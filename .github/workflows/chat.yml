@@ -63,6 +63,24 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install grpcio grpcio-tools
       
-      - name: Run chat client/server test
+      - name: Create coverage directory
+        run: mkdir -p /tmp/coverage
+      
+      - name: Run chat client/server test with coverage
+        env:
+          GOCOVERDIR: /tmp/coverage
+          ENABLE_COVERAGE: "true"
         run: |
           python3 script/test_chat.py
+      
+      - name: Convert coverage to text format
+        run: |
+          go tool covdata textfmt -i=/tmp/coverage -o=coverage-chat.out
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage-chat.out
+          flags: chat-integration
+          name: chat-integration-coverage
+          fail_ci_if_error: false

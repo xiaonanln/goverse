@@ -193,8 +193,17 @@ def build_binary(source_path, output_path, name):
     """Build a Go binary."""
     print(f"Building {name}...")
     try:
-        subprocess.run(['go', 'build', '-o', output_path, source_path],
-                      check=True, capture_output=True, text=True)
+        # Check if coverage is enabled via environment variable
+        enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
+        
+        cmd = ['go', 'build']
+        if enable_coverage:
+            cmd.append('-cover')
+            print(f"  Coverage instrumentation enabled for {name}")
+        
+        cmd.extend(['-o', output_path, source_path])
+        
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
         print(f"✅ {name} built successfully")
         return True
     except subprocess.CalledProcessError as e:
