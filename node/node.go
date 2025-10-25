@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonlingoogle/pulse/client"
-	"github.com/simonlingoogle/pulse/object"
-	"github.com/simonlingoogle/pulse/util/logger"
-	"github.com/simonlingoogle/pulse/util/uniqueid"
+	"github.com/xiaonanln/goverse/client"
+	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	inspector_pb "github.com/simonlingoogle/pulse/inspector/proto"
+	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
 type Object = object.Object

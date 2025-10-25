@@ -15,9 +15,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	client_pb "github.com/simonlingoogle/pulse/client/proto"
-	chat_pb "github.com/simonlingoogle/pulse/samples/chat/proto"
-	"github.com/simonlingoogle/pulse/util/logger"
+	client_pb "github.com/xiaonanln/goverse/client/proto"
+	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
+	"github.com/xiaonanln/goverse/util/logger"
 )
 
 type ChatClient struct {

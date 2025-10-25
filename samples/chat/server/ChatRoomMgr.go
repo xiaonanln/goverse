@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 
-	"github.com/simonlingoogle/pulse/pulseapi"
+	"github.com/xiaonanln/goverse/goverseapi"
 
-	chat_pb "github.com/simonlingoogle/pulse/samples/chat/proto"
+	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 )
 
 var (
@@ -13,14 +13,14 @@ var (
 )
 
 type ChatRoomMgr struct {
-	pulseapi.BaseObject
+	goverseapi.BaseObject
 }
 
 func (mgr *ChatRoomMgr) OnCreated() {
 	mgr.Logger.Infof("ChatRoomMgr %s created", mgr.Id())
 
 	for _, roomName := range chatRooms {
-		roomID, err := pulseapi.CreateObject(context.Background(), "ChatRoom", "ChatRoom-"+roomName, nil)
+		roomID, err := goverseapi.CreateObject(context.Background(), "ChatRoom", "ChatRoom-"+roomName, nil)
 		if err != nil {
 			mgr.Logger.Errorf("Failed to create chat room %s: %v", roomName, err)
 		} else {

@@ -1,4 +1,4 @@
-package pulseapi
+package goverseapi
 
 import (
 	"testing"

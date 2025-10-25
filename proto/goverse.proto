@@ -2,13 +2,13 @@ syntax = "proto3";
 
 import "google/protobuf/any.proto";
 
-option go_package = "github.com/simonlingoogle/pulse/proto/pulse_pb";
+option go_package = "github.com/xiaonanln/goverse/proto/goverse_pb";
 
 
-package pulse;
+package goverse;
 
 
-service Pulse {
+service Goverse {
   rpc Status (Empty) returns (StatusResponse);
   rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);

@@ -1,13 +1,13 @@
-package pulseapi
+package goverseapi
 
 import (
 	"context"
 
-	"github.com/simonlingoogle/pulse/client"
-	"github.com/simonlingoogle/pulse/cluster"
-	"github.com/simonlingoogle/pulse/node"
-	"github.com/simonlingoogle/pulse/object"
-	"github.com/simonlingoogle/pulse/server"
+	"github.com/xiaonanln/goverse/client"
+	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/server"
 	"google.golang.org/protobuf/proto"
 )
 

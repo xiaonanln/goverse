@@ -3,8 +3,8 @@ package graph
 import (
 	"sync"
 
-	"github.com/simonlingoogle/pulse/cmd/inspector/models"
-	inspector_pb "github.com/simonlingoogle/pulse/inspector/proto"
+	"github.com/xiaonanln/goverse/cmd/inspector/models"
+	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
 type PulseGraph struct {

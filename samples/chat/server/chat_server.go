@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 
-	"github.com/simonlingoogle/pulse/pulseapi"
+	"github.com/xiaonanln/goverse/goverseapi"
 )
 
 func main() {
@@ -15,13 +15,13 @@ func main() {
 	)
 	flag.Parse()
 
-	config := &pulseapi.ServerConfig{
+	config := &goverseapi.ServerConfig{
 		ListenAddress:       *listenAddr,
 		AdvertiseAddress:    *advertiseAddr,
 		ClientListenAddress: *clientListenAddr,
 	}
 	// Create and run the server
-	server := pulseapi.NewServer(config)
+	server := goverseapi.NewServer(config)
 	initializeChatServer()
 	err := server.Run()
 	if err != nil {
@@ -30,8 +30,8 @@ func main() {
 }
 
 func initializeChatServer() {
-	pulseapi.RegisterClientType((*ChatClient)(nil))
-	pulseapi.RegisterObjectType((*ChatRoomMgr)(nil))
-	pulseapi.RegisterObjectType((*ChatRoom)(nil))
-	pulseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0", nil)
+	goverseapi.RegisterClientType((*ChatClient)(nil))
+	goverseapi.RegisterObjectType((*ChatRoomMgr)(nil))
+	goverseapi.RegisterObjectType((*ChatRoom)(nil))
+	goverseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0", nil)
 }

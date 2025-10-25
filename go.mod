@@ -1,4 +1,4 @@
-module github.com/simonlingoogle/pulse
+module github.com/xiaonanln/goverse
 
 go 1.24.5
 

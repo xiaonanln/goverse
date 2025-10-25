@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/simonlingoogle/pulse/util/logger"
-	"github.com/simonlingoogle/pulse/util/uniqueid"
+	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
 )
 

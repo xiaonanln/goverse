@@ -15,9 +15,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/simonlingoogle/pulse/cmd/inspector/graph"
-	"github.com/simonlingoogle/pulse/cmd/inspector/models"
-	inspector_pb "github.com/simonlingoogle/pulse/inspector/proto"
+	"github.com/xiaonanln/goverse/cmd/inspector/graph"
+	"github.com/xiaonanln/goverse/cmd/inspector/models"
+	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
 type PulseNode = models.PulseNode

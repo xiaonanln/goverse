@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package chat;
 
-option go_package = "github.com/simonlingoogle/pulse/samples/chat/chat_pb";
+option go_package = "github.com/xiaonanln/goverse/samples/chat/chat_pb";
 
 
 message ChatMessage {

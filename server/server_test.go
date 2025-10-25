@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/simonlingoogle/pulse/node"
-	pulse_pb "github.com/simonlingoogle/pulse/proto"
+	"github.com/xiaonanln/goverse/node"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 )
 
 func TestValidateServerConfig_NilConfig(t *testing.T) {
@@ -90,7 +90,7 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	
 	// Test ListObjects on this server
 	ctx := context.Background()
-	resp, err := server.ListObjects(ctx, &pulse_pb.Empty{})
+	resp, err := server.ListObjects(ctx, &goverse_pb.Empty{})
 	if err != nil {
 		t.Fatalf("ListObjects failed: %v", err)
 	}
