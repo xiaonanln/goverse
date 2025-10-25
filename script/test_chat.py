@@ -78,15 +78,21 @@ class ProcessManager:
     def __init__(self):
         self.processes = []
     
-    def start(self, cmd, name, shell=False):
-        """Start a process in the background."""
+    def start(self, cmd, name, shell=False, env: dict | None = None):
+        """Start a process in the background.
+        Optionally override environment with `env` (merged with os.environ).
+        """
         print(f"Starting {name}...")
+        popen_env = None
+        if env is not None:
+            popen_env = os.environ.copy()
+            popen_env.update(env)
         if shell:
             process = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, 
-                                     stderr=subprocess.DEVNULL)
+                                     stderr=subprocess.DEVNULL, env=popen_env)
         else:
             process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, 
-                                     stderr=subprocess.DEVNULL)
+                                     stderr=subprocess.DEVNULL, env=popen_env)
         self.processes.append((process, name))
         print(f"✅ {name} started with PID: {process.pid}")
         return process
@@ -246,7 +252,7 @@ def build_binary(source_path, output_path, name):
         return False
 
 
-def run_chat_test(client_path, num_servers=1):
+def run_chat_test(client_path, num_servers=1, base_cov_dir: str | None = None):
     """Run the chat client with test input and verify output."""
     print("\nTesting chat client and server interaction...")
     
@@ -295,9 +301,15 @@ Final test message
         with open(input_file_path, 'r') as stdin_file, \
              open(output_file_path, 'w') as stdout_file:
             try:
+                # Set a separate coverage dir for the chat client if coverage base is provided
+                env = os.environ.copy()
+                if base_cov_dir:
+                    client_cov_dir = os.path.join(base_cov_dir, 'client')
+                    os.makedirs(client_cov_dir, exist_ok=True)
+                    env['GOCOVERDIR'] = client_cov_dir
                 subprocess.run([client_path, '-server', f'localhost:{selected_port}', '-user', 'testuser'],
-                             stdin=stdin_file, stdout=stdout_file, stderr=subprocess.STDOUT,
-                             timeout=30)
+                               stdin=stdin_file, stdout=stdout_file, stderr=subprocess.STDOUT,
+                               timeout=30, env=env)
             except subprocess.TimeoutExpired:
                 print("Chat client timed out (this is expected)")
         
@@ -381,13 +393,21 @@ def main():
                                     capture_output=True, text=True, check=True).stdout.strip()
         os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
         
+        # Determine base coverage dir (each binary will write to its own subdir)
+        base_cov_dir = os.environ.get('GOCOVERDIR', '').strip()
+
         # Step 1: Build inspector
         inspector_path = '/tmp/inspector'
         if not build_binary('./cmd/inspector/', inspector_path, "inspector"):
             return 1
         
         # Step 2: Start inspector
-        pm.start([inspector_path], "Inspector")
+        inspector_env = None
+        if base_cov_dir:
+            inspector_cov = os.path.join(base_cov_dir, 'inspector')
+            os.makedirs(inspector_cov, exist_ok=True)
+            inspector_env = {"GOCOVERDIR": inspector_cov}
+        pm.start([inspector_path], "Inspector", env=inspector_env)
         
         # Step 3: Wait for inspector to be ready
         if not check_http_server('http://localhost:8080/', timeout=30):
@@ -412,12 +432,17 @@ def main():
             server_name = f"Chat Server {i + 1}"
             
             print(f"\nStarting {server_name} (ports {listen_port}, {client_port})...")
+            server_env = None
+            if base_cov_dir:
+                server_cov = os.path.join(base_cov_dir, f'server{i+1}')
+                os.makedirs(server_cov, exist_ok=True)
+                server_env = {"GOCOVERDIR": server_cov}
             pm.start([
                 chat_server_path,
                 '-listen', f'localhost:{listen_port}',
                 '-advertise', f'localhost:{listen_port}',
                 '-client-listen', f'localhost:{client_port}'
-            ], server_name)
+            ], server_name, env=server_env)
         
         # Give all servers a moment to start
         wait_time = 5 if num_servers == 1 else 8
@@ -466,7 +491,7 @@ def main():
             return 1
         
         # Step 8: Run chat test
-        if not run_chat_test(chat_client_path, num_servers):
+        if not run_chat_test(chat_client_path, num_servers, base_cov_dir=base_cov_dir if base_cov_dir else None):
             print("\n❌ Chat test failed!")
             return 1
         

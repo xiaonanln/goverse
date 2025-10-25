@@ -73,15 +73,72 @@ jobs:
         run: |
           python3 script/test_chat.py --num-servers 4
       
-      - name: Convert coverage to text format
+      - name: Convert per-binary coverage to text format
         run: |
-          go tool covdata textfmt -i=/tmp/coverage -o=coverage-chat-clustered.out
-      
-      - name: Upload coverage to Codecov
+          set -e
+          if [ ! -d /tmp/coverage ]; then echo "No coverage dir"; exit 0; fi
+          for d in $(ls -d /tmp/coverage/* 2>/dev/null || true); do
+            name=$(basename "$d")
+            echo "Converting coverage for $name from $d"
+            go tool covdata textfmt -i="$d" -o="coverage-${name}.out" || true
+          done
+
+      - name: Upload inspector coverage
+        if: ${{ hashFiles('coverage-inspector.out') != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage-chat-clustered.out
-          flags: chat-clustered
-          name: chat-clustered-coverage
+          files: ./coverage-inspector.out
+          flags: chat-clustered-inspector
+          name: chat-clustered-inspector
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload server1 coverage
+        if: ${{ hashFiles('coverage-server1.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-server1.out
+          flags: chat-clustered-server1
+          name: chat-clustered-server1
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload server2 coverage
+        if: ${{ hashFiles('coverage-server2.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-server2.out
+          flags: chat-clustered-server2
+          name: chat-clustered-server2
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload server3 coverage
+        if: ${{ hashFiles('coverage-server3.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-server3.out
+          flags: chat-clustered-server3
+          name: chat-clustered-server3
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload server4 coverage
+        if: ${{ hashFiles('coverage-server4.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-server4.out
+          flags: chat-clustered-server4
+          name: chat-clustered-server4
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload client coverage
+        if: ${{ hashFiles('coverage-client.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-client.out
+          flags: chat-clustered-client
+          name: chat-clustered-client
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
