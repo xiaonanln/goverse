@@ -1,11 +1,11 @@
-# Goverse
+# GoVerse
 
 > ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
 [![Go Tests](https://github.com/xiaonanln/goverse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/goverse/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/xiaonanln/goverse/branch/main/graph/badge.svg)](https://codecov.io/gh/xiaonanln/goverse)
 
-**Goverse** is a **distributed object runtime for Go**, implementing the **virtual actor (grain) model**.
+**GoVerse** is a **distributed object runtime for Go**, implementing the **virtual actor (grain) model**.
 It lets you build systems around **stateful entities with identity and methods**, while the runtime handles placement, routing, lifecycle, and fault-tolerance.
 
 ---
@@ -39,14 +39,14 @@ It lets you build systems around **stateful entities with identity and methods**
   - `server/chat_server.go` – Chat server main entry point.
   - `client/client.go` – Interactive chat client application.
   - `proto/chat.proto` – Chat protocol definitions.
-- `proto/` – Goverse protocol definitions.
+- `proto/` – GoVerse protocol definitions.
 - `util/` – Logging and utility helpers.
 
 ---
 
 ## 🧩 Client Architecture & Connection Management
 
-Goverse features a **Client Service** system that enables seamless communication between clients and distributed objects:
+GoVerse features a **Client Service** system that enables seamless communication between clients and distributed objects:
 
 ### Core Components:
 
@@ -331,4 +331,4 @@ MIT License
 
 ---
 
-**Goverse** makes building distributed, stateful Go systems simple, scalable, and observable through its client service architecture and virtual actor model.
+**GoVerse** makes building distributed, stateful Go systems simple, scalable, and observable through its client service architecture and virtual actor model.
