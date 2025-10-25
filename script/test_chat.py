@@ -347,11 +347,15 @@ def main():
                                     capture_output=True, text=True, check=True).stdout.strip()
         os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
         
-        # Step 1: Start inspector
-        inspector_cmd = ['go', 'run', 'cmd/inspector/main.go']
-        pm.start(inspector_cmd, "Inspector")
+        # Step 1: Build inspector
+        inspector_path = '/tmp/inspector'
+        if not build_binary('./cmd/inspector/', inspector_path, "inspector"):
+            return 1
         
-        # Step 2: Wait for inspector to be ready
+        # Step 2: Start inspector
+        pm.start([inspector_path], "Inspector")
+        
+        # Step 3: Wait for inspector to be ready
         if not check_http_server('http://localhost:8080/', timeout=30):
             print("❌ Inspector HTTP server failed to start")
             return 1
@@ -362,12 +366,12 @@ def main():
         
         print("✅ Inspector is running and ready")
         
-        # Step 3: Build chat server
+        # Step 4: Build chat server
         chat_server_path = '/tmp/chat_server'
         if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
             return 1
         
-        # Step 4: Start multiple chat servers
+        # Step 5: Start multiple chat servers
         for i in range(num_servers):
             listen_port = 47000 + i
             client_port = 48000 + i
@@ -386,7 +390,7 @@ def main():
         print(f"\nWaiting {wait_time} seconds for all chat servers to start...")
         time.sleep(wait_time)
         
-        # Step 5: Verify all chat servers are ready
+        # Step 6: Verify all chat servers are ready
         for i in range(num_servers):
             listen_port = 47000 + i
             client_port = 48000 + i
@@ -402,7 +406,7 @@ def main():
             
             print(f"✅ Chat server {i + 1} is running and ready")
         
-        # Step 5.5: Call Status RPC for each chat server
+        # Step 6.5: Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
         print("=" * 60)
@@ -412,12 +416,12 @@ def main():
             status_response = call_status_rpc('localhost', listen_port, repo_root)
             print(status_response)
         
-        # Step 6: Build chat client
+        # Step 7: Build chat client
         chat_client_path = '/tmp/chat_client'
         if not build_binary('./samples/chat/client/', chat_client_path, "chat client"):
             return 1
         
-        # Step 7: Run chat test
+        # Step 8: Run chat test
         if not run_chat_test(chat_client_path, num_servers):
             print("\n❌ Chat test failed!")
             return 1
