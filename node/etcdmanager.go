@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	NodesPrefix      = "/pulse/nodes/"
+	NodesPrefix      = "/goverse/nodes/"
 	NodeLeaseTTL     = 15 // seconds
 	NodeKeepAliveTTL = 5  // seconds
 )

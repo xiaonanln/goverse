@@ -267,7 +267,7 @@ func (node *Node) CallClient(ctx context.Context, clientId, method string, reque
 	return &anyResp, nil
 }
 
-// CallObject implements the Pulse gRPC service CallObject method
+// CallObject implements the Goverse gRPC service CallObject method
 func (node *Node) CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
 	node.logger.Infof("CallObject received: id=%s, method=%s", id, method)
 	node.objectsMu.RLock()
@@ -323,7 +323,7 @@ func (node *Node) CallObject(ctx context.Context, id string, method string, requ
 	return resp.Interface().(proto.Message), nil
 }
 
-// CreateObject implements the Pulse gRPC service CreateObject method
+// CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error) {
 	node.logger.Infof("CreateObject received: type=%s", typ)
 	obj, err := node.createObject(typ, id, initData)

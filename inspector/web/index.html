@@ -79,7 +79,7 @@
       defaultNodeType: 'circle'
     })
 
-    function updatePulseNodeList(goverseNodes) {
+    function updateGoverseNodeList(goverseNodes) {
       const nodeList = document.getElementById('node-list')
       nodeList.innerHTML = ''
 
@@ -116,7 +116,7 @@
       console.log("Graph data:", data)
 
       // Update the sidebar node list
-      updatePulseNodeList(data.goverse_nodes)
+      updateGoverseNodeList(data.goverse_nodes)
 
       const seen = new Set()
       data.goverse_objects.forEach(obj => {
