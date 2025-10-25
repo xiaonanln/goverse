@@ -73,42 +73,29 @@ jobs:
         run: |
           python3 script/test_chat.py
       
-      - name: Convert per-binary coverage to text format
+      - name: Merge runtime coverage directories
         run: |
-          set -e
-          if [ ! -d /tmp/coverage ]; then echo "No coverage dir"; exit 0; fi
-          for d in $(ls -d /tmp/coverage/* 2>/dev/null || true); do
-            name=$(basename "$d")
-            echo "Converting coverage for $name from $d"
-            go tool covdata textfmt -i="$d" -o="coverage-${name}.out" || true
-          done
+          MERGED=/tmp/coverage-merged
+          mkdir -p "$MERGED"
+          INPUTS=$(ls -d /tmp/coverage/* 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+          if [ -z "$INPUTS" ]; then echo "No coverage inputs found"; exit 0; fi
+          echo "Merging coverage from: $INPUTS"
+          go tool covdata merge -i=$INPUTS -o=$MERGED
 
-      - name: Upload inspector coverage
-        if: ${{ hashFiles('coverage-inspector.out') != '' }}
+      - name: Convert merged coverage to text format
+        run: |
+          if [ -d /tmp/coverage-merged ]; then
+            go tool covdata textfmt -i=/tmp/coverage-merged -o=coverage-chat.out
+          else
+            echo "No merged coverage to convert"; exit 0;
+          fi
+
+      - name: Upload merged coverage to Codecov
+        if: ${{ hashFiles('coverage-chat.out') != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage-inspector.out
-          flags: chat-inspector
-          name: chat-inspector
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload server1 coverage
-        if: ${{ hashFiles('coverage-server1.out') != '' }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-server1.out
-          flags: chat-server1
-          name: chat-server1
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload client coverage
-        if: ${{ hashFiles('coverage-client.out') != '' }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-client.out
-          flags: chat-client
-          name: chat-client
+          files: ./coverage-chat.out
+          flags: chat-integration
+          name: chat-integration-merged
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
