@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package inspector;
+
+option go_package = "github.com/simonlingoogle/inspector/inspector_pb";
+
+message Empty {}
+
+message Object {
+  string class=1;
+  string id = 2;
+}
+
+message AddObjectRequest { 
+  Object object = 1; 
+  string node_address = 2; // e.g. "localhost:47000"
+}
+
+message RegisterNodeRequest {
+  string advertise_address = 1;  // e.g. "localhost:47000"
+  repeated Object objects = 2;
+}
+
+message RegisterNodeResponse {
+}
+
+message UnregisterNodeRequest {
+  string advertise_address = 1;  // e.g. "localhost:47000"
+}
+
+service InspectorService {
+  rpc AddObject(AddObjectRequest) returns (Empty);
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  rpc UnregisterNode(UnregisterNodeRequest) returns (Empty);
+  rpc Ping(Empty) returns (Empty);
+}

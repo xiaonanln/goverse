@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/simonlingoogle/pulse/client/proto/client_pb";
+
+package client;
+
+service ClientService {
+    rpc Register (Empty) returns (stream google.protobuf.Any);
+    rpc Call (CallRequest) returns (CallResponse);
+}
+
+// RegisterResponse is the first message that the client can receive from the Register stream
+message RegisterResponse {
+  string client_id = 1;
+}
+
+message CallRequest {
+  string client_id = 1;
+  string method = 2;
+  google.protobuf.Any request = 3;
+}
+
+message CallResponse {
+  google.protobuf.Any response = 1;
+}
+
+message Empty {}

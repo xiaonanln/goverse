@@ -1,0 +1,82 @@
+name: Build Dev Docker Image
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '>=1.21'
+      
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
+      - name: Install Go protobuf plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      
+      - name: Compile protobuf files
+        run: |
+          chmod +x ./script/compile-proto.sh
+          ./script/compile-proto.sh
+      
+      - name: Tidy Go modules
+        run: go mod tidy
+      
+      - name: Build inspector
+        run: |
+          echo "Building inspector..."
+          go build -o inspector.out ./cmd/inspector
+          if [ -f "./inspector.out" ]; then
+            echo "✅ Inspector binary built successfully"
+          else
+            echo "❌ Inspector binary not found"
+            exit 1
+          fi
+      
+      - name: Build chat server
+        run: |
+          echo "Building chat server..."
+          go build -o server.out ./samples/chat/server
+          if [ -f "./server.out" ]; then
+            echo "✅ Chat server binary built successfully"
+          else
+            echo "❌ Chat server binary not found"
+            exit 1
+          fi
+      
+      - name: Build chat client
+        run: |
+          echo "Building chat client..."
+          go build -o client.out ./samples/chat/client
+          if [ -f "./client.out" ]; then 
+            echo "✅ Chat client binary built successfully"
+          else
+            echo "❌ Chat client binary not found"
+            exit 1
+          fi
+      
+      - name: List all build artifacts
+        run: |
+          echo "Build completed! Generated binaries:"
+          ls -la inspector* server* client* 2>/dev/null || echo "No binaries found matching pattern"

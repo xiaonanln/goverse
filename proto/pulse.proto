@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/simonlingoogle/pulse/proto/pulse_pb";
+
+
+package pulse;
+
+
+service Pulse {
+  rpc Status (Empty) returns (StatusResponse);
+  rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
+  rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
+  rpc ListObjects (Empty) returns (ListObjectsResponse);
+}
+
+message StatusResponse {
+  string advertise_addr = 1;
+  int64 num_objects = 2;
+  int64 uptime_seconds = 3;
+}
+
+message CallObjectRequest {
+  string id = 1;
+  string method = 2;
+  google.protobuf.Any request = 4;
+}
+
+message CallObjectResponse {
+  google.protobuf.Any response = 1;
+}
+
+message CreateObjectRequest {
+  string type = 1;
+  google.protobuf.Any init_data = 2;
+}
+
+message CreateObjectResponse {
+  string id = 1;
+}
+
+message ObjectInfo {
+  string type = 1;
+  string id = 2;
+  int64 creation_time = 3; // Unix timestamp in seconds
+}
+
+message ListObjectsResponse {
+  repeated ObjectInfo objects = 1;
+}
+
+message Empty {}

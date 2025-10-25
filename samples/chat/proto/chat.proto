@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/simonlingoogle/pulse/samples/chat/chat_pb";
+
+
+message ChatMessage {
+    string user_name = 1;
+    string message = 2;
+    int64 timestamp = 3; // Unix timestamp in microseconds
+}
+
+
+message Client_ListChatRoomsRequest {
+}
+
+// Response containing a list of available chat rooms
+message Client_ListChatRoomsResponse {
+    repeated string chat_rooms = 1;
+}
+
+message ChatRoom_ListRequest {
+}
+
+// Represents a chat message
+message ChatRoom_ListResponse {
+    repeated string chat_rooms = 1;
+}
+
+message Client_JoinChatRoomRequest {
+    string room_name = 1;
+    string user_name = 2;
+}
+
+message Client_JoinChatRoomResponse {
+    string room_name = 1;
+    repeated ChatMessage recent_messages = 2;
+}
+
+message Client_SendChatMessageRequest {
+    string room_name = 1;
+    string user_name = 2;
+    string message = 3;
+}
+
+message Client_SendChatMessageResponse {
+}
+
+message Client_GetRecentMessagesRequest {
+    string room_name = 1;
+    int64 after_timestamp = 2; // Unix timestamp in microseconds
+}
+
+message Client_GetRecentMessagesResponse {
+    repeated ChatMessage messages = 1;
+}
+
+message ChatRoom_JoinRequest {
+    string user_name = 1;
+}
+
+message ChatRoom_JoinResponse {
+    string room_name = 1;
+    repeated ChatMessage recent_messages = 2;
+}
+
+message ChatRoom_SendChatMessageRequest {
+    string user_name = 1;
+    string message = 2;
+}
+
+message ChatRoom_SendChatMessageResponse {
+}
+
+message ChatRoom_GetRecentMessagesRequest {
+    int64 after_timestamp = 1; // Unix timestamp in microseconds
+}
+
+message ChatRoom_GetRecentMessagesResponse {
+    repeated ChatMessage messages = 1;
+}

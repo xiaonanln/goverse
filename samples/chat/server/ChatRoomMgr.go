@@ -1,0 +1,37 @@
+package main
+
+import (
+	"context"
+
+	"github.com/simonlingoogle/pulse/pulseapi"
+
+	chat_pb "github.com/simonlingoogle/pulse/samples/chat/proto"
+)
+
+var (
+	chatRooms = []string{"General", "Technology", "Crypto", "Sports", "Movies"}
+)
+
+type ChatRoomMgr struct {
+	pulseapi.BaseObject
+}
+
+func (mgr *ChatRoomMgr) OnCreated() {
+	mgr.Logger.Infof("ChatRoomMgr %s created", mgr.Id())
+
+	for _, roomName := range chatRooms {
+		roomID, err := pulseapi.CreateObject(context.Background(), "ChatRoom", "ChatRoom-"+roomName, nil)
+		if err != nil {
+			mgr.Logger.Errorf("Failed to create chat room %s: %v", roomName, err)
+		} else {
+			mgr.Logger.Infof("Chat room %s created: %s", roomName, roomID)
+		}
+	}
+
+}
+
+func (mgr *ChatRoomMgr) ListChatRooms(ctx context.Context, request *chat_pb.ChatRoom_ListRequest) (*chat_pb.ChatRoom_ListResponse, error) {
+	return &chat_pb.ChatRoom_ListResponse{
+		ChatRooms: chatRooms,
+	}, nil
+}
