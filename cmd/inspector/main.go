@@ -71,7 +71,7 @@ func (s *svc) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRe
 		Width:         120,
 		Height:        80,
 		Color:         "#4CAF50",
-		Type:          "pulse_node",
+		Type:          "goverse_node",
 		AdvertiseAddr: addr,
 		RegisteredAt:  time.Now(),
 	}
