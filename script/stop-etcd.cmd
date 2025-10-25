@@ -3,8 +3,8 @@ REM Stop and remove etcd Docker container
 
 echo Stopping etcd container...
 
-docker stop pulse-etcd
-docker rm pulse-etcd
+docker stop goverse-etcd
+docker rm goverse-etcd
 
 if %ERRORLEVEL% EQU 0 (
     echo.

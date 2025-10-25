@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for Pulse chat client and server.
+Test script for Goverse chat client and server.
 
 This script:
 1. Starts the inspector
@@ -42,8 +42,8 @@ except ImportError:
     sys.exit(1)
 
 # Generate proto files if they don't exist
-proto_file = REPO_ROOT / 'proto' / 'pulse.proto'
-pb2_file = REPO_ROOT / 'proto' / 'pulse_pb2.py'
+proto_file = REPO_ROOT / 'proto' / 'goverse.proto'
+pb2_file = REPO_ROOT / 'proto' / 'goverse_pb2.py'
 if not pb2_file.exists():
     print("⚠️  Generating Python proto files...")
     try:
@@ -63,8 +63,8 @@ if not pb2_file.exists():
 
 # Now import the proto modules
 try:
-    from proto import pulse_pb2
-    from proto import pulse_pb2_grpc
+    from proto import goverse_pb2
+    from proto import goverse_pb2_grpc
 except ImportError as import_error:
     print(f"❌ Failed to import proto modules: {import_error}")
     print(f"Proto directory contents: {list((REPO_ROOT / 'proto').glob('*.py'))}")
@@ -161,14 +161,14 @@ def check_http_server(url, timeout=30):
 
 
 def call_status_rpc(host, port, repo_root):
-    """Call the Pulse Status RPC and return the response."""
+    """Call the Goverse Status RPC and return the response."""
     try:
         # Create a gRPC channel
         channel = grpc.insecure_channel(f'{host}:{port}')
-        stub = pulse_pb2_grpc.PulseStub(channel)
+        stub = goverse_pb2_grpc.GoverseStub(channel)
         
         # Call the Status RPC
-        response = stub.Status(pulse_pb2.Empty(), timeout=5)
+        response = stub.Status(goverse_pb2.Empty(), timeout=5)
         
         # Format the response as JSON
         result = {
@@ -313,7 +313,7 @@ Final test message
 def main():
     """Main test execution."""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Test Pulse chat client and server')
+    parser = argparse.ArgumentParser(description='Test Goverse chat client and server')
     parser.add_argument('--num-servers', type=int, default=1, choices=[1, 2, 3, 4],
                        help='Number of chat servers to start (1-4, default: 1)')
     args = parser.parse_args()
@@ -325,7 +325,7 @@ def main():
     os.chdir(repo_root)
     
     print("=" * 60)
-    print(f"Pulse Chat Client/Server Test ({num_servers} server{'s' if num_servers > 1 else ''})")
+    print(f"Goverse Chat Client/Server Test ({num_servers} server{'s' if num_servers > 1 else ''})")
     print("=" * 60)
     print()
     
