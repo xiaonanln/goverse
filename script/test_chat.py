@@ -104,9 +104,25 @@ class ProcessManager:
             if process.poll() is None:  # Process is still running
                 print(f"Stopping {name} (PID: {process.pid})...")
                 try:
-                    process.terminate()
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
+                    # Try SIGINT first to allow graceful shutdown and coverage flush
+                    try:
+                        process.send_signal(signal.SIGINT)
+                        process.wait(timeout=10)
+                        continue
+                    except Exception:
+                        pass
+                    except subprocess.TimeoutExpired:
+                        pass
+
+                    # Then try SIGTERM
+                    try:
+                        process.terminate()
+                        process.wait(timeout=5)
+                        continue
+                    except subprocess.TimeoutExpired:
+                        pass
+
+                    # Finally force kill
                     process.kill()
                     process.wait()
                 except Exception as e:
@@ -164,6 +180,45 @@ def check_http_server(url, timeout=30):
     
     print(f"❌ HTTP server failed to respond within {timeout} seconds")
     return False
+
+
+def graceful_stop(process: subprocess.Popen, name: str, timeout_int: float = 10.0, timeout_term: float = 5.0) -> int:
+    """Attempt to stop a process gracefully so Go can flush coverage.
+    Returns the final process returncode (or -1 if unknown).
+    """
+    if process is None:
+        return -1
+    if process.poll() is not None:
+        return process.returncode if process.returncode is not None else -1
+
+    print(f"Gracefully stopping {name} (PID: {process.pid})...")
+    # 1) Try SIGINT first
+    try:
+        process.send_signal(signal.SIGINT)
+        process.wait(timeout=timeout_int)
+        return process.returncode if process.returncode is not None else -1
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+
+    # 2) Then SIGTERM
+    try:
+        process.terminate()
+        process.wait(timeout=timeout_term)
+        return process.returncode if process.returncode is not None else -1
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+
+    # 3) Finally SIGKILL
+    try:
+        process.kill()
+        process.wait()
+    except Exception:
+        pass
+    return process.returncode if process.returncode is not None else -1
 
 
 def call_status_rpc(host, port, repo_root):
@@ -407,7 +462,7 @@ def main():
             inspector_cov = os.path.join(base_cov_dir, 'inspector')
             os.makedirs(inspector_cov, exist_ok=True)
             inspector_env = {"GOCOVERDIR": inspector_cov}
-        pm.start([inspector_path], "Inspector", env=inspector_env)
+        inspector_proc = pm.start([inspector_path], "Inspector", env=inspector_env)
         
         # Step 3: Wait for inspector to be ready
         if not check_http_server('http://localhost:8080/', timeout=30):
@@ -424,47 +479,49 @@ def main():
         chat_server_path = '/tmp/chat_server'
         if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
             return 1
-        
+
         # Step 5: Start multiple chat servers
+        server_procs = []
         for i in range(num_servers):
             listen_port = 47000 + i
             client_port = 48000 + i
             server_name = f"Chat Server {i + 1}"
-            
+
             print(f"\nStarting {server_name} (ports {listen_port}, {client_port})...")
             server_env = None
             if base_cov_dir:
                 server_cov = os.path.join(base_cov_dir, f'server{i+1}')
                 os.makedirs(server_cov, exist_ok=True)
                 server_env = {"GOCOVERDIR": server_cov}
-            pm.start([
+            p = pm.start([
                 chat_server_path,
                 '-listen', f'localhost:{listen_port}',
                 '-advertise', f'localhost:{listen_port}',
                 '-client-listen', f'localhost:{client_port}'
             ], server_name, env=server_env)
-        
+            server_procs.append((p, server_name))
+
         # Give all servers a moment to start
         wait_time = 5 if num_servers == 1 else 8
         print(f"\nWaiting {wait_time} seconds for all chat servers to start...")
         time.sleep(wait_time)
-        
+
         # Step 6: Verify all chat servers are ready
         for i in range(num_servers):
             listen_port = 47000 + i
             client_port = 48000 + i
-            
+
             print(f"\nVerifying Chat Server {i + 1}...")
             if not check_port(listen_port, timeout=20):
                 print(f"❌ Chat server {i + 1} failed to start on port {listen_port} (ListenAddress)")
                 return 1
-            
+
             if not check_port(client_port, timeout=20):
                 print(f"❌ Chat server {i + 1} failed to start on port {client_port} (ClientListenAddress)")
                 return 1
-            
+
             print(f"✅ Chat server {i + 1} is running and ready")
-        
+
         # Step 6.5: Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
@@ -474,7 +531,7 @@ def main():
             print(f"\nChat Server {i + 1} (localhost:{listen_port}) Status:")
             status_response = call_status_rpc('localhost', listen_port, repo_root)
             print(status_response)
-        
+
         # Step 6.6: Call ListObjects RPC for each chat server
         print("\n" + "=" * 60)
         print("Listing Objects on each chat server:")
@@ -484,17 +541,42 @@ def main():
             print(f"\nChat Server {i + 1} (localhost:{listen_port}) Objects:")
             objects_response = call_list_objects_rpc('localhost', listen_port, repo_root)
             print(objects_response)
-        
+
         # Step 7: Build chat client
         chat_client_path = '/tmp/chat_client'
         if not build_binary('./samples/chat/client/', chat_client_path, "chat client"):
             return 1
-        
+
         # Step 8: Run chat test
-        if not run_chat_test(chat_client_path, num_servers, base_cov_dir=base_cov_dir if base_cov_dir else None):
+        chat_ok = run_chat_test(chat_client_path, num_servers, base_cov_dir=base_cov_dir if base_cov_dir else None)
+
+        # Step 9: Stop chat servers (gracefully) and check exit codes
+        print("\nStopping chat servers...")
+        servers_ok = True
+        for p, name in reversed(server_procs):
+            code = graceful_stop(p, name)
+            print(f"{name} exited with code {code}")
+            if code != 0:
+                servers_ok = False
+
+        # Step 10: Stop inspector and check exit code
+        print("\nStopping inspector...")
+        inspector_ok = True
+        code = graceful_stop(inspector_proc, "Inspector")
+        print(f"Inspector exited with code {code}")
+        if code != 0:
+            inspector_ok = False
+
+        if not chat_ok:
             print("\n❌ Chat test failed!")
             return 1
-        
+        if not servers_ok:
+            print("\n❌ One or more chat servers exited with non-zero status")
+            return 1
+        if not inspector_ok:
+            print("\n❌ Inspector exited with non-zero status")
+            return 1
+
         print("\n" + "=" * 60)
         print(f"✅ All chat client/server tests passed ({num_servers} server{'s' if num_servers > 1 else ''})!")
         print("=" * 60)
