@@ -79,26 +79,26 @@
       defaultNodeType: 'circle'
     })
 
-    function updatePulseNodeList(pulseNodes) {
+    function updatePulseNodeList(goverseNodes) {
       const nodeList = document.getElementById('node-list')
       nodeList.innerHTML = ''
 
-      pulseNodes.forEach(pulseNode => {
+      goverseNodes.forEach(goverseNode => {
         const li = document.createElement('li')
         li.className = 'node-item'
         li.innerHTML = `
-          <div class="node-id">${pulseNode.id}</div>
+          <div class="node-id">${goverseNode.id}</div>
           <div class="node-details">
-            ${pulseNode.label ? `Label: ${pulseNode.label}<br>` : ''}
-            Position: (${Math.round(pulseNode.x || 0)}, ${Math.round(pulseNode.y || 0)})<br>
-            ${pulseNode.color ? `Color: ${pulseNode.color}` : ''}
+            ${goverseNode.label ? `Label: ${goverseNode.label}<br>` : ''}
+            Position: (${Math.round(goverseNode.x || 0)}, ${Math.round(goverseNode.y || 0)})<br>
+            ${goverseNode.color ? `Color: ${goverseNode.color}` : ''}
           </div>
         `
 
         // Add click handler to focus on node in graph
         li.addEventListener('click', () => {
-          if (graph.hasNode(pulseNode.id)) {
-            const nodePosition = graph.getNodeAttributes(pulseNode.id)
+          if (graph.hasNode(goverseNode.id)) {
+            const nodePosition = graph.getNodeAttributes(goverseNode.id)
             sigmaInstance.getCamera().animate(
               { x: nodePosition.x, y: nodePosition.y, ratio: 0.5 },
               { duration: 1000 }
@@ -116,10 +116,10 @@
       console.log("Graph data:", data)
 
       // Update the sidebar node list
-      updatePulseNodeList(data.pulse_nodes)
+      updatePulseNodeList(data.goverse_nodes)
 
       const seen = new Set()
-      data.pulse_objects.forEach(obj => {
+      data.goverse_objects.forEach(obj => {
         seen.add(obj.id)
         // Remove or ignore the 'type' property to use default node type
         const nodeData = {

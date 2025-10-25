@@ -20,8 +20,8 @@ import (
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
-type PulseNode = models.PulseNode
-type PulseObject = models.PulseObject
+type GoverseNode = models.GoverseNode
+type GoverseObject = models.GoverseObject
 
 func randPos() (int, int) {
 	return rand.Intn(200), rand.Intn(200)
@@ -29,7 +29,7 @@ func randPos() (int, int) {
 
 type svc struct {
 	inspector_pb.UnimplementedInspectorServiceServer
-	pg *graph.PulseGraph
+	pg *graph.GoverseGraph
 }
 
 func (s *svc) Ping(ctx context.Context, req *inspector_pb.Empty) (*inspector_pb.Empty, error) {
@@ -42,14 +42,14 @@ func (s *svc) AddObject(ctx context.Context, req *inspector_pb.AddObjectRequest)
 		return &inspector_pb.Empty{}, nil
 	}
 	x, y := randPos()
-	obj := PulseObject{
+	obj := GoverseObject{
 		ID:    o.Id,
 		Label: fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 		X:     x, Y: y,
 		Size:        10,
 		Color:       "#1f77b4",
 		Type:        "object",
-		PulseNodeID: req.GetNodeAddress(),
+		GoverseNodeID: req.GetNodeAddress(),
 	}
 	s.pg.AddObject(obj)
 	return &inspector_pb.Empty{}, nil
@@ -63,7 +63,7 @@ func (s *svc) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRe
 	}
 
 	x, y := randPos()
-	node := PulseNode{
+	node := GoverseNode{
 		ID:            addr,
 		Label:         fmt.Sprintf("Node %s", addr),
 		X:             x,
@@ -90,7 +90,7 @@ func (s *svc) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRe
 			continue
 		}
 		x, y := randPos()
-		obj := PulseObject{
+		obj := GoverseObject{
 			ID:          o.Id,
 			Label:       fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 			X:           x,
@@ -98,7 +98,7 @@ func (s *svc) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRe
 			Size:        10,
 			Color:       "#1f77b4",
 			Type:        "object",
-			PulseNodeID: addr,
+			GoverseNodeID: addr,
 		}
 		s.pg.AddObject(obj)
 	}
@@ -115,7 +115,7 @@ func (s *svc) UnregisterNode(ctx context.Context, req *inspector_pb.UnregisterNo
 	return &inspector_pb.Empty{}, nil
 }
 
-func serveHTTP(pg *graph.PulseGraph, addr string) {
+func serveHTTP(pg *graph.GoverseGraph, addr string) {
 	mux := http.NewServeMux()
 	staticDir := "inspector/web"
 
@@ -124,11 +124,11 @@ func serveHTTP(pg *graph.PulseGraph, addr string) {
 		nodes := pg.GetNodes()
 		objects := pg.GetObjects()
 		out := struct {
-			PulseNodes   []PulseNode   `json:"pulse_nodes"`
-			PulseObjects []PulseObject `json:"pulse_objects"`
+			GoverseNodes   []GoverseNode   `json:"goverse_nodes"`
+			GoverseObjects []GoverseObject `json:"goverse_objects"`
 		}{
-			PulseNodes:   nodes,
-			PulseObjects: objects,
+			GoverseNodes:   nodes,
+			GoverseObjects: objects,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
@@ -143,7 +143,7 @@ func serveHTTP(pg *graph.PulseGraph, addr string) {
 	log.Fatal(srv.ListenAndServe())
 }
 
-func serveGRPC(pg *graph.PulseGraph, addr string) {
+func serveGRPC(pg *graph.GoverseGraph, addr string) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatal(err)
@@ -156,7 +156,7 @@ func serveGRPC(pg *graph.PulseGraph, addr string) {
 }
 
 func main() {
-	pg := graph.NewPulseGraph()
+	pg := graph.NewGoverseGraph()
 	go serveGRPC(pg, ":8081")
 	serveHTTP(pg, ":8080")
 }

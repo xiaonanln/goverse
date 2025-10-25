@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Configuration
-IMAGE_NAME="pulse-dev"
+IMAGE_NAME="goverse-dev"
 DOCKERFILE="docker/Dockerfile.dev"
 BUILD_CONTEXT="."
 

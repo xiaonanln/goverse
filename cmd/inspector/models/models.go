@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-type PulseNode struct {
+type GoverseNode struct {
 	ID            string    `json:"id"`
 	Label         string    `json:"label"`
 	X             int       `json:"x"`
@@ -15,7 +15,7 @@ type PulseNode struct {
 	RegisteredAt  time.Time `json:"registered_at"`
 }
 
-type PulseObject struct {
+type GoverseObject struct {
 	ID          string  `json:"id"`
 	Label       string  `json:"label"`
 	X           int     `json:"x"`
@@ -23,5 +23,5 @@ type PulseObject struct {
 	Size        float64 `json:"size"`
 	Color       string  `json:"color"`
 	Type        string  `json:"type"`
-	PulseNodeID string  `json:"pulse_node_id"`
+	GoverseNodeID string  `json:"goverse_node_id"`
 }
