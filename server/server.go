@@ -9,16 +9,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	client_pb "github.com/simonlingoogle/pulse/client/proto"
-	"github.com/simonlingoogle/pulse/cluster"
-	"github.com/simonlingoogle/pulse/node"
-	"github.com/simonlingoogle/pulse/util/logger"
+	client_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	pulse_pb "github.com/simonlingoogle/pulse/proto"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 )
 
 type ServerConfig struct {
@@ -29,7 +29,7 @@ type ServerConfig struct {
 }
 
 type Server struct {
-	pulse_pb.UnimplementedPulseServer
+	goverse_pb.UnimplementedGoverseServer
 	client_pb.UnimplementedClientServiceServer
 	config *ServerConfig
 	Node   *node.Node
@@ -78,11 +78,11 @@ func (server *Server) Run() error {
 	// Ensure context is canceled when the server stops
 	defer server.cancel()
 
-	pulseServiceListener, err := net.Listen("tcp", server.config.ListenAddress)
+	goverseServiceListener, err := net.Listen("tcp", server.config.ListenAddress)
 	if err != nil {
 		return err
 	}
-	defer pulseServiceListener.Close()
+	defer goverseServiceListener.Close()
 
 	clientServiceListener, err := net.Listen("tcp", server.config.ClientListenAddress)
 	if err != nil {
@@ -93,10 +93,10 @@ func (server *Server) Run() error {
 	node := server.Node
 
 	grpcServer := grpc.NewServer()
-	pulse_pb.RegisterPulseServer(grpcServer, server)
+	goverse_pb.RegisterGoverseServer(grpcServer, server)
 	client_pb.RegisterClientServiceServer(grpcServer, server)
 	reflection.Register(grpcServer)
-	server.logger.Infof("gRPC server listening on %s", pulseServiceListener.Addr().String())
+	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
 
 	// Handle signals for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -124,7 +124,7 @@ func (server *Server) Run() error {
 		server.logger.Infof("Client gRPC server stopped")
 	}()
 
-	err = grpcServer.Serve(pulseServiceListener)
+	err = grpcServer.Serve(goverseServiceListener)
 	if err != nil {
 		server.logger.Errorf("gRPC server error: %v", err)
 	}
@@ -193,7 +193,7 @@ func (server *Server) Call(ctx context.Context, req *client_pb.CallRequest) (*cl
 	return response, nil
 }
 
-func (server *Server) CallObject(ctx context.Context, req *pulse_pb.CallObjectRequest) (*pulse_pb.CallObjectResponse, error) {
+func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
 	server.logRPC("CallObject", req)
 
 	resp, err := server.Node.CallObject(ctx, req.GetId(), req.GetMethod(), req.GetRequest())
@@ -206,29 +206,29 @@ func (server *Server) CallObject(ctx context.Context, req *pulse_pb.CallObjectRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
-	response := &pulse_pb.CallObjectResponse{
+	response := &goverse_pb.CallObjectResponse{
 		Response: &respAny,
 	}
 	return response, nil
 }
 
-func (server *Server) CreateObject(ctx context.Context, req *pulse_pb.CreateObjectRequest) (*pulse_pb.CreateObjectResponse, error) {
+func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateObjectRequest) (*goverse_pb.CreateObjectResponse, error) {
 	server.logRPC("CreateObject", req)
 
 	id, err := server.Node.CreateObject(ctx, req.GetType(), "", req.GetInitData())
 	if err != nil {
 		return nil, err
 	}
-	response := &pulse_pb.CreateObjectResponse{
+	response := &goverse_pb.CreateObjectResponse{
 		Id: id,
 	}
 	return response, nil
 }
 
-func (server *Server) Status(ctx context.Context, req *pulse_pb.Empty) (*pulse_pb.StatusResponse, error) {
+func (server *Server) Status(ctx context.Context, req *goverse_pb.Empty) (*goverse_pb.StatusResponse, error) {
 	server.logRPC("Status", req)
 
-	response := &pulse_pb.StatusResponse{
+	response := &goverse_pb.StatusResponse{
 		AdvertiseAddr: server.config.AdvertiseAddress,
 		NumObjects:    int64(server.Node.NumObjects()),
 		UptimeSeconds: server.Node.UptimeSeconds(),
@@ -236,20 +236,20 @@ func (server *Server) Status(ctx context.Context, req *pulse_pb.Empty) (*pulse_p
 	return response, nil
 }
 
-func (server *Server) ListObjects(ctx context.Context, req *pulse_pb.Empty) (*pulse_pb.ListObjectsResponse, error) {
+func (server *Server) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*goverse_pb.ListObjectsResponse, error) {
 	server.logRPC("ListObjects", req)
 
 	objects := server.Node.ListObjects()
-	objectInfos := make([]*pulse_pb.ObjectInfo, 0, len(objects))
+	objectInfos := make([]*goverse_pb.ObjectInfo, 0, len(objects))
 	for _, obj := range objects {
-		objectInfos = append(objectInfos, &pulse_pb.ObjectInfo{
+		objectInfos = append(objectInfos, &goverse_pb.ObjectInfo{
 			Type:         obj.Type,
 			Id:           obj.Id,
 			CreationTime: obj.CreationTime.Unix(),
 		})
 	}
 
-	response := &pulse_pb.ListObjectsResponse{
+	response := &goverse_pb.ListObjectsResponse{
 		Objects: objectInfos,
 	}
 	return response, nil

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Proto files to compile
 PROTO_FILES=(
-    "proto/pulse.proto"
+    "proto/goverse.proto"
     "client/proto/client.proto"
     "inspector/proto/inspector.proto"
     "samples/chat/proto/chat.proto"

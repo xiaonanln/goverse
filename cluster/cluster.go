@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/simonlingoogle/pulse/node"
-	"github.com/simonlingoogle/pulse/util/logger"
+	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/protobuf/proto"
 )
 

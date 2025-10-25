@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonlingoogle/pulse/util/logger"
+	"github.com/xiaonanln/goverse/util/logger"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 

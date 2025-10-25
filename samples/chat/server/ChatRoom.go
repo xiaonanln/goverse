@@ -5,12 +5,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonlingoogle/pulse/pulseapi"
-	chat_pb "github.com/simonlingoogle/pulse/samples/chat/proto"
+	"github.com/xiaonanln/goverse/goverseapi"
+	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 )
 
 type ChatRoom struct {
-	pulseapi.BaseObject
+	goverseapi.BaseObject
 
 	users    map[string]bool
 	messages []*chat_pb.ChatMessage

@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/simonlingoogle/pulse/object"
+	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/proto"
 )
 
