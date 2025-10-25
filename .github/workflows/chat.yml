@@ -78,9 +78,10 @@ jobs:
           go tool covdata textfmt -i=/tmp/coverage -o=coverage-chat.out
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage-chat.out
           flags: chat-integration
           name: chat-integration-coverage
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
