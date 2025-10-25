@@ -189,6 +189,40 @@ def call_status_rpc(host, port, repo_root):
         return f"Error: {str(e)}"
 
 
+def call_list_objects_rpc(host, port, repo_root):
+    """Call the Goverse ListObjects RPC and return the response."""
+    try:
+        # Create a gRPC channel
+        channel = grpc.insecure_channel(f'{host}:{port}')
+        stub = goverse_pb2_grpc.GoverseStub(channel)
+        
+        # Call the ListObjects RPC
+        response = stub.ListObjects(goverse_pb2.Empty(), timeout=5)
+        
+        # Format the response as a list of objects
+        objects = []
+        for obj in response.objects:
+            objects.append({
+                "id": obj.id,
+                "type": obj.type
+            })
+        
+        # Close the channel
+        channel.close()
+        
+        # Return formatted JSON
+        result = {
+            "objectCount": len(objects),
+            "objects": objects
+        }
+        return json.dumps(result, indent=2)
+        
+    except grpc.RpcError as e:
+        return f"Error: RPC failed - {e.code().name}: {e.details()}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 def build_binary(source_path, output_path, name):
     """Build a Go binary."""
     print(f"Building {name}...")
@@ -415,6 +449,16 @@ def main():
             print(f"\nChat Server {i + 1} (localhost:{listen_port}) Status:")
             status_response = call_status_rpc('localhost', listen_port, repo_root)
             print(status_response)
+        
+        # Step 6.6: Call ListObjects RPC for each chat server
+        print("\n" + "=" * 60)
+        print("Listing Objects on each chat server:")
+        print("=" * 60)
+        for i in range(num_servers):
+            listen_port = 47000 + i
+            print(f"\nChat Server {i + 1} (localhost:{listen_port}) Objects:")
+            objects_response = call_list_objects_rpc('localhost', listen_port, repo_root)
+            print(objects_response)
         
         # Step 7: Build chat client
         chat_client_path = '/tmp/chat_client'
