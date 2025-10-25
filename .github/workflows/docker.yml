@@ -28,6 +28,6 @@ jobs:
           context: .
           file: docker/Dockerfile.dev
           push: false
-          tags: pulse-dev:latest
+          tags: goverse-dev:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

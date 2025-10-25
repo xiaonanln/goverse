@@ -1,11 +1,11 @@
-# Pulse
+# Goverse
 
 > ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
-[![Go Tests](https://github.com/xiaonanln/pulse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/pulse/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/xiaonanln/pulse/branch/main/graph/badge.svg)](https://codecov.io/gh/xiaonanln/pulse)
+[![Go Tests](https://github.com/xiaonanln/goverse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/goverse/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/xiaonanln/goverse/branch/main/graph/badge.svg)](https://codecov.io/gh/xiaonanln/goverse)
 
-**Pulse** is a **distributed object runtime for Go**, implementing the **virtual actor (grain) model**.
+**Goverse** is a **distributed object runtime for Go**, implementing the **virtual actor (grain) model**.
 It lets you build systems around **stateful entities with identity and methods**, while the runtime handles placement, routing, lifecycle, and fault-tolerance.
 
 ---
@@ -39,14 +39,14 @@ It lets you build systems around **stateful entities with identity and methods**
   - `server/chat_server.go` – Chat server main entry point.
   - `client/client.go` – Interactive chat client application.
   - `proto/chat.proto` – Chat protocol definitions.
-- `proto/` – Pulse protocol definitions.
+- `proto/` – Goverse protocol definitions.
 - `util/` – Logging and utility helpers.
 
 ---
 
 ## 🧩 Client Architecture & Connection Management
 
-Pulse features a **Client Service** system that enables seamless communication between clients and distributed objects:
+Goverse features a **Client Service** system that enables seamless communication between clients and distributed objects:
 
 ### Core Components:
 
@@ -117,7 +117,7 @@ The chat system consists of multiple distributed objects working together:
 ### ChatRoom Object (Distributed Object)
 ```go
 type ChatRoom struct {
-    pulseapi.BaseObject
+    goverseapi.BaseObject
     users    map[string]bool
     messages []*chat_pb.ChatMessage
     mu       sync.Mutex
@@ -152,13 +152,13 @@ func (room *ChatRoom) SendMessage(ctx context.Context, req *chat_pb.ChatRoom_Sen
 ### ChatClient Object (Server-side Client Proxy)
 ```go
 type ChatClient struct {
-    pulseapi.BaseClient
+    goverseapi.BaseClient
     currentChatRoom string
 }
 
 func (cc *ChatClient) Join(ctx context.Context, req *chat_pb.Client_JoinChatRoomRequest) (*chat_pb.Client_JoinChatRoomResponse, error) {
     // Call the ChatRoom object
-    resp, err := pulseapi.CallObject(ctx, "ChatRoom-"+req.RoomName, "Join", 
+    resp, err := goverseapi.CallObject(ctx, "ChatRoom-"+req.RoomName, "Join", 
         &chat_pb.ChatRoom_JoinRequest{UserName: req.UserName})
     
     cc.currentChatRoom = req.RoomName
@@ -167,7 +167,7 @@ func (cc *ChatClient) Join(ctx context.Context, req *chat_pb.Client_JoinChatRoom
 
 func (cc *ChatClient) SendMessage(ctx context.Context, req *chat_pb.Client_SendChatMessageRequest) (*chat_pb.Client_SendChatMessageResponse, error) {
     // Forward to current chat room
-    _, err := pulseapi.CallObject(ctx, "ChatRoom-"+cc.currentChatRoom, "SendMessage",
+    _, err := goverseapi.CallObject(ctx, "ChatRoom-"+cc.currentChatRoom, "SendMessage",
         &chat_pb.ChatRoom_SendChatMessageRequest{
             UserName: req.GetUserName(),
             Message:  req.GetMessage(),
@@ -179,17 +179,17 @@ func (cc *ChatClient) SendMessage(ctx context.Context, req *chat_pb.Client_SendC
 ### Server Setup
 ```go
 func main() {
-    config := &pulseapi.ServerConfig{
+    config := &goverseapi.ServerConfig{
         ListenAddress:       "localhost:47000",
         AdvertiseAddress:    "localhost:47000",
         ClientListenAddress: "localhost:48000",
     }
-    server := pulseapi.NewServer(config)
+    server := goverseapi.NewServer(config)
     
     // Register types and create initial objects
-    pulseapi.RegisterClientType((*ChatClient)(nil))
-    pulseapi.RegisterObjectType((*ChatRoom)(nil))
-    pulseapi.CreateObject(ctx, "ChatRoom", "ChatRoom-General", nil)
+    goverseapi.RegisterClientType((*ChatClient)(nil))
+    goverseapi.RegisterObjectType((*ChatRoom)(nil))
+    goverseapi.CreateObject(ctx, "ChatRoom", "ChatRoom-General", nil)
     
     server.Run()
 }
@@ -331,4 +331,4 @@ MIT License
 
 ---
 
-**Pulse** makes building distributed, stateful Go systems simple, scalable, and observable through its client service architecture and virtual actor model.
+**Goverse** makes building distributed, stateful Go systems simple, scalable, and observable through its client service architecture and virtual actor model.

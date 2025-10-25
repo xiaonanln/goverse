@@ -1,6 +1,6 @@
 # Test Documentation
 
-This document describes the test coverage for the Pulse distributed system framework.
+This document describes the test coverage for the Goverse distributed system framework.
 
 ## Test Coverage Summary
 
@@ -40,7 +40,7 @@ Tests for server configuration and validation:
 - Server initialization
 - Logger and node setup
 
-#### pulseapi Package (20% coverage)
+#### goverseapi Package (20% coverage)
 Tests for the API wrapper functions:
 - Server creation
 - Type alias verification
