@@ -1,8 +1,8 @@
-# GitHub Copilot Instructions for Pulse
+# GitHub Copilot Instructions for Goverse
 
 ## Project Overview
 
-Pulse is a **distributed object runtime for Go** implementing the **virtual actor (grain) model**. It enables building systems around stateful entities with identity and methods, while the runtime handles placement, routing, lifecycle, and fault-tolerance.
+Goverse is a **distributed object runtime for Go** implementing the **virtual actor (grain) model**. It enables building systems around stateful entities with identity and methods, while the runtime handles placement, routing, lifecycle, and fault-tolerance.
 
 ### Core Concepts
 
@@ -21,8 +21,8 @@ Pulse is a **distributed object runtime for Go** implementing the **virtual acto
 - **object/** - Object base types and helpers (BaseObject)
 - **client/** - Client service implementation and protocol definitions (BaseClient)
 - **cluster/** - Cluster singleton management
-- **pulseapi/** - API wrapper functions for the framework
-- **proto/** - Core Pulse protocol definitions
+- **goverseapi/** - API wrapper functions for the framework
+- **proto/** - Core Goverse protocol definitions
 - **util/** - Logging and utility helpers
 - **samples/chat/** - Distributed chat application example
 - **inspector/** - Web UI for cluster visualization
@@ -30,10 +30,10 @@ Pulse is a **distributed object runtime for Go** implementing the **virtual acto
 
 ### Base Types
 
-- All distributed objects should extend `pulseapi.BaseObject`
-- All client objects should extend `pulseapi.BaseClient`
-- Use `pulseapi.CallObject()` to call methods on distributed objects
-- Register types with `pulseapi.RegisterObjectType()` and `pulseapi.RegisterClientType()`
+- All distributed objects should extend `goverseapi.BaseObject`
+- All client objects should extend `goverseapi.BaseClient`
+- Use `goverseapi.CallObject()` to call methods on distributed objects
+- Register types with `goverseapi.RegisterObjectType()` and `goverseapi.RegisterClientType()`
 
 ## Development Workflow
 
@@ -86,7 +86,7 @@ When modifying `.proto` files:
 4. Run tests to verify changes
 
 Proto files to be aware of:
-- `proto/pulse.proto` - Core Pulse protocol
+- `proto/goverse.proto` - Core Goverse protocol
 - `client/proto/client.proto` - Client service protocol
 - `inspector/proto/inspector.proto` - Inspector UI protocol
 - `samples/chat/proto/chat.proto` - Chat sample protocol
@@ -106,7 +106,7 @@ When implementing distributed objects:
 
 ```go
 type MyObject struct {
-    pulseapi.BaseObject
+    goverseapi.BaseObject
     // Add your state fields here
     mu sync.Mutex  // Use mutex for concurrent access
 }
@@ -126,13 +126,13 @@ When implementing client objects:
 
 ```go
 type MyClient struct {
-    pulseapi.BaseClient
+    goverseapi.BaseClient
     // Add client-specific state
 }
 
 func (c *MyClient) MyMethod(ctx context.Context, req *proto.MyRequest) (*proto.MyResponse, error) {
-    // Call distributed objects using pulseapi.CallObject
-    resp, err := pulseapi.CallObject(ctx, "ObjectType-id", "MethodName", request)
+    // Call distributed objects using goverseapi.CallObject
+    resp, err := goverseapi.CallObject(ctx, "ObjectType-id", "MethodName", request)
     if err != nil {
         return nil, err
     }
@@ -157,7 +157,7 @@ func (c *MyClient) MyMethod(ctx context.Context, req *proto.MyRequest) (*proto.M
 ### Logging
 
 ```go
-import "github.com/simonlingoogle/pulse/util/logger"
+import "github.com/simonlingoogle/goverse/util/logger"
 
 // Use the logger package for consistent logging
 logger.Info("Starting operation")
@@ -220,10 +220,10 @@ func TestMyFunction(t *testing.T) {
 
 ```go
 // Create an object
-pulseapi.CreateObject(ctx, "ObjectType", "ObjectType-uniqueId", initRequest)
+goverseapi.CreateObject(ctx, "ObjectType", "ObjectType-uniqueId", initRequest)
 
 // Call a method on an object
-resp, err := pulseapi.CallObject(ctx, "ObjectType-id", "MethodName", request)
+resp, err := goverseapi.CallObject(ctx, "ObjectType-id", "MethodName", request)
 if err != nil {
     return nil, err
 }
@@ -233,16 +233,16 @@ result := resp.(*proto.ResponseType)
 ### Server Setup
 
 ```go
-config := &pulseapi.ServerConfig{
+config := &goverseapi.ServerConfig{
     ListenAddress:       "localhost:47000",
     AdvertiseAddress:    "localhost:47000",
     ClientListenAddress: "localhost:48000",
 }
-server := pulseapi.NewServer(config)
+server := goverseapi.NewServer(config)
 
 // Register types
-pulseapi.RegisterClientType((*MyClient)(nil))
-pulseapi.RegisterObjectType((*MyObject)(nil))
+goverseapi.RegisterClientType((*MyClient)(nil))
+goverseapi.RegisterObjectType((*MyObject)(nil))
 
 // Start server
 server.Run()
