@@ -157,7 +157,7 @@ func (c *MyClient) MyMethod(ctx context.Context, req *proto.MyRequest) (*proto.M
 ### Logging
 
 ```go
-import "github.com/simonlingoogle/goverse/util/logger"
+import "github.com/xiaonanln/goverse/util/logger"
 
 // Use the logger package for consistent logging
 logger.Info("Starting operation")
