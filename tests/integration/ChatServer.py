@@ -25,12 +25,11 @@ class ChatServer:
     """Manages a Goverse chat server process and gRPC connections."""
     
     def __init__(self, server_index=0, listen_port=None, client_port=None, 
-                 binary_path=None, build_if_needed=True, base_cov_dir=None):
+                 binary_path=None, build_if_needed=True):
         self.server_index = server_index
         self.listen_port = listen_port if listen_port is not None else 47000 + server_index
         self.client_port = client_port if client_port is not None else 48000 + server_index
         self.binary_path = binary_path if binary_path is not None else '/tmp/chat_server'
-        self.base_cov_dir = base_cov_dir
         self.process = None
         self.channel = None
         self.stub = None
@@ -70,13 +69,7 @@ class ChatServer:
 
         print(f"Starting {self.name} (ports {self.listen_port}, {self.client_port})...")
         
-        # Prepare environment for coverage (inherited if already exported)
-        server_env = None
-        if self.base_cov_dir:
-            server_env = os.environ.copy()
-            server_env['GOCOVERDIR'] = self.base_cov_dir
-        
-        # Start the process
+        # Start the process (inherits GOCOVERDIR from environment if set)
         cmd = [
             self.binary_path,
             '-listen', f'localhost:{self.listen_port}',
@@ -87,8 +80,7 @@ class ChatServer:
         self.process = subprocess.Popen(
             cmd, 
             stdout=subprocess.DEVNULL, 
-            stderr=subprocess.DEVNULL,
-            env=server_env
+            stderr=subprocess.DEVNULL
         )
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     

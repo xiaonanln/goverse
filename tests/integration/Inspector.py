@@ -25,7 +25,7 @@ class Inspector:
     """Manages the Goverse inspector process and gRPC/HTTP connections."""
     
     def __init__(self, binary_path=None, http_port=8080, grpc_port=8081, 
-                 build_if_needed=True, base_cov_dir=None):
+                 build_if_needed=True):
         """Initialize and optionally build the inspector.
         
         Args:
@@ -33,12 +33,10 @@ class Inspector:
             http_port: HTTP server port (default: 8080)
             grpc_port: gRPC server port (default: 8081)
             build_if_needed: Whether to build the binary if it doesn't exist
-            base_cov_dir: Base directory for coverage data (optional)
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/inspector'
         self.http_port = http_port
         self.grpc_port = grpc_port
-        self.base_cov_dir = base_cov_dir
         self.process = None
         self.channel = None
         self.stub = None
@@ -78,18 +76,11 @@ class Inspector:
 
         print(f"Starting {self.name}...")
         
-        # Prepare environment for coverage (inherited if already exported)
-        inspector_env = None
-        if self.base_cov_dir:
-            inspector_env = os.environ.copy()
-            inspector_env['GOCOVERDIR'] = self.base_cov_dir
-        
-        # Start the process
+        # Start the process (inherits GOCOVERDIR from environment if set)
         self.process = subprocess.Popen(
             [self.binary_path], 
             stdout=subprocess.DEVNULL, 
-            stderr=subprocess.DEVNULL,
-            env=inspector_env
+            stderr=subprocess.DEVNULL
         )
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     
