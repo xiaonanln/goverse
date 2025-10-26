@@ -164,6 +164,46 @@ func (c *ChatClient) GetRecentMessages() error {
 	return nil
 }
 
+// listenForMessages continuously listens for pushed messages from the server
+func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterClient) {
+	for {
+		msgAny, err := stream.Recv()
+		if err != nil {
+			c.logger.Errorf("Error receiving message from stream: %v", err)
+			return
+		}
+
+		msg, err := msgAny.UnmarshalNew()
+		if err != nil {
+			c.logger.Errorf("Failed to unmarshal pushed message: %v", err)
+			continue
+		}
+
+		// Handle different types of pushed messages
+		switch notification := msg.(type) {
+		case *chat_pb.Client_NewMessageNotification:
+			// Display the pushed message
+			chatMsg := notification.Message
+			timestamp := time.Unix(chatMsg.Timestamp, 0).Format("15:04:05")
+			fmt.Printf("\n[%s] %s: %s\n", timestamp, chatMsg.UserName, chatMsg.Message)
+			
+			// Update last message timestamp
+			if chatMsg.Timestamp > c.lastMsgTimestamp {
+				c.lastMsgTimestamp = chatMsg.Timestamp
+			}
+			
+			// Re-display prompt
+			if c.roomName != "" {
+				fmt.Printf("[%s] > ", c.roomName)
+			} else {
+				fmt.Print("> ")
+			}
+		default:
+			c.logger.Warnf("Received unknown message type: %T", msg)
+		}
+	}
+}
+
 func (c *ChatClient) RunInteractive() {
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -277,6 +317,9 @@ func main() {
 	regResp := receiveMessages(stream).(*client_pb.RegisterResponse)
 	client.clientID = regResp.ClientId
 	client.logger.Infof("Client %s registered successfully", client.clientID)
+
+	// Start a goroutine to listen for pushed messages
+	go client.listenForMessages(stream)
 
 	fmt.Println("Connected! Type /help for commands.")
 	client.RunInteractive()
