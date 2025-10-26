@@ -31,9 +31,9 @@ The test script includes a `ChatServer` class that manages chat server processes
   - `stop()`: Gracefully stop the server process
   - `wait_for_ready()`: Wait for server to be ready to accept connections
 - **RPC Methods:**
-  - `call_status()`: Get server status (advertise address, object count, uptime)
-  - `list_objects()`: List all objects on the server
-  - `call_method()`: Make generic RPC calls to objects
+  - `Status()`: Get server status (advertise address, object count, uptime)
+  - `ListObjects()`: List all objects on the server
+  - `CallObject()`: Make generic RPC calls to objects
 - **Connection Management:**
   - `connect()`: Establish gRPC connection
   - `close()`: Close the gRPC channel

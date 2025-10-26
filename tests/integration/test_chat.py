@@ -264,10 +264,8 @@ class ChatServer:
         # Prepare environment for coverage
         server_env = None
         if self.base_cov_dir:
-            server_cov = os.path.join(self.base_cov_dir, f'server{self.server_index + 1}')
-            os.makedirs(server_cov, exist_ok=True)
             server_env = os.environ.copy()
-            server_env['GOCOVERDIR'] = server_cov
+            server_env['GOCOVERDIR'] = self.base_cov_dir
         
         # Start the process
         cmd = [
@@ -313,7 +311,7 @@ class ChatServer:
             self.channel = grpc.insecure_channel(f'localhost:{self.listen_port}')
             self.stub = goverse_pb2_grpc.GoverseStub(self.channel)
     
-    def call_status(self, timeout=5):
+    def Status(self, timeout=5):
         """Call the Goverse Status RPC and return the response.
         
         Args:
@@ -339,7 +337,7 @@ class ChatServer:
         except Exception as e:
             return f"Error: {str(e)}"
     
-    def list_objects(self, timeout=5):
+    def ListObjects(self, timeout=5):
         """Call the Goverse ListObjects RPC and return the response.
         
         Args:
@@ -370,7 +368,7 @@ class ChatServer:
         except Exception as e:
             return f"Error: {str(e)}"
     
-    def call_method(self, object_id, method, request, timeout=5):
+    def CallObject(self, object_id, method, request, timeout=5):
         """Make a generic RPC call to an object method.
         
         Args:
@@ -652,7 +650,7 @@ def main():
                 server_index=i,
                 binary_path=chat_server_path,
                 build_if_needed=False,  # Already built
-                base_cov_dir=base_cov_dir if base_cov_dir else None
+                base_cov_dir=base_cov_dir
             )
             server.start()
             chat_servers.append(server)
@@ -673,7 +671,7 @@ def main():
         print("=" * 60)
         for server in chat_servers:
             print(f"\n{server.name} (localhost:{server.listen_port}) Status:")
-            status_response = server.call_status()
+            status_response = server.Status()
             print(status_response)
 
         # Step 6.6: Call ListObjects RPC for each chat server
@@ -682,7 +680,7 @@ def main():
         print("=" * 60)
         for server in chat_servers:
             print(f"\n{server.name} (localhost:{server.listen_port}) Objects:")
-            objects_response = server.list_objects()
+            objects_response = server.ListObjects()
             print(objects_response)
 
         # Step 7: Build chat client
