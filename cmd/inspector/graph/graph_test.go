@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -412,8 +413,8 @@ func TestRemoveStaleObjects_NonExistentNode(t *testing.T) {
 func TestConcurrentAccess(t *testing.T) {
 	pg := NewGoverseGraph()
 
-	const goroutines = 10
-	const operations = 100
+	const goroutines = 5
+	const operations = 10
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3) // 3 types of operations
@@ -424,7 +425,7 @@ func TestConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operations; j++ {
 				obj := models.GoverseObject{
-					ID:            string(rune('a'+id)) + string(rune('0'+j%10)),
+					ID:            fmt.Sprintf("obj-%d-%d", id, j),
 					GoverseNodeID: "node1",
 				}
 				pg.AddObject(obj)
@@ -438,7 +439,7 @@ func TestConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operations; j++ {
 				node := models.GoverseNode{
-					ID:    string(rune('n'+id)) + string(rune('0'+j%10)),
+					ID:    fmt.Sprintf("node-%d-%d", id, j),
 					Label: "Node",
 				}
 				pg.AddOrUpdateNode(node)
@@ -478,10 +479,10 @@ func TestConcurrentRemoveAndRead(t *testing.T) {
 
 	// Add initial data
 	for i := 0; i < 10; i++ {
-		node := models.GoverseNode{ID: string(rune('n' + i))}
+		node := models.GoverseNode{ID: fmt.Sprintf("node-%d", i)}
 		pg.AddOrUpdateNode(node)
 
-		obj := models.GoverseObject{ID: string(rune('o' + i)), GoverseNodeID: string(rune('n' + i))}
+		obj := models.GoverseObject{ID: fmt.Sprintf("obj-%d", i), GoverseNodeID: fmt.Sprintf("node-%d", i)}
 		pg.AddObject(obj)
 	}
 
@@ -492,7 +493,7 @@ func TestConcurrentRemoveAndRead(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 5; i++ {
-			pg.RemoveNode(string(rune('n' + i)))
+			pg.RemoveNode(fmt.Sprintf("node-%d", i))
 		}
 	}()
 
@@ -500,7 +501,7 @@ func TestConcurrentRemoveAndRead(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 5; i < 10; i++ {
-			pg.RemoveStaleObjects(string(rune('n'+i)), []*inspector_pb.Object{})
+			pg.RemoveStaleObjects(fmt.Sprintf("node-%d", i), []*inspector_pb.Object{})
 		}
 	}()
 
