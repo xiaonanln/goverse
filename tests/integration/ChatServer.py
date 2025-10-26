@@ -25,7 +25,7 @@ class ChatServer:
     """Manages a Goverse chat server process and gRPC connections."""
     
     def __init__(self, server_index=0, listen_port=None, client_port=None, 
-                 binary_path=None, build_if_needed=True):
+                 binary_path=None):
         self.server_index = server_index
         self.listen_port = listen_port if listen_port is not None else 47000 + server_index
         self.client_port = client_port if client_port is not None else 48000 + server_index
@@ -36,7 +36,7 @@ class ChatServer:
         self.name = f"Chat Server {server_index + 1}"
         
         # Build binary if needed
-        if build_if_needed and not os.path.exists(self.binary_path):
+        if not os.path.exists(self.binary_path):
             if not self._build_binary():
                 raise RuntimeError(f"Failed to build chat server binary at {self.binary_path}")
     
