@@ -1,8 +1,25 @@
 # Use official Golang image as the base
 FROM golang:1.25-bookworm
 
-# Install protoc (protobuf compiler) and git
-RUN apt-get update && apt-get install -y dos2unix protobuf-compiler git && rm -rf /var/lib/apt/lists/*
+# Install system dependencies (including Python and etcd for test_chat.py)
+RUN apt-get update && apt-get install -y \
+    dos2unix \
+    protobuf-compiler \
+    git \
+    python3 \
+    python3-pip \
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install etcd
+RUN wget -q https://github.com/etcd-io/etcd/releases/download/v3.5.10/etcd-v3.5.10-linux-amd64.tar.gz \
+    && tar xzf etcd-v3.5.10-linux-amd64.tar.gz \
+    && mv etcd-v3.5.10-linux-amd64/etcd* /usr/local/bin/ \
+    && rm -rf etcd-v3.5.10-linux-amd64*
+
+# Install Python packages for test_chat.py
+RUN pip3 install --break-system-packages grpcio grpcio-tools
 
 # Install protoc-gen-go and protoc-gen-go-grpc
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
@@ -19,6 +36,9 @@ COPY . .
 
 # Download Go dependencies
 RUN go mod download
+
+# Compile protocol buffers
+RUN ./script/compile-proto.sh
 
 # Default command
 CMD ["bash"]
