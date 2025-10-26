@@ -1,8 +1,6 @@
 # GoVerse
 
-<div style="background-color:#fff3cd;border-left:4px solid #ffeeba;padding:12px 16px;border-radius:6px">
-<strong>⚠️ EARLY DEVELOPMENT STAGE</strong> — This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
-</div>
+> ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
 [![Go Tests](https://github.com/xiaonanln/goverse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/goverse/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/xiaonanln/goverse/branch/main/graph/badge.svg)](https://codecov.io/gh/xiaonanln/goverse)
