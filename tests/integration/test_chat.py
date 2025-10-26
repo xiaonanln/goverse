@@ -61,63 +61,6 @@ except ImportError as import_error:
     sys.exit(1)
 
 
-class ProcessManager:
-    """Manages background processes with cleanup."""
-    
-    def __init__(self):
-        self.processes = []
-    
-    def start(self, cmd, name, shell=False, env: dict | None = None):
-        """Start a process in the background.
-        Optionally override environment with `env` (merged with os.environ).
-        """
-        print(f"Starting {name}...")
-        popen_env = None
-        if env is not None:
-            popen_env = os.environ.copy()
-            popen_env.update(env)
-        if shell:
-            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, 
-                                     stderr=subprocess.DEVNULL, env=popen_env)
-        else:
-            process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, 
-                                     stderr=subprocess.DEVNULL, env=popen_env)
-        self.processes.append((process, name))
-        print(f"✅ {name} started with PID: {process.pid}")
-        return process
-    
-    def cleanup(self):
-        """Clean up all managed processes."""
-        print("\nCleaning up processes...")
-        for process, name in self.processes:
-            if process.poll() is None:  # Process is still running
-                print(f"Stopping {name} (PID: {process.pid})...")
-                try:
-                    # Try SIGINT first to allow graceful shutdown and coverage flush
-                    try:
-                        process.send_signal(signal.SIGINT)
-                        process.wait(timeout=10)
-                        continue
-                    except Exception:
-                        pass
-                    except subprocess.TimeoutExpired:
-                        pass
-
-                    # Then try SIGTERM
-                    try:
-                        process.terminate()
-                        process.wait(timeout=5)
-                        continue
-                    except subprocess.TimeoutExpired:
-                        pass
-
-                    # Finally force kill
-                    process.kill()
-                    process.wait()
-                except Exception as e:
-                    print(f"Error stopping {name}: {e}")
-
-
 def check_port(port, timeout=30):
     """Wait for a port to be available."""
     print(f"Waiting for port {port} to be ready...")
@@ -315,28 +258,20 @@ def main():
     print("=" * 60)
     print()
     
-    # Create process manager for cleanup
-    pm = ProcessManager()
-    
     try:
         # Add go bin to PATH
         go_bin_path = subprocess.run(['go', 'env', 'GOPATH'], 
                                     capture_output=True, text=True, check=True).stdout.strip()
         os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
         
-        # Determine base coverage dir (all binaries will write under this directory)
-        # The Go runtime coverage tooling will create per-process subdirectories
-        # automatically when they share the same GOCOVERDIR root.
         base_cov_dir = os.environ.get('GOCOVERDIR', '').strip()
-
         # If a base coverage dir was provided, ensure it exists and export it so
         # all child processes inherit the same GOCOVERDIR automatically.
         if base_cov_dir:
             os.makedirs(base_cov_dir, exist_ok=True)
-            os.environ['GOCOVERDIR'] = base_cov_dir
 
         # Start inspector using Inspector class
-        inspector = Inspector(base_cov_dir=base_cov_dir)
+        inspector = Inspector()
         inspector.start()
         
         # Wait for inspector to be ready
@@ -354,8 +289,7 @@ def main():
             server = ChatServer(
                 server_index=i,
                 binary_path=chat_server_path,
-                build_if_needed=False,  # Already built
-                base_cov_dir=base_cov_dir
+                build_if_needed=False  # Already built
             )
             server.start()
             chat_servers.append(server)
@@ -433,8 +367,6 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
-    finally:
-        pm.cleanup()
 
 
 if __name__ == '__main__':
