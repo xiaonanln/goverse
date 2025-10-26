@@ -34,6 +34,12 @@ jobs:
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+      - name: Ensure Python proto tools (grpcio-tools) and runtime (grpcio) are available
+        run: |
+          # Install what's required for generating Python protos and running the tests
+          python3 -m pip install --upgrade pip
+          python3 -m pip install grpcio grpcio-tools
       
       - name: Compile protobuf files
         run: |
@@ -57,11 +63,6 @@ jobs:
             echo "Waiting for etcd to start... ($i/10)"
             sleep 1
           done
-      
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install grpcio grpcio-tools
       
       - name: Create coverage directory
         run: mkdir -p /tmp/coverage
