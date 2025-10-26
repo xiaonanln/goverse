@@ -28,12 +28,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 # Expose the integration directory on sys.path so helper modules in this folder
-# (e.g., ChatServer.py, Inspector.py) can be imported directly.
+# (e.g., ChatServer.py, Inspector.py, ChatClient.py) can be imported directly.
 INTEGRATION_DIR = REPO_ROOT / 'tests' / 'integration'
 sys.path.insert(0, str(INTEGRATION_DIR))
 
 from ChatServer import ChatServer
 from Inspector import Inspector
+from ChatClient import ChatClient
 
 # Ensure proto directory is a Python package
 proto_init = REPO_ROOT / 'proto' / '__init__.py'
@@ -235,7 +236,7 @@ def build_binary(source_path, output_path, name):
         return False
 
 
-def run_chat_test(client_path, num_servers=1, base_cov_dir: str | None = None):
+def run_chat_test(num_servers=1):
     """Run the chat client with test input and verify output."""
     print("\nTesting chat client and server interaction...")
     
@@ -249,6 +250,9 @@ def run_chat_test(client_path, num_servers=1, base_cov_dir: str | None = None):
         print(f"Randomly selected server: localhost:{selected_port} (server {selected_server_idx + 1})")
     else:
         print(f"Using server: localhost:{selected_port}")
+    
+    # Create ChatClient instance
+    chat_client = ChatClient()
     
     # Create test input - adjust messages if clustered
     if num_servers > 1:
@@ -270,78 +274,25 @@ Final test message
 /quit
 """
     
-    # Create temporary files
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as input_file:
-        input_file.write(test_input)
-        input_file_path = input_file.name
+    # Run the test and get output
+    output = chat_client.run_test(server_port=selected_port, test_input=test_input)
     
-    output_file_path = tempfile.mktemp(suffix='.txt')
+    # Define test expectations (adjust messages based on number of servers)
+    msg1, msg2 = ("Hello from clustered test!", "This is message 2 from random server") if num_servers > 1 else ("Hello from test!", "This is message 2")
     
-    try:
-        print(f"Running chat client with test input (connecting to localhost:{selected_port})...")
-        
-        # Run the chat client with timeout
-        with open(input_file_path, 'r') as stdin_file, \
-             open(output_file_path, 'w') as stdout_file:
-            try:
-                # Child processes inherit GOCOVERDIR from the environment if set;
-                # no per-process env override is necessary.
-                subprocess.run([client_path, '-server', f'localhost:{selected_port}', '-user', 'testuser'],
-                               stdin=stdin_file, stdout=stdout_file, stderr=subprocess.STDOUT,
-                               timeout=30)
-            except subprocess.TimeoutExpired:
-                print("Chat client timed out (this is expected)")
-        
-        # Read and display output
-        with open(output_file_path, 'r') as f:
-            output = f.read()
-        
-        print("\nChat client output:")
-        print(output)
-        
-        # Verify the output
-        print("\nVerifying test results...")
-        
-        # Define test expectations (adjust messages based on number of servers)
-        msg1, msg2 = ("Hello from clustered test!", "This is message 2 from random server") if num_servers > 1 else ("Hello from test!", "This is message 2")
-        
-        tests = [
-            ("Available Chatrooms:", "/list command executed successfully"),
-            ("General", "Chatroom 'General' listed"),
-            ("Technology", "Chatroom 'Technology' listed"),
-            ("Joined chatroom General", "Joined chatroom 'General'", lambda s: "Joined chatroom General" in s or "[General]" in s),
-            (msg1, f"Message '{msg1}' sent and received"),
-            (msg2, f"Message '{msg2}' sent and received"),
-            ("Final test message", "Message 'Final test message' sent and received"),
-            ("Recent messages in", "/messages command executed successfully"),
-        ]
-        
-        all_passed = True
-        for test_data in tests:
-            if len(test_data) == 2:
-                search_str, success_msg = test_data
-                check_func = lambda s, search=search_str: search in s
-            else:
-                search_str, success_msg, check_func = test_data
-            
-            if check_func(output):
-                print(f"✅ {success_msg}")
-            else:
-                print(f"❌ {success_msg} - not found")
-                all_passed = False
-        
-        return all_passed
-        
-    finally:
-        # Clean up temporary files
-        try:
-            os.unlink(input_file_path)
-        except:
-            pass
-        try:
-            os.unlink(output_file_path)
-        except:
-            pass
+    expected_patterns = [
+        ("Available Chatrooms:", "/list command executed successfully"),
+        ("General", "Chatroom 'General' listed"),
+        ("Technology", "Chatroom 'Technology' listed"),
+        ("Joined chatroom General", "Joined chatroom 'General'", lambda s: "Joined chatroom General" in s or "[General]" in s),
+        (msg1, f"Message '{msg1}' sent and received"),
+        (msg2, f"Message '{msg2}' sent and received"),
+        ("Final test message", "Message 'Final test message' sent and received"),
+        ("Recent messages in", "/messages command executed successfully"),
+    ]
+    
+    # Verify the output
+    return chat_client.verify_output(output, expected_patterns)
 
 
 def main():
@@ -437,13 +388,8 @@ def main():
             objects_response = server.ListObjects()
             print(objects_response)
 
-        # Build chat client
-        chat_client_path = '/tmp/chat_client'
-        if not build_binary('./samples/chat/client/', chat_client_path, "chat client"):
-            return 1
-
         # Run chat test
-        chat_ok = run_chat_test(chat_client_path, num_servers, base_cov_dir=base_cov_dir if base_cov_dir else None)
+        chat_ok = run_chat_test(num_servers)
 
         # Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
