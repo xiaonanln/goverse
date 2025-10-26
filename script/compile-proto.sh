@@ -26,8 +26,9 @@ done
 # Generate Python proto files for integration tests
 echo "Generating Python proto files..."
 if command -v python3 &> /dev/null; then
-    # Ensure proto directory is a Python package
+    # Ensure proto directories are Python packages
     touch proto/__init__.py
+    touch inspector/proto/__init__.py
     
     # Generate Python proto files from goverse.proto
     if [[ -f "proto/goverse.proto" ]]; then
@@ -36,10 +37,23 @@ if command -v python3 &> /dev/null; then
             --python_out=. \
             --grpc_python_out=. \
             proto/goverse.proto 2>&1; then
-            echo "  ✅ Python proto files generated successfully"
+            echo "  ✅ Python proto files generated for proto/goverse.proto"
         else
             echo "  Note: Python grpcio-tools not available, skipping Python proto generation"
             echo "        Install with: pip install grpcio-tools"
+        fi
+    fi
+    
+    # Generate Python proto files from inspector/proto/inspector.proto
+    if [[ -f "inspector/proto/inspector.proto" ]]; then
+        if python3 -m grpc_tools.protoc \
+            -I. \
+            --python_out=. \
+            --grpc_python_out=. \
+            inspector/proto/inspector.proto 2>&1; then
+            echo "  ✅ Python proto files generated for inspector/proto/inspector.proto"
+        else
+            echo "  Note: Failed to generate Python proto files for inspector.proto"
         fi
     fi
 else
