@@ -337,15 +337,11 @@ Final test message
         with open(input_file_path, 'r') as stdin_file, \
              open(output_file_path, 'w') as stdout_file:
             try:
-                # Set a separate coverage dir for the chat client if coverage base is provided
-                env = os.environ.copy()
-                if base_cov_dir:
-                    client_cov_dir = os.path.join(base_cov_dir, 'client')
-                    os.makedirs(client_cov_dir, exist_ok=True)
-                    env['GOCOVERDIR'] = client_cov_dir
+                # Child processes inherit GOCOVERDIR from the environment if set;
+                # no per-process env override is necessary.
                 subprocess.run([client_path, '-server', f'localhost:{selected_port}', '-user', 'testuser'],
                                stdin=stdin_file, stdout=stdout_file, stderr=subprocess.STDOUT,
-                               timeout=30, env=env)
+                               timeout=30)
             except subprocess.TimeoutExpired:
                 print("Chat client timed out (this is expected)")
         
@@ -430,21 +426,24 @@ def main():
                                     capture_output=True, text=True, check=True).stdout.strip()
         os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
         
-        # Determine base coverage dir (each binary will write to its own subdir)
+        # Determine base coverage dir (all binaries will write under this directory)
+        # The Go runtime coverage tooling will create per-process subdirectories
+        # automatically when they share the same GOCOVERDIR root.
         base_cov_dir = os.environ.get('GOCOVERDIR', '').strip()
+
+        # If a base coverage dir was provided, ensure it exists and export it so
+        # all child processes inherit the same GOCOVERDIR automatically.
+        if base_cov_dir:
+            os.makedirs(base_cov_dir, exist_ok=True)
+            os.environ['GOCOVERDIR'] = base_cov_dir
 
         # Step 1: Build inspector
         inspector_path = '/tmp/inspector'
         if not build_binary('./cmd/inspector/', inspector_path, "inspector"):
             return 1
         
-        # Step 2: Start inspector
-        inspector_env = None
-        if base_cov_dir:
-            inspector_cov = os.path.join(base_cov_dir, 'inspector')
-            os.makedirs(inspector_cov, exist_ok=True)
-            inspector_env = {"GOCOVERDIR": inspector_cov}
-        inspector_proc = pm.start([inspector_path], "Inspector", env=inspector_env)
+        # Step 2: Start inspector (it inherits GOCOVERDIR from the environment)
+        inspector_proc = pm.start([inspector_path], "Inspector")
         
         # Step 3: Wait for inspector to be ready
         if not check_http_server('http://localhost:8080/', timeout=30):
@@ -470,17 +469,13 @@ def main():
             server_name = f"Chat Server {i + 1}"
 
             print(f"\nStarting {server_name} (ports {listen_port}, {client_port})...")
-            server_env = None
-            if base_cov_dir:
-                server_cov = os.path.join(base_cov_dir, f'server{i+1}')
-                os.makedirs(server_cov, exist_ok=True)
-                server_env = {"GOCOVERDIR": server_cov}
+            # Servers inherit GOCOVERDIR from the environment (if set)
             p = pm.start([
                 chat_server_path,
                 '-listen', f'localhost:{listen_port}',
                 '-advertise', f'localhost:{listen_port}',
                 '-client-listen', f'localhost:{client_port}'
-            ], server_name, env=server_env)
+            ], server_name)
             server_procs.append((p, server_name))
 
         # Give all servers a moment to start
