@@ -93,6 +93,7 @@ func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterCl
         switch notification := msg.(type) {
         case *chat_pb.Client_NewMessageNotification:
             // Display the message immediately
+            timestamp := time.Unix(notification.Message.Timestamp, 0).Format("15:04:05")
             fmt.Printf("\n[%s] %s: %s\n", timestamp, 
                 notification.Message.UserName, 
                 notification.Message.Message)
@@ -149,8 +150,8 @@ For manual testing with two clients:
 
 1. Start the server: `go run samples/chat/server/*.go`
 2. Open two terminals
-3. Terminal 1: `go run samples/chat/client/client.go -user alice`
-4. Terminal 2: `go run samples/chat/client/client.go -user bob`
+3. Terminal 1: `go run samples/chat/client/*.go -user alice`
+4. Terminal 2: `go run samples/chat/client/*.go -user bob`
 5. Both: `/join General`
 6. Type in one terminal and see messages appear in the other instantly!
 
