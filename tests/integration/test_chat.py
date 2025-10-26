@@ -202,67 +202,249 @@ def graceful_stop(process: subprocess.Popen, name: str, timeout_int: float = 10.
     return process.returncode if process.returncode is not None else -1
 
 
-def call_status_rpc(host, port, repo_root):
-    """Call the Goverse Status RPC and return the response."""
-    try:
-        # Create a gRPC channel
-        channel = grpc.insecure_channel(f'{host}:{port}')
-        stub = goverse_pb2_grpc.GoverseStub(channel)
+class ChatServer:
+    """Manages a Goverse chat server process and gRPC connections."""
+    
+    def __init__(self, server_index=0, listen_port=None, client_port=None, 
+                 binary_path=None, build_if_needed=True, base_cov_dir=None):
+        """Initialize and optionally start a chat server.
         
-        # Call the Status RPC
-        response = stub.Status(goverse_pb2.Empty(), timeout=5)
+        Args:
+            server_index: Server index number (for multi-server setups)
+            listen_port: Server listen port (defaults to 47000 + server_index)
+            client_port: Client listen port (defaults to 48000 + server_index)
+            binary_path: Path to chat server binary (defaults to /tmp/chat_server)
+            build_if_needed: Whether to build the binary if it doesn't exist
+            base_cov_dir: Base directory for coverage data (optional)
+        """
+        self.server_index = server_index
+        self.listen_port = listen_port if listen_port is not None else 47000 + server_index
+        self.client_port = client_port if client_port is not None else 48000 + server_index
+        self.binary_path = binary_path if binary_path is not None else '/tmp/chat_server'
+        self.base_cov_dir = base_cov_dir
+        self.process = None
+        self.channel = None
+        self.stub = None
+        self.name = f"Chat Server {server_index + 1}"
         
-        # Format the response as JSON
-        result = {
-            "advertiseAddr": response.advertise_addr,
-            "numObjects": str(response.num_objects),
-            "uptimeSeconds": str(response.uptime_seconds)
-        }
+        # Build binary if needed
+        if build_if_needed and not os.path.exists(self.binary_path):
+            if not self._build_binary():
+                raise RuntimeError(f"Failed to build chat server binary at {self.binary_path}")
+    
+    def _build_binary(self):
+        """Build the chat server binary."""
+        print(f"Building chat server...")
+        try:
+            enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
+            
+            cmd = ['go', 'build']
+            if enable_coverage:
+                cmd.append('-cover')
+                print(f"  Coverage instrumentation enabled")
+            
+            cmd.extend(['-o', self.binary_path, './samples/chat/server/'])
+            
+            subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(REPO_ROOT))
+            print(f"✅ Chat server built successfully")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to build chat server")
+            print(f"Error: {e.stderr}")
+            return False
+    
+    def start(self):
+        """Start the chat server process."""
+        if self.process is not None:
+            print(f"⚠️  {self.name} is already running")
+            return
         
-        # Close the channel
-        channel.close()
+        print(f"Starting {self.name} (ports {self.listen_port}, {self.client_port})...")
         
-        # Return formatted JSON
-        return json.dumps(result, indent=2)
+        # Prepare environment for coverage
+        server_env = None
+        if self.base_cov_dir:
+            server_env = os.environ.copy()
+            server_env['GOCOVERDIR'] = self.base_cov_dir
         
-    except grpc.RpcError as e:
-        return f"Error: RPC failed - {e.code().name}: {e.details()}"
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
-def call_list_objects_rpc(host, port, repo_root):
-    """Call the Goverse ListObjects RPC and return the response."""
-    try:
-        # Create a gRPC channel
-        channel = grpc.insecure_channel(f'{host}:{port}')
-        stub = goverse_pb2_grpc.GoverseStub(channel)
+        # Start the process
+        cmd = [
+            self.binary_path,
+            '-listen', f'localhost:{self.listen_port}',
+            '-advertise', f'localhost:{self.listen_port}',
+            '-client-listen', f'localhost:{self.client_port}'
+        ]
         
-        # Call the ListObjects RPC
-        response = stub.ListObjects(goverse_pb2.Empty(), timeout=5)
+        self.process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL,
+            env=server_env
+        )
+        print(f"✅ {self.name} started with PID: {self.process.pid}")
+    
+    def wait_for_ready(self, timeout=20):
+        """Wait for the server to be ready to accept connections.
         
-        # Format the response as a list of objects
-        objects = []
-        for obj in response.objects:
-            objects.append({
-                "id": obj.id,
-                "type": obj.type
-            })
+        Args:
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if server is ready, False otherwise
+        """
+        print(f"Verifying {self.name}...")
         
-        # Close the channel
-        channel.close()
+        if not check_port(self.listen_port, timeout=timeout):
+            print(f"❌ {self.name} failed to start on port {self.listen_port} (ListenAddress)")
+            return False
         
-        # Return formatted JSON
-        result = {
-            "objectCount": len(objects),
-            "objects": objects
-        }
-        return json.dumps(result, indent=2)
+        if not check_port(self.client_port, timeout=timeout):
+            print(f"❌ {self.name} failed to start on port {self.client_port} (ClientListenAddress)")
+            return False
         
-    except grpc.RpcError as e:
-        return f"Error: RPC failed - {e.code().name}: {e.details()}"
-    except Exception as e:
-        return f"Error: {str(e)}"
+        print(f"✅ {self.name} is running and ready")
+        return True
+    
+    def connect(self):
+        """Establish gRPC connection to the server."""
+        if self.channel is None:
+            self.channel = grpc.insecure_channel(f'localhost:{self.listen_port}')
+            self.stub = goverse_pb2_grpc.GoverseStub(self.channel)
+    
+    def Status(self, timeout=5):
+        """Call the Goverse Status RPC and return the response.
+        
+        Args:
+            timeout: RPC timeout in seconds
+            
+        Returns:
+            JSON formatted status response or error message
+        """
+        self.connect()
+        try:
+            response = self.stub.Status(goverse_pb2.Empty(), timeout=timeout)
+            
+            result = {
+                "advertiseAddr": response.advertise_addr,
+                "numObjects": str(response.num_objects),
+                "uptimeSeconds": str(response.uptime_seconds)
+            }
+            
+            return json.dumps(result, indent=2)
+            
+        except grpc.RpcError as e:
+            return f"Error: RPC failed - {e.code().name}: {e.details()}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def ListObjects(self, timeout=5):
+        """Call the Goverse ListObjects RPC and return the response.
+        
+        Args:
+            timeout: RPC timeout in seconds
+            
+        Returns:
+            JSON formatted list of objects or error message
+        """
+        self.connect()
+        try:
+            response = self.stub.ListObjects(goverse_pb2.Empty(), timeout=timeout)
+            
+            objects = []
+            for obj in response.objects:
+                objects.append({
+                    "id": obj.id,
+                    "type": obj.type
+                })
+            
+            result = {
+                "objectCount": len(objects),
+                "objects": objects
+            }
+            return json.dumps(result, indent=2)
+            
+        except grpc.RpcError as e:
+            return f"Error: RPC failed - {e.code().name}: {e.details()}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def CallObject(self, object_id, method, request, timeout=5):
+        """Make a generic RPC call to an object method.
+        
+        Args:
+            object_id: The ID of the target object
+            method: The method name to call
+            request: The request message (google.protobuf.Any)
+            timeout: RPC timeout in seconds
+            
+        Returns:
+            The response from the server
+            
+        Raises:
+            grpc.RpcError: If the RPC call fails
+        """
+        self.connect()
+        call_request = goverse_pb2.CallObjectRequest(
+            id=object_id,
+            method=method,
+            request=request
+        )
+        return self.stub.CallObject(call_request, timeout=timeout)
+    
+    def stop(self):
+        """Stop the chat server process gracefully."""
+        if self.process is None:
+            return -1
+        
+        if self.process.poll() is not None:
+            return self.process.returncode if self.process.returncode is not None else -1
+        
+        print(f"Gracefully stopping {self.name} (PID: {self.process.pid})...")
+        
+        # Try SIGINT first
+        try:
+            self.process.send_signal(signal.SIGINT)
+            self.process.wait(timeout=10)
+            return self.process.returncode if self.process.returncode is not None else -1
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception:
+            pass
+        
+        # Then try SIGTERM
+        try:
+            self.process.terminate()
+            self.process.wait(timeout=5)
+            return self.process.returncode if self.process.returncode is not None else -1
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception:
+            pass
+        
+        # Finally force kill
+        try:
+            self.process.kill()
+            self.process.wait()
+        except Exception:
+            pass
+        
+        return self.process.returncode if self.process.returncode is not None else -1
+    
+    def close(self):
+        """Close the gRPC channel."""
+        if self.channel:
+            self.channel.close()
+            self.channel = None
+            self.stub = None
+    
+    def __enter__(self):
+        """Support context manager protocol."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Close the channel when exiting context."""
+        self.close()
+        return False
 
 
 def build_binary(source_path, output_path, name):
@@ -456,27 +638,22 @@ def main():
         
         print("✅ Inspector is running and ready")
         
-        # Step 4: Build chat server
+        # Step 4: Build chat server binary (will be built once and shared)
         chat_server_path = '/tmp/chat_server'
         if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
             return 1
 
-        # Step 5: Start multiple chat servers
-        server_procs = []
+        # Step 5: Start multiple chat servers using ChatServer class
+        chat_servers = []
         for i in range(num_servers):
-            listen_port = 47000 + i
-            client_port = 48000 + i
-            server_name = f"Chat Server {i + 1}"
-
-            print(f"\nStarting {server_name} (ports {listen_port}, {client_port})...")
-            # Servers inherit GOCOVERDIR from the environment (if set)
-            p = pm.start([
-                chat_server_path,
-                '-listen', f'localhost:{listen_port}',
-                '-advertise', f'localhost:{listen_port}',
-                '-client-listen', f'localhost:{client_port}'
-            ], server_name)
-            server_procs.append((p, server_name))
+            server = ChatServer(
+                server_index=i,
+                binary_path=chat_server_path,
+                build_if_needed=False,  # Already built
+                base_cov_dir=base_cov_dir
+            )
+            server.start()
+            chat_servers.append(server)
 
         # Give all servers a moment to start
         wait_time = 5 if num_servers == 1 else 8
@@ -484,39 +661,26 @@ def main():
         time.sleep(wait_time)
 
         # Step 6: Verify all chat servers are ready
-        for i in range(num_servers):
-            listen_port = 47000 + i
-            client_port = 48000 + i
-
-            print(f"\nVerifying Chat Server {i + 1}...")
-            if not check_port(listen_port, timeout=20):
-                print(f"❌ Chat server {i + 1} failed to start on port {listen_port} (ListenAddress)")
+        for server in chat_servers:
+            if not server.wait_for_ready(timeout=20):
                 return 1
-
-            if not check_port(client_port, timeout=20):
-                print(f"❌ Chat server {i + 1} failed to start on port {client_port} (ClientListenAddress)")
-                return 1
-
-            print(f"✅ Chat server {i + 1} is running and ready")
 
         # Step 6.5: Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
         print("=" * 60)
-        for i in range(num_servers):
-            listen_port = 47000 + i
-            print(f"\nChat Server {i + 1} (localhost:{listen_port}) Status:")
-            status_response = call_status_rpc('localhost', listen_port, repo_root)
+        for server in chat_servers:
+            print(f"\n{server.name} (localhost:{server.listen_port}) Status:")
+            status_response = server.Status()
             print(status_response)
 
         # Step 6.6: Call ListObjects RPC for each chat server
         print("\n" + "=" * 60)
         print("Listing Objects on each chat server:")
         print("=" * 60)
-        for i in range(num_servers):
-            listen_port = 47000 + i
-            print(f"\nChat Server {i + 1} (localhost:{listen_port}) Objects:")
-            objects_response = call_list_objects_rpc('localhost', listen_port, repo_root)
+        for server in chat_servers:
+            print(f"\n{server.name} (localhost:{server.listen_port}) Objects:")
+            objects_response = server.ListObjects()
             print(objects_response)
 
         # Step 7: Build chat client
@@ -530,11 +694,12 @@ def main():
         # Step 9: Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
         servers_ok = True
-        for p, name in reversed(server_procs):
-            code = graceful_stop(p, name)
-            print(f"{name} exited with code {code}")
+        for server in reversed(chat_servers):
+            code = server.stop()
+            print(f"{server.name} exited with code {code}")
             if code != 0:
                 servers_ok = False
+            server.close()  # Close gRPC connections
 
         # Step 10: Stop inspector and check exit code
         print("\nStopping inspector...")

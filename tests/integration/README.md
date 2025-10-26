@@ -24,6 +24,21 @@ python3 tests/integration/test_chat.py --num-servers 4
 - Node registration and object tracking
 - Graceful shutdown with coverage collection
 
+**ChatServer Class:**
+The test script includes a `ChatServer` class that manages chat server processes and gRPC communication:
+- **Process Management:**
+  - `start()`: Start the chat server process
+  - `stop()`: Gracefully stop the server process
+  - `wait_for_ready()`: Wait for server to be ready to accept connections
+- **RPC Methods:**
+  - `Status()`: Get server status (advertise address, object count, uptime)
+  - `ListObjects()`: List all objects on the server
+  - `CallObject()`: Make generic RPC calls to objects
+- **Connection Management:**
+  - `connect()`: Establish gRPC connection
+  - `close()`: Close the gRPC channel
+  - Context manager support for automatic cleanup
+
 **Requirements:**
 - Go 1.21+
 - Python 3.x with grpcio package
