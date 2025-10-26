@@ -1,1 +1,0 @@
-docker run --rm goverse-dev bash -c "etcd >/tmp/etcd.log 2>&1 & sleep 2 && python3 tests/integration/test_chat.py"
