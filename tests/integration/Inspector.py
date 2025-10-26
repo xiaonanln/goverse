@@ -8,6 +8,7 @@ import signal
 import socket
 import time
 from pathlib import Path
+from BinaryHelper import BinaryHelper
 
 # Repo root (tests/integration/Inspector.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
@@ -44,29 +45,8 @@ class Inspector:
         
         # Build binary if needed
         if build_if_needed and not os.path.exists(self.binary_path):
-            if not self._build_binary():
+            if not BinaryHelper.build_binary('./cmd/inspector/', self.binary_path, 'inspector'):
                 raise RuntimeError(f"Failed to build inspector binary at {self.binary_path}")
-    
-    def _build_binary(self):
-        """Build the inspector binary."""
-        print(f"Building inspector...")
-        try:
-            enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
-            
-            cmd = ['go', 'build']
-            if enable_coverage:
-                cmd.append('-cover')
-                print(f"  Coverage instrumentation enabled for inspector")
-            
-            cmd.extend(['-o', self.binary_path, './cmd/inspector/'])
-            
-            subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(REPO_ROOT))
-            print(f"✅ inspector built successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to build inspector")
-            print(f"Error: {e.stderr}")
-            return False
     
     def start(self):
         """Start the inspector process."""

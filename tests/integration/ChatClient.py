@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from BinaryHelper import BinaryHelper
 
 # Repo root (tests/integration/ChatClient.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
@@ -12,7 +13,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 class ChatClient:
     """Manages the Goverse chat client process and interactions."""
     
-    def __init__(self, binary_path=None, build_if_needed=True, base_cov_dir=None):
+    def __init__(self, binary_path=None, base_cov_dir=None):
         """Initialize and optionally build the chat client.
         
         Args:
@@ -25,30 +26,9 @@ class ChatClient:
         self.name = "Chat Client"
         
         # Build binary if needed
-        if build_if_needed and not os.path.exists(self.binary_path):
-            if not self._build_binary():
+        if not os.path.exists(self.binary_path):
+            if not BinaryHelper.build_binary('./samples/chat/client/', self.binary_path, 'chat client'):
                 raise RuntimeError(f"Failed to build chat client binary at {self.binary_path}")
-    
-    def _build_binary(self):
-        """Build the chat client binary."""
-        print(f"Building chat client...")
-        try:
-            enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
-            
-            cmd = ['go', 'build']
-            if enable_coverage:
-                cmd.append('-cover')
-                print(f"  Coverage instrumentation enabled for chat client")
-            
-            cmd.extend(['-o', self.binary_path, './samples/chat/client/'])
-            
-            subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(REPO_ROOT))
-            print(f"✅ chat client built successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to build chat client")
-            print(f"Error: {e.stderr}")
-            return False
     
     def run_test(self, server_port, username='testuser', test_input=None, timeout=30):
         """Run the chat client with test input and return the output.

@@ -8,6 +8,7 @@ import signal
 import socket
 import time
 from pathlib import Path
+from BinaryHelper import BinaryHelper
 
 # Repo root (tests/integration/ChatServer.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
@@ -37,29 +38,8 @@ class ChatServer:
         
         # Build binary if needed
         if not os.path.exists(self.binary_path):
-            if not self._build_binary():
+            if not BinaryHelper.build_binary('./samples/chat/server/', self.binary_path, 'chat server'):
                 raise RuntimeError(f"Failed to build chat server binary at {self.binary_path}")
-    
-    def _build_binary(self):
-        """Build the chat server binary."""
-        print(f"Building chat server...")
-        try:
-            enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
-            
-            cmd = ['go', 'build']
-            if enable_coverage:
-                cmd.append('-cover')
-                print(f"  Coverage instrumentation enabled")
-            
-            cmd.extend(['-o', self.binary_path, './samples/chat/server/'])
-            
-            subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(REPO_ROOT))
-            print(f"✅ Chat server built successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to build chat server")
-            print(f"Error: {e.stderr}")
-            return False
     
     def start(self):
         """Start the chat server process."""
