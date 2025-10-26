@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -820,9 +821,9 @@ func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
 		t.Errorf("GetNodes() should return empty list initially, got %d nodes", len(nodes))
 	}
 }
-
 func isGithubAction() bool {
-	return (exec.Command("sh", "-c", "echo $GITHUB_ACTIONS").Run() == nil)
+	// GitHub Actions sets GITHUB_ACTIONS=true; check the environment variable directly
+	return os.Getenv("GITHUB_ACTIONS") == "true"
 }
 
 // TestEtcdManagerServerCrash tests that EtcdManager handles etcd server crash gracefully
@@ -835,6 +836,8 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	// Only skip when NOT running in GitHub Actions (we want this to run in CI)
 	if !isGithubAction() {
 		t.Skipf("Skipping test: manual etcd crash simulation is intended for local runs")
+	} else {
+		t.Log("Running in GitHub Actions - will attempt to stop etcd service for crash simulation")
 	}
 	// First, verify etcd is running
 	mgr, err := NewEtcdManager("localhost:2379")

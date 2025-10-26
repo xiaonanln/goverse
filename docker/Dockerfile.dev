@@ -34,6 +34,9 @@ WORKDIR /app
 # Copy the entire project to /app
 COPY . .
 
+# Make all .sh files under /app/script executable
+RUN find /app/script -type f -name "*.sh" -exec chmod +x {} +
+
 # Download Go dependencies
 RUN go mod download
 
