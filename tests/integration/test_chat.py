@@ -114,48 +114,6 @@ def check_http_server(url, timeout=30):
     return False
 
 
-def graceful_stop(process: subprocess.Popen, name: str, timeout_int: float = 10.0, timeout_term: float = 5.0) -> int:
-    """Attempt to stop a process gracefully so Go can flush coverage.
-    Returns the final process returncode (or -1 if unknown).
-    """
-    if process is None:
-        return -1
-    if process.poll() is not None:
-        return process.returncode if process.returncode is not None else -1
-
-    print(f"Gracefully stopping {name} (PID: {process.pid})...")
-    # 1) Try SIGINT first
-    try:
-        process.send_signal(signal.SIGINT)
-        process.wait(timeout=timeout_int)
-        return process.returncode if process.returncode is not None else -1
-    except subprocess.TimeoutExpired:
-        pass
-    except Exception:
-        pass
-
-    # 2) Then SIGTERM
-    try:
-        process.terminate()
-        process.wait(timeout=timeout_term)
-        return process.returncode if process.returncode is not None else -1
-    except subprocess.TimeoutExpired:
-        pass
-    except Exception:
-        pass
-
-    # 3) Finally SIGKILL
-    try:
-        process.kill()
-        process.wait()
-    except Exception:
-        pass
-    return process.returncode if process.returncode is not None else -1
-
-
- 
-
-
 def build_binary(source_path, output_path, name):
     """Build a Go binary."""
     print(f"Building {name}...")
@@ -277,20 +235,11 @@ def main():
         # Wait for inspector to be ready
         if not inspector.wait_for_ready(timeout=30):
             return 1
-        
-        # Build chat server binary (will be built once and shared)
-        chat_server_path = '/tmp/chat_server'
-        if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
-            return 1
 
         # Start multiple chat servers using ChatServer class
         chat_servers = []
         for i in range(num_servers):
-            server = ChatServer(
-                server_index=i,
-                binary_path=chat_server_path,
-                build_if_needed=False  # Already built
-            )
+            server = ChatServer(server_index=i)
             server.start()
             chat_servers.append(server)
 
