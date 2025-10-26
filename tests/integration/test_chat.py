@@ -202,67 +202,111 @@ def graceful_stop(process: subprocess.Popen, name: str, timeout_int: float = 10.
     return process.returncode if process.returncode is not None else -1
 
 
-def call_status_rpc(host, port, repo_root):
-    """Call the Goverse Status RPC and return the response."""
-    try:
-        # Create a gRPC channel
-        channel = grpc.insecure_channel(f'{host}:{port}')
-        stub = goverse_pb2_grpc.GoverseStub(channel)
+class ChatServer:
+    """Manages gRPC connection and calls to a Goverse chat server."""
+    
+    def __init__(self, host, port):
+        """Initialize connection to the chat server.
         
-        # Call the Status RPC
-        response = stub.Status(goverse_pb2.Empty(), timeout=5)
+        Args:
+            host: Server hostname
+            port: Server port number
+        """
+        self.host = host
+        self.port = port
+        self.channel = grpc.insecure_channel(f'{host}:{port}')
+        self.stub = goverse_pb2_grpc.GoverseStub(self.channel)
+    
+    def call_status(self, timeout=5):
+        """Call the Goverse Status RPC and return the response.
         
-        # Format the response as JSON
-        result = {
-            "advertiseAddr": response.advertise_addr,
-            "numObjects": str(response.num_objects),
-            "uptimeSeconds": str(response.uptime_seconds)
-        }
+        Args:
+            timeout: RPC timeout in seconds
+            
+        Returns:
+            JSON formatted status response or error message
+        """
+        try:
+            response = self.stub.Status(goverse_pb2.Empty(), timeout=timeout)
+            
+            result = {
+                "advertiseAddr": response.advertise_addr,
+                "numObjects": str(response.num_objects),
+                "uptimeSeconds": str(response.uptime_seconds)
+            }
+            
+            return json.dumps(result, indent=2)
+            
+        except grpc.RpcError as e:
+            return f"Error: RPC failed - {e.code().name}: {e.details()}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def list_objects(self, timeout=5):
+        """Call the Goverse ListObjects RPC and return the response.
         
-        # Close the channel
-        channel.close()
+        Args:
+            timeout: RPC timeout in seconds
+            
+        Returns:
+            JSON formatted list of objects or error message
+        """
+        try:
+            response = self.stub.ListObjects(goverse_pb2.Empty(), timeout=timeout)
+            
+            objects = []
+            for obj in response.objects:
+                objects.append({
+                    "id": obj.id,
+                    "type": obj.type
+                })
+            
+            result = {
+                "objectCount": len(objects),
+                "objects": objects
+            }
+            return json.dumps(result, indent=2)
+            
+        except grpc.RpcError as e:
+            return f"Error: RPC failed - {e.code().name}: {e.details()}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def call_method(self, object_id, method, request, timeout=5):
+        """Make a generic RPC call to an object method.
         
-        # Return formatted JSON
-        return json.dumps(result, indent=2)
-        
-    except grpc.RpcError as e:
-        return f"Error: RPC failed - {e.code().name}: {e.details()}"
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
-def call_list_objects_rpc(host, port, repo_root):
-    """Call the Goverse ListObjects RPC and return the response."""
-    try:
-        # Create a gRPC channel
-        channel = grpc.insecure_channel(f'{host}:{port}')
-        stub = goverse_pb2_grpc.GoverseStub(channel)
-        
-        # Call the ListObjects RPC
-        response = stub.ListObjects(goverse_pb2.Empty(), timeout=5)
-        
-        # Format the response as a list of objects
-        objects = []
-        for obj in response.objects:
-            objects.append({
-                "id": obj.id,
-                "type": obj.type
-            })
-        
-        # Close the channel
-        channel.close()
-        
-        # Return formatted JSON
-        result = {
-            "objectCount": len(objects),
-            "objects": objects
-        }
-        return json.dumps(result, indent=2)
-        
-    except grpc.RpcError as e:
-        return f"Error: RPC failed - {e.code().name}: {e.details()}"
-    except Exception as e:
-        return f"Error: {str(e)}"
+        Args:
+            object_id: The ID of the target object
+            method: The method name to call
+            request: The request message (google.protobuf.Any)
+            timeout: RPC timeout in seconds
+            
+        Returns:
+            The response from the server
+            
+        Raises:
+            grpc.RpcError: If the RPC call fails
+        """
+        call_request = goverse_pb2.CallObjectRequest(
+            id=object_id,
+            method=method,
+            request=request
+        )
+        return self.stub.CallObject(call_request, timeout=timeout)
+    
+    def close(self):
+        """Close the gRPC channel."""
+        if self.channel:
+            self.channel.close()
+    
+    def __enter__(self):
+        """Support context manager protocol."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Close the channel when exiting context."""
+        self.close()
+        return False
 
 
 def build_binary(source_path, output_path, name):
@@ -511,8 +555,9 @@ def main():
         for i in range(num_servers):
             listen_port = 47000 + i
             print(f"\nChat Server {i + 1} (localhost:{listen_port}) Status:")
-            status_response = call_status_rpc('localhost', listen_port, repo_root)
-            print(status_response)
+            with ChatServer('localhost', listen_port) as server:
+                status_response = server.call_status()
+                print(status_response)
 
         # Step 6.6: Call ListObjects RPC for each chat server
         print("\n" + "=" * 60)
@@ -521,8 +566,9 @@ def main():
         for i in range(num_servers):
             listen_port = 47000 + i
             print(f"\nChat Server {i + 1} (localhost:{listen_port}) Objects:")
-            objects_response = call_list_objects_rpc('localhost', listen_port, repo_root)
-            print(objects_response)
+            with ChatServer('localhost', listen_port) as server:
+                objects_response = server.list_objects()
+                print(objects_response)
 
         # Step 7: Build chat client
         chat_client_path = '/tmp/chat_client'
