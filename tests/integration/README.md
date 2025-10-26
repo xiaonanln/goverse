@@ -25,29 +25,19 @@ python3 tests/integration/test_chat.py --num-servers 4
 - Graceful shutdown with coverage collection
 
 **ChatServer Class:**
-The test script includes a `ChatServer` class that encapsulates gRPC communication with the chat server:
-- `call_status()`: Get server status (advertise address, object count, uptime)
-- `list_objects()`: List all objects on the server
-- `call_method()`: Make generic RPC calls to objects
-- `close()`: Properly close the gRPC channel
-- Context manager support for automatic cleanup
-
-### test_chat_server.py
-
-Unit tests for the ChatServer class.
-
-**Usage:**
-```bash
-# Run unit tests
-python3 -m unittest tests.integration.test_chat_server -v
-```
-
-**What it tests:**
-- ChatServer initialization and channel creation
-- RPC methods (call_status, list_objects, call_method)
-- Error handling for RPC failures
-- Context manager protocol
-- Proper cleanup of gRPC connections
+The test script includes a `ChatServer` class that manages chat server processes and gRPC communication:
+- **Process Management:**
+  - `start()`: Start the chat server process
+  - `stop()`: Gracefully stop the server process
+  - `wait_for_ready()`: Wait for server to be ready to accept connections
+- **RPC Methods:**
+  - `call_status()`: Get server status (advertise address, object count, uptime)
+  - `list_objects()`: List all objects on the server
+  - `call_method()`: Make generic RPC calls to objects
+- **Connection Management:**
+  - `connect()`: Establish gRPC connection
+  - `close()`: Close the gRPC channel
+  - Context manager support for automatic cleanup
 
 **Requirements:**
 - Go 1.21+
@@ -60,9 +50,6 @@ python3 -m unittest tests.integration.test_chat_server -v
 From the repository root:
 
 ```bash
-# Run unit tests for ChatServer class
-python3 -m unittest tests.integration.test_chat_server -v
-
 # Run single server integration test
 python3 tests/integration/test_chat.py
 

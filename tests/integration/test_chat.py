@@ -203,19 +203,115 @@ def graceful_stop(process: subprocess.Popen, name: str, timeout_int: float = 10.
 
 
 class ChatServer:
-    """Manages gRPC connection and calls to a Goverse chat server."""
+    """Manages a Goverse chat server process and gRPC connections."""
     
-    def __init__(self, host, port):
-        """Initialize connection to the chat server.
+    def __init__(self, server_index=0, listen_port=None, client_port=None, 
+                 binary_path=None, build_if_needed=True, base_cov_dir=None):
+        """Initialize and optionally start a chat server.
         
         Args:
-            host: Server hostname
-            port: Server port number
+            server_index: Server index number (for multi-server setups)
+            listen_port: Server listen port (defaults to 47000 + server_index)
+            client_port: Client listen port (defaults to 48000 + server_index)
+            binary_path: Path to chat server binary (defaults to /tmp/chat_server)
+            build_if_needed: Whether to build the binary if it doesn't exist
+            base_cov_dir: Base directory for coverage data (optional)
         """
-        self.host = host
-        self.port = port
-        self.channel = grpc.insecure_channel(f'{host}:{port}')
-        self.stub = goverse_pb2_grpc.GoverseStub(self.channel)
+        self.server_index = server_index
+        self.listen_port = listen_port if listen_port is not None else 47000 + server_index
+        self.client_port = client_port if client_port is not None else 48000 + server_index
+        self.binary_path = binary_path if binary_path is not None else '/tmp/chat_server'
+        self.base_cov_dir = base_cov_dir
+        self.process = None
+        self.channel = None
+        self.stub = None
+        self.name = f"Chat Server {server_index + 1}"
+        
+        # Build binary if needed
+        if build_if_needed and not os.path.exists(self.binary_path):
+            if not self._build_binary():
+                raise RuntimeError(f"Failed to build chat server binary at {self.binary_path}")
+    
+    def _build_binary(self):
+        """Build the chat server binary."""
+        print(f"Building chat server...")
+        try:
+            enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
+            
+            cmd = ['go', 'build']
+            if enable_coverage:
+                cmd.append('-cover')
+                print(f"  Coverage instrumentation enabled")
+            
+            cmd.extend(['-o', self.binary_path, './samples/chat/server/'])
+            
+            subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(REPO_ROOT))
+            print(f"✅ Chat server built successfully")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to build chat server")
+            print(f"Error: {e.stderr}")
+            return False
+    
+    def start(self):
+        """Start the chat server process."""
+        if self.process is not None:
+            print(f"⚠️  {self.name} is already running")
+            return
+        
+        print(f"Starting {self.name} (ports {self.listen_port}, {self.client_port})...")
+        
+        # Prepare environment for coverage
+        server_env = None
+        if self.base_cov_dir:
+            server_cov = os.path.join(self.base_cov_dir, f'server{self.server_index + 1}')
+            os.makedirs(server_cov, exist_ok=True)
+            server_env = os.environ.copy()
+            server_env['GOCOVERDIR'] = server_cov
+        
+        # Start the process
+        cmd = [
+            self.binary_path,
+            '-listen', f'localhost:{self.listen_port}',
+            '-advertise', f'localhost:{self.listen_port}',
+            '-client-listen', f'localhost:{self.client_port}'
+        ]
+        
+        self.process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL,
+            env=server_env
+        )
+        print(f"✅ {self.name} started with PID: {self.process.pid}")
+    
+    def wait_for_ready(self, timeout=20):
+        """Wait for the server to be ready to accept connections.
+        
+        Args:
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if server is ready, False otherwise
+        """
+        print(f"Verifying {self.name}...")
+        
+        if not check_port(self.listen_port, timeout=timeout):
+            print(f"❌ {self.name} failed to start on port {self.listen_port} (ListenAddress)")
+            return False
+        
+        if not check_port(self.client_port, timeout=timeout):
+            print(f"❌ {self.name} failed to start on port {self.client_port} (ClientListenAddress)")
+            return False
+        
+        print(f"✅ {self.name} is running and ready")
+        return True
+    
+    def connect(self):
+        """Establish gRPC connection to the server."""
+        if self.channel is None:
+            self.channel = grpc.insecure_channel(f'localhost:{self.listen_port}')
+            self.stub = goverse_pb2_grpc.GoverseStub(self.channel)
     
     def call_status(self, timeout=5):
         """Call the Goverse Status RPC and return the response.
@@ -226,6 +322,7 @@ class ChatServer:
         Returns:
             JSON formatted status response or error message
         """
+        self.connect()
         try:
             response = self.stub.Status(goverse_pb2.Empty(), timeout=timeout)
             
@@ -251,6 +348,7 @@ class ChatServer:
         Returns:
             JSON formatted list of objects or error message
         """
+        self.connect()
         try:
             response = self.stub.ListObjects(goverse_pb2.Empty(), timeout=timeout)
             
@@ -287,6 +385,7 @@ class ChatServer:
         Raises:
             grpc.RpcError: If the RPC call fails
         """
+        self.connect()
         call_request = goverse_pb2.CallObjectRequest(
             id=object_id,
             method=method,
@@ -294,10 +393,51 @@ class ChatServer:
         )
         return self.stub.CallObject(call_request, timeout=timeout)
     
+    def stop(self):
+        """Stop the chat server process gracefully."""
+        if self.process is None:
+            return -1
+        
+        if self.process.poll() is not None:
+            return self.process.returncode if self.process.returncode is not None else -1
+        
+        print(f"Gracefully stopping {self.name} (PID: {self.process.pid})...")
+        
+        # Try SIGINT first
+        try:
+            self.process.send_signal(signal.SIGINT)
+            self.process.wait(timeout=10)
+            return self.process.returncode if self.process.returncode is not None else -1
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception:
+            pass
+        
+        # Then try SIGTERM
+        try:
+            self.process.terminate()
+            self.process.wait(timeout=5)
+            return self.process.returncode if self.process.returncode is not None else -1
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception:
+            pass
+        
+        # Finally force kill
+        try:
+            self.process.kill()
+            self.process.wait()
+        except Exception:
+            pass
+        
+        return self.process.returncode if self.process.returncode is not None else -1
+    
     def close(self):
         """Close the gRPC channel."""
         if self.channel:
             self.channel.close()
+            self.channel = None
+            self.stub = None
     
     def __enter__(self):
         """Support context manager protocol."""
@@ -501,31 +641,22 @@ def main():
         
         print("✅ Inspector is running and ready")
         
-        # Step 4: Build chat server
+        # Step 4: Build chat server binary (will be built once and shared)
         chat_server_path = '/tmp/chat_server'
         if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
             return 1
 
-        # Step 5: Start multiple chat servers
-        server_procs = []
+        # Step 5: Start multiple chat servers using ChatServer class
+        chat_servers = []
         for i in range(num_servers):
-            listen_port = 47000 + i
-            client_port = 48000 + i
-            server_name = f"Chat Server {i + 1}"
-
-            print(f"\nStarting {server_name} (ports {listen_port}, {client_port})...")
-            server_env = None
-            if base_cov_dir:
-                server_cov = os.path.join(base_cov_dir, f'server{i+1}')
-                os.makedirs(server_cov, exist_ok=True)
-                server_env = {"GOCOVERDIR": server_cov}
-            p = pm.start([
-                chat_server_path,
-                '-listen', f'localhost:{listen_port}',
-                '-advertise', f'localhost:{listen_port}',
-                '-client-listen', f'localhost:{client_port}'
-            ], server_name, env=server_env)
-            server_procs.append((p, server_name))
+            server = ChatServer(
+                server_index=i,
+                binary_path=chat_server_path,
+                build_if_needed=False,  # Already built
+                base_cov_dir=base_cov_dir if base_cov_dir else None
+            )
+            server.start()
+            chat_servers.append(server)
 
         # Give all servers a moment to start
         wait_time = 5 if num_servers == 1 else 8
@@ -533,42 +664,27 @@ def main():
         time.sleep(wait_time)
 
         # Step 6: Verify all chat servers are ready
-        for i in range(num_servers):
-            listen_port = 47000 + i
-            client_port = 48000 + i
-
-            print(f"\nVerifying Chat Server {i + 1}...")
-            if not check_port(listen_port, timeout=20):
-                print(f"❌ Chat server {i + 1} failed to start on port {listen_port} (ListenAddress)")
+        for server in chat_servers:
+            if not server.wait_for_ready(timeout=20):
                 return 1
-
-            if not check_port(client_port, timeout=20):
-                print(f"❌ Chat server {i + 1} failed to start on port {client_port} (ClientListenAddress)")
-                return 1
-
-            print(f"✅ Chat server {i + 1} is running and ready")
 
         # Step 6.5: Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
         print("=" * 60)
-        for i in range(num_servers):
-            listen_port = 47000 + i
-            print(f"\nChat Server {i + 1} (localhost:{listen_port}) Status:")
-            with ChatServer('localhost', listen_port) as server:
-                status_response = server.call_status()
-                print(status_response)
+        for server in chat_servers:
+            print(f"\n{server.name} (localhost:{server.listen_port}) Status:")
+            status_response = server.call_status()
+            print(status_response)
 
         # Step 6.6: Call ListObjects RPC for each chat server
         print("\n" + "=" * 60)
         print("Listing Objects on each chat server:")
         print("=" * 60)
-        for i in range(num_servers):
-            listen_port = 47000 + i
-            print(f"\nChat Server {i + 1} (localhost:{listen_port}) Objects:")
-            with ChatServer('localhost', listen_port) as server:
-                objects_response = server.list_objects()
-                print(objects_response)
+        for server in chat_servers:
+            print(f"\n{server.name} (localhost:{server.listen_port}) Objects:")
+            objects_response = server.list_objects()
+            print(objects_response)
 
         # Step 7: Build chat client
         chat_client_path = '/tmp/chat_client'
@@ -581,11 +697,12 @@ def main():
         # Step 9: Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
         servers_ok = True
-        for p, name in reversed(server_procs):
-            code = graceful_stop(p, name)
-            print(f"{name} exited with code {code}")
+        for server in reversed(chat_servers):
+            code = server.stop()
+            print(f"{server.name} exited with code {code}")
             if code != 0:
                 servers_ok = False
+            server.close()  # Close gRPC connections
 
         # Step 10: Stop inspector and check exit code
         print("\nStopping inspector...")
