@@ -22,5 +22,5 @@ func (cp *BaseClient) MessageChan() chan proto.Message {
 }
 
 func (cp *BaseClient) OnCreated() {
-	cp.messageChan = make(chan proto.Message)
+	cp.messageChan = make(chan proto.Message, 10) // Buffered channel to avoid blocking
 }

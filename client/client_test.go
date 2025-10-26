@@ -104,10 +104,14 @@ func TestMessageChan_BufferCapacity(t *testing.T) {
 
 	messageChan := client.MessageChan()
 	
-	// The channel is unbuffered (capacity 0), so sending without a receiver would block
-	// We just verify the channel exists and can be accessed
+	// The channel is buffered (capacity 10), so we can send messages without blocking
 	if messageChan == nil {
 		t.Error("messageChan should not be nil after OnCreated")
+	}
+	
+	// Verify we have a buffer capacity > 0
+	if cap(messageChan) == 0 {
+		t.Error("messageChan should have buffer capacity > 0")
 	}
 }
 

@@ -58,6 +58,7 @@ message Client_GetRecentMessagesResponse {
 
 message ChatRoom_JoinRequest {
     string user_name = 1;
+    string client_id = 2;  // Client ID for push notifications
 }
 
 message ChatRoom_JoinResponse {
@@ -79,4 +80,9 @@ message ChatRoom_GetRecentMessagesRequest {
 
 message ChatRoom_GetRecentMessagesResponse {
     repeated ChatMessage messages = 1;
+}
+
+// Message pushed to clients when a new chat message arrives
+message Client_NewMessageNotification {
+    ChatMessage message = 1;
 }

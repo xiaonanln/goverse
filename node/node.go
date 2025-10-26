@@ -443,3 +443,29 @@ func (node *Node) GetNodes() []string {
 	}
 	return node.etcdManager.GetNodes()
 }
+
+// PushMessageToClient sends a message to a client's message channel
+// Returns nil if successful, error if client not found or not a ClientObject
+func (node *Node) PushMessageToClient(clientID string, message proto.Message) error {
+	node.objectsMu.RLock()
+	obj, ok := node.objects[clientID]
+	node.objectsMu.RUnlock()
+	
+	if !ok {
+		return fmt.Errorf("client not found: %s", clientID)
+	}
+	
+	clientObj, ok := obj.(ClientObject)
+	if !ok {
+		return fmt.Errorf("object %s is not a ClientObject", clientID)
+	}
+	
+	// Send message to the client's channel
+	select {
+	case clientObj.MessageChan() <- message:
+		node.logger.Infof("Pushed message to client %s", clientID)
+		return nil
+	default:
+		return fmt.Errorf("client %s message channel is full or closed", clientID)
+	}
+}
