@@ -40,3 +40,9 @@ func CreateObject(ctx context.Context, objType, objID string, initData proto.Mes
 func CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
 	return cluster.Get().CallObject(ctx, id, method, request)
 }
+
+// PushMessageToClient sends a message to a client's message channel
+// This allows distributed objects to push notifications/messages to connected clients
+func PushMessageToClient(clientID string, message proto.Message) error {
+	return cluster.Get().GetThisNode().PushMessageToClient(clientID, message)
+}

@@ -31,6 +31,7 @@ func (cc *ChatClient) Join(ctx context.Context, request *chat_pb.Client_JoinChat
 	cc.Logger.Infof("Joining chat room %s as user %s", request.RoomName, request.UserName)
 	resp, err := goverseapi.CallObject(ctx, "ChatRoom-"+request.RoomName, "Join", &chat_pb.ChatRoom_JoinRequest{
 		UserName: request.UserName,
+		ClientId: cc.Id(), // Pass client ID for push notifications
 	})
 	if err != nil {
 		return nil, err
