@@ -298,7 +298,7 @@ def build_binary(source_path, output_path, name):
         
         cmd.extend(['-o', output_path, source_path])
         
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(REPO_ROOT))
         print(f"✅ {name} built successfully")
         return True
     except subprocess.CalledProcessError as e:
@@ -430,9 +430,10 @@ def main():
     
     num_servers = args.num_servers
     
-    # Get the repository root directory
-    repo_root = Path(__file__).parent.parent.resolve()
+    # Get the repository root directory (from tests/integration/test_chat.py -> repo root)
+    repo_root = Path(__file__).parent.parent.parent.resolve()
     os.chdir(repo_root)
+    print(f"Working directory: {os.getcwd()}")
     
     print("=" * 60)
     print(f"Goverse Chat Client/Server Test ({num_servers} server{'s' if num_servers > 1 else ''})")
