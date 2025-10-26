@@ -25,7 +25,7 @@ import json
 from pathlib import Path
 
 # Add the repo root to the path for proto imports
-REPO_ROOT = Path(__file__).parent.parent.resolve()
+REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 
 # Ensure proto directory is a Python package
