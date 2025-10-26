@@ -28,11 +28,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 # Expose the integration directory on sys.path so helper modules in this folder
-# (e.g., ChatServer.py) can be imported directly.
+# (e.g., ChatServer.py, Inspector.py) can be imported directly.
 INTEGRATION_DIR = REPO_ROOT / 'tests' / 'integration'
 sys.path.insert(0, str(INTEGRATION_DIR))
 
 from ChatServer import ChatServer
+from Inspector import Inspector
 
 # Ensure proto directory is a Python package
 proto_init = REPO_ROOT / 'proto' / '__init__.py'
@@ -383,31 +384,20 @@ def main():
             os.makedirs(base_cov_dir, exist_ok=True)
             os.environ['GOCOVERDIR'] = base_cov_dir
 
-        # Step 1: Build inspector
-        inspector_path = '/tmp/inspector'
-        if not build_binary('./cmd/inspector/', inspector_path, "inspector"):
+        # Step 1: Start inspector using Inspector class
+        inspector = Inspector(base_cov_dir=base_cov_dir)
+        inspector.start()
+        
+        # Step 2: Wait for inspector to be ready
+        if not inspector.wait_for_ready(timeout=30):
             return 1
         
-        # Step 2: Start inspector (it inherits GOCOVERDIR from the environment)
-        inspector_proc = pm.start([inspector_path], "Inspector")
-        
-        # Step 3: Wait for inspector to be ready
-        if not check_http_server('http://localhost:8080/', timeout=30):
-            print("❌ Inspector HTTP server failed to start")
-            return 1
-        
-        if not check_port(8081, timeout=30):
-            print("❌ Inspector gRPC server failed to start")
-            return 1
-        
-        print("✅ Inspector is running and ready")
-        
-        # Step 4: Build chat server binary (will be built once and shared)
+        # Step 3: Build chat server binary (will be built once and shared)
         chat_server_path = '/tmp/chat_server'
         if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
             return 1
 
-        # Step 5: Start multiple chat servers using ChatServer class
+        # Step 4: Start multiple chat servers using ChatServer class
         chat_servers = []
         for i in range(num_servers):
             server = ChatServer(
@@ -424,12 +414,12 @@ def main():
         print(f"\nWaiting {wait_time} seconds for all chat servers to start...")
         time.sleep(wait_time)
 
-        # Step 6: Verify all chat servers are ready
+        # Step 5: Verify all chat servers are ready
         for server in chat_servers:
             if not server.wait_for_ready(timeout=20):
                 return 1
 
-        # Step 6.5: Call Status RPC for each chat server
+        # Step 5.5: Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
         print("=" * 60)
@@ -438,7 +428,7 @@ def main():
             status_response = server.Status()
             print(status_response)
 
-        # Step 6.6: Call ListObjects RPC for each chat server
+        # Step 5.6: Call ListObjects RPC for each chat server
         print("\n" + "=" * 60)
         print("Listing Objects on each chat server:")
         print("=" * 60)
@@ -447,15 +437,15 @@ def main():
             objects_response = server.ListObjects()
             print(objects_response)
 
-        # Step 7: Build chat client
+        # Step 6: Build chat client
         chat_client_path = '/tmp/chat_client'
         if not build_binary('./samples/chat/client/', chat_client_path, "chat client"):
             return 1
 
-        # Step 8: Run chat test
+        # Step 7: Run chat test
         chat_ok = run_chat_test(chat_client_path, num_servers, base_cov_dir=base_cov_dir if base_cov_dir else None)
 
-        # Step 9: Stop chat servers (gracefully) and check exit codes
+        # Step 8: Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
         servers_ok = True
         for server in reversed(chat_servers):
@@ -465,13 +455,14 @@ def main():
                 servers_ok = False
             server.close()  # Close gRPC connections
 
-        # Step 10: Stop inspector and check exit code
+        # Step 9: Stop inspector and check exit code
         print("\nStopping inspector...")
         inspector_ok = True
-        code = graceful_stop(inspector_proc, "Inspector")
+        code = inspector.stop()
         print(f"Inspector exited with code {code}")
         if code != 0:
             inspector_ok = False
+        inspector.close()  # Close gRPC connections
 
         if not chat_ok:
             print("\n❌ Chat test failed!")
