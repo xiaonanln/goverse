@@ -41,27 +41,7 @@ except ImportError:
     print("    pip install grpcio grpcio-tools")
     sys.exit(1)
 
-# Generate proto files if they don't exist
-proto_file = REPO_ROOT / 'proto' / 'goverse.proto'
-pb2_file = REPO_ROOT / 'proto' / 'goverse_pb2.py'
-if not pb2_file.exists():
-    print("⚠️  Generating Python proto files...")
-    try:
-        subprocess.run([
-            sys.executable, '-m', 'grpc_tools.protoc',
-            f'-I{REPO_ROOT}',
-            f'--python_out={REPO_ROOT}',
-            f'--grpc_python_out={REPO_ROOT}',
-            str(proto_file)
-        ], check=True, capture_output=True, text=True)
-        print("✅ Proto files generated successfully")
-    except subprocess.CalledProcessError as proto_error:
-        print(f"❌ Failed to generate proto files: {proto_error}")
-        print(f"stdout: {proto_error.stdout}")
-        print(f"stderr: {proto_error.stderr}")
-        sys.exit(1)
-
-# Now import the proto modules
+# Import the proto modules
 try:
     from proto import goverse_pb2
     from proto import goverse_pb2_grpc
@@ -69,6 +49,7 @@ except ImportError as import_error:
     print(f"❌ Failed to import proto modules: {import_error}")
     print(f"Proto directory contents: {list((REPO_ROOT / 'proto').glob('*.py'))}")
     print("Make sure the proto files were generated correctly.")
+    print("Run: ./script/compile-proto.sh")
     sys.exit(1)
 
 
