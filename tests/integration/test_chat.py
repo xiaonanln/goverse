@@ -384,20 +384,20 @@ def main():
             os.makedirs(base_cov_dir, exist_ok=True)
             os.environ['GOCOVERDIR'] = base_cov_dir
 
-        # Step 1: Start inspector using Inspector class
+        # Start inspector using Inspector class
         inspector = Inspector(base_cov_dir=base_cov_dir)
         inspector.start()
         
-        # Step 2: Wait for inspector to be ready
+        # Wait for inspector to be ready
         if not inspector.wait_for_ready(timeout=30):
             return 1
         
-        # Step 3: Build chat server binary (will be built once and shared)
+        # Build chat server binary (will be built once and shared)
         chat_server_path = '/tmp/chat_server'
         if not build_binary('./samples/chat/server/', chat_server_path, "chat server"):
             return 1
 
-        # Step 4: Start multiple chat servers using ChatServer class
+        # Start multiple chat servers using ChatServer class
         chat_servers = []
         for i in range(num_servers):
             server = ChatServer(
@@ -414,12 +414,12 @@ def main():
         print(f"\nWaiting {wait_time} seconds for all chat servers to start...")
         time.sleep(wait_time)
 
-        # Step 5: Verify all chat servers are ready
+        # Verify all chat servers are ready
         for server in chat_servers:
             if not server.wait_for_ready(timeout=20):
                 return 1
 
-        # Step 5.5: Call Status RPC for each chat server
+        # Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
         print("=" * 60)
@@ -428,7 +428,7 @@ def main():
             status_response = server.Status()
             print(status_response)
 
-        # Step 5.6: Call ListObjects RPC for each chat server
+        # Call ListObjects RPC for each chat server
         print("\n" + "=" * 60)
         print("Listing Objects on each chat server:")
         print("=" * 60)
@@ -437,15 +437,15 @@ def main():
             objects_response = server.ListObjects()
             print(objects_response)
 
-        # Step 6: Build chat client
+        # Build chat client
         chat_client_path = '/tmp/chat_client'
         if not build_binary('./samples/chat/client/', chat_client_path, "chat client"):
             return 1
 
-        # Step 7: Run chat test
+        # Run chat test
         chat_ok = run_chat_test(chat_client_path, num_servers, base_cov_dir=base_cov_dir if base_cov_dir else None)
 
-        # Step 8: Stop chat servers (gracefully) and check exit codes
+        # Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
         servers_ok = True
         for server in reversed(chat_servers):
@@ -455,7 +455,7 @@ def main():
                 servers_ok = False
             server.close()  # Close gRPC connections
 
-        # Step 9: Stop inspector and check exit code
+        # Stop inspector and check exit code
         print("\nStopping inspector...")
         inspector_ok = True
         code = inspector.stop()
