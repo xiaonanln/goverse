@@ -11,7 +11,7 @@ message Object {
   string id = 2;
 }
 
-message AddObjectRequest { 
+message AddOrUpdateObjectRequest { 
   Object object = 1; 
   string node_address = 2; // e.g. "localhost:47000"
 }
@@ -29,7 +29,7 @@ message UnregisterNodeRequest {
 }
 
 service InspectorService {
-  rpc AddObject(AddObjectRequest) returns (Empty);
+  rpc AddOrUpdateObject(AddOrUpdateObjectRequest) returns (Empty);
   rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
   rpc UnregisterNode(UnregisterNodeRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);

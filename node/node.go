@@ -381,7 +381,7 @@ func (node *Node) registerObjectWithInspector(object Object) error {
 		return fmt.Errorf("inspector client not initialized")
 	}
 
-	req := &inspector_pb.AddObjectRequest{
+	req := &inspector_pb.AddOrUpdateObjectRequest{
 		Object: &inspector_pb.Object{
 			Id:    object.Id(),
 			Class: object.Type(),
@@ -389,7 +389,7 @@ func (node *Node) registerObjectWithInspector(object Object) error {
 		NodeAddress: node.advertiseAddress,
 	}
 
-	_, err := node.inspectorClient.AddObject(context.Background(), req)
+	_, err := node.inspectorClient.AddOrUpdateObject(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("failed to register object with inspector: %w", err)
 	}

@@ -39,7 +39,7 @@ func (s *svc) Ping(ctx context.Context, req *inspector_pb.Empty) (*inspector_pb.
 	return &inspector_pb.Empty{}, nil
 }
 
-func (s *svc) AddObject(ctx context.Context, req *inspector_pb.AddObjectRequest) (*inspector_pb.Empty, error) {
+func (s *svc) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOrUpdateObjectRequest) (*inspector_pb.Empty, error) {
 	o := req.GetObject()
 	if o == nil || o.Id == "" {
 		return &inspector_pb.Empty{}, nil
@@ -49,12 +49,12 @@ func (s *svc) AddObject(ctx context.Context, req *inspector_pb.AddObjectRequest)
 		ID:    o.Id,
 		Label: fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 		X:     x, Y: y,
-		Size:        10,
-		Color:       "#1f77b4",
-		Type:        "object",
+		Size:          10,
+		Color:         "#1f77b4",
+		Type:          "object",
 		GoverseNodeID: req.GetNodeAddress(),
 	}
-	s.pg.AddObject(obj)
+	s.pg.AddOrUpdateObject(obj)
 	return &inspector_pb.Empty{}, nil
 }
 
@@ -94,16 +94,16 @@ func (s *svc) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRe
 		}
 		x, y := randPos()
 		obj := GoverseObject{
-			ID:          o.Id,
-			Label:       fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
-			X:           x,
-			Y:           y,
-			Size:        10,
-			Color:       "#1f77b4",
-			Type:        "object",
+			ID:            o.Id,
+			Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
+			X:             x,
+			Y:             y,
+			Size:          10,
+			Color:         "#1f77b4",
+			Type:          "object",
 			GoverseNodeID: addr,
 		}
-		s.pg.AddObject(obj)
+		s.pg.AddOrUpdateObject(obj)
 	}
 
 	log.Printf("Node registered: advertise_addr=%s", addr)

@@ -44,14 +44,12 @@ func (pg *GoverseGraph) GetObjects() []models.GoverseObject {
 	return objects
 }
 
-// AddObject adds an object if it does not already exist.
-func (pg *GoverseGraph) AddObject(obj models.GoverseObject) {
+// AddOrUpdateObject adds or replaces an object.
+func (pg *GoverseGraph) AddOrUpdateObject(obj models.GoverseObject) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
 
-	if _, exists := pg.objects[obj.ID]; !exists {
-		pg.objects[obj.ID] = obj
-	}
+	pg.objects[obj.ID] = obj
 }
 
 // AddOrUpdateNode registers or updates a node.

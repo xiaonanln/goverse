@@ -89,8 +89,8 @@ func TestGetObjects(t *testing.T) {
 	// Add some objects
 	obj1 := models.GoverseObject{ID: "obj1", Label: "Object 1"}
 	obj2 := models.GoverseObject{ID: "obj2", Label: "Object 2"}
-	pg.AddObject(obj1)
-	pg.AddObject(obj2)
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
 
 	objects = pg.GetObjects()
 	if len(objects) != 2 {
@@ -112,8 +112,8 @@ func TestGetObjects(t *testing.T) {
 	}
 }
 
-// TestAddObject tests adding objects
-func TestAddObject(t *testing.T) {
+// TestAddOrUpdateObject tests adding objects
+func TestAddOrUpdateObject(t *testing.T) {
 	pg := NewGoverseGraph()
 
 	obj := models.GoverseObject{
@@ -122,7 +122,7 @@ func TestAddObject(t *testing.T) {
 		GoverseNodeID: "node1",
 	}
 
-	pg.AddObject(obj)
+	pg.AddOrUpdateObject(obj)
 
 	objects := pg.GetObjects()
 	if len(objects) != 1 {
@@ -142,8 +142,8 @@ func TestAddObject(t *testing.T) {
 	}
 }
 
-// TestAddObject_Duplicate tests that duplicate objects are not added
-func TestAddObject_Duplicate(t *testing.T) {
+// TestAddOrUpdateObject_Duplicate tests that duplicate objects are replaced
+func TestAddOrUpdateObject_Duplicate(t *testing.T) {
 	pg := NewGoverseGraph()
 
 	obj1 := models.GoverseObject{
@@ -156,17 +156,17 @@ func TestAddObject_Duplicate(t *testing.T) {
 		Label: "Second Version",
 	}
 
-	pg.AddObject(obj1)
-	pg.AddObject(obj2) // Should not replace the first one
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2) // Should replace the first one
 
 	objects := pg.GetObjects()
 	if len(objects) != 1 {
-		t.Fatalf("Expected 1 object (duplicates should not be added), got %d", len(objects))
+		t.Fatalf("Expected 1 object, got %d", len(objects))
 	}
 
-	// Verify the original object is preserved
-	if objects[0].Label != "First Version" {
-		t.Errorf("Expected label 'First Version', got '%s' - duplicate should not replace existing", objects[0].Label)
+	// Verify the object was replaced with the newer version
+	if objects[0].Label != "Second Version" {
+		t.Errorf("Expected label 'Second Version', got '%s' - duplicate should replace existing", objects[0].Label)
 	}
 }
 
@@ -269,9 +269,9 @@ func TestRemoveNode_CascadeObjects(t *testing.T) {
 	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node1"}
 	obj3 := models.GoverseObject{ID: "obj3", GoverseNodeID: "node2"}
 
-	pg.AddObject(obj1)
-	pg.AddObject(obj2)
-	pg.AddObject(obj3)
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
+	pg.AddOrUpdateObject(obj3)
 
 	// Remove node1
 	pg.RemoveNode("node1")
@@ -300,9 +300,9 @@ func TestRemoveStaleObjects(t *testing.T) {
 	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node1"}
 	obj3 := models.GoverseObject{ID: "obj3", GoverseNodeID: "node2"}
 
-	pg.AddObject(obj1)
-	pg.AddObject(obj2)
-	pg.AddObject(obj3)
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
+	pg.AddOrUpdateObject(obj3)
 
 	// Current objects only includes obj1
 	currentObjs := []*inspector_pb.Object{
@@ -343,9 +343,9 @@ func TestRemoveStaleObjects_EmptyCurrentList(t *testing.T) {
 	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node1"}
 	obj3 := models.GoverseObject{ID: "obj3", GoverseNodeID: "node2"}
 
-	pg.AddObject(obj1)
-	pg.AddObject(obj2)
-	pg.AddObject(obj3)
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
+	pg.AddOrUpdateObject(obj3)
 
 	// Empty current objects list
 	currentObjs := []*inspector_pb.Object{}
@@ -367,7 +367,7 @@ func TestRemoveStaleObjects_NilObjects(t *testing.T) {
 	pg := NewGoverseGraph()
 
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
-	pg.AddObject(obj1)
+	pg.AddOrUpdateObject(obj1)
 
 	// Current list contains nil and empty ID objects
 	currentObjs := []*inspector_pb.Object{
@@ -394,7 +394,7 @@ func TestRemoveStaleObjects_NonExistentNode(t *testing.T) {
 	pg := NewGoverseGraph()
 
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
-	pg.AddObject(obj1)
+	pg.AddOrUpdateObject(obj1)
 
 	currentObjs := []*inspector_pb.Object{
 		{Id: "obj2"},
@@ -428,7 +428,7 @@ func TestConcurrentAccess(t *testing.T) {
 					ID:            fmt.Sprintf("obj-%d-%d", id, j),
 					GoverseNodeID: "node1",
 				}
-				pg.AddObject(obj)
+				pg.AddOrUpdateObject(obj)
 			}
 		}(i)
 	}
@@ -483,7 +483,7 @@ func TestConcurrentRemoveAndRead(t *testing.T) {
 		pg.AddOrUpdateNode(node)
 
 		obj := models.GoverseObject{ID: fmt.Sprintf("obj-%d", i), GoverseNodeID: fmt.Sprintf("node-%d", i)}
-		pg.AddObject(obj)
+		pg.AddOrUpdateObject(obj)
 	}
 
 	var wg sync.WaitGroup
@@ -538,9 +538,9 @@ func TestAddObject_MultipleNodes(t *testing.T) {
 	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node2"}
 	obj3 := models.GoverseObject{ID: "obj3", GoverseNodeID: "node1"}
 
-	pg.AddObject(obj1)
-	pg.AddObject(obj2)
-	pg.AddObject(obj3)
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
+	pg.AddOrUpdateObject(obj3)
 
 	objects := pg.GetObjects()
 	if len(objects) != 3 {
