@@ -1,40 +1,37 @@
 #!/usr/bin/env python3
-"""ChatClient helper for managing the chat client process."""
-import os
-import subprocess
-import tempfile
-import time
+"""ChatClient helper using gRPC client for managing chat client interactions."""
+import grpc
 import threading
+import time
 from pathlib import Path
-from BinaryHelper import BinaryHelper
+from google.protobuf import any_pb2
 
-# Repo root (tests/integration/ChatClient.py -> repo root)
+# Import generated proto files
+import sys
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+sys.path.insert(0, str(REPO_ROOT))
+
+from client.proto import client_pb2, client_pb2_grpc
+from samples.chat.proto import chat_pb2
 
 
 class ChatClient:
-    """Manages the Goverse chat client process and interactions."""
+    """Manages the Goverse chat client using gRPC."""
     
-    def __init__(self, binary_path=None, base_cov_dir=None):
-        """Initialize and optionally build the chat client.
-        
-        Args:
-            binary_path: Path to chat client binary (defaults to /tmp/chat_client)
-            build_if_needed: Whether to build the binary if it doesn't exist
-            base_cov_dir: Base directory for coverage data (optional)
-        """
-        self.binary_path = binary_path if binary_path is not None else '/tmp/chat_client'
-        self.base_cov_dir = base_cov_dir
+    def __init__(self):
+        """Initialize the chat client."""
         self.name = "Chat Client"
-        self.process = None
-        self.stdin_pipe = None
-        self.output_file = None
-        self.output_file_path = None
-        
-        # Build binary if needed
-        if not os.path.exists(self.binary_path):
-            if not BinaryHelper.build_binary('./samples/chat/client/', self.binary_path, 'chat client'):
-                raise RuntimeError(f"Failed to build chat client binary at {self.binary_path}")
+        self.channel = None
+        self.stub = None
+        self.client_id = None
+        self.stream = None
+        self.room_name = None
+        self.user_name = None
+        self.last_msg_timestamp = 0
+        self.output_buffer = []
+        self.output_lock = threading.Lock()
+        self.stream_thread = None
+        self.running = False
     
     def start_interactive(self, server_port, username='testuser'):
         """Start the chat client as an interactive background process.
@@ -46,36 +43,201 @@ class ChatClient:
         Returns:
             True if client started successfully, False otherwise
         """
-        # Create temporary file for output (secure version)
-        fd, self.output_file_path = tempfile.mkstemp(suffix='.txt', text=True)
-        os.close(fd)  # Close the file descriptor, we'll open it for writing
-        self.output_file = open(self.output_file_path, 'w')
-        
-        # Start the chat client process
-        self.process = subprocess.Popen(
-            [self.binary_path, '-server', f'localhost:{server_port}', '-user', username],
-            stdin=subprocess.PIPE,
-            stdout=self.output_file,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1  # Line buffered
-        )
-        self.stdin_pipe = self.process.stdin
-        
-        # Give it a moment to connect
-        time.sleep(1)
-        
-        return self.process.poll() is None
+        try:
+            # Connect to the server
+            server_address = f'localhost:{server_port}'
+            self.channel = grpc.insecure_channel(server_address)
+            self.stub = client_pb2_grpc.ClientServiceStub(self.channel)
+            self.user_name = username
+            
+            # Register the client (this will block until connection is established)
+            self.stream = self.stub.Register(client_pb2.Empty())
+            
+            # Read the first message which should be RegisterResponse
+            first_msg = next(self.stream)
+            reg_response = client_pb2.RegisterResponse()
+            first_msg.Unpack(reg_response)
+            self.client_id = reg_response.client_id
+            
+            # Start background thread to listen for pushed messages
+            self.running = True
+            self.stream_thread = threading.Thread(target=self._listen_for_messages, daemon=True)
+            self.stream_thread.start()
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error starting chat client: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
-    def send_input(self, text):
-        """Send input to the running client process.
+    def _listen_for_messages(self):
+        """Background thread to listen for pushed messages from the server."""
+        try:
+            while self.running:
+                try:
+                    msg_any = next(self.stream)
+                    
+                    # Try to unpack as NewMessageNotification
+                    notification = chat_pb2.Client_NewMessageNotification()
+                    if msg_any.Unpack(notification):
+                        chat_msg = notification.message
+                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(chat_msg.timestamp))
+                        output_line = f"[{timestamp_str}] {chat_msg.user_name}: {chat_msg.message}"
+                        
+                        with self.output_lock:
+                            self.output_buffer.append(output_line)
+                        
+                        # Update last message timestamp
+                        if chat_msg.timestamp > self.last_msg_timestamp:
+                            self.last_msg_timestamp = chat_msg.timestamp
+                            
+                except StopIteration:
+                    break
+                except Exception as e:
+                    if self.running:
+                        print(f"Error in message listener: {e}")
+                    break
+        except Exception as e:
+            if self.running:
+                print(f"Fatal error in message listener: {e}")
+    
+    def _call(self, method, request_proto):
+        """Call a method on the client object.
         
         Args:
-            text: Text to send (will add newline automatically)
+            method: Method name to call
+            request_proto: Request protobuf message
+            
+        Returns:
+            Response protobuf message
         """
-        if self.stdin_pipe:
-            self.stdin_pipe.write(text + '\n')
-            self.stdin_pipe.flush()
+        # Pack request into Any
+        request_any = any_pb2.Any()
+        request_any.Pack(request_proto)
+        
+        # Call the RPC
+        call_request = client_pb2.CallRequest(
+            client_id=self.client_id,
+            method=method,
+            request=request_any
+        )
+        
+        response = self.stub.Call(call_request)
+        return response.response
+    
+    def send_input(self, text):
+        """Send input to the running client (process commands).
+        
+        Args:
+            text: Text to send (command or message)
+        """
+        text = text.strip()
+        if not text:
+            return
+            
+        try:
+            if text.startswith('/'):
+                self._handle_command(text)
+            else:
+                # Send as chat message
+                if not self.room_name:
+                    with self.output_lock:
+                        self.output_buffer.append("Error: You must join a chatroom first with /join <room>")
+                    return
+                
+                request = chat_pb2.Client_SendChatMessageRequest(
+                    user_name=self.user_name,
+                    room_name=self.room_name,
+                    message=text
+                )
+                self._call("SendMessage", request)
+                
+        except Exception as e:
+            with self.output_lock:
+                self.output_buffer.append(f"Error: {e}")
+    
+    def _handle_command(self, command):
+        """Handle a chat command.
+        
+        Args:
+            command: Command string starting with /
+        """
+        parts = command.split(None, 1)
+        cmd = parts[0].lower()
+        
+        try:
+            if cmd == '/list':
+                request = chat_pb2.Client_ListChatRoomsRequest()
+                response_any = self._call("ListChatRooms", request)
+                
+                response = chat_pb2.Client_ListChatRoomsResponse()
+                response_any.Unpack(response)
+                
+                with self.output_lock:
+                    self.output_buffer.append("Available Chatrooms:")
+                    for room in response.chat_rooms:
+                        self.output_buffer.append(f" - {room}")
+                        
+            elif cmd == '/join':
+                if len(parts) < 2:
+                    with self.output_lock:
+                        self.output_buffer.append("Usage: /join <roomname>")
+                    return
+                    
+                room_name = parts[1]
+                request = chat_pb2.Client_JoinChatRoomRequest(
+                    room_name=room_name,
+                    user_name=self.user_name
+                )
+                response_any = self._call("Join", request)
+                
+                response = chat_pb2.Client_JoinChatRoomResponse()
+                response_any.Unpack(response)
+                
+                self.room_name = room_name
+                self.last_msg_timestamp = 0
+                
+                with self.output_lock:
+                    self.output_buffer.append(f"Joined chatroom {response.room_name}")
+                    for msg in response.recent_messages:
+                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
+                        self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
+                        if msg.timestamp > self.last_msg_timestamp:
+                            self.last_msg_timestamp = msg.timestamp
+                            
+            elif cmd == '/messages':
+                if not self.room_name:
+                    with self.output_lock:
+                        self.output_buffer.append("Error: You must join a chatroom first with /join <room>")
+                    return
+                    
+                request = chat_pb2.Client_GetRecentMessagesRequest(
+                    room_name=self.room_name,
+                    after_timestamp=self.last_msg_timestamp
+                )
+                response_any = self._call("GetRecentMessages", request)
+                
+                response = chat_pb2.Client_GetRecentMessagesResponse()
+                response_any.Unpack(response)
+                
+                with self.output_lock:
+                    self.output_buffer.append(f"Recent messages in [{self.room_name}]:")
+                    for msg in response.messages:
+                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
+                        self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
+                        if msg.timestamp > self.last_msg_timestamp:
+                            self.last_msg_timestamp = msg.timestamp
+                            
+            elif cmd == '/quit':
+                with self.output_lock:
+                    self.output_buffer.append("Goodbye!")
+                self.stop()
+                
+        except Exception as e:
+            with self.output_lock:
+                self.output_buffer.append(f"Error executing command: {e}")
     
     def get_output(self):
         """Get the current output from the client.
@@ -83,47 +245,31 @@ class ChatClient:
         Returns:
             The accumulated output as a string
         """
-        if self.output_file:
-            self.output_file.flush()
-        
-        if self.output_file_path and os.path.exists(self.output_file_path):
-            with open(self.output_file_path, 'r') as f:
-                return f.read()
-        return ""
+        with self.output_lock:
+            output = '\n'.join(self.output_buffer)
+        return output
     
     def stop(self):
-        """Stop the running client process and return output."""
-        if self.process and self.process.poll() is None:
-            self.send_input('/quit')
-            time.sleep(0.5)
-            if self.process.poll() is None:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-                    self.process.wait()
+        """Stop the running client and return output."""
+        self.running = False
         
-        output = self.get_output()
-        
-        # Clean up
-        if self.stdin_pipe:
+        if self.stream:
             try:
-                self.stdin_pipe.close()
-            except Exception:
-                pass
-        if self.output_file:
-            try:
-                self.output_file.close()
-            except Exception:
-                pass
-        if self.output_file_path:
-            try:
-                os.unlink(self.output_file_path)
+                # Close the stream
+                pass  # Can't really close a streaming RPC from client side
             except Exception:
                 pass
         
-        return output
+        if self.stream_thread and self.stream_thread.is_alive():
+            self.stream_thread.join(timeout=2)
+        
+        if self.channel:
+            try:
+                self.channel.close()
+            except Exception:
+                pass
+        
+        return self.get_output()
     
     def run_test(self, server_port, username='testuser', test_input=None, timeout=30):
         """Run the chat client with test input and return the output.
@@ -147,50 +293,60 @@ Final test message
 /quit
 """
         
-        # Create temporary files for input and output
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as input_file:
-            input_file.write(test_input)
-            input_file_path = input_file.name
-        
-        output_file_path = tempfile.mktemp(suffix='.txt')
-        
         try:
+            # Connect to the server
+            server_address = f'localhost:{server_port}'
+            self.channel = grpc.insecure_channel(server_address)
+            self.stub = client_pb2_grpc.ClientServiceStub(self.channel)
+            self.user_name = username
+            
+            # Register the client (this will block until connection is established)
+            self.stream = self.stub.Register(client_pb2.Empty())
+            
+            # Read the first message which should be RegisterResponse
+            first_msg = next(self.stream)
+            reg_response = client_pb2.RegisterResponse()
+            first_msg.Unpack(reg_response)
+            self.client_id = reg_response.client_id
+            
             print(f"Running chat client with test input (connecting to localhost:{server_port})...")
+            print(f"Client registered with ID: {self.client_id}")
             
-            # Run the chat client with timeout
-            with open(input_file_path, 'r') as stdin_file, \
-                 open(output_file_path, 'w') as stdout_file:
-                try:
-                    # Child processes inherit GOCOVERDIR from the environment if set
-                    subprocess.run(
-                        [self.binary_path, '-server', f'localhost:{server_port}', '-user', username],
-                        stdin=stdin_file, 
-                        stdout=stdout_file, 
-                        stderr=subprocess.STDOUT,
-                        timeout=timeout
-                    )
-                except subprocess.TimeoutExpired:
-                    print("Chat client timed out (this is expected)")
+            # Start background thread to listen for pushed messages
+            self.running = True
+            self.stream_thread = threading.Thread(target=self._listen_for_messages, daemon=True)
+            self.stream_thread.start()
             
-            # Read and return output
-            with open(output_file_path, 'r') as f:
-                output = f.read()
+            # Give it a moment to start
+            time.sleep(0.5)
+            
+            # Process test input line by line
+            for line in test_input.strip().split('\n'):
+                line = line.strip()
+                if line:
+                    self.send_input(line)
+                    # Small delay between commands
+                    time.sleep(0.2)
+            
+            # Give time for any async operations to complete
+            time.sleep(2)
+            
+            # Get the output
+            output = self.get_output()
             
             print("\nChat client output:")
             print(output)
             
             return output
             
+        except Exception as e:
+            print(f"Error running test: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"Error: {e}"
+            
         finally:
-            # Clean up temporary files
-            try:
-                os.unlink(input_file_path)
-            except:
-                pass
-            try:
-                os.unlink(output_file_path)
-            except:
-                pass
+            self.stop()
     
     def verify_output(self, output, expected_patterns=None):
         """Verify chat client output contains expected patterns.
