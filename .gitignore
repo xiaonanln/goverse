@@ -38,3 +38,4 @@ go.work.sum
 *_pb2_grpc.py
 __pycache__/
 coverage-*
+default.etcd/
