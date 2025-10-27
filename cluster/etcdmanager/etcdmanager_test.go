@@ -10,6 +10,57 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// cleanupEtcd removes all test data from etcd
+// This ensures tests start with a clean slate and don't interfere with each other
+func cleanupEtcd(t *testing.T, mgr *EtcdManager) {
+	if mgr == nil || mgr.GetClient() == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Delete all keys under /goverse/ prefix (includes nodes and any test keys)
+	_, err := mgr.GetClient().Delete(ctx, "/goverse/", clientv3.WithPrefix())
+	if err != nil {
+		t.Logf("Warning: failed to cleanup etcd: %v", err)
+	}
+
+	// Also clean up any test keys that might not be under /goverse/
+	testKeyPrefixes := []string{"test-key", "test/key"}
+	for _, prefix := range testKeyPrefixes {
+		_, err := mgr.GetClient().Delete(ctx, prefix, clientv3.WithPrefix())
+		if err != nil {
+			t.Logf("Warning: failed to cleanup test keys with prefix %s: %v", prefix, err)
+		}
+	}
+}
+
+// setupEtcdTest creates a manager, connects, and registers cleanup
+// Returns nil if etcd is not available (test should be skipped)
+func setupEtcdTest(t *testing.T) *EtcdManager {
+	mgr, err := NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("NewEtcdManager() failed: %v", err)
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("Skipping test: etcd not available: %v", err)
+		return nil
+	}
+
+	// Clean up before test
+	cleanupEtcd(t, mgr)
+
+	// Register cleanup after test (runs even if test fails)
+	t.Cleanup(func() {
+		cleanupEtcd(t, mgr)
+		mgr.Close()
+	})
+
+	return mgr
+}
+
 // TestNewEtcdManager tests creating a new etcd manager
 func TestNewEtcdManager(t *testing.T) {
 	tests := []struct {
@@ -56,17 +107,10 @@ func TestNewEtcdManager(t *testing.T) {
 func TestEtcdManagerConnect(t *testing.T) {
 	// Note: This test requires a running etcd instance at localhost:2379
 	// Skip if etcd is not available
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available at localhost:2379: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	// Verify client is set
 	if mgr.GetClient() == nil {
@@ -97,17 +141,10 @@ func TestEtcdManagerConnectInvalidEndpoint(t *testing.T) {
 
 // TestEtcdManagerPutGet tests put and get operations
 func TestEtcdManagerPutGet(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 
@@ -153,7 +190,7 @@ func TestEtcdManagerPutGet(t *testing.T) {
 				t.Errorf("Get() = %v, want %v", got, tt.value)
 			}
 
-			// Cleanup
+			// Cleanup individual key (though cleanupEtcd will handle it too)
 			mgr.Delete(ctx, tt.key)
 		})
 	}
@@ -446,23 +483,16 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 
 // TestEtcdManagerRegisterNode tests node registration
 func TestEtcdManagerRegisterNode(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 	nodeAddress := "localhost:47001"
 
 	// Register node
-	err = mgr.RegisterNode(ctx, nodeAddress)
+	err := mgr.RegisterNode(ctx, nodeAddress)
 	if err != nil {
 		t.Errorf("RegisterNode() error = %v", err)
 		return
@@ -487,8 +517,7 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 		t.Errorf("Registered node %s not found in node list", nodeAddress)
 	}
 
-	// Cleanup
-	mgr.UnregisterNode(ctx, nodeAddress)
+	// Cleanup handled by t.Cleanup in setupEtcdTest
 }
 
 // TestEtcdManagerRegisterNodeMultipleTimes tests that registering multiple different nodes fails
