@@ -133,7 +133,10 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 
 	// Record initial node count
 	initialNodes := node1.GetNodes()
-	t.Logf("Node1 initially sees %d nodes", len(initialNodes))
+	t.Logf("Node1 initially sees %d nodes: %v", len(initialNodes), initialNodes)
+	if len(initialNodes) != 1 || initialNodes[0] != "localhost:47003" {
+		t.Fatalf("Node1 should initially see only itself ('localhost:47003'), got %d nodes: %v", len(initialNodes), initialNodes)
+	}
 
 	// Create and start node2
 	node2 := NewNodeWithEtcd("localhost:47004", "localhost:2379")
