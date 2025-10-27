@@ -127,117 +127,111 @@ class ChatClient:
         response = self.stub.Call(call_request)
         return response.response
     
-    def send_input(self, text):
-        """Send input to the running client (process commands).
+    def list_chatrooms(self):
+        """List all available chatrooms.
         
-        Args:
-            text: Text to send (command or message)
+        Returns:
+            List of chatroom names
         """
-        text = text.strip()
-        if not text:
-            return
-            
-        try:
-            if text.startswith('/'):
-                self._handle_command(text)
-            else:
-                # Send as chat message
-                if not self.room_name:
-                    with self.output_lock:
-                        self.output_buffer.append("Error: You must join a chatroom first with /join <room>")
-                    return
-                
-                request = chat_pb2.Client_SendChatMessageRequest(
-                    user_name=self.user_name,
-                    room_name=self.room_name,
-                    message=text
-                )
-                self._call("SendMessage", request)
-                
-        except Exception as e:
-            with self.output_lock:
-                self.output_buffer.append(f"Error: {e}")
+        request = chat_pb2.Client_ListChatRoomsRequest()
+        response_any = self._call("ListChatRooms", request)
+        
+        response = chat_pb2.Client_ListChatRoomsResponse()
+        response_any.Unpack(response)
+        
+        with self.output_lock:
+            self.output_buffer.append("Available Chatrooms:")
+            for room in response.chat_rooms:
+                self.output_buffer.append(f" - {room}")
+        
+        return list(response.chat_rooms)
     
-    def _handle_command(self, command):
-        """Handle a chat command.
+    def join_chatroom(self, room_name):
+        """Join a chatroom.
         
         Args:
-            command: Command string starting with /
+            room_name: Name of the chatroom to join
+            
+        Returns:
+            List of recent messages in the chatroom
         """
-        parts = command.split(None, 1)
-        cmd = parts[0].lower()
+        request = chat_pb2.Client_JoinChatRoomRequest(
+            room_name=room_name,
+            user_name=self.user_name
+        )
+        response_any = self._call("Join", request)
         
-        try:
-            if cmd == '/list':
-                request = chat_pb2.Client_ListChatRoomsRequest()
-                response_any = self._call("ListChatRooms", request)
-                
-                response = chat_pb2.Client_ListChatRoomsResponse()
-                response_any.Unpack(response)
-                
-                with self.output_lock:
-                    self.output_buffer.append("Available Chatrooms:")
-                    for room in response.chat_rooms:
-                        self.output_buffer.append(f" - {room}")
-                        
-            elif cmd == '/join':
-                if len(parts) < 2:
-                    with self.output_lock:
-                        self.output_buffer.append("Usage: /join <roomname>")
-                    return
-                    
-                room_name = parts[1]
-                request = chat_pb2.Client_JoinChatRoomRequest(
-                    room_name=room_name,
-                    user_name=self.user_name
-                )
-                response_any = self._call("Join", request)
-                
-                response = chat_pb2.Client_JoinChatRoomResponse()
-                response_any.Unpack(response)
-                
-                self.room_name = room_name
-                self.last_msg_timestamp = 0
-                
-                with self.output_lock:
-                    self.output_buffer.append(f"Joined chatroom {response.room_name}")
-                    for msg in response.recent_messages:
-                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
-                        self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
-                        if msg.timestamp > self.last_msg_timestamp:
-                            self.last_msg_timestamp = msg.timestamp
-                            
-            elif cmd == '/messages':
-                if not self.room_name:
-                    with self.output_lock:
-                        self.output_buffer.append("Error: You must join a chatroom first with /join <room>")
-                    return
-                    
-                request = chat_pb2.Client_GetRecentMessagesRequest(
-                    room_name=self.room_name,
-                    after_timestamp=self.last_msg_timestamp
-                )
-                response_any = self._call("GetRecentMessages", request)
-                
-                response = chat_pb2.Client_GetRecentMessagesResponse()
-                response_any.Unpack(response)
-                
-                with self.output_lock:
-                    self.output_buffer.append(f"Recent messages in [{self.room_name}]:")
-                    for msg in response.messages:
-                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
-                        self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
-                        if msg.timestamp > self.last_msg_timestamp:
-                            self.last_msg_timestamp = msg.timestamp
-                            
-            elif cmd == '/quit':
-                with self.output_lock:
-                    self.output_buffer.append("Goodbye!")
-                self.stop()
-                
-        except Exception as e:
+        response = chat_pb2.Client_JoinChatRoomResponse()
+        response_any.Unpack(response)
+        
+        self.room_name = room_name
+        self.last_msg_timestamp = 0
+        
+        with self.output_lock:
+            self.output_buffer.append(f"Joined chatroom {response.room_name}")
+            for msg in response.recent_messages:
+                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
+                self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
+                if msg.timestamp > self.last_msg_timestamp:
+                    self.last_msg_timestamp = msg.timestamp
+        
+        return list(response.recent_messages)
+    
+    def send_message(self, message):
+        """Send a message to the current chatroom.
+        
+        Args:
+            message: Message text to send
+            
+        Raises:
+            RuntimeError: If not currently in a chatroom
+        """
+        if not self.room_name:
+            error_msg = "Error: You must join a chatroom first"
             with self.output_lock:
-                self.output_buffer.append(f"Error executing command: {e}")
+                self.output_buffer.append(error_msg)
+            raise RuntimeError(error_msg)
+        
+        request = chat_pb2.Client_SendChatMessageRequest(
+            user_name=self.user_name,
+            room_name=self.room_name,
+            message=message
+        )
+        self._call("SendMessage", request)
+    
+    def get_recent_messages(self):
+        """Get recent messages from the current chatroom.
+        
+        Returns:
+            List of recent messages
+            
+        Raises:
+            RuntimeError: If not currently in a chatroom
+        """
+        if not self.room_name:
+            error_msg = "Error: You must join a chatroom first"
+            with self.output_lock:
+                self.output_buffer.append(error_msg)
+            raise RuntimeError(error_msg)
+        
+        request = chat_pb2.Client_GetRecentMessagesRequest(
+            room_name=self.room_name,
+            after_timestamp=self.last_msg_timestamp
+        )
+        response_any = self._call("GetRecentMessages", request)
+        
+        response = chat_pb2.Client_GetRecentMessagesResponse()
+        response_any.Unpack(response)
+        
+        with self.output_lock:
+            self.output_buffer.append(f"Recent messages in [{self.room_name}]:")
+            for msg in response.messages:
+                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
+                self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
+                if msg.timestamp > self.last_msg_timestamp:
+                    self.last_msg_timestamp = msg.timestamp
+        
+        return list(response.messages)
     
     def get_output(self):
         """Get the current output from the client.
@@ -271,27 +265,20 @@ class ChatClient:
         
         return self.get_output()
     
-    def run_test(self, server_port, username='testuser', test_input=None, timeout=30):
-        """Run the chat client with test input and return the output.
+    def run_test(self, server_port, username='testuser', messages=None, timeout=30):
+        """Run the chat client with a test sequence and return the output.
         
         Args:
             server_port: The server port to connect to
             username: Username for the chat client (default: testuser)
-            test_input: Input commands as a string (default: basic test commands)
+            messages: List of messages to send (default: standard test messages)
             timeout: Command timeout in seconds (default: 30)
             
         Returns:
             The output from the chat client as a string
         """
-        if test_input is None:
-            test_input = """/list
-/join General
-Hello from test!
-This is message 2
-Final test message
-/messages
-/quit
-"""
+        if messages is None:
+            messages = ['Hello from test!', 'This is message 2', 'Final test message']
         
         try:
             # Connect to the server
@@ -309,7 +296,7 @@ Final test message
             first_msg.Unpack(reg_response)
             self.client_id = reg_response.client_id
             
-            print(f"Running chat client with test input (connecting to localhost:{server_port})...")
+            print(f"Running chat client with test (connecting to localhost:{server_port})...")
             print(f"Client registered with ID: {self.client_id}")
             
             # Start background thread to listen for pushed messages
@@ -320,13 +307,24 @@ Final test message
             # Give it a moment to start
             time.sleep(0.5)
             
-            # Process test input line by line
-            for line in test_input.strip().split('\n'):
-                line = line.strip()
-                if line:
-                    self.send_input(line)
-                    # Small delay between commands
-                    time.sleep(0.2)
+            # Run the test sequence
+            self.list_chatrooms()
+            time.sleep(0.2)
+            
+            self.join_chatroom('General')
+            time.sleep(0.2)
+            
+            # Send the provided messages
+            for msg in messages:
+                self.send_message(msg)
+                time.sleep(0.2)
+            
+            self.get_recent_messages()
+            time.sleep(0.2)
+            
+            # Add goodbye message
+            with self.output_lock:
+                self.output_buffer.append("Goodbye!")
             
             # Give time for any async operations to complete
             time.sleep(2)
