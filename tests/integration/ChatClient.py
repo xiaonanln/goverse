@@ -3,6 +3,8 @@
 import os
 import subprocess
 import tempfile
+import time
+import threading
 from pathlib import Path
 from BinaryHelper import BinaryHelper
 
@@ -24,11 +26,103 @@ class ChatClient:
         self.binary_path = binary_path if binary_path is not None else '/tmp/chat_client'
         self.base_cov_dir = base_cov_dir
         self.name = "Chat Client"
+        self.process = None
+        self.stdin_pipe = None
+        self.output_file = None
+        self.output_file_path = None
         
         # Build binary if needed
         if not os.path.exists(self.binary_path):
             if not BinaryHelper.build_binary('./samples/chat/client/', self.binary_path, 'chat client'):
                 raise RuntimeError(f"Failed to build chat client binary at {self.binary_path}")
+    
+    def start_interactive(self, server_port, username='testuser'):
+        """Start the chat client as an interactive background process.
+        
+        Args:
+            server_port: The server port to connect to
+            username: Username for the chat client (default: testuser)
+            
+        Returns:
+            True if client started successfully, False otherwise
+        """
+        # Create temporary file for output
+        self.output_file_path = tempfile.mktemp(suffix='.txt')
+        self.output_file = open(self.output_file_path, 'w')
+        
+        # Start the chat client process
+        self.process = subprocess.Popen(
+            [self.binary_path, '-server', f'localhost:{server_port}', '-user', username],
+            stdin=subprocess.PIPE,
+            stdout=self.output_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1  # Line buffered
+        )
+        self.stdin_pipe = self.process.stdin
+        
+        # Give it a moment to connect
+        time.sleep(1)
+        
+        return self.process.poll() is None
+    
+    def send_input(self, text):
+        """Send input to the running client process.
+        
+        Args:
+            text: Text to send (will add newline automatically)
+        """
+        if self.stdin_pipe:
+            self.stdin_pipe.write(text + '\n')
+            self.stdin_pipe.flush()
+    
+    def get_output(self):
+        """Get the current output from the client.
+        
+        Returns:
+            The accumulated output as a string
+        """
+        if self.output_file:
+            self.output_file.flush()
+        
+        if self.output_file_path and os.path.exists(self.output_file_path):
+            with open(self.output_file_path, 'r') as f:
+                return f.read()
+        return ""
+    
+    def stop(self):
+        """Stop the running client process and return output."""
+        if self.process and self.process.poll() is None:
+            self.send_input('/quit')
+            time.sleep(0.5)
+            if self.process.poll() is None:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait()
+        
+        output = self.get_output()
+        
+        # Clean up
+        if self.stdin_pipe:
+            try:
+                self.stdin_pipe.close()
+            except:
+                pass
+        if self.output_file:
+            try:
+                self.output_file.close()
+            except:
+                pass
+        if self.output_file_path:
+            try:
+                os.unlink(self.output_file_path)
+            except:
+                pass
+        
+        return output
     
     def run_test(self, server_port, username='testuser', test_input=None, timeout=30):
         """Run the chat client with test input and return the output.
