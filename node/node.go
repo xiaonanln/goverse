@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
@@ -32,7 +33,7 @@ type Node struct {
 	objects          map[string]Object
 	objectsMu        sync.RWMutex
 	inspectorClient  inspector_pb.InspectorServiceClient
-	etcdManager      *EtcdManager
+	etcdManager      *etcdmanager.EtcdManager
 	logger           *logger.Logger
 	startupTime      time.Time
 }
@@ -56,7 +57,7 @@ func NewNodeWithEtcd(advertiseAddress string, etcdAddress string) *Node {
 		etcdAddress = "localhost:2379" // default
 	}
 
-	etcdMgr, err := NewEtcdManager(etcdAddress)
+	etcdMgr, err := etcdmanager.NewEtcdManager(etcdAddress)
 	if err != nil {
 		node.logger.Errorf("Failed to create etcd manager: %v", err)
 	} else {
@@ -432,7 +433,7 @@ type ObjectInfo struct {
 }
 
 // GetEtcdManager returns the etcd manager
-func (node *Node) GetEtcdManager() *EtcdManager {
+func (node *Node) GetEtcdManager() *etcdmanager.EtcdManager {
 	return node.etcdManager
 }
 
@@ -450,16 +451,16 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 	node.objectsMu.RLock()
 	obj, ok := node.objects[clientID]
 	node.objectsMu.RUnlock()
-	
+
 	if !ok {
 		return fmt.Errorf("client not found: %s", clientID)
 	}
-	
+
 	clientObj, ok := obj.(ClientObject)
 	if !ok {
 		return fmt.Errorf("object %s is not a ClientObject", clientID)
 	}
-	
+
 	// Send message to the client's channel
 	select {
 	case clientObj.MessageChan() <- message:
