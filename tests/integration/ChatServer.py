@@ -8,6 +8,8 @@ import signal
 import socket
 import time
 from pathlib import Path
+from typing import Dict, List, Any
+from google.protobuf.any_pb2 import Any as AnyProto
 from BinaryHelper import BinaryHelper
 
 # Repo root (tests/integration/ChatServer.py -> repo root)
@@ -25,6 +27,10 @@ except Exception:
 class ChatServer:
     """Manages a Goverse chat server process and gRPC connections."""
     
+    process: subprocess.Popen | None
+    channel: grpc.Channel | None
+    stub: goverse_pb2_grpc.GoverseStub | None
+    
     def __init__(self, server_index=0, listen_port=None, client_port=None, 
                  binary_path=None):
         self.server_index = server_index
@@ -41,7 +47,7 @@ class ChatServer:
             if not BinaryHelper.build_binary('./samples/chat/server/', self.binary_path, 'chat server'):
                 raise RuntimeError(f"Failed to build chat server binary at {self.binary_path}")
     
-    def start(self):
+    def start(self) -> None:
         """Start the chat server process."""
         if self.process is not None:
             print(f"⚠️  {self.name} is already running")
@@ -50,7 +56,7 @@ class ChatServer:
         print(f"Starting {self.name} (ports {self.listen_port}, {self.client_port})...")
         
         # Start the process (inherits GOCOVERDIR from environment if set)
-        cmd = [
+        cmd: List[str] = [
             self.binary_path,
             '-listen', f'localhost:{self.listen_port}',
             '-advertise', f'localhost:{self.listen_port}',
@@ -94,17 +100,17 @@ class ChatServer:
         print(f"✅ {self.name} is running and ready")
         return True
     
-    def connect(self):
+    def connect(self) -> None:
         """Establish gRPC connection to the server."""
         if self.channel is None:
             self.channel = grpc.insecure_channel(f'localhost:{self.listen_port}')
             self.stub = goverse_pb2_grpc.GoverseStub(self.channel)
     
-    def Status(self, timeout=5):
+    def Status(self, timeout: float = 5) -> str:
         self.connect()
         try:
-            response = self.stub.Status(goverse_pb2.Empty(), timeout=timeout)
-            result = {
+            response: goverse_pb2.StatusResponse = self.stub.Status(goverse_pb2.Empty(), timeout=timeout)
+            result: Dict[str, str] = {
                 "advertiseAddr": response.advertise_addr,
                 "numObjects": str(response.num_objects),
                 "uptimeSeconds": str(response.uptime_seconds)
@@ -115,17 +121,17 @@ class ChatServer:
         except Exception as e:
             return f"Error: {str(e)}"
     
-    def ListObjects(self, timeout=5):
+    def ListObjects(self, timeout: float = 5) -> str:
         self.connect()
         try:
-            response = self.stub.ListObjects(goverse_pb2.Empty(), timeout=timeout)
-            objects = []
+            response: goverse_pb2.ListObjectsResponse = self.stub.ListObjects(goverse_pb2.Empty(), timeout=timeout)
+            objects: List[Dict[str, str]] = []
             for obj in response.objects:
                 objects.append({
                     "id": obj.id,
                     "type": obj.type
                 })
-            result = {
+            result: Dict[str, Any] = {
                 "objectCount": len(objects),
                 "objects": objects
             }
@@ -135,7 +141,7 @@ class ChatServer:
         except Exception as e:
             return f"Error: {str(e)}"
     
-    def CallObject(self, object_id, method, request, timeout=5):
+    def CallObject(self, object_id: str, method: str, request: AnyProto, timeout: float = 5) -> goverse_pb2.CallObjectResponse:
         self.connect()
         call_request = goverse_pb2.CallObjectRequest(
             id=object_id,
@@ -144,11 +150,11 @@ class ChatServer:
         )
         return self.stub.CallObject(call_request, timeout=timeout)
     
-    def stop(self):
+    def close(self) -> int:
         self._close_channel()
         return self._stop_process()
 
-    def _stop_process(self):
+    def _stop_process(self) -> int:
         if self.process is None:
             return -1
         
@@ -183,15 +189,15 @@ class ChatServer:
         
         return self.process.returncode if self.process.returncode is not None else -1
     
-    def _close_channel(self):
+    def _close_channel(self) -> None:
         if self.channel:
             self.channel.close()
             self.channel = None
             self.stub = None
 
-    def __enter__(self):
+    def __enter__(self) -> 'ChatServer':
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         self.close()
         return False
