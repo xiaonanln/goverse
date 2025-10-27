@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -373,6 +374,10 @@ func TestEtcdManagerGetClient(t *testing.T) {
 
 // TestEtcdManagerRegisterMultipleNodes tests that registering multiple different nodes with one manager fails
 func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -440,6 +445,10 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 
 // TestEtcdManagerRegisterNode tests node registration
 func TestEtcdManagerRegisterNode(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -479,6 +488,10 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 
 // TestEtcdManagerRegisterNodeMultipleTimes tests that registering multiple different nodes fails
 func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -548,6 +561,10 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 
 // TestEtcdManagerUnregisterNode tests node unregistration
 func TestEtcdManagerUnregisterNode(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -585,6 +602,10 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 
 // TestEtcdManagerGetAllNodes tests retrieving all nodes
 func TestEtcdManagerGetAllNodes(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -623,6 +644,10 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 
 // TestEtcdManagerWatchNodes tests watching for node changes
 func TestEtcdManagerWatchNodes(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -680,6 +705,10 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 
 // TestEtcdManagerMultipleNodes tests multiple nodes scenario
 func TestEtcdManagerMultipleNodes(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	// Create two separate managers for two nodes
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
@@ -764,6 +793,10 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerGetNodesInitiallyEmpty tests that GetNodes returns empty list initially
 func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	mgr, err := NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -786,6 +819,10 @@ func isGithubAction() bool {
 // 3. Watch channel closure is handled gracefully
 // 4. Operations after crash return appropriate errors without causing failures
 func TestEtcdManagerServerCrash(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	// Only skip when NOT running in GitHub Actions (we want this to run in CI)
 	if !isGithubAction() {
 		t.Skipf("Skipping test: manual etcd crash simulation is intended for local runs")
