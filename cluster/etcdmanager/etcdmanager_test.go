@@ -198,22 +198,15 @@ func TestEtcdManagerPutGet(t *testing.T) {
 
 // TestEtcdManagerGetNonExistent tests getting non-existent key
 func TestEtcdManagerGetNonExistent(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 
 	// Try to get non-existent key
-	_, err = mgr.Get(ctx, "non-existent-key-12345")
+	_, err := mgr.Get(ctx, "non-existent-key-12345")
 	if err == nil {
 		t.Error("Get() should return error for non-existent key")
 	}
@@ -221,24 +214,17 @@ func TestEtcdManagerGetNonExistent(t *testing.T) {
 
 // TestEtcdManagerDelete tests delete operation
 func TestEtcdManagerDelete(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 
 	// Put a value
 	key := "test-delete-key"
 	value := "test-delete-value"
-	err = mgr.Put(ctx, key, value)
+	err := mgr.Put(ctx, key, value)
 	if err != nil {
 		t.Fatalf("Put() error = %v", err)
 	}
@@ -264,17 +250,10 @@ func TestEtcdManagerDelete(t *testing.T) {
 
 // TestEtcdManagerWatch tests watch functionality
 func TestEtcdManagerWatch(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -314,9 +293,6 @@ func TestEtcdManagerWatch(t *testing.T) {
 	case <-ctx.Done():
 		t.Error("Watch() timeout waiting for event")
 	}
-
-	// Cleanup
-	mgr.Delete(context.Background(), key)
 }
 
 // TestEtcdManagerOperationsWithoutConnect tests operations without connecting
@@ -352,19 +328,13 @@ func TestEtcdManagerOperationsWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerClose tests closing the connection
 func TestEtcdManagerClose(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
 
 	// Close should succeed
-	err = mgr.Close()
+	err := mgr.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v", err)
 	}
@@ -393,7 +363,10 @@ func TestEtcdManagerGetClient(t *testing.T) {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
 	}
-	defer mgr.Close()
+	t.Cleanup(func() {
+		cleanupEtcd(t, mgr)
+		mgr.Close()
+	})
 
 	// After connect
 	client := mgr.GetClient()
@@ -409,17 +382,10 @@ func TestEtcdManagerGetClient(t *testing.T) {
 
 // TestEtcdManagerRegisterMultipleNodes tests that registering multiple different nodes with one manager fails
 func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 
@@ -431,7 +397,7 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 	}
 
 	// Register first node - should succeed
-	err = mgr.RegisterNode(ctx, nodeAddresses[0])
+	err := mgr.RegisterNode(ctx, nodeAddresses[0])
 	if err != nil {
 		t.Fatalf("Failed to register first node %s: %v", nodeAddresses[0], err)
 	}
@@ -522,24 +488,17 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 
 // TestEtcdManagerRegisterNodeMultipleTimes tests that registering multiple different nodes fails
 func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 	nodeAddress1 := "localhost:47001"
 	nodeAddress2 := "localhost:47002"
 
 	// Register first node
-	err = mgr.RegisterNode(ctx, nodeAddress1)
+	err := mgr.RegisterNode(ctx, nodeAddress1)
 	if err != nil {
 		t.Fatalf("First RegisterNode() error = %v", err)
 	}
