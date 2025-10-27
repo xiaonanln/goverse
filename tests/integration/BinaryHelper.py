@@ -3,6 +3,7 @@
 import os
 import subprocess
 from pathlib import Path
+from typing import List
 
 # Repo root (tests/integration/BinaryHelper.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
@@ -12,7 +13,7 @@ class BinaryHelper:
     """Helper class for building Go binaries with optional coverage instrumentation."""
     
     @staticmethod
-    def build_binary(source_path, output_path, name):
+    def build_binary(source_path: str, output_path: str, name: str) -> bool:
         """Build a Go binary.
         
         Args:
@@ -28,7 +29,7 @@ class BinaryHelper:
             # Check if coverage is enabled via environment variable
             enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
             
-            cmd = ['go', 'build']
+            cmd: List[str] = ['go', 'build']
             if enable_coverage:
                 cmd.append('-cover')
                 print(f"  Coverage instrumentation enabled for {name}")
