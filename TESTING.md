@@ -50,12 +50,12 @@ Tests for the API wrapper functions:
 
 Run all tests:
 ```bash
-go test ./...
+go test -p 1 ./...
 ```
 
 Run tests with coverage:
 ```bash
-go test -cover ./...
+go test -p 1 -cover ./...
 ```
 
 Run tests for a specific package:
@@ -67,7 +67,7 @@ go test -v ./client/...
 
 Run tests with detailed coverage report:
 ```bash
-go test -coverprofile=coverage.out ./...
+go test -p 1 -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out -o coverage.html
 ```
 

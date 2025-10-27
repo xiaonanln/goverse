@@ -65,7 +65,7 @@ go build ./...
 
 ```bash
 # Run all tests with coverage
-go test -v -coverprofile=coverage.out -covermode=atomic ./...
+go test -v -p 1 -coverprofile=coverage.out -covermode=atomic ./...
 
 # Run tests for a specific package
 go test -v ./server/
@@ -114,7 +114,7 @@ type MyObject struct {
 func (obj *MyObject) MyMethod(ctx context.Context, req *proto.MyRequest) (*proto.MyResponse, error) {
     obj.mu.Lock()
     defer obj.mu.Unlock()
-    
+
     // Implementation
     return &proto.MyResponse{}, nil
 }
@@ -198,7 +198,7 @@ func TestMyFunction(t *testing.T) {
         {"valid case", "input", "expected", false},
         {"error case", "bad", "", true},
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             got, err := MyFunction(tt.input)
