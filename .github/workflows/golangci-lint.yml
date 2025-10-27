@@ -3,8 +3,11 @@ on:
   push:
     branches:
       - main
-      - master
+      - develop
   pull_request:
+    branches:
+      - main
+      - develop
 
 permissions:
   contents: read
@@ -16,10 +19,10 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v6
         with:
-          go-version: stable
+          go-version: '>=1.21'
       
       - name: Install protoc
         run: |
