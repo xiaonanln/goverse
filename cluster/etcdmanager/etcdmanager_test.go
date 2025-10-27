@@ -557,23 +557,16 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 
 // TestEtcdManagerUnregisterNode tests node unregistration
 func TestEtcdManagerUnregisterNode(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 	nodeAddress := "localhost:47002"
 
 	// Register node first
-	err = mgr.RegisterNode(ctx, nodeAddress)
+	err := mgr.RegisterNode(ctx, nodeAddress)
 	if err != nil {
 		t.Fatalf("RegisterNode() error = %v", err)
 	}
@@ -601,17 +594,10 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 
 // TestEtcdManagerGetAllNodes tests retrieving all nodes
 func TestEtcdManagerGetAllNodes(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	defer mgr.Close()
 
 	ctx := context.Background()
 	nodeAddresses := []string{"localhost:47003", "localhost:47004", "localhost:47005"}
@@ -656,7 +642,10 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
 	}
-	defer mgr1.Close()
+	t.Cleanup(func() {
+		cleanupEtcd(t, mgr1)
+		mgr1.Close()
+	})
 
 	ctx := context.Background()
 
@@ -721,7 +710,10 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
 	}
-	defer mgr1.Close()
+	t.Cleanup(func() {
+		cleanupEtcd(t, mgr1)
+		mgr1.Close()
+	})
 
 	mgr2, err := NewEtcdManager("localhost:2379")
 	if err != nil {
@@ -732,7 +724,9 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect() error = %v", err)
 	}
-	defer mgr2.Close()
+	t.Cleanup(func() {
+		mgr2.Close()
+	})
 
 	ctx := context.Background()
 
