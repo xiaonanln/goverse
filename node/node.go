@@ -121,7 +121,8 @@ func (node *Node) Stop(ctx context.Context) error {
 func (node *Node) connectToInspector() error {
 	conn, err := grpc.NewClient("localhost:8081", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return fmt.Errorf("failed to connect to inspector service: %w", err)
+		node.logger.Warnf("Failed to connect to inspector service: %v (continuing without inspector)", err)
+		return nil
 	}
 
 	inspectorClient := inspector_pb.NewInspectorServiceClient(conn)
@@ -144,7 +145,8 @@ func (node *Node) connectToInspector() error {
 
 	_, err = inspectorClient.RegisterNode(context.Background(), registerReq)
 	if err != nil {
-		return fmt.Errorf("failed to register node with inspector: %w", err)
+		node.logger.Warnf("Failed to register node with inspector: %v (continuing without inspector)", err)
+		return nil
 	}
 
 	node.logger.Infof("Successfully registered node %s with inspector", node.advertiseAddress)
@@ -163,7 +165,8 @@ func (node *Node) unregisterFromInspector() error {
 
 	_, err := node.inspectorClient.UnregisterNode(context.Background(), unregisterReq)
 	if err != nil {
-		return fmt.Errorf("failed to unregister node from inspector: %w", err)
+		node.logger.Warnf("Failed to unregister node from inspector: %v", err)
+		return nil
 	}
 
 	node.logger.Infof("Successfully unregistered node %s from inspector", node.advertiseAddress)
@@ -379,7 +382,7 @@ func (node *Node) destroyObject(id string) {
 
 func (node *Node) registerObjectWithInspector(object Object) error {
 	if node.inspectorClient == nil {
-		return fmt.Errorf("inspector client not initialized")
+		return nil
 	}
 
 	req := &inspector_pb.AddOrUpdateObjectRequest{
@@ -392,7 +395,8 @@ func (node *Node) registerObjectWithInspector(object Object) error {
 
 	_, err := node.inspectorClient.AddOrUpdateObject(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("failed to register object with inspector: %w", err)
+		node.logger.Warnf("Failed to register object with inspector: %v", err)
+		return nil
 	}
 
 	node.logger.Infof("Registered object %s with inspector", object.String())

@@ -18,8 +18,7 @@ func TestNodeEtcdIntegration(t *testing.T) {
 	// Start node1
 	err := node1.Start(ctx)
 	if err != nil {
-		t.Skipf("Skipping test: failed to start node1 (etcd may not be available): %v", err)
-		return
+		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
 
@@ -85,8 +84,7 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 	node1 := NewNodeWithEtcd("localhost:47003", "localhost:2379")
 	err := node1.Start(ctx)
 	if err != nil {
-		t.Skipf("Skipping test: failed to start node1 (etcd may not be available): %v", err)
-		return
+		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
 
@@ -137,8 +135,7 @@ func TestNodeEtcdLeaveDetection(t *testing.T) {
 	node1 := NewNodeWithEtcd("localhost:47005", "localhost:2379")
 	err := node1.Start(ctx)
 	if err != nil {
-		t.Skipf("Skipping test: failed to start node1 (etcd may not be available): %v", err)
-		return
+		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
 
