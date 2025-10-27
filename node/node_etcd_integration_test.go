@@ -4,11 +4,45 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
+
+// cleanupEtcdNodes removes all node registrations from etcd to ensure test isolation
+func cleanupEtcdNodes(t *testing.T) {
+	// Connect to etcd and clean up all nodes
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
+		return
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Logf("Warning: failed to connect to etcd for cleanup: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	ctx := context.Background()
+
+	// Delete all keys under /goverse/nodes/ prefix
+	_, err = mgr.GetClient().Delete(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	if err != nil {
+		t.Logf("Warning: failed to cleanup etcd nodes: %v", err)
+	}
+}
 
 // TestNodeEtcdIntegration tests node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
 func TestNodeEtcdIntegration(t *testing.T) {
+	// Clean up etcd before test
+	cleanupEtcdNodes(t)
+	t.Cleanup(func() {
+		cleanupEtcdNodes(t)
+	})
+
 	ctx := context.Background()
 
 	// Create two nodes
@@ -78,6 +112,12 @@ func TestNodeEtcdIntegration(t *testing.T) {
 
 // TestNodeEtcdDynamicDiscovery tests that nodes dynamically discover new nodes
 func TestNodeEtcdDynamicDiscovery(t *testing.T) {
+	// Clean up etcd before test
+	cleanupEtcdNodes(t)
+	t.Cleanup(func() {
+		cleanupEtcdNodes(t)
+	})
+
 	ctx := context.Background()
 
 	// Create and start node1
@@ -129,6 +169,12 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 
 // TestNodeEtcdLeaveDetection tests that nodes detect when other nodes leave
 func TestNodeEtcdLeaveDetection(t *testing.T) {
+	// Clean up etcd before test
+	cleanupEtcdNodes(t)
+	t.Cleanup(func() {
+		cleanupEtcdNodes(t)
+	})
+
 	ctx := context.Background()
 
 	// Create and start node1
