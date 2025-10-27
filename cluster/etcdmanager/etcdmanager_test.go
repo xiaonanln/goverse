@@ -1,4 +1,4 @@
-package node
+package etcdmanager
 
 import (
 	"context"
