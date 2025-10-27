@@ -1,0 +1,10 @@
+# golangci-lint configuration file
+# See https://golangci-lint.run/usage/configuration/ for details
+
+version: 2
+
+issues:
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+  # Maximum count of issues with the same text
+  max-same-issues: 0
