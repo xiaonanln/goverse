@@ -72,14 +72,14 @@ def run_push_messaging_test(num_servers=1):
         
         # Have both clients join the same chatroom
         print("Both clients joining 'General' chatroom...")
-        client1.send_input('/join General')
-        client2.send_input('/join General')
+        client1.join_chatroom('General')
+        client2.join_chatroom('General')
         time.sleep(1)
         
         # Client 1 sends a message
         test_message = "Hello from user1 via push!"
         print(f"Client1 sending message: '{test_message}'")
-        client1.send_input(test_message)
+        client1.send_message(test_message)
         
         # Wait for push message to be delivered
         time.sleep(2)
@@ -102,7 +102,7 @@ def run_push_messaging_test(num_servers=1):
         # Also send another message to verify push continues to work
         test_message2 = "Another message from user1!"
         print(f"\nClient1 sending second message: '{test_message2}'")
-        client1.send_input(test_message2)
+        client1.send_message(test_message2)
         time.sleep(2)
         
         # Get updated output (incremental read)
@@ -140,31 +140,25 @@ def run_chat_test(num_servers=1):
     # Create ChatClient instance
     chat_client = ChatClient()
     
-    # Create test input - adjust messages if clustered
+    # Define test messages - adjust if clustered
     if num_servers > 1:
-        test_input = """/list
-/join General
-Hello from clustered test!
-This is message 2 from random server
-Final test message
-/messages
-/quit
-"""
+        messages = [
+            'Hello from clustered test!',
+            'This is message 2 from random server',
+            'Final test message'
+        ]
     else:
-        test_input = """/list
-/join General
-Hello from test!
-This is message 2
-Final test message
-/messages
-/quit
-"""
+        messages = [
+            'Hello from test!',
+            'This is message 2',
+            'Final test message'
+        ]
     
     # Run the test and get output
-    output = chat_client.run_test(server_port=selected_port, test_input=test_input)
+    output = chat_client.run_test(server_port=selected_port, messages=messages)
     
     # Define test expectations (adjust messages based on number of servers)
-    msg1, msg2 = ("Hello from clustered test!", "This is message 2 from random server") if num_servers > 1 else ("Hello from test!", "This is message 2")
+    msg1, msg2 = messages[0], messages[1]
     
     expected_patterns = [
         ("Available Chatrooms:", "/list command executed successfully"),
