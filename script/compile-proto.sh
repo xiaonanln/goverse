@@ -29,6 +29,8 @@ if command -v python3 &> /dev/null; then
     # Ensure proto directories are Python packages
     touch proto/__init__.py
     touch inspector/proto/__init__.py
+    touch client/proto/__init__.py
+    touch samples/chat/proto/__init__.py
     
     # Generate Python proto files from goverse.proto
     if [[ -f "proto/goverse.proto" ]]; then
@@ -54,6 +56,32 @@ if command -v python3 &> /dev/null; then
             echo "  ✅ Python proto files generated for inspector/proto/inspector.proto"
         else
             echo "  Note: Failed to generate Python proto files for inspector.proto"
+        fi
+    fi
+    
+    # Generate Python proto files from client/proto/client.proto
+    if [[ -f "client/proto/client.proto" ]]; then
+        if python3 -m grpc_tools.protoc \
+            -I. \
+            --python_out=. \
+            --grpc_python_out=. \
+            client/proto/client.proto 2>&1; then
+            echo "  ✅ Python proto files generated for client/proto/client.proto"
+        else
+            echo "  Note: Failed to generate Python proto files for client.proto"
+        fi
+    fi
+    
+    # Generate Python proto files from samples/chat/proto/chat.proto
+    if [[ -f "samples/chat/proto/chat.proto" ]]; then
+        if python3 -m grpc_tools.protoc \
+            -I. \
+            --python_out=. \
+            --grpc_python_out=. \
+            samples/chat/proto/chat.proto 2>&1; then
+            echo "  ✅ Python proto files generated for samples/chat/proto/chat.proto"
+        else
+            echo "  Note: Failed to generate Python proto files for chat.proto"
         fi
     fi
 else
