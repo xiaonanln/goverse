@@ -145,6 +145,10 @@ class ChatServer:
         return self.stub.CallObject(call_request, timeout=timeout)
     
     def stop(self):
+        self._close_channel()
+        return self._stop_process()
+
+    def _stop_process(self):
         if self.process is None:
             return -1
         
@@ -179,7 +183,7 @@ class ChatServer:
         
         return self.process.returncode if self.process.returncode is not None else -1
     
-    def close(self):
+    def _close_channel(self):
         if self.channel:
             self.channel.close()
             self.channel = None

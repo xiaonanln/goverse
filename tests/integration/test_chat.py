@@ -260,11 +260,10 @@ def main():
         print("\nStopping chat servers...")
         servers_ok = True
         for server in reversed(chat_servers):
-            code = server.stop()
+            code = server.close()
             print(f"{server.name} exited with code {code}")
             if code != 0:
                 servers_ok = False
-            server.close()  # Close gRPC connections
 
         # Stop inspector and check exit code
         print("\nStopping inspector...")
