@@ -105,8 +105,9 @@ def run_push_messaging_test(num_servers=1):
         client1.send_input(test_message2)
         time.sleep(2)
         
-        client2_output = client2.get_output()
-        success2 = test_message2 in client2_output
+        # Get updated output (incremental read)
+        client2_output_updated = client2.get_output()
+        success2 = test_message2 in client2_output_updated
         
         if success2:
             print(f"✅ Client2 received second push message: '{test_message2}'")
