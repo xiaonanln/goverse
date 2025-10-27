@@ -152,48 +152,55 @@ class Inspector:
         except Exception as e:
             return f"Error: {str(e)}"
     
-    def stop(self):
-        """Stop the inspector process gracefully."""
-        if self.process is None:
-            return -1
-        
-        if self.process.poll() is not None:
-            return self.process.returncode if self.process.returncode is not None else -1
-        
-        print(f"Gracefully stopping {self.name} (PID: {self.process.pid})...")
-        
-        try:
-            self.process.send_signal(signal.SIGINT)
-            self.process.wait(timeout=10)
-            return self.process.returncode if self.process.returncode is not None else -1
-        except subprocess.TimeoutExpired:
-            pass
-        except Exception:
-            pass
-        
-        try:
-            self.process.terminate()
-            self.process.wait(timeout=5)
-            return self.process.returncode if self.process.returncode is not None else -1
-        except subprocess.TimeoutExpired:
-            pass
-        except Exception:
-            pass
-        
-        try:
-            self.process.kill()
-            self.process.wait()
-        except Exception:
-            pass
-        
-        return self.process.returncode if self.process.returncode is not None else -1
-    
     def close(self):
-        """Close the gRPC channel."""
+        """Stop the inspector process gracefully and close the gRPC channel.
+        
+        Returns:
+            The process exit code, or -1 if process was not running
+        """
+        exit_code = -1
+        
+        # Stop the process gracefully
+        if self.process is not None:
+            if self.process.poll() is None:
+                print(f"Gracefully stopping {self.name} (PID: {self.process.pid})...")
+                
+                try:
+                    self.process.send_signal(signal.SIGINT)
+                    self.process.wait(timeout=10)
+                    exit_code = self.process.returncode if self.process.returncode is not None else -1
+                except subprocess.TimeoutExpired:
+                    pass
+                except Exception:
+                    pass
+                
+                if self.process.poll() is None:
+                    try:
+                        self.process.terminate()
+                        self.process.wait(timeout=5)
+                        exit_code = self.process.returncode if self.process.returncode is not None else -1
+                    except subprocess.TimeoutExpired:
+                        pass
+                    except Exception:
+                        pass
+                
+                if self.process.poll() is None:
+                    try:
+                        self.process.kill()
+                        self.process.wait()
+                        exit_code = self.process.returncode if self.process.returncode is not None else -1
+                    except Exception:
+                        pass
+            else:
+                exit_code = self.process.returncode if self.process.returncode is not None else -1
+        
+        # Close the gRPC channel
         if self.channel:
             self.channel.close()
             self.channel = None
             self.stub = None
+        
+        return exit_code
 
     def __enter__(self):
         """Support context manager protocol."""

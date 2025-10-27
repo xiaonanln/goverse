@@ -269,11 +269,10 @@ def main():
         # Stop inspector and check exit code
         print("\nStopping inspector...")
         inspector_ok = True
-        code = inspector.stop()
+        code = inspector.close()
         print(f"Inspector exited with code {code}")
         if code != 0:
             inspector_ok = False
-        inspector.close()  # Close gRPC connections
 
         if not push_ok:
             print("\n❌ Push messaging test failed!")
