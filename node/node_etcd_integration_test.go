@@ -44,11 +44,11 @@ func TestNodeEtcdIntegration(t *testing.T) {
 
 	// Each node should see at least 2 nodes (including itself)
 	if len(nodes1) < 2 {
-		t.Errorf("Node1 should see at least 2 nodes, got %d", len(nodes1))
+		t.Fatalf("Node1 should see at least 2 nodes, got %d", len(nodes1))
 	}
 
 	if len(nodes2) < 2 {
-		t.Errorf("Node2 should see at least 2 nodes, got %d", len(nodes2))
+		t.Fatalf("Node2 should see at least 2 nodes, got %d", len(nodes2))
 	}
 
 	// Verify node1 sees node2
@@ -60,7 +60,7 @@ func TestNodeEtcdIntegration(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("Node1 should see node2 in its node list")
+		t.Fatal("Node1 should see node2 in its node list")
 	}
 
 	// Verify node2 sees node1
@@ -72,7 +72,7 @@ func TestNodeEtcdIntegration(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("Node2 should see node1 in its node list")
+		t.Fatal("Node2 should see node1 in its node list")
 	}
 }
 
@@ -111,7 +111,7 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 	t.Logf("Node1 now sees %d nodes: %v", len(updatedNodes), updatedNodes)
 
 	if len(updatedNodes) <= len(initialNodes) {
-		t.Errorf("Node1 should see more nodes after node2 joined, had %d, now has %d", len(initialNodes), len(updatedNodes))
+		t.Fatalf("Node1 should see more nodes after node2 joined, had %d, now has %d", len(initialNodes), len(updatedNodes))
 	}
 
 	// Verify node2 is in the list
@@ -123,7 +123,7 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("Node1 should discover node2 dynamically")
+		t.Fatal("Node1 should discover node2 dynamically")
 	}
 }
 
@@ -161,7 +161,7 @@ func TestNodeEtcdLeaveDetection(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("Node1 should see node2 before it stops")
+		t.Fatal("Node1 should see node2 before it stops")
 	}
 
 	// Stop node2
@@ -179,7 +179,7 @@ func TestNodeEtcdLeaveDetection(t *testing.T) {
 
 	for _, node := range nodes {
 		if node == "localhost:47006" {
-			t.Error("Node1 should no longer see node2 after it stopped")
+			t.Fatal("Node1 should no longer see node2 after it stopped")
 		}
 	}
 }
