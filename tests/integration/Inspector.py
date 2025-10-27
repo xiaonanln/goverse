@@ -8,6 +8,7 @@ import signal
 import socket
 import time
 from pathlib import Path
+from typing import Dict
 from BinaryHelper import BinaryHelper
 
 # Repo root (tests/integration/Inspector.py -> repo root)
@@ -25,8 +26,12 @@ except Exception:
 class Inspector:
     """Manages the Goverse inspector process and gRPC/HTTP connections."""
     
-    def __init__(self, binary_path=None, http_port=8080, grpc_port=8081, 
-                 build_if_needed=True):
+    process: subprocess.Popen | None
+    channel: grpc.Channel | None
+    stub: inspector_pb2_grpc.InspectorServiceStub | None
+    
+    def __init__(self, binary_path: str | None = None, http_port: int = 8080, grpc_port: int = 8081, 
+                 build_if_needed: bool = True) -> None:
         """Initialize and optionally build the inspector.
         
         Args:
@@ -48,7 +53,7 @@ class Inspector:
             if not BinaryHelper.build_binary('./cmd/inspector/', self.binary_path, 'inspector'):
                 raise RuntimeError(f"Failed to build inspector binary at {self.binary_path}")
     
-    def start(self):
+    def start(self) -> None:
         """Start the inspector process."""
         if self.process is not None:
             print(f"⚠️  {self.name} is already running")
@@ -64,7 +69,7 @@ class Inspector:
         )
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     
-    def wait_for_ready(self, timeout=30):
+    def wait_for_ready(self, timeout: float = 30) -> bool:
         """Wait for the inspector to be ready to accept connections.
         
         Args:
@@ -73,7 +78,7 @@ class Inspector:
         Returns:
             True if inspector is ready, False otherwise
         """
-        def check_http_server(url, timeout=30):
+        def check_http_server(url: str, timeout: float = 30) -> bool:
             """Wait for HTTP server to respond."""
             print(f"Waiting for HTTP server at {url}...")
             start_time = time.time()
@@ -93,7 +98,7 @@ class Inspector:
             print(f"❌ HTTP server failed to respond within {timeout} seconds")
             return False
         
-        def check_port(port, timeout=30):
+        def check_port(port: int, timeout: float = 30) -> bool:
             """Wait for a port to be available."""
             print(f"Waiting for port {port} to be ready...")
             start_time = time.time()
@@ -125,13 +130,13 @@ class Inspector:
         print(f"✅ {self.name} is running and ready")
         return True
     
-    def connect(self):
+    def connect(self) -> None:
         """Establish gRPC connection to the inspector."""
         if self.channel is None:
             self.channel = grpc.insecure_channel(f'localhost:{self.grpc_port}')
             self.stub = inspector_pb2_grpc.InspectorServiceStub(self.channel)
     
-    def Ping(self, timeout=5):
+    def Ping(self, timeout: float = 5) -> str:
         """Call the Ping RPC and return the response.
         
         Args:
@@ -143,7 +148,7 @@ class Inspector:
         self.connect()
         try:
             response = self.stub.Ping(inspector_pb2.PingRequest(), timeout=timeout)
-            result = {
+            result: Dict[str, str] = {
                 "message": response.message
             }
             return json.dumps(result, indent=2)
@@ -152,7 +157,7 @@ class Inspector:
         except Exception as e:
             return f"Error: {str(e)}"
     
-    def close(self):
+    def close(self) -> int:
         """Stop the inspector process gracefully and close the gRPC channel.
         
         Returns:
@@ -202,11 +207,11 @@ class Inspector:
         
         return exit_code
 
-    def __enter__(self):
+    def __enter__(self) -> 'Inspector':
         """Support context manager protocol."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         """Close the channel when exiting context."""
         self.close()
         return False

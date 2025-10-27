@@ -4,6 +4,7 @@ import grpc
 import threading
 import time
 from pathlib import Path
+from typing import List, Dict, Any, Optional
 from google.protobuf import any_pb2
 
 # Import generated proto files
@@ -18,7 +19,14 @@ from samples.chat.proto import chat_pb2
 class ChatClient:
     """Manages the Goverse chat client using gRPC."""
     
-    def __init__(self):
+    channel: Optional[grpc.Channel]
+    stub: Optional[client_pb2_grpc.ClientServiceStub]
+    stream: Optional[Any]
+    stream_thread: Optional[threading.Thread]
+    output_lock: threading.Lock
+    output_buffer: List[str]
+    
+    def __init__(self) -> None:
         """Initialize the chat client."""
         self.name = "Chat Client"
         self.channel = None
@@ -33,7 +41,7 @@ class ChatClient:
         self.stream_thread = None
         self.running = False
     
-    def start_interactive(self, server_port, username='testuser'):
+    def start_interactive(self, server_port: int, username: str = 'testuser') -> bool:
         """Start the chat client as an interactive background process.
         
         Args:
@@ -72,7 +80,7 @@ class ChatClient:
             traceback.print_exc()
             return False
     
-    def _listen_for_messages(self):
+    def _listen_for_messages(self) -> None:
         """Background thread to listen for pushed messages from the server."""
         try:
             while self.running:
@@ -103,7 +111,7 @@ class ChatClient:
             if self.running:
                 print(f"Fatal error in message listener: {e}")
     
-    def _call(self, method, request_proto):
+    def _call(self, method: str, request_proto: Any) -> any_pb2.Any:
         """Call a method on the client object.
         
         Args:
@@ -127,7 +135,7 @@ class ChatClient:
         response = self.stub.Call(call_request)
         return response.response
     
-    def list_chatrooms(self):
+    def list_chatrooms(self) -> List[str]:
         """List all available chatrooms.
         
         Returns:
@@ -146,7 +154,7 @@ class ChatClient:
         
         return list(response.chat_rooms)
     
-    def join_chatroom(self, room_name):
+    def join_chatroom(self, room_name: str) -> List[Any]:
         """Join a chatroom.
         
         Args:
@@ -177,7 +185,7 @@ class ChatClient:
         
         return list(response.recent_messages)
     
-    def send_message(self, message):
+    def send_message(self, message: str) -> None:
         """Send a message to the current chatroom.
         
         Args:
@@ -199,7 +207,7 @@ class ChatClient:
         )
         self._call("SendMessage", request)
     
-    def get_recent_messages(self):
+    def get_recent_messages(self) -> List[Any]:
         """Get recent messages from the current chatroom.
         
         Returns:
@@ -233,7 +241,7 @@ class ChatClient:
         
         return list(response.messages)
     
-    def get_output(self):
+    def get_output(self) -> str:
         """Get the current output from the client.
         
         Returns:
@@ -243,7 +251,7 @@ class ChatClient:
             output = '\n'.join(self.output_buffer)
         return output
     
-    def stop(self):
+    def stop(self) -> str:
         """Stop the running client and return output."""
         self.running = False
         
@@ -265,7 +273,7 @@ class ChatClient:
         
         return self.get_output()
     
-    def run_test(self, server_port, username='testuser', messages=None, timeout=30):
+    def run_test(self, server_port: int, username: str = 'testuser', messages: Optional[List[str]] = None, timeout: float = 30) -> str:
         """Run the chat client with a test sequence and return the output.
         
         Args:
@@ -346,7 +354,7 @@ class ChatClient:
         finally:
             self.stop()
     
-    def verify_output(self, output, expected_patterns=None):
+    def verify_output(self, output: str, expected_patterns: Optional[List[Any]] = None) -> bool:
         """Verify chat client output contains expected patterns.
         
         Args:
