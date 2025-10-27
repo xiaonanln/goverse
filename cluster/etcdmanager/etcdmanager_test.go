@@ -89,15 +89,15 @@ func TestNewEtcdManager(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mgr, err := NewEtcdManager(tt.etcdAddress)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("NewEtcdManager() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("NewEtcdManager() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if mgr == nil {
-				t.Error("NewEtcdManager() returned nil manager")
+				t.Fatalf("NewEtcdManager() returned nil manager")
 				return
 			}
 			if mgr.logger == nil {
-				t.Error("EtcdManager logger is nil")
+				t.Fatalf("EtcdManager logger is nil")
 			}
 		})
 	}
@@ -114,7 +114,7 @@ func TestEtcdManagerConnect(t *testing.T) {
 
 	// Verify client is set
 	if mgr.GetClient() == nil {
-		t.Error("Connect() did not set client")
+		t.Fatalf("Connect() did not set client")
 	}
 }
 
@@ -129,13 +129,13 @@ func TestEtcdManagerConnectInvalidEndpoint(t *testing.T) {
 	// This is expected behavior - connection is established lazily
 	err = mgr.Connect()
 	if err != nil {
-		t.Errorf("Connect() returned unexpected error: %v", err)
+		t.Fatalf("Connect() returned unexpected error: %v", err)
 	}
 	defer mgr.Close()
 
 	// Verify client is set even for invalid endpoint
 	if mgr.GetClient() == nil {
-		t.Error("Connect() should set client even for invalid endpoint")
+		t.Fatalf("Connect() should set client even for invalid endpoint")
 	}
 }
 
@@ -175,19 +175,19 @@ func TestEtcdManagerPutGet(t *testing.T) {
 			// Put value
 			err := mgr.Put(ctx, tt.key, tt.value)
 			if err != nil {
-				t.Errorf("Put() error = %v", err)
+				t.Fatalf("Put() error = %v", err)
 				return
 			}
 
 			// Get value
 			got, err := mgr.Get(ctx, tt.key)
 			if err != nil {
-				t.Errorf("Get() error = %v", err)
+				t.Fatalf("Get() error = %v", err)
 				return
 			}
 
 			if got != tt.value {
-				t.Errorf("Get() = %v, want %v", got, tt.value)
+				t.Fatalf("Get() = %v, want %v", got, tt.value)
 			}
 
 			// Cleanup individual key (though cleanupEtcd will handle it too)
@@ -208,7 +208,7 @@ func TestEtcdManagerGetNonExistent(t *testing.T) {
 	// Try to get non-existent key
 	_, err := mgr.Get(ctx, "non-existent-key-12345")
 	if err == nil {
-		t.Error("Get() should return error for non-existent key")
+		t.Fatal("Get() should return error for non-existent key")
 	}
 }
 
@@ -238,13 +238,13 @@ func TestEtcdManagerDelete(t *testing.T) {
 	// Delete the key
 	err = mgr.Delete(ctx, key)
 	if err != nil {
-		t.Errorf("Delete() error = %v", err)
+		t.Fatalf("Delete() error = %v", err)
 	}
 
 	// Verify it's gone
 	_, err = mgr.Get(ctx, key)
 	if err == nil {
-		t.Error("Get() should fail after Delete()")
+		t.Fatalf("Get() should fail after Delete()")
 	}
 }
 
@@ -277,21 +277,21 @@ func TestEtcdManagerWatch(t *testing.T) {
 	select {
 	case watchResp := <-watchChan:
 		if len(watchResp.Events) == 0 {
-			t.Error("Watch() returned no events")
+			t.Fatalf("Watch() returned no events")
 			return
 		}
 		event := watchResp.Events[0]
 		if event.Type != clientv3.EventTypePut {
-			t.Errorf("Watch() event type = %v, want %v", event.Type, clientv3.EventTypePut)
+			t.Fatalf("Watch() event type = %v, want %v", event.Type, clientv3.EventTypePut)
 		}
 		if string(event.Kv.Key) != key {
-			t.Errorf("Watch() event key = %s, want %s", string(event.Kv.Key), key)
+			t.Fatalf("Watch() event key = %s, want %s", string(event.Kv.Key), key)
 		}
 		if string(event.Kv.Value) != value {
-			t.Errorf("Watch() event value = %s, want %s", string(event.Kv.Value), value)
+			t.Fatalf("Watch() event value = %s, want %s", string(event.Kv.Value), value)
 		}
 	case <-ctx.Done():
-		t.Error("Watch() timeout waiting for event")
+		t.Fatalf("Watch() timeout waiting for event")
 	}
 }
 
@@ -307,22 +307,22 @@ func TestEtcdManagerOperationsWithoutConnect(t *testing.T) {
 	// Try operations without connecting
 	err = mgr.Put(ctx, "key", "value")
 	if err == nil {
-		t.Error("Put() should fail when not connected")
+		t.Fatalf("Put() should fail when not connected")
 	}
 
 	_, err = mgr.Get(ctx, "key")
 	if err == nil {
-		t.Error("Get() should fail when not connected")
+		t.Fatalf("Get() should fail when not connected")
 	}
 
 	err = mgr.Delete(ctx, "key")
 	if err == nil {
-		t.Error("Delete() should fail when not connected")
+		t.Fatalf("Delete() should fail when not connected")
 	}
 
 	watchChan := mgr.Watch(ctx, "key")
 	if watchChan != nil {
-		t.Error("Watch() should return nil when not connected")
+		t.Fatalf("Watch() should return nil when not connected")
 	}
 }
 
@@ -336,13 +336,13 @@ func TestEtcdManagerClose(t *testing.T) {
 	// Close should succeed
 	err := mgr.Close()
 	if err != nil {
-		t.Errorf("Close() error = %v", err)
+		t.Fatalf("Close() error = %v", err)
 	}
 
 	// Close again should not panic
 	err = mgr.Close()
 	if err != nil {
-		t.Errorf("Second Close() error = %v", err)
+		t.Fatalf("Second Close() error = %v", err)
 	}
 }
 
@@ -355,7 +355,7 @@ func TestEtcdManagerGetClient(t *testing.T) {
 
 	// Before connect
 	if mgr.GetClient() != nil {
-		t.Error("GetClient() should return nil before Connect()")
+		t.Fatalf("GetClient() should return nil before Connect()")
 	}
 
 	err = mgr.Connect()
@@ -371,12 +371,12 @@ func TestEtcdManagerGetClient(t *testing.T) {
 	// After connect
 	client := mgr.GetClient()
 	if client == nil {
-		t.Error("GetClient() should return client after Connect()")
+		t.Fatal("GetClient() should return client after Connect()")
 	}
 
 	// Verify it's a valid client by checking it's not nil
 	if client == nil {
-		t.Error("GetClient() returned nil client")
+		t.Fatal("GetClient() returned nil client")
 	}
 }
 
@@ -406,7 +406,7 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 	for i := 1; i < len(nodeAddresses); i++ {
 		err = mgr.RegisterNode(ctx, nodeAddresses[i])
 		if err == nil {
-			t.Errorf("RegisterNode(%s) should have failed after node %s was already registered, but succeeded", nodeAddresses[i], nodeAddresses[0])
+			t.Fatalf("RegisterNode(%s) should have failed after node %s was already registered, but succeeded", nodeAddresses[i], nodeAddresses[0])
 		} else {
 			t.Logf("Expected error for node %s: %v", nodeAddresses[i], err)
 		}
@@ -415,35 +415,35 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 	// Get all registered nodes
 	registeredNodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
-		t.Errorf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodes() error = %v", err)
 		return
 	}
 
 	// Verify only the first node is registered
 	if len(registeredNodes) != 1 {
-		t.Errorf("GetNodes() returned %d nodes, want 1", len(registeredNodes))
+		t.Fatalf("GetNodes() returned %d nodes, want 1", len(registeredNodes))
 	}
 
 	// Verify the registered node is the first one
 	if len(registeredNodes) > 0 && registeredNodes[0] != nodeAddresses[0] {
-		t.Errorf("Registered node is %s, want %s", registeredNodes[0], nodeAddresses[0])
+		t.Fatalf("Registered node is %s, want %s", registeredNodes[0], nodeAddresses[0])
 	}
 
 	// Cleanup - unregister the node
 	err = mgr.UnregisterNode(ctx, nodeAddresses[0])
 	if err != nil {
-		t.Errorf("Failed to unregister node %s: %v", nodeAddresses[0], err)
+		t.Fatalf("Failed to unregister node %s: %v", nodeAddresses[0], err)
 	}
 
 	// Verify node is unregistered
 	remainingNodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
-		t.Errorf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodes() error = %v", err)
 		return
 	}
 
 	if len(remainingNodes) != 0 {
-		t.Errorf("After cleanup, GetNodes() returned %d nodes, want 0", len(remainingNodes))
+		t.Fatalf("After cleanup, GetNodes() returned %d nodes, want 0", len(remainingNodes))
 	}
 }
 
@@ -460,14 +460,14 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 	// Register node
 	err := mgr.RegisterNode(ctx, nodeAddress)
 	if err != nil {
-		t.Errorf("RegisterNode() error = %v", err)
+		t.Fatalf("RegisterNode() error = %v", err)
 		return
 	}
 
 	// Verify node is registered
 	nodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
-		t.Errorf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodes() error = %v", err)
 		return
 	}
 
@@ -480,7 +480,7 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 	}
 
 	if !found {
-		t.Errorf("Registered node %s not found in node list", nodeAddress)
+		t.Fatalf("Registered node %s not found in node list", nodeAddress)
 	}
 
 	// Cleanup handled by t.Cleanup in setupEtcdTest
@@ -506,13 +506,13 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 	// Try to register same node again - should succeed (no-op)
 	err = mgr.RegisterNode(ctx, nodeAddress1)
 	if err != nil {
-		t.Errorf("RegisterNode() with same node ID should succeed, got error: %v", err)
+		t.Fatalf("RegisterNode() with same node ID should succeed, got error: %v", err)
 	}
 
 	// Try to register different node - should fail
 	err = mgr.RegisterNode(ctx, nodeAddress2)
 	if err == nil {
-		t.Error("RegisterNode() with different node ID should fail, but succeeded")
+		t.Fatal("RegisterNode() with different node ID should fail, but succeeded")
 	} else {
 		t.Logf("Expected error: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 	// Verify only first node is registered
 	nodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
-		t.Errorf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodes() error = %v", err)
 		return
 	}
 
@@ -536,10 +536,10 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 	}
 
 	if !foundNode1 {
-		t.Errorf("First registered node %s not found in node list", nodeAddress1)
+		t.Fatalf("First registered node %s not found in node list", nodeAddress1)
 	}
 	if foundNode2 {
-		t.Errorf("Second node %s should not be in node list", nodeAddress2)
+		t.Fatalf("Second node %s should not be in node list", nodeAddress2)
 	}
 
 	// Cleanup
@@ -548,7 +548,7 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 	// After unregister, should be able to register a new node
 	err = mgr.RegisterNode(ctx, nodeAddress2)
 	if err != nil {
-		t.Errorf("RegisterNode() after unregister should succeed, got error: %v", err)
+		t.Fatalf("RegisterNode() after unregister should succeed, got error: %v", err)
 	}
 
 	// Cleanup
@@ -574,20 +574,20 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 	// Unregister node
 	err = mgr.UnregisterNode(ctx, nodeAddress)
 	if err != nil {
-		t.Errorf("UnregisterNode() error = %v", err)
+		t.Fatalf("UnregisterNode() error = %v", err)
 		return
 	}
 
 	// Verify node is unregistered
 	nodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
-		t.Errorf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodes() error = %v", err)
 		return
 	}
 
 	for _, node := range nodes {
 		if node == nodeAddress {
-			t.Errorf("Unregistered node %s still found in node list", nodeAddress)
+			t.Fatalf("Unregistered node %s still found in node list", nodeAddress)
 		}
 	}
 }
@@ -616,12 +616,12 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 	// Get all nodes
 	nodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
-		t.Errorf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodes() error = %v", err)
 		return
 	}
 
 	if len(nodes) == 0 {
-		t.Error("getAllNodes() returned empty list")
+		t.Fatal("getAllNodes() returned empty list")
 	}
 
 	// Cleanup
@@ -632,6 +632,7 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 
 // TestEtcdManagerWatchNodes tests watching for node changes
 func TestEtcdManagerWatchNodes(t *testing.T) {
+
 	mgr1, err := NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -676,13 +677,13 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 	}
 
 	if !found {
-		t.Errorf("Registered node %s not found in watched node list", nodeAddress)
+		t.Fatalf("Registered node %s not found in watched node list", nodeAddress)
 	}
 
 	// Unregister node
 	err = mgr1.UnregisterNode(ctx, nodeAddress)
 	if err != nil {
-		t.Errorf("UnregisterNode() error = %v", err)
+		t.Fatalf("UnregisterNode() error = %v", err)
 	}
 
 	// Wait for watch to process the delete event
@@ -692,7 +693,7 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 	nodes = mgr1.GetNodes()
 	for _, node := range nodes {
 		if node == nodeAddress {
-			t.Errorf("Unregistered node %s still in watched node list", nodeAddress)
+			t.Fatalf("Unregistered node %s still in watched node list", nodeAddress)
 		}
 	}
 }
@@ -763,11 +764,11 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 	nodes2 := mgr2.GetNodes()
 
 	if len(nodes1) < 2 {
-		t.Errorf("Manager 1 should see at least 2 nodes, got %d", len(nodes1))
+		t.Fatalf("Manager 1 should see at least 2 nodes, got %d", len(nodes1))
 	}
 
 	if len(nodes2) < 2 {
-		t.Errorf("Manager 2 should see at least 2 nodes, got %d", len(nodes2))
+		t.Fatalf("Manager 2 should see at least 2 nodes, got %d", len(nodes2))
 	}
 
 	// Cleanup
@@ -787,7 +788,7 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 	// Try to register without connecting
 	err = mgr.RegisterNode(ctx, "localhost:47009")
 	if err == nil {
-		t.Error("RegisterNode() should fail when not connected")
+		t.Fatal("RegisterNode() should fail when not connected")
 	}
 }
 
@@ -800,7 +801,7 @@ func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
 
 	nodes := mgr.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("GetNodes() should return empty list initially, got %d nodes", len(nodes))
+		t.Fatalf("GetNodes() should return empty list initially, got %d nodes", len(nodes))
 	}
 }
 func isGithubAction() bool {
@@ -926,15 +927,15 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	// Put should succeed using the original manager
 	err = mgr.Put(ctx2, testKey, testValue)
 	if err != nil {
-		t.Errorf("Put() after etcd restart (original manager) failed: %v", err)
+		t.Fatalf("Put() after etcd restart (original manager) failed: %v", err)
 	}
 
 	// Get should succeed using the original manager
 	got, err := mgr.Get(ctx2, testKey)
 	if err != nil {
-		t.Errorf("Get() after etcd restart (original manager) failed: %v", err)
+		t.Fatalf("Get() after etcd restart (original manager) failed: %v", err)
 	} else if got != testValue {
-		t.Errorf("Get() after etcd restart (original manager) = %v, want %v", got, testValue)
+		t.Fatalf("Get() after etcd restart (original manager) = %v, want %v", got, testValue)
 	}
 
 	// Cleanup
@@ -983,14 +984,14 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 		}
 	}
 	if !foundNew {
-		t.Errorf("Old manager did not see new node %s registered by mgr2", newNodeAddr)
+		t.Fatalf("Old manager did not see new node %s registered by mgr2", newNodeAddr)
 	}
 
 	// Verify mgr2 sees both nodes (newNodeAddr and nodeAddress)
 	nodesMgr2 := mgr2.GetNodes()
 	t.Logf("mgr2.GetNodes() returned: %v", nodesMgr2)
 	if len(nodesMgr2) < 2 {
-		t.Errorf("mgr2.GetNodes() returned %d nodes, want at least 2", len(nodesMgr2))
+		t.Fatalf("mgr2.GetNodes() returned %d nodes, want at least 2", len(nodesMgr2))
 	}
 
 	// Cleanup
