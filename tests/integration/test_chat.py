@@ -36,6 +36,91 @@ from ChatServer import ChatServer
 from Inspector import Inspector
 from ChatClient import ChatClient
 
+def run_push_messaging_test(num_servers=1):
+    """Test push-based messaging between two chat clients."""
+    print("\nTesting push-based messaging...")
+    
+    # Select a random server from available servers
+    server_ports = [48000 + i for i in range(num_servers)]
+    selected_port = random.choice(server_ports)
+    selected_server_idx = server_ports.index(selected_port)
+    
+    print(f"Available servers: {len(server_ports)}")
+    if num_servers > 1:
+        print(f"Randomly selected server: localhost:{selected_port} (server {selected_server_idx + 1})")
+    else:
+        print(f"Using server: localhost:{selected_port}")
+    
+    # Create two chat clients
+    client1 = ChatClient()
+    client2 = ChatClient()
+    
+    try:
+        # Start both clients in background
+        print("Starting client1 (sender)...")
+        if not client1.start_interactive(selected_port, 'user1'):
+            print("❌ Failed to start client1")
+            return False
+        
+        print("Starting client2 (receiver)...")
+        if not client2.start_interactive(selected_port, 'user2'):
+            print("❌ Failed to start client2")
+            return False
+        
+        # Give clients time to connect
+        time.sleep(2)
+        
+        # Have both clients join the same chatroom
+        print("Both clients joining 'General' chatroom...")
+        client1.send_input('/join General')
+        client2.send_input('/join General')
+        time.sleep(1)
+        
+        # Client 1 sends a message
+        test_message = "Hello from user1 via push!"
+        print(f"Client1 sending message: '{test_message}'")
+        client1.send_input(test_message)
+        
+        # Wait for push message to be delivered
+        time.sleep(2)
+        
+        # Get output from client2 (receiver) - should have the message via push
+        client2_output = client2.get_output()
+        
+        print("\nClient2 output:")
+        print(client2_output)
+        
+        # Verify that client2 received the message via push (not by polling /messages)
+        # The message should appear in the output before any /messages command
+        success = test_message in client2_output
+        
+        if success:
+            print(f"✅ Client2 received push message: '{test_message}'")
+        else:
+            print(f"❌ Client2 did not receive push message: '{test_message}'")
+        
+        # Also send another message to verify push continues to work
+        test_message2 = "Another message from user1!"
+        print(f"\nClient1 sending second message: '{test_message2}'")
+        client1.send_input(test_message2)
+        time.sleep(2)
+        
+        client2_output = client2.get_output()
+        success2 = test_message2 in client2_output
+        
+        if success2:
+            print(f"✅ Client2 received second push message: '{test_message2}'")
+        else:
+            print(f"❌ Client2 did not receive second push message: '{test_message2}'")
+        
+        return success and success2
+        
+    finally:
+        # Clean up clients
+        print("\nStopping clients...")
+        client1.stop()
+        client2.stop()
+
 def run_chat_test(num_servers=1):
     """Run the chat client with test input and verify output."""
     print("\nTesting chat client and server interaction...")
@@ -170,6 +255,9 @@ def main():
             objects_response = server.ListObjects()
             print(objects_response)
 
+        # Run push messaging test
+        push_ok = run_push_messaging_test(num_servers)
+
         # Run chat test
         chat_ok = run_chat_test(num_servers)
 
@@ -192,6 +280,9 @@ def main():
             inspector_ok = False
         inspector.close()  # Close gRPC connections
 
+        if not push_ok:
+            print("\n❌ Push messaging test failed!")
+            return 1
         if not chat_ok:
             print("\n❌ Chat test failed!")
             return 1
