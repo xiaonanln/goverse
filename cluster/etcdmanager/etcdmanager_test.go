@@ -632,33 +632,22 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 
 // TestEtcdManagerWatchNodes tests watching for node changes
 func TestEtcdManagerWatchNodes(t *testing.T) {
-
-	mgr1, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr1.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
 		return
 	}
-	t.Cleanup(func() {
-		cleanupEtcd(t, mgr1)
-		mgr1.Close()
-	})
 
 	ctx := context.Background()
 
 	// Start watching nodes
-	err = mgr1.WatchNodes(ctx)
+	err := mgr.WatchNodes(ctx)
 	if err != nil {
 		t.Fatalf("WatchNodes() error = %v", err)
 	}
 
 	// Register a node
 	nodeAddress := "localhost:47006"
-	err = mgr1.RegisterNode(ctx, nodeAddress)
+	err = mgr.RegisterNode(ctx, nodeAddress)
 	if err != nil {
 		t.Fatalf("RegisterNode() error = %v", err)
 	}
@@ -667,7 +656,7 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// Check if node appears in the list
-	nodes := mgr1.GetNodes()
+	nodes := mgr.GetNodes()
 	found := false
 	for _, node := range nodes {
 		if node == nodeAddress {
@@ -681,7 +670,7 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 	}
 
 	// Unregister node
-	err = mgr1.UnregisterNode(ctx, nodeAddress)
+	err = mgr.UnregisterNode(ctx, nodeAddress)
 	if err != nil {
 		t.Fatalf("UnregisterNode() error = %v", err)
 	}
@@ -690,7 +679,7 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// Check if node is removed from the list
-	nodes = mgr1.GetNodes()
+	nodes = mgr.GetNodes()
 	for _, node := range nodes {
 		if node == nodeAddress {
 			t.Fatalf("Unregistered node %s still in watched node list", nodeAddress)
