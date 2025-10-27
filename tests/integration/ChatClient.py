@@ -46,8 +46,9 @@ class ChatClient:
         Returns:
             True if client started successfully, False otherwise
         """
-        # Create temporary file for output
-        self.output_file_path = tempfile.mktemp(suffix='.txt')
+        # Create temporary file for output (secure version)
+        fd, self.output_file_path = tempfile.mkstemp(suffix='.txt', text=True)
+        os.close(fd)  # Close the file descriptor, we'll open it for writing
         self.output_file = open(self.output_file_path, 'w')
         
         # Start the chat client process
@@ -109,17 +110,17 @@ class ChatClient:
         if self.stdin_pipe:
             try:
                 self.stdin_pipe.close()
-            except:
+            except Exception:
                 pass
         if self.output_file:
             try:
                 self.output_file.close()
-            except:
+            except Exception:
                 pass
         if self.output_file_path:
             try:
                 os.unlink(self.output_file_path)
-            except:
+            except Exception:
                 pass
         
         return output
