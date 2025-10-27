@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -37,6 +38,10 @@ func cleanupEtcdNodes(t *testing.T) {
 // TestNodeEtcdIntegration tests node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
 func TestNodeEtcdIntegration(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	// Clean up etcd before test
 	cleanupEtcdNodes(t)
 	t.Cleanup(func() {
@@ -112,6 +117,10 @@ func TestNodeEtcdIntegration(t *testing.T) {
 
 // TestNodeEtcdDynamicDiscovery tests that nodes dynamically discover new nodes
 func TestNodeEtcdDynamicDiscovery(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	// Clean up etcd before test
 	cleanupEtcdNodes(t)
 	t.Cleanup(func() {
@@ -172,6 +181,10 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 
 // TestNodeEtcdLeaveDetection tests that nodes detect when other nodes leave
 func TestNodeEtcdLeaveDetection(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
 	// Clean up etcd before test
 	cleanupEtcdNodes(t)
 	t.Cleanup(func() {

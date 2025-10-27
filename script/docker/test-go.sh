@@ -21,12 +21,12 @@ if ! bash /app/script/docker/start-etcd.sh; then
     exit 1
 fi
 
-echo 
+echo
 echo "Running Go unit tests..."
-echo 
+echo
 
 # run all go tests (no caching) and fail fast on errors
-if ! go test ./... -count=1 -v -failfast; then
+if ! go test ./... -p 1 -count=1 -v -failfast; then
     echo "✗ Go unit tests failed"
     exit 1
 fi
