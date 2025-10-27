@@ -348,35 +348,26 @@ func TestEtcdManagerClose(t *testing.T) {
 
 // TestEtcdManagerGetClient tests getting the client
 func TestEtcdManagerGetClient(t *testing.T) {
+	// Test before connect
 	mgr, err := NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
 
-	// Before connect
 	if mgr.GetClient() != nil {
 		t.Fatalf("GetClient() should return nil before Connect()")
 	}
 
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	// Test after connect using setupEtcdTest
+	mgr2 := setupEtcdTest(t)
+	if mgr2 == nil {
 		return
 	}
-	t.Cleanup(func() {
-		cleanupEtcd(t, mgr)
-		mgr.Close()
-	})
 
 	// After connect
-	client := mgr.GetClient()
+	client := mgr2.GetClient()
 	if client == nil {
-		t.Fatal("GetClient() should return client after Connect()")
-	}
-
-	// Verify it's a valid client by checking it's not nil
-	if client == nil {
-		t.Fatal("GetClient() returned nil client")
+		t.Fatalf("GetClient() should return client after Connect()")
 	}
 }
 
@@ -690,20 +681,10 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 // TestEtcdManagerMultipleNodes tests multiple nodes scenario
 func TestEtcdManagerMultipleNodes(t *testing.T) {
 	// Create two separate managers for two nodes
-	mgr1, err := NewEtcdManager("localhost:2379")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr1.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
+	mgr1 := setupEtcdTest(t)
+	if mgr1 == nil {
 		return
 	}
-	t.Cleanup(func() {
-		cleanupEtcd(t, mgr1)
-		mgr1.Close()
-	})
 
 	mgr2, err := NewEtcdManager("localhost:2379")
 	if err != nil {
