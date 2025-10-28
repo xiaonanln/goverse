@@ -169,3 +169,34 @@ func TestWatchNodes_NoEtcdManager(t *testing.T) {
 		t.Errorf("WatchNodes error = %v; want %v", err.Error(), expectedErr)
 	}
 }
+
+func TestGetLeaderNode_NoEtcdManager(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+
+	leader := cluster.GetLeaderNode()
+
+	if leader != "" {
+		t.Error("GetLeaderNode() should return empty string when etcd manager is not set")
+	}
+}
+
+func TestGetLeaderNode_WithEtcdManager(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+	cluster.logger = logger.NewLogger("TestCluster")
+
+	// Create an etcd manager (without connecting)
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	cluster.SetEtcdManager(mgr)
+
+	// When there are no nodes, leader should be empty
+	leader := cluster.GetLeaderNode()
+	if leader != "" {
+		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
+	}
+}

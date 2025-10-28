@@ -351,3 +351,24 @@ func (mgr *EtcdManager) GetNodes() []string {
 	}
 	return nodes
 }
+
+// GetLeaderNode returns the leader node address.
+// The leader is the node with the smallest advertised address in lexicographic order.
+// Returns an empty string if there are no registered nodes.
+func (mgr *EtcdManager) GetLeaderNode() string {
+	mgr.nodesMu.RLock()
+	defer mgr.nodesMu.RUnlock()
+
+	if len(mgr.nodes) == 0 {
+		return ""
+	}
+
+	// Find the smallest address (leader)
+	var leader string
+	for node := range mgr.nodes {
+		if leader == "" || node < leader {
+			leader = node
+		}
+	}
+	return leader
+}

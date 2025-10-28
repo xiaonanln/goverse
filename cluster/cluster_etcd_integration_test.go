@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -416,4 +417,180 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 			t.Fatal("Cluster1 should no longer see node2 after it stopped")
 		}
 	}
+}
+
+// TestClusterGetLeaderNode tests leader election across multiple nodes
+func TestClusterGetLeaderNode(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
+	// Clean up etcd before test
+	cleanupEtcdNodes(t)
+	t.Cleanup(func() {
+		cleanupEtcdNodes(t)
+	})
+
+	ctx := context.Background()
+
+	// Create three clusters with different addresses
+	// node2 has the smallest address, so it should be the leader
+	clusters := make([]*Cluster, 3)
+	nodes := make([]*node.Node, 3)
+	addresses := []string{"localhost:47100", "localhost:47050", "localhost:47200"}
+
+	for i := 0; i < 3; i++ {
+		clusters[i] = &Cluster{}
+		clusters[i].logger = logger.NewLogger(fmt.Sprintf("TestCluster%d", i+1))
+
+		etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+		if err != nil {
+			t.Fatalf("Failed to create etcd manager %d: %v", i+1, err)
+		}
+		clusters[i].SetEtcdManager(etcdMgr)
+
+		nodes[i] = node.NewNode(addresses[i])
+		clusters[i].SetThisNode(nodes[i])
+
+		err = nodes[i].Start(ctx)
+		if err != nil {
+			t.Fatalf("Failed to start node%d: %v", i+1, err)
+		}
+		defer nodes[i].Stop(ctx)
+
+		err = clusters[i].ConnectEtcd()
+		if err != nil {
+			t.Skipf("Skipping test: etcd not available: %v", err)
+			return
+		}
+		defer clusters[i].CloseEtcd()
+
+		err = clusters[i].RegisterNode(ctx)
+		if err != nil {
+			t.Fatalf("Failed to register node%d: %v", i+1, err)
+		}
+		defer clusters[i].UnregisterNode(ctx)
+
+		err = clusters[i].WatchNodes(ctx)
+		if err != nil {
+			t.Fatalf("Failed to start watching nodes for cluster%d: %v", i+1, err)
+		}
+	}
+
+	// Wait for all nodes to be registered and watches to sync
+	time.Sleep(1 * time.Second)
+
+	// All clusters should see the same leader (the one with smallest address)
+	expectedLeader := "localhost:47050" // This is the smallest address
+
+	for i, cluster := range clusters {
+		leader := cluster.GetLeaderNode()
+		t.Logf("Cluster %d sees leader: %s", i+1, leader)
+		if leader != expectedLeader {
+			t.Errorf("Cluster %d: GetLeaderNode() = %s, want %s", i+1, leader, expectedLeader)
+		}
+	}
+
+	// Verify all clusters see all 3 nodes
+	for i, cluster := range clusters {
+		nodeList := cluster.GetNodes()
+		if len(nodeList) < 3 {
+			t.Errorf("Cluster %d should see at least 3 nodes, got %d", i+1, len(nodeList))
+		}
+	}
+}
+
+// TestClusterGetLeaderNode_DynamicChange tests leader change when current leader leaves
+func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
+	// Serialize etcd tests to prevent interference
+	testutil.EtcdTestMutex.Lock()
+	defer testutil.EtcdTestMutex.Unlock()
+
+	// Clean up etcd before test
+	cleanupEtcdNodes(t)
+	t.Cleanup(func() {
+		cleanupEtcdNodes(t)
+	})
+
+	ctx := context.Background()
+
+	// Create two clusters - cluster2 has smaller address (will be initial leader)
+	cluster1 := &Cluster{}
+	cluster1.logger = logger.NewLogger("TestCluster1")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager 1: %v", err)
+	}
+	cluster1.SetEtcdManager(etcdMgr1)
+
+	node1 := node.NewNode("localhost:47300")
+	cluster1.SetThisNode(node1)
+
+	cluster2 := &Cluster{}
+	cluster2.logger = logger.NewLogger("TestCluster2")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager 2: %v", err)
+	}
+	cluster2.SetEtcdManager(etcdMgr2)
+
+	node2 := node.NewNode("localhost:47200") // Smaller address - will be leader
+	cluster2.SetThisNode(node2)
+
+	// Start and register both nodes
+	for i, n := range []*node.Node{node1, node2} {
+		err = n.Start(ctx)
+		if err != nil {
+			t.Fatalf("Failed to start node%d: %v", i+1, err)
+		}
+		defer n.Stop(ctx)
+	}
+
+	for i, c := range []*Cluster{cluster1, cluster2} {
+		err = c.ConnectEtcd()
+		if err != nil {
+			t.Skipf("Skipping test: etcd not available: %v", err)
+			return
+		}
+		defer c.CloseEtcd()
+
+		err = c.RegisterNode(ctx)
+		if err != nil {
+			t.Fatalf("Failed to register node%d: %v", i+1, err)
+		}
+
+		err = c.WatchNodes(ctx)
+		if err != nil {
+			t.Fatalf("Failed to start watching nodes for cluster%d: %v", i+1, err)
+		}
+	}
+
+	// Wait for all nodes to be registered and watches to sync
+	time.Sleep(1 * time.Second)
+
+	// Initially, node2 should be the leader (smaller address)
+	initialLeader := cluster1.GetLeaderNode()
+	t.Logf("Initial leader: %s", initialLeader)
+	if initialLeader != "localhost:47200" {
+		t.Errorf("Initial leader should be localhost:47200, got %s", initialLeader)
+	}
+
+	// Unregister node2 (current leader)
+	err = cluster2.UnregisterNode(ctx)
+	if err != nil {
+		t.Fatalf("Failed to unregister node2: %v", err)
+	}
+
+	// Wait for watch to detect the removal
+	time.Sleep(1 * time.Second)
+
+	// Now node1 should be the leader (only remaining node)
+	newLeader := cluster1.GetLeaderNode()
+	t.Logf("New leader after node2 left: %s", newLeader)
+	if newLeader != "localhost:47300" {
+		t.Errorf("After node2 left, leader should be localhost:47300, got %s", newLeader)
+	}
+
+	// Cleanup
+	cluster1.UnregisterNode(ctx)
 }
