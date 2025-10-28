@@ -83,6 +83,11 @@ if err != nil {
 When creating a shard mapping:
 1. Nodes are sorted lexicographically for determinism
 2. Shards are assigned using round-robin: `node = sortedNodes[shardID % len(nodes)]`
+   - Shard 0 → node at index (0 % 3) = 0
+   - Shard 1 → node at index (1 % 3) = 1
+   - Shard 2 → node at index (2 % 3) = 2
+   - Shard 3 → node at index (3 % 3) = 0 (back to first node)
+   - And so on...
 3. This ensures even distribution across all nodes
 
 ### Updates
@@ -98,6 +103,8 @@ With 3 nodes (node1, node2, node3) and 8192 shards:
 - node1: shards 0, 3, 6, 9, ... (2731 shards)
 - node2: shards 1, 4, 7, 10, ... (2731 shards)
 - node3: shards 2, 5, 8, 11, ... (2730 shards)
+
+Total: 8192 shards (2731 + 2731 + 2730)
 
 ## Storage Format
 
