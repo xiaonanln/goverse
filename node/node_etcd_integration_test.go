@@ -36,6 +36,9 @@ func cleanupEtcdNodes(t *testing.T) {
 }
 
 // startWatchingNodes starts watching for node changes and handles errors
+// Note: In production code, WatchNodes is called by Cluster.WatchNodes().
+// These tests create standalone nodes without using Cluster, so they call
+// the etcdManager directly for testing purposes.
 func startWatchingNodes(t *testing.T, node *Node, ctx context.Context) {
 	err := node.GetEtcdManager().WatchNodes(ctx)
 	if err != nil {
