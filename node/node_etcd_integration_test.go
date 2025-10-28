@@ -61,6 +61,12 @@ func TestNodeEtcdIntegration(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
+	// Start watching nodes for node1
+	err = node1.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes for node1: %v", err)
+	}
+
 	// Wait a bit for registration to complete
 	time.Sleep(500 * time.Millisecond)
 
@@ -70,6 +76,12 @@ func TestNodeEtcdIntegration(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
+
+	// Start watching nodes for node2
+	err = node2.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes for node2: %v", err)
+	}
 
 	// Wait for watches to sync
 	time.Sleep(500 * time.Millisecond)
@@ -137,6 +149,12 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
+	// Start watching nodes for node1
+	err = node1.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes for node1: %v", err)
+	}
+
 	// Wait for registration
 	time.Sleep(500 * time.Millisecond)
 
@@ -154,6 +172,12 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
+
+	// Start watching nodes for node2
+	err = node2.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes for node2: %v", err)
+	}
 
 	// Wait for watch to detect the new node
 	time.Sleep(1 * time.Second)
@@ -201,11 +225,23 @@ func TestNodeEtcdLeaveDetection(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
+	// Start watching nodes for node1
+	err = node1.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes for node1: %v", err)
+	}
+
 	// Create and start node2
 	node2 := NewNodeWithEtcd("localhost:47006", "localhost:2379")
 	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
+	}
+
+	// Start watching nodes for node2
+	err = node2.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes for node2: %v", err)
 	}
 
 	// Wait for both nodes to discover each other
