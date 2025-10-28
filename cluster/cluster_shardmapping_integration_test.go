@@ -8,7 +8,6 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -59,10 +58,8 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two clusters to test leader election and shard mapping
-	cluster1 := &Cluster{}
-	cluster1.logger = logger.NewLogger("TestCluster1")
-	cluster2 := &Cluster{}
-	cluster2.logger = logger.NewLogger("TestCluster2")
+	cluster1 := newClusterForTesting("TestCluster1")
+	cluster2 := newClusterForTesting("TestCluster2")
 
 	// Create etcd managers for both clusters
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
@@ -307,10 +304,8 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two clusters initially
-	cluster1 := &Cluster{}
-	cluster1.logger = logger.NewLogger("TestCluster1")
-	cluster2 := &Cluster{}
-	cluster2.logger = logger.NewLogger("TestCluster2")
+	cluster1 := newClusterForTesting("TestCluster1")
+	cluster2 := newClusterForTesting("TestCluster2")
 
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
@@ -400,8 +395,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 
 	// Now add a third node
-	cluster3 := &Cluster{}
-	cluster3.logger = logger.NewLogger("TestCluster3")
+	cluster3 := newClusterForTesting("TestCluster3")
 	etcdMgr3, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 3: %v", err)
