@@ -7,6 +7,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -53,9 +54,9 @@ func TestClusterEtcdIntegration(t *testing.T) {
 
 	// Create two clusters
 	cluster1 := &Cluster{}
-	cluster1.logger = cluster1.logger
+	cluster1.logger = logger.NewLogger("TestCluster1")
 	cluster2 := &Cluster{}
-	cluster2.logger = cluster2.logger
+	cluster2.logger = logger.NewLogger("TestCluster2")
 
 	// Create etcd managers for both clusters
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
@@ -188,7 +189,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 	// Create and setup cluster1
 	cluster1 := &Cluster{}
-	cluster1.logger = cluster1.logger
+	cluster1.logger = logger.NewLogger("TestCluster1")
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
@@ -233,7 +234,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 	// Create and setup cluster2
 	cluster2 := &Cluster{}
-	cluster2.logger = cluster2.logger
+	cluster2.logger = logger.NewLogger("TestCluster2")
 	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
@@ -306,7 +307,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 	// Create and setup cluster1
 	cluster1 := &Cluster{}
-	cluster1.logger = cluster1.logger
+	cluster1.logger = logger.NewLogger("TestCluster1")
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
@@ -341,7 +342,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 	// Create and setup cluster2
 	cluster2 := &Cluster{}
-	cluster2.logger = cluster2.logger
+	cluster2.logger = logger.NewLogger("TestCluster2")
 	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
