@@ -24,7 +24,7 @@ func TestSetThisNode(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := &Cluster{}
 	cluster.logger = logger.NewLogger("TestCluster")
-	
+
 	n := node.NewNode("test-address")
 	cluster.SetThisNode(n)
 
@@ -37,7 +37,7 @@ func TestSetThisNode_Panic(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := &Cluster{}
 	cluster.logger = logger.NewLogger("TestCluster")
-	
+
 	n1 := node.NewNode("test-address-1")
 	cluster.SetThisNode(n1)
 
