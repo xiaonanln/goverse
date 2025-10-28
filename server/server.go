@@ -60,7 +60,7 @@ func NewServer(config *ServerConfig) *Server {
 		logger: logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
 	}
 	
-	// SetThisNode will assign the etcdManager to the node
+	// Set this node on the cluster
 	cluster.Get().SetThisNode(server.Node)
 	return server
 }
@@ -118,6 +118,17 @@ func (server *Server) Run() error {
 		return err
 	}
 
+	// Connect to etcd and register this node
+	if err := cluster.Get().ConnectEtcd(); err != nil {
+		server.logger.Errorf("Failed to connect to etcd: %v", err)
+		return fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+
+	if err := cluster.Get().RegisterNode(server.ctx); err != nil {
+		server.logger.Errorf("Failed to register node with etcd: %v", err)
+		return fmt.Errorf("failed to register node with etcd: %w", err)
+	}
+
 	// Start watching for node changes through the cluster
 	if err := cluster.Get().WatchNodes(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start watching nodes: %v", err)
@@ -144,6 +155,15 @@ func (server *Server) Run() error {
 	err = grpcServer.Serve(goverseServiceListener)
 	if err != nil {
 		server.logger.Errorf("gRPC server error: %v", err)
+	}
+
+	// Unregister from etcd and close connection
+	if err := cluster.Get().UnregisterNode(server.ctx); err != nil {
+		server.logger.Errorf("Failed to unregister node from etcd: %v", err)
+	}
+
+	if err := cluster.Get().CloseEtcd(); err != nil {
+		server.logger.Errorf("Failed to close etcd connection: %v", err)
 	}
 
 	err = node.Stop(server.ctx)
