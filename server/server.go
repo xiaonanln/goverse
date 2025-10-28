@@ -11,6 +11,7 @@ import (
 
 	client_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
@@ -43,13 +44,23 @@ func NewServer(config *ServerConfig) *Server {
 		log.Fatalf("Invalid server configuration: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	
+	// Create the etcdManager and set it on the cluster
+	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress)
+	if err != nil {
+		log.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	cluster.Get().SetEtcdManager(etcdMgr)
+	
 	server := &Server{
 		config: config,
-		Node:   node.NewNodeWithEtcd(config.AdvertiseAddress, config.EtcdAddress),
+		Node:   node.NewNode(config.AdvertiseAddress),
 		ctx:    ctx,
 		cancel: cancel,
 		logger: logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
 	}
+	
+	// SetThisNode will assign the etcdManager to the node
 	cluster.Get().SetThisNode(server.Node)
 	return server
 }
@@ -105,6 +116,12 @@ func (server *Server) Run() error {
 	if err := node.Start(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start node: %v", err)
 		return err
+	}
+
+	// Start watching for node changes through the cluster
+	if err := cluster.Get().WatchNodes(server.ctx); err != nil {
+		server.logger.Errorf("Failed to start watching nodes: %v", err)
+		// Continue even if watching fails - it's not critical for basic operation
 	}
 
 	go func() {

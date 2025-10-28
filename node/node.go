@@ -84,11 +84,7 @@ func (node *Node) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to register node with etcd: %w", err)
 		}
 
-		// Start watching for node changes
-		if err := node.etcdManager.WatchNodes(ctx); err != nil {
-			node.logger.Errorf("Failed to start watching nodes: %v", err)
-			return fmt.Errorf("failed to start watching nodes: %w", err)
-		}
+		// Note: WatchNodes is now called by Cluster, not by Node
 	}
 
 	return node.connectToInspector()
@@ -439,6 +435,11 @@ type ObjectInfo struct {
 // GetEtcdManager returns the etcd manager
 func (node *Node) GetEtcdManager() *etcdmanager.EtcdManager {
 	return node.etcdManager
+}
+
+// SetEtcdManager sets the etcd manager for the node
+func (node *Node) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
+	node.etcdManager = mgr
 }
 
 // GetNodes returns a list of all registered nodes
