@@ -35,6 +35,14 @@ func cleanupEtcdNodes(t *testing.T) {
 	}
 }
 
+// startWatchingNodes starts watching for node changes and handles errors
+func startWatchingNodes(t *testing.T, node *Node, ctx context.Context) {
+	err := node.GetEtcdManager().WatchNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching nodes: %v", err)
+	}
+}
+
 // TestNodeEtcdIntegration tests node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
 func TestNodeEtcdIntegration(t *testing.T) {
@@ -62,10 +70,7 @@ func TestNodeEtcdIntegration(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Start watching nodes for node1
-	err = node1.GetEtcdManager().WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for node1: %v", err)
-	}
+	startWatchingNodes(t, node1, ctx)
 
 	// Wait a bit for registration to complete
 	time.Sleep(500 * time.Millisecond)
@@ -78,10 +83,7 @@ func TestNodeEtcdIntegration(t *testing.T) {
 	defer node2.Stop(ctx)
 
 	// Start watching nodes for node2
-	err = node2.GetEtcdManager().WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for node2: %v", err)
-	}
+	startWatchingNodes(t, node2, ctx)
 
 	// Wait for watches to sync
 	time.Sleep(500 * time.Millisecond)
@@ -150,10 +152,7 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Start watching nodes for node1
-	err = node1.GetEtcdManager().WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for node1: %v", err)
-	}
+	startWatchingNodes(t, node1, ctx)
 
 	// Wait for registration
 	time.Sleep(500 * time.Millisecond)
@@ -174,10 +173,7 @@ func TestNodeEtcdDynamicDiscovery(t *testing.T) {
 	defer node2.Stop(ctx)
 
 	// Start watching nodes for node2
-	err = node2.GetEtcdManager().WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for node2: %v", err)
-	}
+	startWatchingNodes(t, node2, ctx)
 
 	// Wait for watch to detect the new node
 	time.Sleep(1 * time.Second)
@@ -226,10 +222,7 @@ func TestNodeEtcdLeaveDetection(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Start watching nodes for node1
-	err = node1.GetEtcdManager().WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for node1: %v", err)
-	}
+	startWatchingNodes(t, node1, ctx)
 
 	// Create and start node2
 	node2 := NewNodeWithEtcd("localhost:47006", "localhost:2379")
@@ -239,10 +232,7 @@ func TestNodeEtcdLeaveDetection(t *testing.T) {
 	}
 
 	// Start watching nodes for node2
-	err = node2.GetEtcdManager().WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for node2: %v", err)
-	}
+	startWatchingNodes(t, node2, ctx)
 
 	// Wait for both nodes to discover each other
 	time.Sleep(1 * time.Second)
