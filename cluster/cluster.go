@@ -30,6 +30,13 @@ func Get() *Cluster {
 	return &thisCluster
 }
 
+// newClusterForTesting creates a new cluster instance for testing with an initialized logger
+func newClusterForTesting(name string) *Cluster {
+	return &Cluster{
+		logger: logger.NewLogger(name),
+	}
+}
+
 func (c *Cluster) SetThisNode(n *node.Node) {
 	if c.thisNode != nil {
 		panic("ThisNode is already set")

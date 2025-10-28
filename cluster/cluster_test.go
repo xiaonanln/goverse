@@ -6,7 +6,6 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -22,8 +21,7 @@ func TestGet(t *testing.T) {
 
 func TestSetThisNode(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := &Cluster{}
-	cluster.logger = logger.NewLogger("TestCluster")
+	cluster := newClusterForTesting("TestCluster")
 
 	n := node.NewNode("test-address")
 	cluster.SetThisNode(n)
@@ -35,8 +33,7 @@ func TestSetThisNode(t *testing.T) {
 
 func TestSetThisNode_Panic(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := &Cluster{}
-	cluster.logger = logger.NewLogger("TestCluster")
+	cluster := newClusterForTesting("TestCluster")
 
 	n1 := node.NewNode("test-address-1")
 	cluster.SetThisNode(n1)
@@ -80,8 +77,7 @@ func TestCallObject_NodeNotSet(t *testing.T) {
 
 func TestSetEtcdManager(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := &Cluster{}
-	cluster.logger = logger.NewLogger("TestCluster")
+	cluster := newClusterForTesting("TestCluster")
 
 	// Create an etcd manager (without connecting)
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
@@ -98,8 +94,7 @@ func TestSetEtcdManager(t *testing.T) {
 
 func TestSetEtcdManager_WithNode(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := &Cluster{}
-	cluster.logger = logger.NewLogger("TestCluster")
+	cluster := newClusterForTesting("TestCluster")
 
 	// Set a node first
 	n := node.NewNode("test-address")
@@ -121,8 +116,7 @@ func TestSetEtcdManager_WithNode(t *testing.T) {
 
 func TestSetThisNode_WithEtcdManager(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := &Cluster{}
-	cluster.logger = logger.NewLogger("TestCluster")
+	cluster := newClusterForTesting("TestCluster")
 
 	// Set etcd manager first
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
@@ -183,8 +177,7 @@ func TestGetLeaderNode_NoEtcdManager(t *testing.T) {
 
 func TestGetLeaderNode_WithEtcdManager(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := &Cluster{}
-	cluster.logger = logger.NewLogger("TestCluster")
+	cluster := newClusterForTesting("TestCluster")
 
 	// Create an etcd manager (without connecting)
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
