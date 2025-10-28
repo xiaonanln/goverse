@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
@@ -33,18 +32,12 @@ type Node struct {
 	objects          map[string]Object
 	objectsMu        sync.RWMutex
 	inspectorClient  inspector_pb.InspectorServiceClient
-	etcdManager      *etcdmanager.EtcdManager
 	logger           *logger.Logger
 	startupTime      time.Time
 }
 
 // NewNode creates a new Node instance
 func NewNode(advertiseAddress string) *Node {
-	return NewNodeWithEtcd(advertiseAddress, "")
-}
-
-// NewNodeWithEtcd creates a new Node instance with etcd address
-func NewNodeWithEtcd(advertiseAddress string, etcdAddress string) *Node {
 	node := &Node{
 		advertiseAddress: advertiseAddress,
 		objectTypes:      make(map[string]reflect.Type),
@@ -52,41 +45,12 @@ func NewNodeWithEtcd(advertiseAddress string, etcdAddress string) *Node {
 		logger:           logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 	}
 
-	// Initialize etcd manager if address is provided
-	if etcdAddress == "" {
-		etcdAddress = "localhost:2379" // default
-	}
-
-	etcdMgr, err := etcdmanager.NewEtcdManager(etcdAddress)
-	if err != nil {
-		node.logger.Errorf("Failed to create etcd manager: %v", err)
-	} else {
-		node.etcdManager = etcdMgr
-	}
-
 	return node
 }
 
-// Start starts the node and connects it to the inspector and etcd
+// Start starts the node and connects it to the inspector
 func (node *Node) Start(ctx context.Context) error {
 	node.startupTime = time.Now()
-
-	// Connect to etcd
-	if node.etcdManager != nil {
-		if err := node.etcdManager.Connect(); err != nil {
-			node.logger.Errorf("Failed to connect to etcd: %v", err)
-			return fmt.Errorf("failed to connect to etcd: %w", err)
-		}
-
-		// Register this node with etcd
-		if err := node.etcdManager.RegisterNode(ctx, node.advertiseAddress); err != nil {
-			node.logger.Errorf("Failed to register node with etcd: %v", err)
-			return fmt.Errorf("failed to register node with etcd: %w", err)
-		}
-
-		// Note: WatchNodes is now called by Cluster, not by Node
-	}
-
 	return node.connectToInspector()
 }
 
@@ -97,19 +61,6 @@ func (node *Node) IsStarted() bool {
 // Stop stops the node and unregisters it from the inspector
 func (node *Node) Stop(ctx context.Context) error {
 	node.logger.Infof("Node stopping")
-
-	// Unregister from etcd
-	if node.etcdManager != nil {
-		if err := node.etcdManager.UnregisterNode(ctx, node.advertiseAddress); err != nil {
-			node.logger.Errorf("Failed to unregister node from etcd: %v", err)
-		}
-
-		// Close etcd connection
-		if err := node.etcdManager.Close(); err != nil {
-			node.logger.Errorf("Failed to close etcd connection: %v", err)
-		}
-	}
-
 	return node.unregisterFromInspector()
 }
 
@@ -172,6 +123,11 @@ func (node *Node) unregisterFromInspector() error {
 // String returns a string representation of the node
 func (node *Node) String() string {
 	return fmt.Sprintf("Node@%s", node.advertiseAddress)
+}
+
+// GetAdvertiseAddress returns the advertise address of the node
+func (node *Node) GetAdvertiseAddress() string {
+	return node.advertiseAddress
 }
 
 func (node *Node) RegisterClientType(clientObj ClientObject) {
@@ -430,24 +386,6 @@ type ObjectInfo struct {
 	Type         string
 	Id           string
 	CreationTime time.Time
-}
-
-// GetEtcdManager returns the etcd manager
-func (node *Node) GetEtcdManager() *etcdmanager.EtcdManager {
-	return node.etcdManager
-}
-
-// SetEtcdManager sets the etcd manager for the node
-func (node *Node) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
-	node.etcdManager = mgr
-}
-
-// GetNodes returns a list of all registered nodes
-func (node *Node) GetNodes() []string {
-	if node.etcdManager == nil {
-		return []string{}
-	}
-	return node.etcdManager.GetNodes()
 }
 
 // PushMessageToClient sends a message to a client's message channel
