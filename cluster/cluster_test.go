@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -74,5 +75,101 @@ func TestCallObject_NodeNotSet(t *testing.T) {
 	expectedErr := "ThisNode is not set"
 	if err.Error() != expectedErr {
 		t.Errorf("CallObject error = %v; want %v", err.Error(), expectedErr)
+	}
+}
+
+func TestSetEtcdManager(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+	cluster.logger = logger.NewLogger("TestCluster")
+
+	// Create an etcd manager (without connecting)
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	cluster.SetEtcdManager(mgr)
+
+	if cluster.GetEtcdManager() != mgr {
+		t.Error("GetEtcdManager() should return the manager set by SetEtcdManager()")
+	}
+}
+
+func TestSetEtcdManager_WithNode(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+	cluster.logger = logger.NewLogger("TestCluster")
+
+	// Set a node first
+	n := node.NewNode("test-address")
+	cluster.SetThisNode(n)
+
+	// Then set the etcd manager
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	cluster.SetEtcdManager(mgr)
+
+	// Both cluster and node should have the manager
+	if cluster.GetEtcdManager() != mgr {
+		t.Error("Cluster should have the etcd manager")
+	}
+
+	if n.GetEtcdManager() != mgr {
+		t.Error("Node should have the etcd manager assigned by cluster")
+	}
+}
+
+func TestSetThisNode_WithEtcdManager(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+	cluster.logger = logger.NewLogger("TestCluster")
+
+	// Set etcd manager first
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	cluster.SetEtcdManager(mgr)
+
+	// Then set the node
+	n := node.NewNode("test-address")
+	cluster.SetThisNode(n)
+
+	// Node should have the manager assigned
+	if n.GetEtcdManager() != mgr {
+		t.Error("Node should have the etcd manager assigned when SetThisNode is called")
+	}
+}
+
+func TestGetNodes_NoEtcdManager(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+
+	nodes := cluster.GetNodes()
+
+	if len(nodes) != 0 {
+		t.Error("GetNodes() should return empty list when etcd manager is not set")
+	}
+}
+
+func TestWatchNodes_NoEtcdManager(t *testing.T) {
+	// Create a new cluster for testing
+	cluster := &Cluster{}
+
+	ctx := context.Background()
+	err := cluster.WatchNodes(ctx)
+
+	if err == nil {
+		t.Error("WatchNodes should return error when etcd manager is not set")
+	}
+
+	expectedErr := "etcd manager not set"
+	if err.Error() != expectedErr {
+		t.Errorf("WatchNodes error = %v; want %v", err.Error(), expectedErr)
 	}
 }
