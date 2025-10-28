@@ -33,12 +33,6 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 		panic("ThisNode is already set")
 	}
 	c.thisNode = n
-	
-	// Assign the cluster's etcdManager to the node
-	if c.etcdManager != nil {
-		n.SetEtcdManager(c.etcdManager)
-	}
-	
 	c.logger.Infof("This Node is %s", n)
 }
 
@@ -57,15 +51,50 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 // SetEtcdManager sets the etcd manager for the cluster
 func (c *Cluster) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
 	c.etcdManager = mgr
-	// If node is already set, assign the manager to it as well
-	if c.thisNode != nil {
-		c.thisNode.SetEtcdManager(mgr)
-	}
 }
 
 // GetEtcdManager returns the cluster's etcd manager
 func (c *Cluster) GetEtcdManager() *etcdmanager.EtcdManager {
 	return c.etcdManager
+}
+
+// ConnectEtcd connects to etcd
+func (c *Cluster) ConnectEtcd() error {
+	if c.etcdManager == nil {
+		return fmt.Errorf("etcd manager not set")
+	}
+	return c.etcdManager.Connect()
+}
+
+// RegisterNode registers this node with etcd
+func (c *Cluster) RegisterNode(ctx context.Context) error {
+	if c.etcdManager == nil {
+		return fmt.Errorf("etcd manager not set")
+	}
+	if c.thisNode == nil {
+		return fmt.Errorf("thisNode not set")
+	}
+	return c.etcdManager.RegisterNode(ctx, c.thisNode.GetAdvertiseAddress())
+}
+
+// UnregisterNode unregisters this node from etcd
+func (c *Cluster) UnregisterNode(ctx context.Context) error {
+	if c.etcdManager == nil {
+		// No-op if etcd manager is not set
+		return nil
+	}
+	if c.thisNode == nil {
+		return fmt.Errorf("thisNode not set")
+	}
+	return c.etcdManager.UnregisterNode(ctx, c.thisNode.GetAdvertiseAddress())
+}
+
+// CloseEtcd closes the etcd connection
+func (c *Cluster) CloseEtcd() error {
+	if c.etcdManager == nil {
+		return nil
+	}
+	return c.etcdManager.Close()
 }
 
 // WatchNodes starts watching for node changes in etcd

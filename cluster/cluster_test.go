@@ -113,13 +113,9 @@ func TestSetEtcdManager_WithNode(t *testing.T) {
 
 	cluster.SetEtcdManager(mgr)
 
-	// Both cluster and node should have the manager
+	// Cluster should have the manager
 	if cluster.GetEtcdManager() != mgr {
 		t.Error("Cluster should have the etcd manager")
-	}
-
-	if n.GetEtcdManager() != mgr {
-		t.Error("Node should have the etcd manager assigned by cluster")
 	}
 }
 
@@ -140,9 +136,9 @@ func TestSetThisNode_WithEtcdManager(t *testing.T) {
 	n := node.NewNode("test-address")
 	cluster.SetThisNode(n)
 
-	// Node should have the manager assigned
-	if n.GetEtcdManager() != mgr {
-		t.Error("Node should have the etcd manager assigned when SetThisNode is called")
+	// Cluster should have the manager
+	if cluster.GetEtcdManager() != mgr {
+		t.Error("Cluster should have the etcd manager")
 	}
 }
 
