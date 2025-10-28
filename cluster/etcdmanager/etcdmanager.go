@@ -372,3 +372,15 @@ func (mgr *EtcdManager) GetLeaderNode() string {
 	}
 	return leader
 }
+
+// SetNodesForTesting sets the nodes map for testing purposes
+// This should only be used in tests
+func (mgr *EtcdManager) SetNodesForTesting(nodes []string) {
+	mgr.nodesMu.Lock()
+	defer mgr.nodesMu.Unlock()
+
+	mgr.nodes = make(map[string]bool)
+	for _, node := range nodes {
+		mgr.nodes[node] = true
+	}
+}

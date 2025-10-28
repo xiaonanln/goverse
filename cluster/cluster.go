@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/protobuf/proto"
@@ -17,6 +18,7 @@ var (
 type Cluster struct {
 	thisNode    *node.Node
 	etcdManager *etcdmanager.EtcdManager
+	shardMapper *sharding.ShardMapper
 	logger      *logger.Logger
 }
 
@@ -51,6 +53,8 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 // SetEtcdManager sets the etcd manager for the cluster
 func (c *Cluster) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
 	c.etcdManager = mgr
+	// Initialize shard mapper when etcd manager is set
+	c.shardMapper = sharding.NewShardMapper(mgr)
 }
 
 // GetEtcdManager returns the cluster's etcd manager
@@ -121,4 +125,104 @@ func (c *Cluster) GetLeaderNode() string {
 		return ""
 	}
 	return c.etcdManager.GetLeaderNode()
+}
+
+// IsLeader returns true if this node is the cluster leader
+func (c *Cluster) IsLeader() bool {
+	if c.thisNode == nil {
+		return false
+	}
+	leaderNode := c.GetLeaderNode()
+	return leaderNode != "" && leaderNode == c.thisNode.GetAdvertiseAddress()
+}
+
+// InitializeShardMapping creates and stores the initial shard mapping in etcd
+// This should only be called by the leader node
+func (c *Cluster) InitializeShardMapping(ctx context.Context) error {
+	if !c.IsLeader() {
+		return fmt.Errorf("only the leader can initialize shard mapping")
+	}
+
+	if c.shardMapper == nil {
+		return fmt.Errorf("shard mapper not initialized")
+	}
+
+	nodes := c.GetNodes()
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes available to initialize shard mapping")
+	}
+
+	c.logger.Infof("Initializing shard mapping with %d nodes", len(nodes))
+
+	mapping, err := c.shardMapper.CreateShardMapping(ctx, nodes)
+	if err != nil {
+		return fmt.Errorf("failed to create shard mapping: %w", err)
+	}
+
+	err = c.shardMapper.StoreShardMapping(ctx, mapping)
+	if err != nil {
+		return fmt.Errorf("failed to store shard mapping: %w", err)
+	}
+
+	c.logger.Infof("Successfully initialized shard mapping (version %d)", mapping.Version)
+	return nil
+}
+
+// UpdateShardMapping updates the shard mapping when nodes are added or removed
+// This should only be called by the leader node
+func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
+	if !c.IsLeader() {
+		return fmt.Errorf("only the leader can update shard mapping")
+	}
+
+	if c.shardMapper == nil {
+		return fmt.Errorf("shard mapper not initialized")
+	}
+
+	nodes := c.GetNodes()
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes available to update shard mapping")
+	}
+
+	c.logger.Infof("Updating shard mapping with %d nodes", len(nodes))
+
+	mapping, err := c.shardMapper.UpdateShardMapping(ctx, nodes)
+	if err != nil {
+		return fmt.Errorf("failed to update shard mapping: %w", err)
+	}
+
+	err = c.shardMapper.StoreShardMapping(ctx, mapping)
+	if err != nil {
+		return fmt.Errorf("failed to store shard mapping: %w", err)
+	}
+
+	c.logger.Infof("Successfully updated shard mapping (version %d)", mapping.Version)
+	return nil
+}
+
+// GetShardMapping retrieves the current shard mapping
+func (c *Cluster) GetShardMapping(ctx context.Context) (*sharding.ShardMapping, error) {
+	if c.shardMapper == nil {
+		return nil, fmt.Errorf("shard mapper not initialized")
+	}
+
+	return c.shardMapper.GetShardMapping(ctx)
+}
+
+// GetNodeForObject returns the node address that should handle the given object ID
+func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string, error) {
+	if c.shardMapper == nil {
+		return "", fmt.Errorf("shard mapper not initialized")
+	}
+
+	return c.shardMapper.GetNodeForObject(ctx, objectID)
+}
+
+// GetNodeForShard returns the node address that owns the given shard
+func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, error) {
+	if c.shardMapper == nil {
+		return "", fmt.Errorf("shard mapper not initialized")
+	}
+
+	return c.shardMapper.GetNodeForShard(ctx, shardID)
 }
