@@ -112,3 +112,13 @@ func (c *Cluster) GetNodes() []string {
 	}
 	return c.etcdManager.GetNodes()
 }
+
+// GetLeaderNode returns the leader node address.
+// The leader is the node with the smallest advertised address in lexicographic order.
+// Returns an empty string if there are no registered nodes or if etcd manager is not set.
+func (c *Cluster) GetLeaderNode() string {
+	if c.etcdManager == nil {
+		return ""
+	}
+	return c.etcdManager.GetLeaderNode()
+}
