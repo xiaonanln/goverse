@@ -1311,7 +1311,7 @@ func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
 			t.Fatalf("Connect() failed: %v", err)
 		}
 		managers = append(managers, m)
-		
+
 		err = m.WatchNodes(ctx)
 		if err != nil {
 			t.Fatalf("WatchNodes() error = %v", err)
