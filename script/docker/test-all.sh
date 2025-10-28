@@ -9,6 +9,8 @@ echo "Starting Chat Integration Tests"
 echo "========================================"
 echo
 
+./script/compile-proto.sh
+
 # Clean up any stale etcd data directory to ensure a fresh start
 if [ -d "/app/default.etcd" ]; then
     echo "Removing stale etcd data directory at /app/default.etcd"
