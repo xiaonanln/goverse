@@ -8,7 +8,6 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -54,10 +53,8 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two clusters
-	cluster1 := &Cluster{}
-	cluster1.logger = logger.NewLogger("TestCluster1")
-	cluster2 := &Cluster{}
-	cluster2.logger = logger.NewLogger("TestCluster2")
+	cluster1 := newClusterForTesting("TestCluster1")
+	cluster2 := newClusterForTesting("TestCluster2")
 
 	// Create etcd managers for both clusters
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
@@ -189,8 +186,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and setup cluster1
-	cluster1 := &Cluster{}
-	cluster1.logger = logger.NewLogger("TestCluster1")
+	cluster1 := newClusterForTesting("TestCluster1")
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
@@ -234,8 +230,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	}
 
 	// Create and setup cluster2
-	cluster2 := &Cluster{}
-	cluster2.logger = logger.NewLogger("TestCluster2")
+	cluster2 := newClusterForTesting("TestCluster2")
 	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
@@ -307,8 +302,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and setup cluster1
-	cluster1 := &Cluster{}
-	cluster1.logger = logger.NewLogger("TestCluster1")
+	cluster1 := newClusterForTesting("TestCluster1")
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
@@ -342,8 +336,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	}
 
 	// Create and setup cluster2
-	cluster2 := &Cluster{}
-	cluster2.logger = logger.NewLogger("TestCluster2")
+	cluster2 := newClusterForTesting("TestCluster2")
 	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
@@ -440,8 +433,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	addresses := []string{"localhost:47100", "localhost:47050", "localhost:47200"}
 
 	for i := 0; i < 3; i++ {
-		clusters[i] = &Cluster{}
-		clusters[i].logger = logger.NewLogger(fmt.Sprintf("TestCluster%d", i+1))
+		clusters[i] = newClusterForTesting(fmt.Sprintf("TestCluster%d", i+1))
 
 		etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379")
 		if err != nil {
@@ -515,8 +507,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two clusters - cluster2 has smaller address (will be initial leader)
-	cluster1 := &Cluster{}
-	cluster1.logger = logger.NewLogger("TestCluster1")
+	cluster1 := newClusterForTesting("TestCluster1")
 	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
@@ -526,8 +517,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	node1 := node.NewNode("localhost:47300")
 	cluster1.SetThisNode(node1)
 
-	cluster2 := &Cluster{}
-	cluster2.logger = logger.NewLogger("TestCluster2")
+	cluster2 := newClusterForTesting("TestCluster2")
 	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
