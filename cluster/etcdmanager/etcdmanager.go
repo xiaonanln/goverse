@@ -32,17 +32,22 @@ type EtcdManager struct {
 	lastNodeChange   time.Time // timestamp of last node list change
 }
 
-// NewEtcdManager creates a new etcd manager
+// NewEtcdManager creates a new etcd manager.
+//
+// The optional prefix parameter specifies the root path for all etcd keys.
 // If prefix is empty or not provided, DefaultPrefix ("/goverse") will be used.
 // The prefix is used as the root for all etcd keys (e.g., nodes will be stored under "<prefix>/nodes/").
 // This allows multiple goverse clusters or test environments to coexist in the same etcd instance.
 //
-// Example:
-//   mgr, _ := NewEtcdManager("localhost:2379")              // Uses "/goverse" prefix
-//   mgr, _ := NewEtcdManager("localhost:2379", "/myapp")    // Uses "/myapp" prefix
+// Examples:
+//
+//	mgr, _ := NewEtcdManager("localhost:2379")              // Uses "/goverse" prefix
+//	mgr, _ := NewEtcdManager("localhost:2379", "/myapp")    // Uses "/myapp" prefix
+//	mgr, _ := NewEtcdManager("localhost:2379", "")          // Uses "/goverse" prefix (empty string treated as default)
 func NewEtcdManager(etcdAddress string, prefix ...string) (*EtcdManager, error) {
 	endpoints := []string{etcdAddress}
 
+	// Use default prefix if none provided or if empty string is provided
 	globalPrefix := DefaultPrefix
 	if len(prefix) > 0 && prefix[0] != "" {
 		globalPrefix = prefix[0]
