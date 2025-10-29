@@ -237,10 +237,8 @@ func (nc *NodeConnections) handleNodeChanges(previousNodes map[string]bool) {
 		}
 	}
 
-	// Update previousNodes for next iteration
-	for addr := range previousNodes {
-		delete(previousNodes, addr)
-	}
+	// Update previousNodes for next iteration by copying currentNodesMap
+	previousNodes = make(map[string]bool, len(currentNodesMap))
 	for addr := range currentNodesMap {
 		previousNodes[addr] = true
 	}
