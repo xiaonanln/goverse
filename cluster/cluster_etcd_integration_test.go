@@ -8,14 +8,18 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// getClusterTestPrefix returns a unique etcd prefix for cluster integration tests
+func getClusterTestPrefix(t *testing.T) string {
+	return "/goverse-test/" + t.Name()
+}
+
 // cleanupEtcdNodes removes all node registrations from etcd to ensure test isolation
-func cleanupEtcdNodes(t *testing.T) {
-	// Connect to etcd and clean up all nodes
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+func cleanupEtcdNodes(t *testing.T, prefix string) {
+	// Connect to etcd and clean up all nodes under the test prefix
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {
 		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
 		return
@@ -30,8 +34,8 @@ func cleanupEtcdNodes(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Delete all keys under the manager's nodes prefix
-	_, err = mgr.GetClient().Delete(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
+	// Delete all keys under the test prefix
+	_, err = mgr.GetClient().Delete(ctx, prefix+"/", clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd nodes: %v", err)
 	}
@@ -40,14 +44,13 @@ func cleanupEtcdNodes(t *testing.T) {
 // TestClusterEtcdIntegration tests cluster node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
 func TestClusterEtcdIntegration(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
+	// Use unique prefix for this test
+	testPrefix := getClusterTestPrefix(t)
 
 	// Clean up etcd before test
-	cleanupEtcdNodes(t)
+	cleanupEtcdNodes(t, testPrefix)
 	t.Cleanup(func() {
-		cleanupEtcdNodes(t)
+		cleanupEtcdNodes(t, testPrefix)
 	})
 
 	ctx := context.Background()
@@ -56,12 +59,12 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	cluster1 := newClusterForTesting("TestCluster1")
 	cluster2 := newClusterForTesting("TestCluster2")
 
-	// Create etcd managers for both clusters
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	// Create etcd managers for both clusters with same test prefix
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -173,21 +176,20 @@ func TestClusterEtcdIntegration(t *testing.T) {
 
 // TestClusterEtcdDynamicDiscovery tests that clusters dynamically discover new nodes
 func TestClusterEtcdDynamicDiscovery(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
+	// Use unique prefix for this test
+	testPrefix := getClusterTestPrefix(t)
 
 	// Clean up etcd before test
-	cleanupEtcdNodes(t)
+	cleanupEtcdNodes(t, testPrefix)
 	t.Cleanup(func() {
-		cleanupEtcdNodes(t)
+		cleanupEtcdNodes(t, testPrefix)
 	})
 
 	ctx := context.Background()
 
 	// Create and setup cluster1
 	cluster1 := newClusterForTesting("TestCluster1")
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
@@ -231,7 +233,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 	// Create and setup cluster2
 	cluster2 := newClusterForTesting("TestCluster2")
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -289,21 +291,20 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 // TestClusterEtcdLeaveDetection tests that clusters detect when other nodes leave
 func TestClusterEtcdLeaveDetection(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
+	// Use unique prefix for this test
+	testPrefix := getClusterTestPrefix(t)
 
 	// Clean up etcd before test
-	cleanupEtcdNodes(t)
+	cleanupEtcdNodes(t, testPrefix)
 	t.Cleanup(func() {
-		cleanupEtcdNodes(t)
+		cleanupEtcdNodes(t, testPrefix)
 	})
 
 	ctx := context.Background()
 
 	// Create and setup cluster1
 	cluster1 := newClusterForTesting("TestCluster1")
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
@@ -337,7 +338,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 	// Create and setup cluster2
 	cluster2 := newClusterForTesting("TestCluster2")
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -414,14 +415,13 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 // TestClusterGetLeaderNode tests leader election across multiple nodes
 func TestClusterGetLeaderNode(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
+	// Use unique prefix for this test
+	testPrefix := getClusterTestPrefix(t)
 
 	// Clean up etcd before test
-	cleanupEtcdNodes(t)
+	cleanupEtcdNodes(t, testPrefix)
 	t.Cleanup(func() {
-		cleanupEtcdNodes(t)
+		cleanupEtcdNodes(t, testPrefix)
 	})
 
 	ctx := context.Background()
@@ -435,7 +435,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		clusters[i] = newClusterForTesting(fmt.Sprintf("TestCluster%d", i+1))
 
-		etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+		etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 		if err != nil {
 			t.Fatalf("Failed to create etcd manager %d: %v", i+1, err)
 		}
@@ -494,21 +494,20 @@ func TestClusterGetLeaderNode(t *testing.T) {
 
 // TestClusterGetLeaderNode_DynamicChange tests leader change when current leader leaves
 func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
+	// Use unique prefix for this test
+	testPrefix := getClusterTestPrefix(t)
 
 	// Clean up etcd before test
-	cleanupEtcdNodes(t)
+	cleanupEtcdNodes(t, testPrefix)
 	t.Cleanup(func() {
-		cleanupEtcdNodes(t)
+		cleanupEtcdNodes(t, testPrefix)
 	})
 
 	ctx := context.Background()
 
 	// Create two clusters - cluster2 has smaller address (will be initial leader)
 	cluster1 := newClusterForTesting("TestCluster1")
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
@@ -518,7 +517,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	cluster1.SetThisNode(node1)
 
 	cluster2 := newClusterForTesting("TestCluster2")
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
