@@ -9,52 +9,13 @@ import (
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
-	clientv3 "go.etcd.io/etcd/client/v3"
 )
-
-// cleanupEtcdShardMapping removes shard mapping from etcd to ensure test isolation
-func cleanupEtcdShardMapping(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
-		return
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Logf("Warning: failed to connect to etcd for cleanup: %v", err)
-		return
-	}
-	defer mgr.Close()
-
-	ctx := context.Background()
-
-	// Delete shard mapping key (use the manager's prefix)
-	shardMappingKey := mgr.GetPrefix() + "/shardmapping"
-	_, err = mgr.GetClient().Delete(ctx, shardMappingKey)
-	if err != nil {
-		t.Logf("Warning: failed to cleanup etcd shard mapping: %v", err)
-	}
-
-	// Delete all node keys
-	_, err = mgr.GetClient().Delete(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
-	if err != nil {
-		t.Logf("Warning: failed to cleanup etcd nodes: %v", err)
-	}
-}
 
 // TestClusterShardMappingIntegration tests shard mapping with actual etcd integration
 // This test requires a running etcd instance at localhost:2379
 func TestClusterShardMappingIntegration(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
-	// Clean up etcd before test
-	cleanupEtcdShardMapping(t)
-	t.Cleanup(func() {
-		cleanupEtcdShardMapping(t)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
@@ -62,12 +23,12 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	cluster1 := newClusterForTesting("TestCluster1")
 	cluster2 := newClusterForTesting("TestCluster2")
 
-	// Create etcd managers for both clusters
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	// Create etcd managers for both clusters with unique test prefix
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -292,15 +253,8 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 
 // TestClusterShardMappingUpdate tests updating shard mapping when nodes change
 func TestClusterShardMappingUpdate(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
-	// Clean up etcd before test
-	cleanupEtcdShardMapping(t)
-	t.Cleanup(func() {
-		cleanupEtcdShardMapping(t)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
@@ -308,11 +262,11 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	cluster1 := newClusterForTesting("TestCluster1")
 	cluster2 := newClusterForTesting("TestCluster2")
 
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -397,7 +351,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 
 	// Now add a third node
 	cluster3 := newClusterForTesting("TestCluster3")
-	etcdMgr3, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr3, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 3: %v", err)
 	}
