@@ -8,50 +8,14 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
-	clientv3 "go.etcd.io/etcd/client/v3"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
-
-// getClusterTestPrefix returns a unique etcd prefix for cluster integration tests
-func getClusterTestPrefix(t *testing.T) string {
-	return "/goverse-test/" + t.Name()
-}
-
-// cleanupEtcdNodes removes all node registrations from etcd to ensure test isolation
-func cleanupEtcdNodes(t *testing.T, prefix string) {
-	// Connect to etcd and clean up all nodes under the test prefix
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
-	if err != nil {
-		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
-		return
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Logf("Warning: failed to connect to etcd for cleanup: %v", err)
-		return
-	}
-	defer mgr.Close()
-
-	ctx := context.Background()
-
-	// Delete all keys under the test prefix
-	_, err = mgr.GetClient().Delete(ctx, prefix+"/", clientv3.WithPrefix())
-	if err != nil {
-		t.Logf("Warning: failed to cleanup etcd nodes: %v", err)
-	}
-}
 
 // TestClusterEtcdIntegration tests cluster node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
 func TestClusterEtcdIntegration(t *testing.T) {
-	// Use unique prefix for this test
-	testPrefix := getClusterTestPrefix(t)
-
-	// Clean up etcd before test
-	cleanupEtcdNodes(t, testPrefix)
-	t.Cleanup(func() {
-		cleanupEtcdNodes(t, testPrefix)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
@@ -176,14 +140,8 @@ func TestClusterEtcdIntegration(t *testing.T) {
 
 // TestClusterEtcdDynamicDiscovery tests that clusters dynamically discover new nodes
 func TestClusterEtcdDynamicDiscovery(t *testing.T) {
-	// Use unique prefix for this test
-	testPrefix := getClusterTestPrefix(t)
-
-	// Clean up etcd before test
-	cleanupEtcdNodes(t, testPrefix)
-	t.Cleanup(func() {
-		cleanupEtcdNodes(t, testPrefix)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
@@ -291,14 +249,8 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 // TestClusterEtcdLeaveDetection tests that clusters detect when other nodes leave
 func TestClusterEtcdLeaveDetection(t *testing.T) {
-	// Use unique prefix for this test
-	testPrefix := getClusterTestPrefix(t)
-
-	// Clean up etcd before test
-	cleanupEtcdNodes(t, testPrefix)
-	t.Cleanup(func() {
-		cleanupEtcdNodes(t, testPrefix)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
@@ -415,14 +367,8 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 // TestClusterGetLeaderNode tests leader election across multiple nodes
 func TestClusterGetLeaderNode(t *testing.T) {
-	// Use unique prefix for this test
-	testPrefix := getClusterTestPrefix(t)
-
-	// Clean up etcd before test
-	cleanupEtcdNodes(t, testPrefix)
-	t.Cleanup(func() {
-		cleanupEtcdNodes(t, testPrefix)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
@@ -494,14 +440,8 @@ func TestClusterGetLeaderNode(t *testing.T) {
 
 // TestClusterGetLeaderNode_DynamicChange tests leader change when current leader leaves
 func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
-	// Use unique prefix for this test
-	testPrefix := getClusterTestPrefix(t)
-
-	// Clean up etcd before test
-	cleanupEtcdNodes(t, testPrefix)
-	t.Cleanup(func() {
-		cleanupEtcdNodes(t, testPrefix)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
