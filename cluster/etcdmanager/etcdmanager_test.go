@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -36,10 +35,19 @@ func cleanupEtcd(t *testing.T, mgr *EtcdManager) {
 	}
 }
 
-// setupEtcdTest creates a manager, connects, and registers cleanup
+// getTestPrefix returns a unique etcd prefix for the current test
+func getTestPrefix(t *testing.T) string {
+	// Generate a unique prefix for this test to enable parallel execution
+	// Use test name to ensure uniqueness across concurrent tests
+	return "/goverse-test/" + t.Name()
+}
+
+// setupEtcdTest creates a manager with a unique prefix, connects, and registers cleanup
 // Returns nil if etcd is not available (test should be skipped)
 func setupEtcdTest(t *testing.T) *EtcdManager {
-	mgr, err := NewEtcdManager("localhost:2379", "")
+	uniquePrefix := getTestPrefix(t)
+	
+	mgr, err := NewEtcdManager("localhost:2379", uniquePrefix)
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -56,6 +64,26 @@ func setupEtcdTest(t *testing.T) *EtcdManager {
 	// Register cleanup after test (runs even if test fails)
 	t.Cleanup(func() {
 		cleanupEtcd(t, mgr)
+		mgr.Close()
+	})
+
+	return mgr
+}
+
+// setupEtcdTestWithPrefix creates an additional manager for the same test
+// using the same unique prefix. This is for tests that need multiple managers.
+func setupEtcdTestWithPrefix(t *testing.T, prefix string) *EtcdManager {
+	mgr, err := NewEtcdManager("localhost:2379", prefix)
+	if err != nil {
+		t.Fatalf("NewEtcdManager() failed: %v", err)
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+
+	t.Cleanup(func() {
 		mgr.Close()
 	})
 
@@ -431,10 +459,6 @@ func TestEtcdManagerGetClient(t *testing.T) {
 
 // TestEtcdManagerRegisterMultipleNodes tests that registering multiple different nodes with one manager fails
 func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -502,10 +526,6 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 
 // TestEtcdManagerRegisterNode tests node registration
 func TestEtcdManagerRegisterNode(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -545,10 +565,6 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 
 // TestEtcdManagerRegisterNodeMultipleTimes tests that registering multiple different nodes fails
 func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -618,10 +634,6 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 
 // TestEtcdManagerUnregisterNode tests node unregistration
 func TestEtcdManagerUnregisterNode(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -659,10 +671,6 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 
 // TestEtcdManagerGetAllNodes tests retrieving all nodes
 func TestEtcdManagerGetAllNodes(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -701,10 +709,6 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 
 // TestEtcdManagerWatchNodes tests watching for node changes
 func TestEtcdManagerWatchNodes(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -762,33 +766,19 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 
 // TestEtcdManagerMultipleNodes tests multiple nodes scenario
 func TestEtcdManagerMultipleNodes(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
-	// Create two separate managers for two nodes
+	// Create two separate managers for two nodes with same unique prefix
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
 		return
 	}
 
-	mgr2, err := NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr2.Connect()
-	if err != nil {
-		t.Fatalf("Connect() error = %v", err)
-	}
-	t.Cleanup(func() {
-		mgr2.Close()
-	})
+	// Create second manager with same prefix to simulate multiple nodes
+	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
 
 	ctx := context.Background()
 
 	// Start watching on both managers
-	err = mgr1.WatchNodes(ctx)
+	err := mgr1.WatchNodes(ctx)
 	if err != nil {
 		t.Fatalf("WatchNodes() on mgr1 error = %v", err)
 	}
@@ -850,10 +840,6 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerGetNodesInitiallyEmpty tests that GetNodes returns empty list initially
 func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -876,18 +862,17 @@ func isGithubAction() bool {
 // 3. Watch channel closure is handled gracefully
 // 4. Operations after crash return appropriate errors without causing failures
 func TestEtcdManagerServerCrash(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	// Only skip when NOT running in GitHub Actions (we want this to run in CI)
 	if !isGithubAction() {
 		t.Skipf("Skipping test: manual etcd crash simulation is intended for local runs")
 	} else {
 		t.Log("Running in GitHub Actions - will attempt to stop etcd service for crash simulation")
 	}
+	// Use unique prefix for this test
+	testPrefix := getTestPrefix(t)
+
 	// First, verify etcd is running
-	mgr, err := NewEtcdManager("localhost:2379", "")
+	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -897,6 +882,15 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
 	}
+
+	// Clean up before test
+	cleanupEtcd(t, mgr)
+
+	// Register cleanup after test
+	t.Cleanup(func() {
+		cleanupEtcd(t, mgr)
+		mgr.Close()
+	})
 
 	ctx := context.Background()
 	nodeAddress := "localhost:47010"
@@ -1011,16 +1005,8 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	t.Logf("Wait for 20 seconds for invalid leases to expire")
 	time.Sleep(20 * time.Second) // Wait for etcd to stabilize
 
-	// Create a new manager and connect after etcd restart
-	mgr2, err := NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() (mgr2) failed: %v", err)
-	}
-	err = mgr2.Connect()
-	if err != nil {
-		t.Fatalf("Connect() (mgr2) after etcd restart failed: %v", err)
-	}
-	defer mgr2.Close()
+	// Create a new manager and connect after etcd restart with same prefix
+	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
 
 	err = mgr2.WatchNodes(ctx)
 	if err != nil {
@@ -1103,10 +1089,6 @@ func TestEtcdManagerGetLeaderNode_EmptyNodes(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_SingleNode tests GetLeaderNode with one node
 func TestEtcdManagerGetLeaderNode_SingleNode(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -1142,44 +1124,19 @@ func TestEtcdManagerGetLeaderNode_SingleNode(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_MultipleNodes tests GetLeaderNode with multiple nodes
 func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	// Create multiple managers for multiple nodes
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
 		return
 	}
 
-	mgr2, err := NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() for mgr2 failed: %v", err)
-	}
-	err = mgr2.Connect()
-	if err != nil {
-		t.Fatalf("Connect() for mgr2 error = %v", err)
-	}
-	t.Cleanup(func() {
-		mgr2.Close()
-	})
-
-	mgr3, err := NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() for mgr3 failed: %v", err)
-	}
-	err = mgr3.Connect()
-	if err != nil {
-		t.Fatalf("Connect() for mgr3 error = %v", err)
-	}
-	t.Cleanup(func() {
-		mgr3.Close()
-	})
+	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
+	mgr3 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
 
 	ctx := context.Background()
 
 	// Start watching on all managers
-	err = mgr1.WatchNodes(ctx)
+	err := mgr1.WatchNodes(ctx)
 	if err != nil {
 		t.Fatalf("WatchNodes() on mgr1 error = %v", err)
 	}
@@ -1245,32 +1202,18 @@ func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_LeaderChanges tests leader changes when nodes leave
 func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	// Create two managers for two nodes
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
 		return
 	}
 
-	mgr2, err := NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() for mgr2 failed: %v", err)
-	}
-	err = mgr2.Connect()
-	if err != nil {
-		t.Fatalf("Connect() for mgr2 error = %v", err)
-	}
-	t.Cleanup(func() {
-		mgr2.Close()
-	})
+	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
 
 	ctx := context.Background()
 
 	// Start watching on both managers
-	err = mgr1.WatchNodes(ctx)
+	err := mgr1.WatchNodes(ctx)
 	if err != nil {
 		t.Fatalf("WatchNodes() on mgr1 error = %v", err)
 	}
@@ -1324,10 +1267,6 @@ func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_LexicographicOrder tests lexicographic ordering
 func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -1357,16 +1296,10 @@ func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
 		t.Fatalf("RegisterNode() error = %v", err)
 	}
 
-	// Create and register other nodes
+	// Create and register other nodes with same prefix
+	prefix := getTestPrefix(t)
 	for i := 1; i < len(nodeAddresses); i++ {
-		m, err := NewEtcdManager("localhost:2379", "")
-		if err != nil {
-			t.Fatalf("NewEtcdManager() failed: %v", err)
-		}
-		err = m.Connect()
-		if err != nil {
-			t.Fatalf("Connect() failed: %v", err)
-		}
+		m := setupEtcdTestWithPrefix(t, prefix)
 		managers = append(managers, m)
 
 		err = m.WatchNodes(ctx)
