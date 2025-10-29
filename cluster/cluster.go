@@ -27,6 +27,7 @@ type Cluster struct {
 	thisNode            *node.Node
 	etcdManager         *etcdmanager.EtcdManager
 	shardMapper         *sharding.ShardMapper
+	nodeConnections     *NodeConnections
 	logger              *logger.Logger
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
@@ -62,6 +63,10 @@ func (c *Cluster) ResetForTesting() {
 	c.thisNode = nil
 	c.etcdManager = nil
 	c.shardMapper = nil
+	if c.nodeConnections != nil {
+		c.nodeConnections.Stop()
+		c.nodeConnections = nil
+	}
 	if c.shardMappingCancel != nil {
 		c.shardMappingCancel()
 	}
@@ -380,3 +385,29 @@ func (c *Cluster) handleShardMappingCheck() {
 		}
 	}
 }
+
+// StartNodeConnections initializes and starts the node connections manager
+// This should be called after WatchNodes is started
+func (c *Cluster) StartNodeConnections(ctx context.Context) error {
+	if c.nodeConnections != nil {
+		c.logger.Warnf("NodeConnections already started")
+		return nil
+	}
+
+	c.nodeConnections = NewNodeConnections(c)
+	return c.nodeConnections.Start(ctx)
+}
+
+// StopNodeConnections stops the node connections manager
+func (c *Cluster) StopNodeConnections() {
+	if c.nodeConnections != nil {
+		c.nodeConnections.Stop()
+		c.nodeConnections = nil
+	}
+}
+
+// GetNodeConnections returns the node connections manager
+func (c *Cluster) GetNodeConnections() *NodeConnections {
+	return c.nodeConnections
+}
+
