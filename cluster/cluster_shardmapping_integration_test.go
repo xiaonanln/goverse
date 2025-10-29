@@ -14,7 +14,7 @@ import (
 
 // cleanupEtcdShardMapping removes shard mapping from etcd to ensure test isolation
 func cleanupEtcdShardMapping(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
 		return
@@ -63,11 +63,11 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	cluster2 := newClusterForTesting("TestCluster2")
 
 	// Create etcd managers for both clusters
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -308,11 +308,11 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	cluster1 := newClusterForTesting("TestCluster1")
 	cluster2 := newClusterForTesting("TestCluster2")
 
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -397,7 +397,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 
 	// Now add a third node
 	cluster3 := newClusterForTesting("TestCluster3")
-	etcdMgr3, err := etcdmanager.NewEtcdManager("localhost:2379")
+	etcdMgr3, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 3: %v", err)
 	}
