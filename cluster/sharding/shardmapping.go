@@ -19,6 +19,8 @@ const (
 type ShardMapping struct {
 	// Map from shard ID to node address
 	Shards map[int]string `json:"shards"`
+	// Sorted list of nodes in the cluster
+	Nodes []string `json:"nodes"`
 	// Version for optimistic concurrency control
 	Version int64 `json:"version"`
 }
@@ -56,6 +58,7 @@ func (sm *ShardMapper) CreateShardMapping(ctx context.Context, nodes []string) (
 	// Create the mapping by distributing shards evenly across nodes
 	mapping := &ShardMapping{
 		Shards:  make(map[int]string, NumShards),
+		Nodes:   sortedNodes,
 		Version: 1,
 	}
 
@@ -206,6 +209,11 @@ func (sm *ShardMapper) UpdateShardMapping(ctx context.Context, nodes []string) (
 		}
 	}
 
+	// Check if node list changed (even if no shards moved)
+	if !nodesEqual(currentMapping.Nodes, sortedNodes) {
+		needsUpdate = true
+	}
+
 	// If no changes needed, return the current mapping
 	if !needsUpdate {
 		sm.logger.Infof("No changes needed to shard mapping, keeping version %d", currentMapping.Version)
@@ -215,11 +223,25 @@ func (sm *ShardMapper) UpdateShardMapping(ctx context.Context, nodes []string) (
 	// Create new mapping with incremented version
 	newMapping := &ShardMapping{
 		Shards:  newShards,
+		Nodes:   sortedNodes,
 		Version: currentMapping.Version + 1,
 	}
 
 	sm.logger.Infof("Updated shard mapping to version %d", newMapping.Version)
 	return newMapping, nil
+}
+
+// nodesEqual checks if two sorted node lists are equal
+func nodesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // InvalidateCache clears the local cache, forcing a reload from etcd on next access
