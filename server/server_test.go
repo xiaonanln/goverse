@@ -270,7 +270,58 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		t.Fatalf("Node should see itself (%s) in node list: %v", config.AdvertiseAddress, nodeAddresses)
 	}
 
-	t.Logf("Server successfully started and registered as sole node/leader")
+	// Verify this node is the leader
+	if !clusterInstance.IsLeader() {
+		t.Fatal("Server should be the leader as the only node in the cluster")
+	}
+
+	leaderNode := clusterInstance.GetLeaderNode()
+	if leaderNode != config.AdvertiseAddress {
+		t.Fatalf("Leader node is %s, expected %s", leaderNode, config.AdvertiseAddress)
+	}
+
+	t.Logf("Server successfully started and registered as sole node/leader: %s", leaderNode)
+
+	// Initialize shard mapping (leader responsibility)
+	err = clusterInstance.InitializeShardMapping(ctx)
+	if err != nil {
+		t.Fatalf("Failed to initialize shard mapping: %v", err)
+	}
+
+	// Verify shard mapping was created and stored
+	shardMapping, err := clusterInstance.GetShardMapping(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get shard mapping: %v", err)
+	}
+
+	if shardMapping == nil {
+		t.Fatal("Shard mapping should not be nil after initialization")
+	}
+
+	if len(shardMapping.Shards) == 0 {
+		t.Fatal("Shard mapping should contain at least one shard")
+	}
+
+	// Verify the leader node is in the shard mapping
+	foundInMapping := false
+	for _, nodeAddr := range shardMapping.Shards {
+		if nodeAddr == config.AdvertiseAddress {
+			foundInMapping = true
+			break
+		}
+	}
+	if !foundInMapping {
+		t.Fatalf("Leader node %s not found in shard mapping", config.AdvertiseAddress)
+	}
+
+	// Get unique nodes from shard mapping
+	uniqueNodes := make(map[string]bool)
+	for _, nodeAddr := range shardMapping.Shards {
+		uniqueNodes[nodeAddr] = true
+	}
+
+	t.Logf("Shard mapping initialized successfully with %d unique nodes, %d shards, version %d",
+		len(uniqueNodes), len(shardMapping.Shards), shardMapping.Version)
 
 	// Gracefully stop the server
 	server.cancel()
