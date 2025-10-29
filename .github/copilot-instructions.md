@@ -39,32 +39,56 @@ Goverse is a **distributed object runtime for Go** implementing the **virtual ac
 
 ### Prerequisites
 
+**IMPORTANT**: Always install prerequisites and compile protocol buffers before building or testing.
+
 ```bash
-# Install protoc compiler
+# Install protoc compiler (Linux/WSL)
+sudo apt-get update
 sudo apt-get install -y protobuf-compiler
 
-# Install Go protobuf plugins
+# Install protoc compiler (macOS)
+brew install protobuf
+
+# Install protoc compiler (Windows with Chocolatey)
+choco install protoc
+
+# Install Go protobuf plugins (required for all platforms)
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# Ensure the Go bin directory is in your PATH
+# Add to ~/.bashrc, ~/.zshrc, or PowerShell profile:
+# export PATH="$PATH:$(go env GOPATH)/bin"  # Linux/macOS
+# $env:PATH += ";$(go env GOPATH)\bin"      # PowerShell
 ```
 
 ### Building the Project
 
+**CRITICAL**: Always compile protobuf files FIRST before any build, test, or run operations.
+
 ```bash
-# Compile protobuf files first
+# Step 1: Compile protobuf files (REQUIRED FIRST STEP)
 ./script/compile-proto.sh
 
-# Tidy dependencies
+# On Windows, use:
+# .\script\win\compile-proto.cmd
+
+# Step 2: Tidy dependencies
 go mod tidy
 
-# Build the project
+# Step 3: Build the project
 go build ./...
 ```
 
 ### Running Tests
 
+**Always compile proto files before running tests:**
+
 ```bash
-# Run all tests with coverage
+# Compile proto files first
+./script/compile-proto.sh
+
+# Then run tests
 go test -v -p 1 -coverprofile=coverage.out -covermode=atomic ./...
 
 # Run tests for a specific package
