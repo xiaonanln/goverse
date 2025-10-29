@@ -13,15 +13,8 @@ import (
 // TestClusterAutomaticShardMappingManagement tests automatic shard mapping management with etcd integration
 // This test requires a running etcd instance at localhost:2379
 func TestClusterAutomaticShardMappingManagement(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
-	// Clean up etcd before and after test
-	cleanupEtcdShardMapping(t)
-	t.Cleanup(func() {
-		cleanupEtcdShardMapping(t)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -30,12 +23,12 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	cluster1 := newClusterForTesting("TestCluster1")
 	cluster2 := newClusterForTesting("TestCluster2")
 
-	// Create etcd managers for both clusters
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	// Create etcd managers for both clusters with unique test prefix
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
@@ -210,22 +203,15 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 
 // TestClusterShardMappingAutoUpdate tests that shard mapping is updated when nodes change
 func TestClusterShardMappingAutoUpdate(t *testing.T) {
-	// Serialize etcd tests to prevent interference
-	testutil.EtcdTestMutex.Lock()
-	defer testutil.EtcdTestMutex.Unlock()
-
-	// Clean up etcd before and after test
-	cleanupEtcdShardMapping(t)
-	t.Cleanup(func() {
-		cleanupEtcdShardMapping(t)
-	})
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Create first cluster and node
 	cluster1 := newClusterForTesting("TestCluster1")
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 1: %v", err)
 	}
@@ -276,7 +262,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 
 	// Now add a second node
 	cluster2 := newClusterForTesting("TestCluster2")
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager 2: %v", err)
 	}
