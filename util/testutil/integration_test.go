@@ -29,14 +29,16 @@ func TestPrepareEtcdPrefixWithEtcdManager(t *testing.T) {
 	// Use the manager to perform operations
 	ctx := context.Background()
 	
-	// Put a value
-	err = mgr.Put(ctx, "test-key", "test-value")
+	// Put a value under the prefix (this ensures cleanup works)
+	// Note: etcdmanager Put/Get use absolute keys, so we need to include the prefix
+	testKey := prefix + "/test-key"
+	err = mgr.Put(ctx, testKey, "test-value")
 	if err != nil {
 		t.Fatalf("Put() failed: %v", err)
 	}
 
 	// Get the value back
-	value, err := mgr.Get(ctx, "test-key")
+	value, err := mgr.Get(ctx, testKey)
 	if err != nil {
 		t.Fatalf("Get() failed: %v", err)
 	}
