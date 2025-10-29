@@ -166,8 +166,8 @@ func cleanupEtcdForServerTest(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Delete all keys under /goverse/ prefix
-	_, err = mgr.GetClient().Delete(ctx, "/goverse/", clientv3.WithPrefix())
+	// Delete all keys under the manager's prefix
+	_, err = mgr.GetClient().Delete(ctx, mgr.GetPrefix()+"/", clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Get all registered nodes using etcd manager's GetClient
 	ctx := context.Background()
-	getResp, err := mgr.GetClient().Get(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	getResp, err := mgr.GetClient().Get(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
 	if err != nil {
 		t.Fatalf("Failed to get nodes from etcd: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	// Verify node was unregistered from etcd after stopping
 	time.Sleep(1 * time.Second) // Give time for cleanup
 
-	getResp, err = mgr.GetClient().Get(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	getResp, err = mgr.GetClient().Get(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
 	if err != nil {
 		t.Fatalf("Failed to get nodes from etcd after stop: %v", err)
 	}

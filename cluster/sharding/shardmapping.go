@@ -11,10 +11,6 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 )
 
-const (
-	ShardMappingKey = "/goverse/shardmapping"
-)
-
 // ShardMapping represents the mapping of shards to nodes
 type ShardMapping struct {
 	// Map from shard ID to node address
@@ -39,6 +35,15 @@ func NewShardMapper(etcdManager *etcdmanager.EtcdManager) *ShardMapper {
 		etcdManager: etcdManager,
 		logger:      logger.NewLogger("ShardMapper"),
 	}
+}
+
+// getShardMappingKey returns the shard mapping key based on the etcd manager's prefix
+func (sm *ShardMapper) getShardMappingKey() string {
+	if sm.etcdManager != nil {
+		return sm.etcdManager.GetPrefix() + "/shardmapping"
+	}
+	// Fallback for tests where etcdManager is nil
+	return etcdmanager.DefaultPrefix + "/shardmapping"
 }
 
 // CreateShardMapping creates a new shard mapping by distributing all shards across available nodes
@@ -84,7 +89,7 @@ func (sm *ShardMapper) StoreShardMapping(ctx context.Context, mapping *ShardMapp
 	}
 
 	// Store in etcd
-	err = sm.etcdManager.Put(ctx, ShardMappingKey, string(data))
+	err = sm.etcdManager.Put(ctx, sm.getShardMappingKey(), string(data))
 	if err != nil {
 		return fmt.Errorf("failed to store shard mapping in etcd: %w", err)
 	}
@@ -116,7 +121,7 @@ func (sm *ShardMapper) GetShardMapping(ctx context.Context) (*ShardMapping, erro
 	}
 
 	// Retrieve from etcd
-	data, err := sm.etcdManager.Get(ctx, ShardMappingKey)
+	data, err := sm.etcdManager.Get(ctx, sm.getShardMappingKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get shard mapping from etcd: %w", err)
 	}

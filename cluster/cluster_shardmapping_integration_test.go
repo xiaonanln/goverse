@@ -29,14 +29,15 @@ func cleanupEtcdShardMapping(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Delete shard mapping key
-	_, err = mgr.GetClient().Delete(ctx, sharding.ShardMappingKey)
+	// Delete shard mapping key (use the manager's prefix)
+	shardMappingKey := mgr.GetPrefix() + "/shardmapping"
+	_, err = mgr.GetClient().Delete(ctx, shardMappingKey)
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd shard mapping: %v", err)
 	}
 
 	// Delete all node keys
-	_, err = mgr.GetClient().Delete(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	_, err = mgr.GetClient().Delete(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd nodes: %v", err)
 	}
