@@ -8,9 +8,12 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestStartShardMappingManagement_NoEtcdManager(t *testing.T) {
+	t.Parallel()
+
 	cluster := newClusterForTesting("TestCluster")
 	ctx := context.Background()
 
@@ -26,11 +29,16 @@ func TestStartShardMappingManagement_NoEtcdManager(t *testing.T) {
 }
 
 func TestStartShardMappingManagement_NoShardMapper(t *testing.T) {
+	t.Parallel()
+
 	cluster := newClusterForTesting("TestCluster")
 	ctx := context.Background()
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Create and set etcd manager but don't initialize shard mapper
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -48,11 +56,16 @@ func TestStartShardMappingManagement_NoShardMapper(t *testing.T) {
 }
 
 func TestStartAndStopShardMappingManagement(t *testing.T) {
+	t.Parallel()
+
 	cluster := newClusterForTesting("TestCluster")
 	ctx := context.Background()
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Set up the cluster with etcd manager and shard mapper
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -84,11 +97,16 @@ func TestStartAndStopShardMappingManagement(t *testing.T) {
 }
 
 func TestStartShardMappingManagement_AlreadyRunning(t *testing.T) {
+	t.Parallel()
+
 	cluster := newClusterForTesting("TestCluster")
 	ctx := context.Background()
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Set up the cluster
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -112,7 +130,12 @@ func TestStartShardMappingManagement_AlreadyRunning(t *testing.T) {
 }
 
 func TestEtcdManager_NodeStability(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	t.Parallel()
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -140,7 +163,12 @@ func TestEtcdManager_NodeStability(t *testing.T) {
 }
 
 func TestEtcdManager_GetLastNodeChangeTime(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	t.Parallel()
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -163,10 +191,15 @@ func TestEtcdManager_GetLastNodeChangeTime(t *testing.T) {
 }
 
 func TestHandleShardMappingCheck_NoNodes(t *testing.T) {
+	t.Parallel()
+
 	cluster := newClusterForTesting("TestCluster")
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Set up the cluster
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -186,6 +219,8 @@ func TestHandleShardMappingCheck_NoNodes(t *testing.T) {
 }
 
 func TestShardMappingConstants(t *testing.T) {
+	t.Parallel()
+
 	// Verify the constants are set to expected values
 	if ShardMappingCheckInterval != 5*time.Second {
 		t.Errorf("ShardMappingCheckInterval = %v; want %v", ShardMappingCheckInterval, 5*time.Second)
@@ -197,10 +232,15 @@ func TestShardMappingConstants(t *testing.T) {
 }
 
 func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
+	t.Parallel()
+
 	cluster := newClusterForTesting("TestCluster")
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Set up the cluster
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
