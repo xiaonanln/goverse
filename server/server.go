@@ -136,19 +136,20 @@ func (server *Server) Run() error {
 	}
 
 	// Handle both signals and context cancellation for graceful shutdown
+	clientGrpcServer := grpc.NewServer()
 	go func() {
 		select {
 		case <-sigChan:
-			server.logger.Infof("Received shutdown signal, stopping gRPC server...")
+			server.logger.Infof("Received shutdown signal, stopping gRPC servers...")
 		case <-server.ctx.Done():
-			server.logger.Infof("Context cancelled, stopping gRPC server...")
+			server.logger.Infof("Context cancelled, stopping gRPC servers...")
 		}
 		grpcServer.GracefulStop()
+		clientGrpcServer.GracefulStop()
 	}()
 
 	go func() {
 		server.logger.Infof("Client gRPC server listening on %s", clientServiceListener.Addr().String())
-		clientGrpcServer := grpc.NewServer()
 		client_pb.RegisterClientServiceServer(clientGrpcServer, server)
 		reflection.Register(clientGrpcServer)
 		if err := clientGrpcServer.Serve(clientServiceListener); err != nil {
