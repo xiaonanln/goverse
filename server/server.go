@@ -149,7 +149,6 @@ func (server *Server) Run() error {
 		// Continue even if shard mapping management fails - it's not critical for basic operation
 	}
 
-
 	// Handle both signals and context cancellation for graceful shutdown
 	clientGrpcServer := grpc.NewServer()
 	go func() {
