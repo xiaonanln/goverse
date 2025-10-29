@@ -8,8 +8,11 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -85,6 +88,72 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 	}
 
 	return c.thisNode.CallObject(ctx, id, method, request)
+}
+
+// CreateObject creates a distributed object on the appropriate node based on sharding
+// The object ID is determined by the type and optional custom ID
+// This method routes the creation request to the correct node in the cluster
+func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initData proto.Message) (string, error) {
+	if c.thisNode == nil {
+		return "", fmt.Errorf("ThisNode is not set")
+	}
+
+	// If objID is not provided, generate one locally
+	// We need to know the ID to determine which node should create it
+	if objID == "" {
+		objID = objType + "-" + uniqueid.UniqueId()
+	}
+
+	// Determine which node should host this object
+	nodeAddr, err := c.GetNodeForObject(ctx, objID)
+	if err != nil {
+		// If shard mapping is not available, create locally
+		c.logger.Warnf("Could not determine node for object %s: %v, creating locally", objID, err)
+		return c.thisNode.CreateObject(ctx, objType, objID, initData)
+	}
+
+	// Check if the object should be created on this node
+	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+		// Create locally
+		c.logger.Infof("Creating object %s locally (type: %s)", objID, objType)
+		return c.thisNode.CreateObject(ctx, objType, objID, initData)
+	}
+
+	// Route to the appropriate node
+	c.logger.Infof("Routing CreateObject for %s to node %s", objID, nodeAddr)
+	
+	if c.nodeConnections == nil {
+		return "", fmt.Errorf("node connections not initialized")
+	}
+
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
+
+	// Marshal initData to Any
+	var initDataAny *anypb.Any
+	if initData != nil {
+		initDataAny = &anypb.Any{}
+		if err := initDataAny.MarshalFrom(initData); err != nil {
+			return "", fmt.Errorf("failed to marshal init data: %w", err)
+		}
+	}
+
+	// Call CreateObject on the remote node
+	req := &goverse_pb.CreateObjectRequest{
+		Type:     objType,
+		Id:       objID,
+		InitData: initDataAny,
+	}
+
+	resp, err := client.CreateObject(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
+	}
+
+	c.logger.Infof("Successfully created object %s on node %s", resp.Id, nodeAddr)
+	return resp.Id, nil
 }
 
 // SetEtcdManager sets the etcd manager for the cluster
