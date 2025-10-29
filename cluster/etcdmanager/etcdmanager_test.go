@@ -19,19 +19,10 @@ func cleanupEtcd(t *testing.T, mgr *EtcdManager) {
 
 	ctx := context.Background()
 
-	// Delete all keys under the manager's prefix (includes nodes and any test keys)
+	// Delete all keys under the manager's unique test prefix
 	_, err := mgr.GetClient().Delete(ctx, mgr.GetPrefix()+"/", clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd: %v", err)
-	}
-
-	// Also clean up any test keys that might not be under the prefix
-	testKeyPrefixes := []string{"test-key", "test/key"}
-	for _, prefix := range testKeyPrefixes {
-		_, err := mgr.GetClient().Delete(ctx, prefix, clientv3.WithPrefix())
-		if err != nil {
-			t.Logf("Warning: failed to cleanup test keys with prefix %s: %v", prefix, err)
-		}
 	}
 }
 
@@ -840,7 +831,9 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerGetNodesInitiallyEmpty tests that GetNodes returns empty list initially
 func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379", "")
+	// Use unique prefix even for this simple test
+	testPrefix := getTestPrefix(t)
+	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
