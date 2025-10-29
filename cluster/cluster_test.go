@@ -6,6 +6,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -79,8 +80,11 @@ func TestSetEtcdManager(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := newClusterForTesting("TestCluster")
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Create an etcd manager (without connecting)
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -100,8 +104,11 @@ func TestSetEtcdManager_WithNode(t *testing.T) {
 	n := node.NewNode("test-address")
 	cluster.SetThisNode(n)
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Then set the etcd manager
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -118,8 +125,11 @@ func TestSetThisNode_WithEtcdManager(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := newClusterForTesting("TestCluster")
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Set etcd manager first
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -179,8 +189,11 @@ func TestGetLeaderNode_WithEtcdManager(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := newClusterForTesting("TestCluster")
 
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	// Create an etcd manager (without connecting)
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
