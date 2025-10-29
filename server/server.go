@@ -278,7 +278,7 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateObjectRequest) (*goverse_pb.CreateObjectResponse, error) {
 	server.logRPC("CreateObject", req)
 
-	id, err := server.Node.CreateObject(ctx, req.GetType(), "", req.GetInitData())
+	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId(), req.GetInitData())
 	if err != nil {
 		return nil, err
 	}
