@@ -30,7 +30,7 @@ func TestStartShardMappingManagement_NoShardMapper(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and set etcd manager but don't initialize shard mapper
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestStartAndStopShardMappingManagement(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up the cluster with etcd manager and shard mapper
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestStartShardMappingManagement_AlreadyRunning(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up the cluster
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestStartShardMappingManagement_AlreadyRunning(t *testing.T) {
 }
 
 func TestEtcdManager_NodeStability(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestEtcdManager_NodeStability(t *testing.T) {
 }
 
 func TestEtcdManager_GetLastNodeChangeTime(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestHandleShardMappingCheck_NoNodes(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Set up the cluster
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Set up the cluster
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}

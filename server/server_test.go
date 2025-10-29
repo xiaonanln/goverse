@@ -151,7 +151,7 @@ func TestNode_ListObjects(t *testing.T) {
 
 // cleanupEtcdForServerTest removes all test data from etcd
 func cleanupEtcdForServerTest(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
 		return
@@ -222,7 +222,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	}
 
 	// Verify node is registered in etcd
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}

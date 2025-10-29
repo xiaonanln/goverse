@@ -39,7 +39,7 @@ func cleanupEtcd(t *testing.T, mgr *EtcdManager) {
 // setupEtcdTest creates a manager, connects, and registers cleanup
 // Returns nil if etcd is not available (test should be skipped)
 func setupEtcdTest(t *testing.T) *EtcdManager {
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestNewEtcdManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgr, err := NewEtcdManager(tt.etcdAddress)
+			mgr, err := NewEtcdManager(tt.etcdAddress, "")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("NewEtcdManager() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -129,12 +129,6 @@ func TestNewEtcdManagerWithPrefix(t *testing.T) {
 			wantPrefix:  DefaultPrefix,
 		},
 		{
-			name:        "no prefix argument uses default",
-			etcdAddress: "localhost:2379",
-			prefix:      "",
-			wantPrefix:  DefaultPrefix,
-		},
-		{
 			name:        "prefix with trailing slash",
 			etcdAddress: "localhost:2379",
 			prefix:      "/myapp/",
@@ -144,14 +138,7 @@ func TestNewEtcdManagerWithPrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mgr *EtcdManager
-			var err error
-			
-			if tt.prefix == "" && tt.name == "no prefix argument uses default" {
-				mgr, err = NewEtcdManager(tt.etcdAddress)
-			} else {
-				mgr, err = NewEtcdManager(tt.etcdAddress, tt.prefix)
-			}
+			mgr, err := NewEtcdManager(tt.etcdAddress, tt.prefix)
 			
 			if err != nil {
 				t.Fatalf("NewEtcdManager() error = %v", err)
@@ -191,7 +178,7 @@ func TestEtcdManagerConnect(t *testing.T) {
 
 // TestEtcdManagerConnectInvalidEndpoint tests connecting to invalid endpoint
 func TestEtcdManagerConnectInvalidEndpoint(t *testing.T) {
-	mgr, err := NewEtcdManager("invalid-host:9999")
+	mgr, err := NewEtcdManager("invalid-host:9999", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -368,7 +355,7 @@ func TestEtcdManagerWatch(t *testing.T) {
 
 // TestEtcdManagerOperationsWithoutConnect tests operations without connecting
 func TestEtcdManagerOperationsWithoutConnect(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -420,7 +407,7 @@ func TestEtcdManagerClose(t *testing.T) {
 // TestEtcdManagerGetClient tests getting the client
 func TestEtcdManagerGetClient(t *testing.T) {
 	// Test before connect
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -785,7 +772,7 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 		return
 	}
 
-	mgr2, err := NewEtcdManager("localhost:2379")
+	mgr2, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -847,7 +834,7 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 
 // TestEtcdManagerRegisterNodeWithoutConnect tests registering without connection
 func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -867,7 +854,7 @@ func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
 	testutil.EtcdTestMutex.Lock()
 	defer testutil.EtcdTestMutex.Unlock()
 
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -900,7 +887,7 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 		t.Log("Running in GitHub Actions - will attempt to stop etcd service for crash simulation")
 	}
 	// First, verify etcd is running
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -1025,7 +1012,7 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	time.Sleep(20 * time.Second) // Wait for etcd to stabilize
 
 	// Create a new manager and connect after etcd restart
-	mgr2, err := NewEtcdManager("localhost:2379")
+	mgr2, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() (mgr2) failed: %v", err)
 	}
@@ -1103,7 +1090,7 @@ func executeCommand(cmd string) (string, error) {
 
 // TestEtcdManagerGetLeaderNode_EmptyNodes tests GetLeaderNode with no nodes
 func TestEtcdManagerGetLeaderNode_EmptyNodes(t *testing.T) {
-	mgr, err := NewEtcdManager("localhost:2379")
+	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
 	}
@@ -1165,7 +1152,7 @@ func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
 		return
 	}
 
-	mgr2, err := NewEtcdManager("localhost:2379")
+	mgr2, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() for mgr2 failed: %v", err)
 	}
@@ -1177,7 +1164,7 @@ func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
 		mgr2.Close()
 	})
 
-	mgr3, err := NewEtcdManager("localhost:2379")
+	mgr3, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() for mgr3 failed: %v", err)
 	}
@@ -1268,7 +1255,7 @@ func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
 		return
 	}
 
-	mgr2, err := NewEtcdManager("localhost:2379")
+	mgr2, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() for mgr2 failed: %v", err)
 	}
@@ -1372,7 +1359,7 @@ func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
 
 	// Create and register other nodes
 	for i := 1; i < len(nodeAddresses); i++ {
-		m, err := NewEtcdManager("localhost:2379")
+		m, err := NewEtcdManager("localhost:2379", "")
 		if err != nil {
 			t.Fatalf("NewEtcdManager() failed: %v", err)
 		}

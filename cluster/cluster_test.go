@@ -80,7 +80,7 @@ func TestSetEtcdManager(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Create an etcd manager (without connecting)
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestSetEtcdManager_WithNode(t *testing.T) {
 	cluster.SetThisNode(n)
 
 	// Then set the etcd manager
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestSetThisNode_WithEtcdManager(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Set etcd manager first
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestGetLeaderNode_WithEtcdManager(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Create an etcd manager (without connecting)
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
