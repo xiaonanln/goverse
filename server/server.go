@@ -27,6 +27,7 @@ type ServerConfig struct {
 	AdvertiseAddress    string
 	ClientListenAddress string
 	EtcdAddress         string
+	EtcdPrefix          string // Optional: etcd key prefix for this cluster (default: "/goverse")
 }
 
 type Server struct {
@@ -46,7 +47,8 @@ func NewServer(config *ServerConfig) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create the etcdManager and set it on the cluster
-	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, "")
+	// Use the configured EtcdPrefix, or empty string to use the default prefix
+	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, config.EtcdPrefix)
 	if err != nil {
 		log.Fatalf("Failed to create etcd manager: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -149,30 +150,6 @@ func TestNode_ListObjects(t *testing.T) {
 	}
 }
 
-// cleanupEtcdForServerTest removes all test data from etcd
-func cleanupEtcdForServerTest(t *testing.T) {
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
-		return
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Logf("Warning: etcd not available for cleanup: %v", err)
-		return
-	}
-	defer mgr.Close()
-
-	ctx := context.Background()
-
-	// Delete all keys under the manager's prefix
-	_, err = mgr.GetClient().Delete(ctx, mgr.GetPrefix()+"/", clientv3.WithPrefix())
-	if err != nil {
-		t.Logf("Warning: failed to cleanup etcd: %v", err)
-	}
-}
-
 // TestServerStartupWithEtcd tests that a server can:
 // 1. Start successfully
 // 2. Register its node address to etcd
@@ -181,18 +158,16 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	// Reset cluster state before this test
 	resetClusterForTesting(t)
 
-	// Clean up etcd before test
-	cleanupEtcdForServerTest(t)
-	t.Cleanup(func() {
-		cleanupEtcdForServerTest(t)
-	})
+	// Use PrepareEtcdPrefix to get a unique prefix for test isolation
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create server config with unique ports
+	// Create server config with unique ports and etcd prefix
 	config := &ServerConfig{
 		ListenAddress:       "localhost:47100",
 		AdvertiseAddress:    "localhost:47100",
 		ClientListenAddress: "localhost:47101",
 		EtcdAddress:         "localhost:2379",
+		EtcdPrefix:          etcdPrefix,
 	}
 
 	// Create server
@@ -222,7 +197,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	}
 
 	// Verify node is registered in etcd
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", etcdPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create etcd manager: %v", err)
 	}
