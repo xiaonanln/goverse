@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 )
@@ -86,6 +87,22 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	
 	if server.logger == nil {
 		t.Error("NewServer should initialize a logger")
+	}
+	
+	// Verify that the cluster has an etcd manager set
+	clusterInstance := cluster.Get()
+	if clusterInstance.GetEtcdManager() == nil {
+		t.Error("NewServer should set the etcd manager on the cluster")
+	}
+	
+	// Verify that the cluster has this node set
+	if clusterInstance.GetThisNode() == nil {
+		t.Error("NewServer should set the node on the cluster")
+	}
+	
+	// Verify that the cluster's node matches the server's node
+	if clusterInstance.GetThisNode() != server.Node {
+		t.Error("Cluster's node should match the server's node")
 	}
 	
 	// Test ListObjects on this server
