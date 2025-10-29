@@ -90,6 +90,11 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	}
 	
 	// Verify that the cluster has an etcd manager set
+	// Note: This test validates the integration with the global cluster singleton
+	// (cluster.Get()), which is the actual production behavior. We cannot use
+	// cluster.newClusterForTesting() here because NewServer() always uses the
+	// global singleton. The test is designed to run first to avoid conflicts
+	// with the singleton's "ThisNode is already set" check.
 	clusterInstance := cluster.Get()
 	if clusterInstance.GetEtcdManager() == nil {
 		t.Error("NewServer should set the etcd manager on the cluster")
