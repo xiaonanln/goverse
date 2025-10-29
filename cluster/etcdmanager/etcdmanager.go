@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	NodesPrefix      = "/goverse/nodes/"
+	DefaultPrefix    = "/goverse"
 	NodeLeaseTTL     = 15 // seconds
 	NodeKeepAliveTTL = 5  // seconds
 )
@@ -21,6 +21,7 @@ type EtcdManager struct {
 	client           *clientv3.Client
 	endpoints        []string
 	logger           *logger.Logger
+	prefix           string          // global prefix for all etcd keys
 	leaseID          clientv3.LeaseID
 	registeredNodeID string          // the node ID that was registered
 	nodes            map[string]bool // map of node addresses
@@ -32,12 +33,19 @@ type EtcdManager struct {
 }
 
 // NewEtcdManager creates a new etcd manager
-func NewEtcdManager(etcdAddress string) (*EtcdManager, error) {
+// If prefix is empty, DefaultPrefix ("/goverse") will be used
+func NewEtcdManager(etcdAddress string, prefix ...string) (*EtcdManager, error) {
 	endpoints := []string{etcdAddress}
+
+	globalPrefix := DefaultPrefix
+	if len(prefix) > 0 && prefix[0] != "" {
+		globalPrefix = prefix[0]
+	}
 
 	mgr := &EtcdManager{
 		endpoints: endpoints,
 		logger:    logger.NewLogger("EtcdManager"),
+		prefix:    globalPrefix,
 		nodes:     make(map[string]bool),
 	}
 
@@ -92,6 +100,16 @@ func (mgr *EtcdManager) Close() error {
 // GetClient returns the etcd client
 func (mgr *EtcdManager) GetClient() *clientv3.Client {
 	return mgr.client
+}
+
+// GetNodesPrefix returns the nodes prefix based on the global prefix
+func (mgr *EtcdManager) GetNodesPrefix() string {
+	return mgr.prefix + "/nodes/"
+}
+
+// GetPrefix returns the global prefix
+func (mgr *EtcdManager) GetPrefix() string {
+	return mgr.prefix
 }
 
 // Put stores a key-value pair in etcd
@@ -180,7 +198,7 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 	mgr.leaseID = lease.ID
 
 	// Register the node with the lease
-	key := NodesPrefix + nodeAddress
+	key := mgr.GetNodesPrefix() + nodeAddress
 	_, err = mgr.client.Put(ctx, key, nodeAddress, clientv3.WithLease(lease.ID))
 	if err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
@@ -236,7 +254,7 @@ func (mgr *EtcdManager) UnregisterNode(ctx context.Context, nodeAddress string) 
 	}
 
 	// Delete the node key
-	key := NodesPrefix + nodeAddress
+	key := mgr.GetNodesPrefix() + nodeAddress
 	_, err := mgr.client.Delete(ctx, key)
 	if err != nil {
 		return fmt.Errorf("failed to unregister node: %w", err)
@@ -255,7 +273,7 @@ func (mgr *EtcdManager) getAllNodes(ctx context.Context) ([]string, int64, error
 		return nil, 0, fmt.Errorf("etcd client not connected")
 	}
 
-	resp, err := mgr.client.Get(ctx, NodesPrefix, clientv3.WithPrefix())
+	resp, err := mgr.client.Get(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get nodes: %w", err)
 	}
@@ -299,10 +317,10 @@ func (mgr *EtcdManager) WatchNodes(ctx context.Context) error {
 	mgr.watchCtx, mgr.watchCancel = context.WithCancel(ctx)
 
 	// Start watching for changes
-	watchChan := mgr.client.Watch(mgr.watchCtx, NodesPrefix, clientv3.WithPrefix(), clientv3.WithRev(rev))
+	watchChan := mgr.client.Watch(mgr.watchCtx, mgr.GetNodesPrefix(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 
 	go func() {
-		mgr.logger.Infof("Started watching nodes at prefix %s", NodesPrefix)
+		mgr.logger.Infof("Started watching nodes at prefix %s", mgr.GetNodesPrefix())
 		for {
 			select {
 			case <-mgr.watchCtx.Done():
@@ -329,7 +347,7 @@ func (mgr *EtcdManager) WatchNodes(ctx context.Context) error {
 					case clientv3.EventTypeDelete:
 						// For DELETE events, extract node address from the key
 						key := string(event.Kv.Key)
-						nodeAddress := key[len(NodesPrefix):]
+						nodeAddress := key[len(mgr.GetNodesPrefix()):]
 						delete(mgr.nodes, nodeAddress)
 						mgr.lastNodeChange = time.Now()
 						mgr.logger.Infof("Node removed: %s", nodeAddress)

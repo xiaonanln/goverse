@@ -20,13 +20,13 @@ func cleanupEtcd(t *testing.T, mgr *EtcdManager) {
 
 	ctx := context.Background()
 
-	// Delete all keys under /goverse/ prefix (includes nodes and any test keys)
-	_, err := mgr.GetClient().Delete(ctx, "/goverse/", clientv3.WithPrefix())
+	// Delete all keys under the manager's prefix (includes nodes and any test keys)
+	_, err := mgr.GetClient().Delete(ctx, mgr.GetPrefix()+"/", clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd: %v", err)
 	}
 
-	// Also clean up any test keys that might not be under /goverse/
+	// Also clean up any test keys that might not be under the prefix
 	testKeyPrefixes := []string{"test-key", "test/key"}
 	for _, prefix := range testKeyPrefixes {
 		_, err := mgr.GetClient().Delete(ctx, prefix, clientv3.WithPrefix())
@@ -99,6 +99,76 @@ func TestNewEtcdManager(t *testing.T) {
 			}
 			if mgr.logger == nil {
 				t.Fatalf("EtcdManager logger is nil")
+			}
+			// Verify default prefix is set
+			if mgr.GetPrefix() != DefaultPrefix {
+				t.Fatalf("NewEtcdManager() prefix = %s, want %s", mgr.GetPrefix(), DefaultPrefix)
+			}
+		})
+	}
+}
+
+// TestNewEtcdManagerWithPrefix tests creating etcd manager with custom prefix
+func TestNewEtcdManagerWithPrefix(t *testing.T) {
+	tests := []struct {
+		name        string
+		etcdAddress string
+		prefix      string
+		wantPrefix  string
+	}{
+		{
+			name:        "custom prefix",
+			etcdAddress: "localhost:2379",
+			prefix:      "/test",
+			wantPrefix:  "/test",
+		},
+		{
+			name:        "empty prefix uses default",
+			etcdAddress: "localhost:2379",
+			prefix:      "",
+			wantPrefix:  DefaultPrefix,
+		},
+		{
+			name:        "no prefix argument uses default",
+			etcdAddress: "localhost:2379",
+			prefix:      "",
+			wantPrefix:  DefaultPrefix,
+		},
+		{
+			name:        "prefix with trailing slash",
+			etcdAddress: "localhost:2379",
+			prefix:      "/myapp/",
+			wantPrefix:  "/myapp/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mgr *EtcdManager
+			var err error
+			
+			if tt.prefix == "" && tt.name == "no prefix argument uses default" {
+				mgr, err = NewEtcdManager(tt.etcdAddress)
+			} else {
+				mgr, err = NewEtcdManager(tt.etcdAddress, tt.prefix)
+			}
+			
+			if err != nil {
+				t.Fatalf("NewEtcdManager() error = %v", err)
+			}
+			if mgr == nil {
+				t.Fatalf("NewEtcdManager() returned nil manager")
+			}
+			
+			// Verify prefix is set correctly
+			if mgr.GetPrefix() != tt.wantPrefix {
+				t.Fatalf("GetPrefix() = %s, want %s", mgr.GetPrefix(), tt.wantPrefix)
+			}
+			
+			// Verify nodes prefix is derived correctly
+			expectedNodesPrefix := tt.wantPrefix + "/nodes/"
+			if mgr.GetNodesPrefix() != expectedNodesPrefix {
+				t.Fatalf("GetNodesPrefix() = %s, want %s", mgr.GetNodesPrefix(), expectedNodesPrefix)
 			}
 		})
 	}

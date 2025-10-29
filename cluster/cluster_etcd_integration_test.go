@@ -30,8 +30,8 @@ func cleanupEtcdNodes(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Delete all keys under /goverse/nodes/ prefix
-	_, err = mgr.GetClient().Delete(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	// Delete all keys under the manager's nodes prefix
+	_, err = mgr.GetClient().Delete(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to cleanup etcd nodes: %v", err)
 	}
