@@ -9,21 +9,27 @@ Goverse is a **distributed object runtime for Go** implementing the **virtual ac
 - **Distributed Objects (Grains)**: Uniquely addressable, stateful entities with custom methods
 - **Virtual Actor Lifecycle**: Objects are activated on demand, deactivated when idle, and reactivated seamlessly
 - **Client Service**: Client connection management and method routing through server-side client objects
-- **Sharding & Rebalancing**: Fixed shard model with automatic remapping via etcd
+- **Sharding & Rebalancing**: Fixed shard model (8192 shards) with automatic mapping management via etcd
+- **Automatic Shard Management**: Leader node automatically manages shard mapping when nodes join/leave
 - **Fault-Tolerance**: Lease + epoch fencing prevent split-brain; safe recovery after node failures
+- **Concurrency Modes**: Sequential, concurrent, or read-only execution strategies
 
 ## Architecture
 
 ### Key Components
 
-- **server/** - Node server implementation
+- **server/** - Node server implementation with context-based shutdown
 - **node/** - Core node logic and object management
 - **object/** - Object base types and helpers (BaseObject)
 - **client/** - Client service implementation and protocol definitions (BaseClient)
-- **cluster/** - Cluster singleton management
+- **cluster/** - Cluster singleton management, leadership election, and automatic shard mapping
+- **cluster/sharding/** - Shard-to-node mapping with 8192 fixed shards (see cluster/sharding/README.md)
+- **cluster/etcdmanager/** - etcd connection management and node registry
 - **goverseapi/** - API wrapper functions for the framework
 - **proto/** - Core Goverse protocol definitions
-- **util/** - Logging and utility helpers
+- **util/logger/** - Logging utilities
+- **util/testutil/** - Test helpers including EtcdTestMutex for test isolation
+- **util/uniqueid/** - Unique ID generation utilities
 - **samples/chat/** - Distributed chat application example
 - **inspector/** - Web UI for cluster visualization
 - **cmd/inspector/** - Inspector web server
@@ -201,6 +207,43 @@ The project aims for high test coverage across all packages:
 - **cluster package**: Target 90%+ coverage
 - **server package**: Gradually improving coverage
 
+### etcd Integration Test Isolation
+
+**CRITICAL**: All tests using etcd must be properly isolated to prevent interference:
+
+```go
+import "github.com/xiaonanln/goverse/util/testutil"
+
+func TestWithEtcd(t *testing.T) {
+    // Serialize etcd tests to prevent interference
+    testutil.EtcdTestMutex.Lock()
+    defer testutil.EtcdTestMutex.Unlock()
+
+    // Clean up etcd before test
+    cleanupEtcd(t)
+    t.Cleanup(func() {
+        cleanupEtcd(t)
+    })
+
+    // Your test code here
+}
+```
+
+### Cluster Singleton Reset Pattern
+
+Tests that use the cluster singleton must reset it between tests:
+
+```go
+import "github.com/xiaonanln/goverse/cluster"
+
+func TestWithCluster(t *testing.T) {
+    // Reset cluster singleton for test isolation
+    cluster.Get().ResetForTesting()
+    
+    // Your test code here
+}
+```
+
 ### Writing Tests
 
 - Place tests in `*_test.go` files alongside the code
@@ -208,6 +251,7 @@ The project aims for high test coverage across all packages:
 - Test both success and error cases
 - Mock external dependencies when appropriate
 - Use `t.Run()` for subtests
+- Use `t.Cleanup()` for automatic cleanup even on test failure
 
 Example test structure:
 
@@ -268,8 +312,44 @@ server := goverseapi.NewServer(config)
 goverseapi.RegisterClientType((*MyClient)(nil))
 goverseapi.RegisterObjectType((*MyObject)(nil))
 
-// Start server
+// Start server (blocks until shutdown)
 server.Run()
+```
+
+### Cluster and Shard Mapping
+
+```go
+import "github.com/xiaonanln/goverse/cluster"
+
+c := cluster.Get()
+
+// Check if this node is the leader
+if c.IsLeader() {
+    // Initialize shard mapping (first time)
+    err := c.InitializeShardMapping(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Or update when nodes change
+    err = c.UpdateShardMapping(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+
+// Start automatic shard mapping management (leader manages, others refresh)
+err := c.StartShardMappingManagement(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+defer c.StopShardMappingManagement()
+
+// Get node for an object (any node can call this)
+node, err := c.GetNodeForObject(ctx, "object-123")
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
 ### Client Connection
