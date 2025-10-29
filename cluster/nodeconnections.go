@@ -206,6 +206,7 @@ func (nc *NodeConnections) watchNodeChanges() {
 }
 
 // handleNodeChanges processes node additions and removals
+// Updates previousNodes map in-place to reflect the current node list
 func (nc *NodeConnections) handleNodeChanges(previousNodes map[string]bool) {
 	currentNodes := nc.cluster.GetNodes()
 	currentNodesMap := make(map[string]bool)
@@ -237,10 +238,16 @@ func (nc *NodeConnections) handleNodeChanges(previousNodes map[string]bool) {
 		}
 	}
 
-	// Update previousNodes for next iteration by copying currentNodesMap
-	previousNodes = make(map[string]bool, len(currentNodesMap))
-	for addr := range currentNodesMap {
-		previousNodes[addr] = true
+	// Update previousNodes in-place for next iteration
+	// First, clear entries not in current nodes
+	for nodeAddr := range previousNodes {
+		if !currentNodesMap[nodeAddr] {
+			delete(previousNodes, nodeAddr)
+		}
+	}
+	// Then, add new entries from current nodes
+	for nodeAddr := range currentNodesMap {
+		previousNodes[nodeAddr] = true
 	}
 }
 
