@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
@@ -15,11 +16,21 @@ var (
 	thisCluster Cluster
 )
 
+const (
+	// ShardMappingCheckInterval is how often to check if shard mapping needs updating
+	ShardMappingCheckInterval = 5 * time.Second
+	// NodeStabilityDuration is how long the node list must be stable before updating shard mapping
+	NodeStabilityDuration = 10 * time.Second
+)
+
 type Cluster struct {
-	thisNode    *node.Node
-	etcdManager *etcdmanager.EtcdManager
-	shardMapper *sharding.ShardMapper
-	logger      *logger.Logger
+	thisNode              *node.Node
+	etcdManager           *etcdmanager.EtcdManager
+	shardMapper           *sharding.ShardMapper
+	logger                *logger.Logger
+	shardMappingCtx       context.Context
+	shardMappingCancel    context.CancelFunc
+	shardMappingRunning   bool
 }
 
 func init() {
@@ -232,4 +243,107 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 	}
 
 	return c.shardMapper.GetNodeForShard(ctx, shardID)
+}
+
+// StartShardMappingManagement starts a background goroutine that periodically manages shard mapping
+// If this node is the leader and the node list has been stable for NodeStabilityDuration,
+// it will update/initialize the shard mapping.
+// If this node is not the leader, it will periodically refresh the shard mapping from etcd.
+func (c *Cluster) StartShardMappingManagement(ctx context.Context) error {
+	if c.etcdManager == nil {
+		return fmt.Errorf("etcd manager not set")
+	}
+	if c.shardMapper == nil {
+		return fmt.Errorf("shard mapper not initialized")
+	}
+	if c.shardMappingRunning {
+		c.logger.Warnf("Shard mapping management already running")
+		return nil
+	}
+
+	c.shardMappingCtx, c.shardMappingCancel = context.WithCancel(ctx)
+	c.shardMappingRunning = true
+
+	go c.shardMappingManagementLoop()
+	c.logger.Infof("Started shard mapping management (check interval: %v, stability duration: %v)",
+		ShardMappingCheckInterval, NodeStabilityDuration)
+
+	return nil
+}
+
+// StopShardMappingManagement stops the shard mapping management background task
+func (c *Cluster) StopShardMappingManagement() {
+	if c.shardMappingCancel != nil {
+		c.shardMappingCancel()
+		c.shardMappingCancel = nil
+	}
+	c.shardMappingRunning = false
+	c.logger.Infof("Stopped shard mapping management")
+}
+
+// shardMappingManagementLoop is the background loop that manages shard mapping
+func (c *Cluster) shardMappingManagementLoop() {
+	ticker := time.NewTicker(ShardMappingCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.shardMappingCtx.Done():
+			c.logger.Debugf("Shard mapping management loop stopped")
+			return
+		case <-ticker.C:
+			c.handleShardMappingCheck()
+		}
+	}
+}
+
+// handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
+func (c *Cluster) handleShardMappingCheck() {
+	ctx := c.shardMappingCtx
+
+	if c.IsLeader() {
+		// Leader: manage shard mapping if nodes are stable
+		if c.etcdManager.IsNodeListStable(NodeStabilityDuration) {
+			nodes := c.GetNodes()
+			if len(nodes) == 0 {
+				c.logger.Debugf("No nodes available, skipping shard mapping update")
+				return
+			}
+
+			c.logger.Debugf("Node list stable, managing shard mapping as leader")
+			
+			// Try to get existing mapping first
+			_, err := c.shardMapper.GetShardMapping(ctx)
+			if err != nil {
+				// No existing mapping, initialize
+				c.logger.Infof("No existing shard mapping, initializing")
+				err = c.InitializeShardMapping(ctx)
+				if err != nil {
+					c.logger.Errorf("Failed to initialize shard mapping: %v", err)
+				}
+			} else {
+				// Existing mapping, update if needed
+				err = c.UpdateShardMapping(ctx)
+				if err != nil {
+					c.logger.Errorf("Failed to update shard mapping: %v", err)
+				}
+			}
+		} else {
+			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
+		}
+	} else {
+		// Not leader: just refresh shard mapping from etcd
+		c.logger.Debugf("Not leader, refreshing shard mapping from etcd")
+		
+		// Invalidate cache to force refresh from etcd
+		c.shardMapper.InvalidateCache()
+		
+		// Try to load the mapping
+		_, err := c.shardMapper.GetShardMapping(ctx)
+		if err != nil {
+			c.logger.Debugf("Could not load shard mapping: %v", err)
+		} else {
+			c.logger.Debugf("Refreshed shard mapping from etcd")
+		}
+	}
 }
