@@ -58,6 +58,8 @@ func setupEtcdTestWithPrefix(t *testing.T, prefix string) *EtcdManager {
 
 // TestNewEtcdManager tests creating a new etcd manager
 func TestNewEtcdManager(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		etcdAddress string
@@ -104,6 +106,8 @@ func TestNewEtcdManager(t *testing.T) {
 
 // TestNewEtcdManagerWithPrefix tests creating etcd manager with custom prefix
 func TestNewEtcdManagerWithPrefix(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		etcdAddress string
@@ -157,6 +161,8 @@ func TestNewEtcdManagerWithPrefix(t *testing.T) {
 
 // TestEtcdManagerConnect tests connecting to etcd
 func TestEtcdManagerConnect(t *testing.T) {
+	t.Parallel()
+
 	// Note: This test requires a running etcd instance at localhost:2379
 	// Skip if etcd is not available
 	mgr := setupEtcdTest(t)
@@ -172,6 +178,8 @@ func TestEtcdManagerConnect(t *testing.T) {
 
 // TestEtcdManagerConnectInvalidEndpoint tests connecting to invalid endpoint
 func TestEtcdManagerConnectInvalidEndpoint(t *testing.T) {
+	t.Parallel()
+
 	mgr, err := NewEtcdManager("invalid-host:9999", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -193,6 +201,8 @@ func TestEtcdManagerConnectInvalidEndpoint(t *testing.T) {
 
 // TestEtcdManagerPutGet tests put and get operations
 func TestEtcdManagerPutGet(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -250,6 +260,8 @@ func TestEtcdManagerPutGet(t *testing.T) {
 
 // TestEtcdManagerGetNonExistent tests getting non-existent key
 func TestEtcdManagerGetNonExistent(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -266,6 +278,8 @@ func TestEtcdManagerGetNonExistent(t *testing.T) {
 
 // TestEtcdManagerDelete tests delete operation
 func TestEtcdManagerDelete(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -302,6 +316,8 @@ func TestEtcdManagerDelete(t *testing.T) {
 
 // TestEtcdManagerWatch tests watch functionality
 func TestEtcdManagerWatch(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -349,6 +365,8 @@ func TestEtcdManagerWatch(t *testing.T) {
 
 // TestEtcdManagerOperationsWithoutConnect tests operations without connecting
 func TestEtcdManagerOperationsWithoutConnect(t *testing.T) {
+	t.Parallel()
+
 	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -380,6 +398,8 @@ func TestEtcdManagerOperationsWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerClose tests closing the connection
 func TestEtcdManagerClose(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -400,6 +420,8 @@ func TestEtcdManagerClose(t *testing.T) {
 
 // TestEtcdManagerGetClient tests getting the client
 func TestEtcdManagerGetClient(t *testing.T) {
+	t.Parallel()
+
 	// Test before connect
 	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
@@ -425,6 +447,8 @@ func TestEtcdManagerGetClient(t *testing.T) {
 
 // TestEtcdManagerRegisterMultipleNodes tests that registering multiple different nodes with one manager fails
 func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -492,6 +516,8 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 
 // TestEtcdManagerRegisterNode tests node registration
 func TestEtcdManagerRegisterNode(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -531,6 +557,8 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 
 // TestEtcdManagerRegisterNodeMultipleTimes tests that registering multiple different nodes fails
 func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -600,6 +628,8 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 
 // TestEtcdManagerUnregisterNode tests node unregistration
 func TestEtcdManagerUnregisterNode(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -637,6 +667,8 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 
 // TestEtcdManagerGetAllNodes tests retrieving all nodes
 func TestEtcdManagerGetAllNodes(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -675,6 +707,8 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 
 // TestEtcdManagerWatchNodes tests watching for node changes
 func TestEtcdManagerWatchNodes(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -732,6 +766,8 @@ func TestEtcdManagerWatchNodes(t *testing.T) {
 
 // TestEtcdManagerMultipleNodes tests multiple nodes scenario
 func TestEtcdManagerMultipleNodes(t *testing.T) {
+	t.Parallel()
+
 	// Create two separate managers for two nodes with same unique prefix
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
@@ -790,6 +826,8 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 
 // TestEtcdManagerRegisterNodeWithoutConnect tests registering without connection
 func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
+	t.Parallel()
+
 	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -806,6 +844,8 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerGetNodesInitiallyEmpty tests that GetNodes returns empty list initially
 func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
+	t.Parallel()
+
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
@@ -1040,6 +1080,8 @@ func executeCommand(cmd string) (string, error) {
 
 // TestEtcdManagerGetLeaderNode_EmptyNodes tests GetLeaderNode with no nodes
 func TestEtcdManagerGetLeaderNode_EmptyNodes(t *testing.T) {
+	t.Parallel()
+
 	mgr, err := NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -1053,6 +1095,8 @@ func TestEtcdManagerGetLeaderNode_EmptyNodes(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_SingleNode tests GetLeaderNode with one node
 func TestEtcdManagerGetLeaderNode_SingleNode(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return
@@ -1088,6 +1132,8 @@ func TestEtcdManagerGetLeaderNode_SingleNode(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_MultipleNodes tests GetLeaderNode with multiple nodes
 func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
+	t.Parallel()
+
 	// Create multiple managers for multiple nodes
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
@@ -1166,6 +1212,8 @@ func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_LeaderChanges tests leader changes when nodes leave
 func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
+	t.Parallel()
+
 	// Create two managers for two nodes
 	mgr1 := setupEtcdTest(t)
 	if mgr1 == nil {
@@ -1231,6 +1279,8 @@ func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
 
 // TestEtcdManagerGetLeaderNode_LexicographicOrder tests lexicographic ordering
 func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
+	t.Parallel()
+
 	mgr := setupEtcdTest(t)
 	if mgr == nil {
 		return

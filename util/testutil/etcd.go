@@ -39,6 +39,8 @@ import (
 //   - string: The unique prefix for this test (e.g., "/goverse-test/TestMyFeature")
 func PrepareEtcdPrefix(t *testing.T, etcdAddress string) string {
 	// Generate a unique prefix for this test based on the test name
+	t.Helper()
+
 	prefix := "/goverse-test/" + t.Name()
 
 	t.Logf("Initializing etcd test with prefix: %s", prefix)
