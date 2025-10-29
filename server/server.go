@@ -44,14 +44,14 @@ func NewServer(config *ServerConfig) *Server {
 		log.Fatalf("Invalid server configuration: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Create the etcdManager and set it on the cluster
 	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress)
 	if err != nil {
 		log.Fatalf("Failed to create etcd manager: %v", err)
 	}
 	cluster.Get().SetEtcdManager(etcdMgr)
-	
+
 	server := &Server{
 		config: config,
 		Node:   node.NewNode(config.AdvertiseAddress),
@@ -59,7 +59,7 @@ func NewServer(config *ServerConfig) *Server {
 		cancel: cancel,
 		logger: logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
 	}
-	
+
 	// Set this node on the cluster
 	cluster.Get().SetThisNode(server.Node)
 	return server
@@ -135,9 +135,14 @@ func (server *Server) Run() error {
 		// Continue even if watching fails - it's not critical for basic operation
 	}
 
+	// Handle both signals and context cancellation for graceful shutdown
 	go func() {
-		<-sigChan
-		server.logger.Infof("Received shutdown signal, stopping gRPC server...")
+		select {
+		case <-sigChan:
+			server.logger.Infof("Received shutdown signal, stopping gRPC server...")
+		case <-server.ctx.Done():
+			server.logger.Infof("Context cancelled, stopping gRPC server...")
+		}
 		grpcServer.GracefulStop()
 	}()
 
