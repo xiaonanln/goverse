@@ -137,11 +137,18 @@ func (server *Server) Run() error {
 		// Continue even if watching fails - it's not critical for basic operation
 	}
 
+	// Start node connections manager
+	if err := cluster.Get().StartNodeConnections(server.ctx); err != nil {
+		server.logger.Errorf("Failed to start node connections: %v", err)
+		// Continue even if node connections fail - it's not critical for basic operation
+	}
+
 	// Start shard mapping management
 	if err := cluster.Get().StartShardMappingManagement(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start shard mapping management: %v", err)
 		// Continue even if shard mapping management fails - it's not critical for basic operation
 	}
+
 
 	// Handle both signals and context cancellation for graceful shutdown
 	clientGrpcServer := grpc.NewServer()
@@ -173,6 +180,9 @@ func (server *Server) Run() error {
 
 	// Stop shard mapping management
 	cluster.Get().StopShardMappingManagement()
+
+	// Stop node connections
+	cluster.Get().StopNodeConnections()
 
 	// Unregister from etcd and close connection
 	if err := cluster.Get().UnregisterNode(server.ctx); err != nil {
