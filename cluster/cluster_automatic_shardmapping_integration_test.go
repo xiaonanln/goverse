@@ -189,7 +189,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	t.Logf("Testing periodic refresh on non-leader...")
 	
 	// Invalidate cache on non-leader
-	cluster2.shardMapper.InvalidateCache()
+	cluster2.InvalidateShardMappingCache()
 	
 	// Wait for next check interval
 	time.Sleep(ShardMappingCheckInterval + 1*time.Second)
