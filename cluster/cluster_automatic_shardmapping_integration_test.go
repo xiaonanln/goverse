@@ -13,6 +13,7 @@ import (
 // TestClusterAutomaticShardMappingManagement tests automatic shard mapping management with etcd integration
 // This test requires a running etcd instance at localhost:2379
 func TestClusterAutomaticShardMappingManagement(t *testing.T) {
+	t.Parallel()
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -203,6 +204,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 
 // TestClusterShardMappingAutoUpdate tests that shard mapping is updated when nodes change
 func TestClusterShardMappingAutoUpdate(t *testing.T) {
+	t.Parallel()
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
