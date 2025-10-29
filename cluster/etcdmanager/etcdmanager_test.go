@@ -7,37 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
-
-// cleanupEtcd removes all test data from etcd
-// This ensures tests start with a clean slate and don't interfere with each other
-func cleanupEtcd(t *testing.T, mgr *EtcdManager) {
-	if mgr == nil || mgr.GetClient() == nil {
-		return
-	}
-
-	ctx := context.Background()
-
-	// Delete all keys under the manager's unique test prefix
-	_, err := mgr.GetClient().Delete(ctx, mgr.GetPrefix()+"/", clientv3.WithPrefix())
-	if err != nil {
-		t.Logf("Warning: failed to cleanup etcd: %v", err)
-	}
-}
-
-// getTestPrefix returns a unique etcd prefix for the current test
-func getTestPrefix(t *testing.T) string {
-	// Generate a unique prefix for this test to enable parallel execution
-	// Use test name to ensure uniqueness across concurrent tests
-	return "/goverse-test/" + t.Name()
-}
 
 // setupEtcdTest creates a manager with a unique prefix, connects, and registers cleanup
 // Returns nil if etcd is not available (test should be skipped)
 func setupEtcdTest(t *testing.T) *EtcdManager {
-	uniquePrefix := getTestPrefix(t)
-	
+	// Use PrepareEtcdPrefix for test isolation
+	uniquePrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
 	mgr, err := NewEtcdManager("localhost:2379", uniquePrefix)
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -49,12 +28,8 @@ func setupEtcdTest(t *testing.T) *EtcdManager {
 		return nil
 	}
 
-	// Clean up before test
-	cleanupEtcd(t, mgr)
-
-	// Register cleanup after test (runs even if test fails)
+	// Cleanup is handled by PrepareEtcdPrefix via t.Cleanup
 	t.Cleanup(func() {
-		cleanupEtcd(t, mgr)
 		mgr.Close()
 	})
 
@@ -158,19 +133,19 @@ func TestNewEtcdManagerWithPrefix(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mgr, err := NewEtcdManager(tt.etcdAddress, tt.prefix)
-			
+
 			if err != nil {
 				t.Fatalf("NewEtcdManager() error = %v", err)
 			}
 			if mgr == nil {
 				t.Fatalf("NewEtcdManager() returned nil manager")
 			}
-			
+
 			// Verify prefix is set correctly
 			if mgr.GetPrefix() != tt.wantPrefix {
 				t.Fatalf("GetPrefix() = %s, want %s", mgr.GetPrefix(), tt.wantPrefix)
 			}
-			
+
 			// Verify nodes prefix is derived correctly
 			expectedNodesPrefix := tt.wantPrefix + "/nodes/"
 			if mgr.GetNodesPrefix() != expectedNodesPrefix {
@@ -764,7 +739,7 @@ func TestEtcdManagerMultipleNodes(t *testing.T) {
 	}
 
 	// Create second manager with same prefix to simulate multiple nodes
-	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
+	mgr2 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
 
 	ctx := context.Background()
 
@@ -831,8 +806,8 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 
 // TestEtcdManagerGetNodesInitiallyEmpty tests that GetNodes returns empty list initially
 func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
-	// Use unique prefix even for this simple test
-	testPrefix := getTestPrefix(t)
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("NewEtcdManager() failed: %v", err)
@@ -861,8 +836,8 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	} else {
 		t.Log("Running in GitHub Actions - will attempt to stop etcd service for crash simulation")
 	}
-	// Use unique prefix for this test
-	testPrefix := getTestPrefix(t)
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// First, verify etcd is running
 	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
@@ -876,12 +851,8 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 		return
 	}
 
-	// Clean up before test
-	cleanupEtcd(t, mgr)
-
-	// Register cleanup after test
+	// Cleanup handled by PrepareEtcdPrefix via t.Cleanup
 	t.Cleanup(func() {
-		cleanupEtcd(t, mgr)
 		mgr.Close()
 	})
 
@@ -999,7 +970,7 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	time.Sleep(20 * time.Second) // Wait for etcd to stabilize
 
 	// Create a new manager and connect after etcd restart with same prefix
-	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
+	mgr2 := setupEtcdTestWithPrefix(t, mgr.GetPrefix())
 
 	err = mgr2.WatchNodes(ctx)
 	if err != nil {
@@ -1123,8 +1094,8 @@ func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
 		return
 	}
 
-	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
-	mgr3 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
+	mgr2 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
+	mgr3 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
 
 	ctx := context.Background()
 
@@ -1201,7 +1172,7 @@ func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
 		return
 	}
 
-	mgr2 := setupEtcdTestWithPrefix(t, getTestPrefix(t))
+	mgr2 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
 
 	ctx := context.Background()
 
@@ -1290,7 +1261,7 @@ func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
 	}
 
 	// Create and register other nodes with same prefix
-	prefix := getTestPrefix(t)
+	prefix := mgr.GetPrefix()
 	for i := 1; i < len(nodeAddresses); i++ {
 		m := setupEtcdTestWithPrefix(t, prefix)
 		managers = append(managers, m)
