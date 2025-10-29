@@ -221,7 +221,7 @@ func TestGetNodeForShard(t *testing.T) {
 		Shards:  make(map[int]string),
 		Version: 1,
 	}
-	
+
 	// Assign all shards for testing
 	for i := 0; i < NumShards; i++ {
 		if i%3 == 0 {
@@ -377,14 +377,14 @@ func TestUpdateShardMapping(t *testing.T) {
 	sm.mapping = initialMapping
 	sm.mu.Unlock()
 
-	// Update with same nodes (should increment version but keep same assignments)
+	// Update with same nodes (should NOT increment version since no changes)
 	updatedMapping, err := sm.UpdateShardMapping(ctx, initialNodes)
 	if err != nil {
 		t.Fatalf("UpdateShardMapping() error: %v", err)
 	}
 
-	if updatedMapping.Version != initialMapping.Version+1 {
-		t.Errorf("UpdateShardMapping() version = %d, want %d", updatedMapping.Version, initialMapping.Version+1)
+	if updatedMapping.Version != initialMapping.Version {
+		t.Errorf("UpdateShardMapping() version = %d, want %d (no change expected)", updatedMapping.Version, initialMapping.Version)
 	}
 
 	// Verify shards stayed on same nodes
@@ -448,7 +448,7 @@ func TestUpdateShardMapping_NodeRemoved(t *testing.T) {
 	if stableCount < expectedStable-2 || stableCount > expectedStable+2 {
 		t.Errorf("Expected around %d stable shard assignments, got %d", expectedStable, stableCount)
 	}
-	
+
 	t.Logf("Stable assignments: %d out of %d shards", stableCount, NumShards)
 }
 
