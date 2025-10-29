@@ -28,6 +28,7 @@ type EtcdManager struct {
 	watchCancel      context.CancelFunc
 	watchCtx         context.Context
 	watchStarted     bool
+	lastNodeChange   time.Time // timestamp of last node list change
 }
 
 // NewEtcdManager creates a new etcd manager
@@ -289,6 +290,7 @@ func (mgr *EtcdManager) WatchNodes(ctx context.Context) error {
 	for _, node := range nodes {
 		mgr.nodes[node] = true
 	}
+	mgr.lastNodeChange = time.Now()
 	mgr.nodesMu.Unlock()
 
 	mgr.logger.Infof("Initialized with %d nodes", len(nodes))
@@ -322,12 +324,14 @@ func (mgr *EtcdManager) WatchNodes(ctx context.Context) error {
 					case clientv3.EventTypePut:
 						nodeAddress := string(event.Kv.Value)
 						mgr.nodes[nodeAddress] = true
+						mgr.lastNodeChange = time.Now()
 						mgr.logger.Infof("Node added: %s", nodeAddress)
 					case clientv3.EventTypeDelete:
 						// For DELETE events, extract node address from the key
 						key := string(event.Kv.Key)
 						nodeAddress := key[len(NodesPrefix):]
 						delete(mgr.nodes, nodeAddress)
+						mgr.lastNodeChange = time.Now()
 						mgr.logger.Infof("Node removed: %s", nodeAddress)
 					}
 					mgr.nodesMu.Unlock()
@@ -371,4 +375,32 @@ func (mgr *EtcdManager) GetLeaderNode() string {
 		}
 	}
 	return leader
+}
+
+// GetLastNodeChangeTime returns the timestamp of the last node list change
+func (mgr *EtcdManager) GetLastNodeChangeTime() time.Time {
+	mgr.nodesMu.RLock()
+	defer mgr.nodesMu.RUnlock()
+	return mgr.lastNodeChange
+}
+
+// IsNodeListStable returns true if the node list has not changed for the specified duration
+func (mgr *EtcdManager) IsNodeListStable(duration time.Duration) bool {
+	mgr.nodesMu.RLock()
+	defer mgr.nodesMu.RUnlock()
+	
+	// If lastNodeChange is zero, nodes have never changed (not initialized)
+	if mgr.lastNodeChange.IsZero() {
+		return false
+	}
+	
+	return time.Since(mgr.lastNodeChange) >= duration
+}
+
+// SetLastNodeChangeForTesting sets the last node change timestamp for testing purposes
+// This should only be used in tests
+func (mgr *EtcdManager) SetLastNodeChangeForTesting(t time.Time) {
+	mgr.nodesMu.Lock()
+	defer mgr.nodesMu.Unlock()
+	mgr.lastNodeChange = t
 }
