@@ -12,6 +12,14 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// resetClusterForTesting resets the cluster singleton state between tests
+// This is necessary because cluster.Get() returns a singleton and tests may interfere with each other
+func resetClusterForTesting(t *testing.T) {
+	clusterInstance := cluster.Get()
+	clusterInstance.ResetForTesting()
+	t.Logf("Cluster state reset for testing")
+}
+
 func TestValidateServerConfig_NilConfig(t *testing.T) {
 	err := validateServerConfig(nil)
 	if err == nil {
@@ -68,6 +76,9 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 }
 
 func TestNewServer_ValidConfig(t *testing.T) {
+	// Reset cluster state before this test
+	resetClusterForTesting(t)
+
 	config := &ServerConfig{
 		ListenAddress:       "localhost:9090",
 		AdvertiseAddress:    "localhost:9090",
@@ -167,6 +178,9 @@ func cleanupEtcdForServerTest(t *testing.T) {
 // 2. Register its node address to etcd
 // 3. Become the sole leader
 func TestServerStartupWithEtcd(t *testing.T) {
+	// Reset cluster state before this test
+	resetClusterForTesting(t)
+
 	// Clean up etcd before test
 	cleanupEtcdForServerTest(t)
 	t.Cleanup(func() {

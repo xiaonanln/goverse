@@ -24,13 +24,13 @@ const (
 )
 
 type Cluster struct {
-	thisNode              *node.Node
-	etcdManager           *etcdmanager.EtcdManager
-	shardMapper           *sharding.ShardMapper
-	logger                *logger.Logger
-	shardMappingCtx       context.Context
-	shardMappingCancel    context.CancelFunc
-	shardMappingRunning   bool
+	thisNode            *node.Node
+	etcdManager         *etcdmanager.EtcdManager
+	shardMapper         *sharding.ShardMapper
+	logger              *logger.Logger
+	shardMappingCtx     context.Context
+	shardMappingCancel  context.CancelFunc
+	shardMappingRunning bool
 }
 
 func init() {
@@ -54,6 +54,20 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 	}
 	c.thisNode = n
 	c.logger.Infof("This Node is %s", n)
+}
+
+// ResetForTesting resets the cluster state for testing purposes
+// WARNING: This should only be used in tests
+func (c *Cluster) ResetForTesting() {
+	c.thisNode = nil
+	c.etcdManager = nil
+	c.shardMapper = nil
+	if c.shardMappingCancel != nil {
+		c.shardMappingCancel()
+	}
+	c.shardMappingCtx = nil
+	c.shardMappingCancel = nil
+	c.shardMappingRunning = false
 }
 
 func (c *Cluster) GetThisNode() *node.Node {
@@ -319,7 +333,7 @@ func (c *Cluster) handleShardMappingCheck() {
 			}
 
 			c.logger.Debugf("Node list stable, managing shard mapping as leader")
-			
+
 			// Try to get existing mapping first
 			_, err := c.shardMapper.GetShardMapping(ctx)
 			if err != nil {
@@ -342,10 +356,10 @@ func (c *Cluster) handleShardMappingCheck() {
 	} else {
 		// Not leader: just refresh shard mapping from etcd
 		c.logger.Debugf("Not leader, refreshing shard mapping from etcd")
-		
+
 		// Invalidate cache to force refresh from etcd
 		c.shardMapper.InvalidateCache()
-		
+
 		// Try to load the mapping
 		_, err := c.shardMapper.GetShardMapping(ctx)
 		if err != nil {
