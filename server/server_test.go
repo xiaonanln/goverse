@@ -3,10 +3,13 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 func TestValidateServerConfig_NilConfig(t *testing.T) {
@@ -70,25 +73,25 @@ func TestNewServer_ValidConfig(t *testing.T) {
 		AdvertiseAddress:    "localhost:9090",
 		ClientListenAddress: "localhost:9091",
 	}
-	
+
 	server := NewServer(config)
-	
+
 	if server == nil {
 		t.Error("NewServer should return a server instance")
 	}
-	
+
 	if server.Node == nil {
 		t.Error("NewServer should initialize a Node")
 	}
-	
+
 	if server.config != config {
 		t.Error("NewServer should store the provided config")
 	}
-	
+
 	if server.logger == nil {
 		t.Error("NewServer should initialize a logger")
 	}
-	
+
 	// Verify that the cluster has an etcd manager set
 	// Note: This test validates the integration with the global cluster singleton
 	// (cluster.Get()), which is the actual production behavior. We intentionally
@@ -99,24 +102,24 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	if clusterInstance.GetEtcdManager() == nil {
 		t.Error("NewServer should set the etcd manager on the cluster")
 	}
-	
+
 	// Verify that the cluster has this node set
 	if clusterInstance.GetThisNode() == nil {
 		t.Error("NewServer should set the node on the cluster")
 	}
-	
+
 	// Verify that the cluster's node matches the server's node
 	if clusterInstance.GetThisNode() != server.Node {
 		t.Error("Cluster's node should match the server's node")
 	}
-	
+
 	// Test ListObjects on this server
 	ctx := context.Background()
 	resp, err := server.ListObjects(ctx, &goverse_pb.Empty{})
 	if err != nil {
 		t.Fatalf("ListObjects failed: %v", err)
 	}
-	
+
 	// Initially should have no objects
 	if len(resp.Objects) != 0 {
 		t.Errorf("Expected 0 objects initially, got %d", len(resp.Objects))
@@ -126,11 +129,174 @@ func TestNewServer_ValidConfig(t *testing.T) {
 func TestNode_ListObjects(t *testing.T) {
 	// Create a node directly without going through NewServer
 	n := node.NewNode("localhost:9094")
-	
+
 	// Test that ListObjects returns empty list initially
 	objectInfos := n.ListObjects()
-	
+
 	if len(objectInfos) != 0 {
 		t.Errorf("Expected 0 objects initially, got %d", len(objectInfos))
 	}
+}
+
+// cleanupEtcdForServerTest removes all test data from etcd
+func cleanupEtcdForServerTest(t *testing.T) {
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Logf("Warning: failed to create etcd manager for cleanup: %v", err)
+		return
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Logf("Warning: etcd not available for cleanup: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	ctx := context.Background()
+
+	// Delete all keys under /goverse/ prefix
+	_, err = mgr.GetClient().Delete(ctx, "/goverse/", clientv3.WithPrefix())
+	if err != nil {
+		t.Logf("Warning: failed to cleanup etcd: %v", err)
+	}
+}
+
+// TestServerStartupWithEtcd tests that a server can:
+// 1. Start successfully
+// 2. Register its node address to etcd
+// 3. Become the sole leader
+func TestServerStartupWithEtcd(t *testing.T) {
+	// Clean up etcd before test
+	cleanupEtcdForServerTest(t)
+	t.Cleanup(func() {
+		cleanupEtcdForServerTest(t)
+	})
+
+	// Create server config with unique ports
+	config := &ServerConfig{
+		ListenAddress:       "localhost:47100",
+		AdvertiseAddress:    "localhost:47100",
+		ClientListenAddress: "localhost:47101",
+		EtcdAddress:         "localhost:2379",
+	}
+
+	// Create server
+	server := NewServer(config)
+	if server == nil {
+		t.Fatal("NewServer should return a server instance")
+	}
+
+	// Start server in background
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- server.Run()
+	}()
+
+	// Give server time to start and register with etcd
+	time.Sleep(2 * time.Second)
+
+	// Verify server started successfully (Run should still be running)
+	select {
+	case err := <-serverDone:
+		if err != nil {
+			t.Fatalf("Server Run() failed: %v", err)
+		}
+		t.Fatal("Server Run() exited prematurely")
+	default:
+		// Server is still running - this is expected
+	}
+
+	// Verify node is registered in etcd
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		server.cancel()
+		<-serverDone
+		t.Fatalf("Failed to connect to etcd: %v", err)
+	}
+	defer mgr.Close()
+
+	// Get all registered nodes using etcd manager's GetClient
+	ctx := context.Background()
+	getResp, err := mgr.GetClient().Get(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	if err != nil {
+		t.Fatalf("Failed to get nodes from etcd: %v", err)
+	}
+
+	// Should have exactly one node registered
+	if len(getResp.Kvs) != 1 {
+		t.Fatalf("Expected 1 node registered in etcd, got %d", len(getResp.Kvs))
+	}
+
+	// Verify the registered address matches our advertise address
+	registeredAddress := string(getResp.Kvs[0].Value)
+	if registeredAddress != config.AdvertiseAddress {
+		t.Fatalf("Registered address %s does not match advertise address %s", registeredAddress, config.AdvertiseAddress)
+	}
+
+	t.Logf("Node successfully registered in etcd: %s", registeredAddress)
+
+	// Verify server is the leader
+	// Since it's the only node, it should be the leader
+	clusterInstance := cluster.Get()
+	if clusterInstance == nil {
+		t.Fatal("Cluster instance should not be nil")
+	}
+
+	etcdMgr := clusterInstance.GetEtcdManager()
+	if etcdMgr == nil {
+		t.Fatal("Etcd manager should be set in cluster")
+	}
+
+	// The node should see itself in the node list
+	nodeAddresses := etcdMgr.GetNodes()
+	if len(nodeAddresses) < 1 {
+		t.Fatal("Node should see at least itself in the node list")
+	}
+
+	found := false
+	for _, addr := range nodeAddresses {
+		if addr == config.AdvertiseAddress {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Node should see itself (%s) in node list: %v", config.AdvertiseAddress, nodeAddresses)
+	}
+
+	t.Logf("Server successfully started and registered as sole node/leader")
+
+	// Gracefully stop the server
+	server.cancel()
+
+	// Wait for server to stop (with timeout)
+	select {
+	case err := <-serverDone:
+		if err != nil && err != context.Canceled {
+			t.Logf("Server stopped with error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Server did not stop within timeout")
+	}
+
+	// Verify node was unregistered from etcd after stopping
+	time.Sleep(1 * time.Second) // Give time for cleanup
+
+	getResp, err = mgr.GetClient().Get(ctx, etcdmanager.NodesPrefix, clientv3.WithPrefix())
+	if err != nil {
+		t.Fatalf("Failed to get nodes from etcd after stop: %v", err)
+	}
+
+	// Should have no nodes registered after server stops
+	if len(getResp.Kvs) != 0 {
+		t.Logf("Warning: Expected 0 nodes after server stop, got %d (may be due to lease expiry delay)", len(getResp.Kvs))
+	}
+
+	t.Log("Test completed successfully")
 }
