@@ -87,7 +87,64 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 		return nil, fmt.Errorf("ThisNode is not set")
 	}
 
-	return c.thisNode.CallObject(ctx, id, method, request)
+	// Determine which node hosts this object
+	nodeAddr, err := c.GetNodeForObject(ctx, id)
+	if err != nil {
+		// If shard mapping is not available, try locally
+		c.logger.Warnf("Could not determine node for object %s: %v, calling locally", id, err)
+		return c.thisNode.CallObject(ctx, id, method, request)
+	}
+
+	// Check if the object is on this node
+	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+		// Call locally
+		return c.thisNode.CallObject(ctx, id, method, request)
+	}
+
+	// Route to the appropriate node
+	c.logger.Infof("Routing CallObject for %s.%s to node %s", id, method, nodeAddr)
+	
+	if c.nodeConnections == nil {
+		return nil, fmt.Errorf("node connections not initialized")
+	}
+
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
+
+	// Marshal request to Any
+	var requestAny *anypb.Any
+	if request != nil {
+		requestAny = &anypb.Any{}
+		if err := requestAny.MarshalFrom(request); err != nil {
+			return nil, fmt.Errorf("failed to marshal request: %w", err)
+		}
+	}
+
+	// Call CallObject on the remote node
+	req := &goverse_pb.CallObjectRequest{
+		Id:      id,
+		Method:  method,
+		Request: requestAny,
+	}
+
+	resp, err := client.CallObject(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
+	}
+
+	// Unmarshal the response
+	if resp.Response == nil {
+		return nil, nil
+	}
+
+	response, err := resp.Response.UnmarshalNew()
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return response, nil
 }
 
 // CreateObject creates a distributed object on the appropriate node based on sharding
