@@ -323,14 +323,15 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Shard mapping updated after node addition (version %d -> %d)",
 		initialMapping.Version, updatedMapping.Version)
 
-	// Verify both nodes are in the mapping
+	// Verify mapping still only contains the original node (second node should not be included)
 	nodeSet := make(map[string]bool)
 	for _, assignedNode := range updatedMapping.Shards {
 		nodeSet[assignedNode] = true
 	}
 
-	if len(nodeSet) != 2 {
-		t.Fatalf("Expected 2 unique nodes in shard mapping, got %d: %v", len(nodeSet), nodeSet)
+	expectedNode := "localhost:50021"
+	if len(nodeSet) != 1 || !nodeSet[expectedNode] {
+		t.Fatalf("Expected shard mapping to contain only %s, got %d nodes: %v", expectedNode, len(nodeSet), nodeSet)
 	}
 
 	t.Logf("Test completed - shard mapping successfully updated when nodes changed")
