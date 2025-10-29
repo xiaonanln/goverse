@@ -138,6 +138,89 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	}
 }
 
+func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
+	// Reset cluster state before this test
+	resetClusterForTesting(t)
+
+	// Use a custom etcd prefix for testing
+	customPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	config := &ServerConfig{
+		ListenAddress:       "localhost:9095",
+		AdvertiseAddress:    "localhost:9095",
+		ClientListenAddress: "localhost:9096",
+		EtcdAddress:         "localhost:2379",
+		EtcdPrefix:          customPrefix,
+	}
+
+	server := NewServer(config)
+
+	if server == nil {
+		t.Error("NewServer should return a server instance")
+	}
+
+	if server.config != config {
+		t.Error("NewServer should store the provided config")
+	}
+
+	// Verify that the cluster has an etcd manager set with the custom prefix
+	clusterInstance := cluster.Get()
+	if clusterInstance.GetEtcdManager() == nil {
+		t.Error("NewServer should set the etcd manager on the cluster")
+	}
+
+	etcdMgr := clusterInstance.GetEtcdManager()
+	if etcdMgr.GetPrefix() != customPrefix {
+		t.Errorf("EtcdManager prefix = %s, want %s", etcdMgr.GetPrefix(), customPrefix)
+	}
+
+	// Verify that the cluster's node matches the server's node
+	if clusterInstance.GetThisNode() != server.Node {
+		t.Error("Cluster's node should match the server's node")
+	}
+
+	// Verify the node is registered in the correct etcd key
+	// Connect etcd manager to verify node registration
+	err := etcdMgr.Connect()
+	if err != nil {
+		t.Skipf("Skipping etcd verification: failed to connect to etcd: %v", err)
+		return
+	}
+	defer etcdMgr.Close()
+
+	// Register the node
+	ctx := context.Background()
+	err = etcdMgr.RegisterNode(ctx, config.AdvertiseAddress)
+	if err != nil {
+		t.Fatalf("Failed to register node: %v", err)
+	}
+
+	// Verify the node is stored at the correct etcd path with custom prefix
+	expectedNodePath := customPrefix + "/nodes/" + config.AdvertiseAddress
+	getResp, err := etcdMgr.GetClient().Get(ctx, expectedNodePath)
+	if err != nil {
+		t.Fatalf("Failed to get node from etcd: %v", err)
+	}
+
+	if len(getResp.Kvs) != 1 {
+		t.Fatalf("Expected 1 key in etcd at %s, got %d", expectedNodePath, len(getResp.Kvs))
+	}
+
+	// Verify the stored value is the node address
+	storedAddress := string(getResp.Kvs[0].Value)
+	if storedAddress != config.AdvertiseAddress {
+		t.Fatalf("Stored address %s does not match advertise address %s", storedAddress, config.AdvertiseAddress)
+	}
+
+	t.Logf("Node successfully registered at custom etcd path: %s with value: %s", expectedNodePath, storedAddress)
+
+	// Cleanup: unregister the node
+	err = etcdMgr.UnregisterNode(ctx, config.AdvertiseAddress)
+	if err != nil {
+		t.Logf("Warning: failed to unregister node: %v", err)
+	}
+}
+
 func TestNode_ListObjects(t *testing.T) {
 	// Create a node directly without going through NewServer
 	n := node.NewNode("localhost:9094")
