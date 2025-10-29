@@ -1,0 +1,235 @@
+package cluster
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/node"
+)
+
+func TestStartShardMappingManagement_NoEtcdManager(t *testing.T) {
+	cluster := newClusterForTesting("TestCluster")
+	ctx := context.Background()
+
+	err := cluster.StartShardMappingManagement(ctx)
+	if err == nil {
+		t.Error("StartShardMappingManagement should return error when etcd manager is not set")
+	}
+
+	expectedErr := "etcd manager not set"
+	if err.Error() != expectedErr {
+		t.Errorf("StartShardMappingManagement error = %v; want %v", err.Error(), expectedErr)
+	}
+}
+
+func TestStartShardMappingManagement_NoShardMapper(t *testing.T) {
+	cluster := newClusterForTesting("TestCluster")
+	ctx := context.Background()
+
+	// Create and set etcd manager but don't initialize shard mapper
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	cluster.etcdManager = mgr
+
+	err = cluster.StartShardMappingManagement(ctx)
+	if err == nil {
+		t.Error("StartShardMappingManagement should return error when shard mapper is not initialized")
+	}
+
+	expectedErr := "shard mapper not initialized"
+	if err.Error() != expectedErr {
+		t.Errorf("StartShardMappingManagement error = %v; want %v", err.Error(), expectedErr)
+	}
+}
+
+func TestStartAndStopShardMappingManagement(t *testing.T) {
+	cluster := newClusterForTesting("TestCluster")
+	ctx := context.Background()
+
+	// Set up the cluster with etcd manager and shard mapper
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	cluster.SetEtcdManager(mgr)
+
+	// Set a node
+	n := node.NewNode("test-address")
+	cluster.SetThisNode(n)
+
+	// Start shard mapping management
+	err = cluster.StartShardMappingManagement(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start shard mapping management: %v", err)
+	}
+
+	if !cluster.shardMappingRunning {
+		t.Error("Shard mapping management should be running")
+	}
+
+	// Wait a moment to let the goroutine start
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop shard mapping management
+	cluster.StopShardMappingManagement()
+
+	if cluster.shardMappingRunning {
+		t.Error("Shard mapping management should be stopped")
+	}
+}
+
+func TestStartShardMappingManagement_AlreadyRunning(t *testing.T) {
+	cluster := newClusterForTesting("TestCluster")
+	ctx := context.Background()
+
+	// Set up the cluster
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	cluster.SetEtcdManager(mgr)
+
+	n := node.NewNode("test-address")
+	cluster.SetThisNode(n)
+
+	// Start shard mapping management
+	err = cluster.StartShardMappingManagement(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start shard mapping management: %v", err)
+	}
+	defer cluster.StopShardMappingManagement()
+
+	// Try to start again - should not error but log a warning
+	err = cluster.StartShardMappingManagement(ctx)
+	if err != nil {
+		t.Errorf("Starting shard mapping management twice should not error, got: %v", err)
+	}
+}
+
+func TestEtcdManager_NodeStability(t *testing.T) {
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	// Initially, nodes are not stable (lastNodeChange is zero)
+	if mgr.IsNodeListStable(1 * time.Second) {
+		t.Error("Node list should not be stable when lastNodeChange is zero")
+	}
+
+	// Simulate a node change by using the testing helper
+	mgr.SetLastNodeChangeForTesting(time.Now())
+
+	// Right after a change, should not be stable
+	if mgr.IsNodeListStable(1 * time.Second) {
+		t.Error("Node list should not be stable immediately after a change")
+	}
+
+	// Wait a bit
+	time.Sleep(1100 * time.Millisecond)
+
+	// Now it should be stable
+	if !mgr.IsNodeListStable(1 * time.Second) {
+		t.Error("Node list should be stable after waiting")
+	}
+}
+
+func TestEtcdManager_GetLastNodeChangeTime(t *testing.T) {
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+
+	// Initially, should be zero time
+	lastChange := mgr.GetLastNodeChangeTime()
+	if !lastChange.IsZero() {
+		t.Error("GetLastNodeChangeTime should return zero time initially")
+	}
+
+	// Set a time using the testing helper
+	now := time.Now()
+	mgr.SetLastNodeChangeForTesting(now)
+
+	// Should return the set time
+	lastChange = mgr.GetLastNodeChangeTime()
+	if lastChange != now {
+		t.Errorf("GetLastNodeChangeTime = %v; want %v", lastChange, now)
+	}
+}
+
+func TestHandleShardMappingCheck_NoNodes(t *testing.T) {
+	cluster := newClusterForTesting("TestCluster")
+
+	// Set up the cluster
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	cluster.SetEtcdManager(mgr)
+
+	n := node.NewNode("test-address")
+	cluster.SetThisNode(n)
+
+	// Create context for testing
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cluster.shardMappingCtx = ctx
+
+	// When there are no nodes and we're leader, should skip update
+	// This test just verifies the function doesn't panic
+	cluster.handleShardMappingCheck()
+}
+
+func TestShardMappingConstants(t *testing.T) {
+	// Verify the constants are set to expected values
+	if ShardMappingCheckInterval != 5*time.Second {
+		t.Errorf("ShardMappingCheckInterval = %v; want %v", ShardMappingCheckInterval, 5*time.Second)
+	}
+
+	if NodeStabilityDuration != 10*time.Second {
+		t.Errorf("NodeStabilityDuration = %v; want %v", NodeStabilityDuration, 10*time.Second)
+	}
+}
+
+func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
+	cluster := newClusterForTesting("TestCluster")
+
+	// Set up the cluster
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	cluster.SetEtcdManager(mgr)
+
+	// Create a test mapping and set it
+	testMapping := &sharding.ShardMapping{
+		Shards:  make(map[int]string),
+		Version: 1,
+	}
+	cluster.shardMapper.SetMappingForTesting(testMapping)
+
+	// Verify mapping is cached
+	ctx := context.Background()
+	mapping, err := cluster.shardMapper.GetShardMapping(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get shard mapping: %v", err)
+	}
+	if mapping.Version != 1 {
+		t.Errorf("Expected version 1, got %d", mapping.Version)
+	}
+
+	// Invalidate cache
+	cluster.shardMapper.InvalidateCache()
+
+	// After invalidation, GetShardMapping should try to fetch from etcd
+	// Since we don't have etcd running, this should fail
+	_, err = cluster.shardMapper.GetShardMapping(ctx)
+	if err == nil {
+		t.Error("Expected error when getting mapping from etcd (not running), got nil")
+	}
+}
