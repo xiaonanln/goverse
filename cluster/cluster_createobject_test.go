@@ -3,10 +3,9 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/xiaonanln/goverse/node"
-	"google.golang.org/protobuf/proto"
+	"github.com/xiaonanln/goverse/object"
 )
 
 // TestCreateObject_LocalNode tests CreateObject when the object should be created on the local node
@@ -70,35 +69,23 @@ func TestCreateObject_NoNode(t *testing.T) {
 	}
 }
 
+// TestCallObject_NoNode tests that CallObject fails when thisNode is not set
+func TestCallObject_NoNode(t *testing.T) {
+	c := newClusterForTesting("TestCallObject_NoNode")
+
+	ctx := context.Background()
+	_, err := c.CallObject(ctx, "test-obj", "Echo", nil)
+	if err == nil {
+		t.Error("CallObject should fail when thisNode is not set")
+	}
+}
+
 // Mock object type for testing
 type testObject struct {
-	id           string
-	creationTime time.Time
-}
-
-func (o *testObject) Id() string {
-	return o.id
-}
-
-func (o *testObject) Type() string {
-	return "testObject"
-}
-
-func (o *testObject) String() string {
-	return "testObject(" + o.Id() + ")"
-}
-
-func (o *testObject) CreationTime() time.Time {
-	return o.creationTime
-}
-
-func (o *testObject) OnInit(self node.Object, id string, data proto.Message) {
-	o.id = id
-	if o.id == "" {
-		o.id = "test-generated-id"
-	}
-	o.creationTime = time.Now()
+	object.BaseObject
 }
 
 func (o *testObject) OnCreated() {}
+
+
 
