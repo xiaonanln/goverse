@@ -46,7 +46,7 @@ func NewServer(config *ServerConfig) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create the etcdManager and set it on the cluster
-	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress)
+	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, "")
 	if err != nil {
 		log.Fatalf("Failed to create etcd manager: %v", err)
 	}

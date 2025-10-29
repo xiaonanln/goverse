@@ -535,7 +535,7 @@ func TestInvalidateCache(t *testing.T) {
 }
 
 func TestNewShardMapper(t *testing.T) {
-	etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379")
+	etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379", "")
 	if err != nil {
 		t.Fatalf("NewEtcdManager() error: %v", err)
 	}

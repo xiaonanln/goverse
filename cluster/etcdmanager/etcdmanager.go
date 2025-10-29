@@ -34,29 +34,27 @@ type EtcdManager struct {
 
 // NewEtcdManager creates a new etcd manager.
 //
-// The optional prefix parameter specifies the root path for all etcd keys.
-// If prefix is empty or not provided, DefaultPrefix ("/goverse") will be used.
+// The prefix parameter specifies the root path for all etcd keys.
+// If prefix is empty, DefaultPrefix ("/goverse") will be used.
 // The prefix is used as the root for all etcd keys (e.g., nodes will be stored under "<prefix>/nodes/").
 // This allows multiple goverse clusters or test environments to coexist in the same etcd instance.
 //
 // Examples:
 //
-//	mgr, _ := NewEtcdManager("localhost:2379")              // Uses "/goverse" prefix
+//	mgr, _ := NewEtcdManager("localhost:2379", "")          // Uses "/goverse" prefix
 //	mgr, _ := NewEtcdManager("localhost:2379", "/myapp")    // Uses "/myapp" prefix
-//	mgr, _ := NewEtcdManager("localhost:2379", "")          // Uses "/goverse" prefix (empty string treated as default)
-func NewEtcdManager(etcdAddress string, prefix ...string) (*EtcdManager, error) {
+func NewEtcdManager(etcdAddress string, prefix string) (*EtcdManager, error) {
 	endpoints := []string{etcdAddress}
 
-	// Use default prefix if none provided or if empty string is provided
-	globalPrefix := DefaultPrefix
-	if len(prefix) > 0 && prefix[0] != "" {
-		globalPrefix = prefix[0]
+	// Use default prefix if empty string is provided
+	if prefix == "" {
+		prefix = DefaultPrefix
 	}
 
 	mgr := &EtcdManager{
 		endpoints: endpoints,
 		logger:    logger.NewLogger("EtcdManager"),
-		prefix:    globalPrefix,
+		prefix:    prefix,
 		nodes:     make(map[string]bool),
 	}
 
