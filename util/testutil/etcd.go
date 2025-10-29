@@ -37,7 +37,7 @@ var EtcdTestMutex sync.Mutex
 //
 //	func TestMyEtcdFeature(t *testing.T) {
 //	    prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-//	    
+//
 //	    // Use the prefix with an etcd manager
 //	    mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 //	    if err != nil {
@@ -56,6 +56,8 @@ func PrepareEtcdPrefix(t *testing.T, etcdAddress string) string {
 	// Generate a unique prefix for this test based on the test name
 	prefix := "/goverse-test/" + t.Name()
 
+	t.Logf("Initializing etcd test with prefix: %s", prefix)
+
 	// Create a temporary etcd client for cleanup operations with a timeout
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{etcdAddress},
@@ -69,7 +71,7 @@ func PrepareEtcdPrefix(t *testing.T, etcdAddress string) string {
 	// Clean up everything under the prefix before the test starts
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	
+
 	_, err = cli.Delete(ctx, prefix+"/", clientv3.WithPrefix())
 	if err != nil {
 		t.Logf("Warning: failed to clean etcd prefix before test: %v", err)
@@ -79,7 +81,7 @@ func PrepareEtcdPrefix(t *testing.T, etcdAddress string) string {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		
+
 		_, err := cli.Delete(ctx, prefix+"/", clientv3.WithPrefix())
 		if err != nil {
 			t.Logf("Warning: failed to clean etcd prefix after test: %v", err)
