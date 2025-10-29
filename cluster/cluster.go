@@ -218,17 +218,28 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 
 	c.logger.Infof("Updating shard mapping with %d nodes", len(nodes))
 
+	// Get current mapping for version comparison
+	currentMapping, err := c.shardMapper.GetShardMapping(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current shard mapping: %w", err)
+	}
+
 	mapping, err := c.shardMapper.UpdateShardMapping(ctx, nodes)
 	if err != nil {
 		return fmt.Errorf("failed to update shard mapping: %w", err)
 	}
 
-	err = c.shardMapper.StoreShardMapping(ctx, mapping)
-	if err != nil {
-		return fmt.Errorf("failed to store shard mapping: %w", err)
+	// Only store if the mapping was actually updated (version changed)
+	if mapping.Version > currentMapping.Version {
+		err = c.shardMapper.StoreShardMapping(ctx, mapping)
+		if err != nil {
+			return fmt.Errorf("failed to store shard mapping: %w", err)
+		}
+		c.logger.Infof("Successfully updated shard mapping (version %d)", mapping.Version)
+	} else {
+		c.logger.Debugf("Shard mapping unchanged (version %d)", mapping.Version)
 	}
 
-	c.logger.Infof("Successfully updated shard mapping (version %d)", mapping.Version)
 	return nil
 }
 

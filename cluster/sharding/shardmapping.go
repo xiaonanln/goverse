@@ -162,6 +162,7 @@ func (sm *ShardMapper) GetNodeForObject(ctx context.Context, objectID string) (s
 
 // UpdateShardMapping updates the shard mapping when nodes are added or removed
 // This should only be called by the leader node
+// Returns the current mapping unchanged if no changes are needed
 func (sm *ShardMapper) UpdateShardMapping(ctx context.Context, nodes []string) (*ShardMapping, error) {
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("cannot update shard mapping with no nodes")
@@ -182,28 +183,39 @@ func (sm *ShardMapper) UpdateShardMapping(ctx context.Context, nodes []string) (
 	copy(sortedNodes, nodes)
 	sort.Strings(sortedNodes)
 
-	// Create new mapping with incremented version
-	newMapping := &ShardMapping{
-		Shards:  make(map[int]string, NumShards),
-		Version: currentMapping.Version + 1,
-	}
-
-	// Reassign shards that were on nodes that are no longer available
+	// Create node set for quick lookup
 	nodeSet := make(map[string]bool)
 	for _, node := range sortedNodes {
 		nodeSet[node] = true
 	}
 
+	// Check if any changes are needed
+	needsUpdate := false
+	newShards := make(map[int]string, NumShards)
+
 	for shardID := 0; shardID < NumShards; shardID++ {
 		currentNode, exists := currentMapping.Shards[shardID]
 		if exists && nodeSet[currentNode] {
 			// Keep the shard on the same node if it's still available
-			newMapping.Shards[shardID] = currentNode
+			newShards[shardID] = currentNode
 		} else {
 			// Assign to a new node using round-robin
 			nodeIdx := shardID % len(sortedNodes)
-			newMapping.Shards[shardID] = sortedNodes[nodeIdx]
+			newShards[shardID] = sortedNodes[nodeIdx]
+			needsUpdate = true
 		}
+	}
+
+	// If no changes needed, return the current mapping
+	if !needsUpdate {
+		sm.logger.Infof("No changes needed to shard mapping, keeping version %d", currentMapping.Version)
+		return currentMapping, nil
+	}
+
+	// Create new mapping with incremented version
+	newMapping := &ShardMapping{
+		Shards:  newShards,
+		Version: currentMapping.Version + 1,
 	}
 
 	sm.logger.Infof("Updated shard mapping to version %d", newMapping.Version)

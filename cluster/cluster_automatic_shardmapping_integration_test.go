@@ -156,7 +156,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 		t.Fatalf("Shard mapping should be available to non-leader")
 	}
 	if mapping2.Version != mapping1.Version {
-		t.Errorf("Both clusters should have same shard mapping version, got %d and %d", mapping1.Version, mapping2.Version)
+		t.Fatalf("Both clusters should have same shard mapping version, got %d and %d", mapping1.Version, mapping2.Version)
 	}
 
 	t.Logf("Non-leader successfully retrieved shard mapping (version %d)", mapping2.Version)
@@ -180,27 +180,27 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 		shardCount += count
 	}
 
-	expectedShards := 1024 // From sharding.NumShards
+	expectedShards := 8192 // From sharding.NumShards
 	if shardCount != expectedShards {
-		t.Errorf("Expected %d total shards assigned, got %d", expectedShards, shardCount)
+		t.Fatalf("Expected %d total shards assigned, got %d", expectedShards, shardCount)
 	}
 
 	// Test 4: Verify periodic refresh on non-leader
 	t.Logf("Testing periodic refresh on non-leader...")
-	
+
 	// Invalidate cache on non-leader
 	cluster2.InvalidateShardMappingCache()
-	
+
 	// Wait for next check interval
 	time.Sleep(ShardMappingCheckInterval + 1*time.Second)
-	
+
 	// Non-leader should have refreshed mapping from etcd
 	mapping2New, err := cluster2.GetShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get refreshed shard mapping from cluster2: %v", err)
 	}
 	if mapping2New.Version != mapping1.Version {
-		t.Errorf("Refreshed mapping should have same version, got %d, expected %d", mapping2New.Version, mapping1.Version)
+		t.Fatalf("Refreshed mapping should have same version, got %d, expected %d", mapping2New.Version, mapping1.Version)
 	}
 
 	t.Logf("Non-leader successfully refreshed shard mapping")
@@ -316,7 +316,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 
 	// Version should have increased
 	if updatedMapping.Version <= initialMapping.Version {
-		t.Errorf("Shard mapping version should increase after node addition, got %d (initial was %d)",
+		t.Fatalf("Shard mapping version should increase after node addition, got %d (initial was %d)",
 			updatedMapping.Version, initialMapping.Version)
 	}
 
@@ -330,7 +330,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	}
 
 	if len(nodeSet) != 2 {
-		t.Errorf("Expected 2 unique nodes in shard mapping, got %d: %v", len(nodeSet), nodeSet)
+		t.Fatalf("Expected 2 unique nodes in shard mapping, got %d: %v", len(nodeSet), nodeSet)
 	}
 
 	t.Logf("Test completed - shard mapping successfully updated when nodes changed")
