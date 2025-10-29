@@ -33,7 +33,13 @@ type EtcdManager struct {
 }
 
 // NewEtcdManager creates a new etcd manager
-// If prefix is empty, DefaultPrefix ("/goverse") will be used
+// If prefix is empty or not provided, DefaultPrefix ("/goverse") will be used.
+// The prefix is used as the root for all etcd keys (e.g., nodes will be stored under "<prefix>/nodes/").
+// This allows multiple goverse clusters or test environments to coexist in the same etcd instance.
+//
+// Example:
+//   mgr, _ := NewEtcdManager("localhost:2379")              // Uses "/goverse" prefix
+//   mgr, _ := NewEtcdManager("localhost:2379", "/myapp")    // Uses "/myapp" prefix
 func NewEtcdManager(etcdAddress string, prefix ...string) (*EtcdManager, error) {
 	endpoints := []string{etcdAddress}
 
@@ -102,12 +108,13 @@ func (mgr *EtcdManager) GetClient() *clientv3.Client {
 	return mgr.client
 }
 
-// GetNodesPrefix returns the nodes prefix based on the global prefix
+// GetNodesPrefix returns the nodes prefix based on the global prefix.
+// For example, if the global prefix is "/goverse", this returns "/goverse/nodes/".
 func (mgr *EtcdManager) GetNodesPrefix() string {
 	return mgr.prefix + "/nodes/"
 }
 
-// GetPrefix returns the global prefix
+// GetPrefix returns the global prefix used for all etcd keys.
 func (mgr *EtcdManager) GetPrefix() string {
 	return mgr.prefix
 }
