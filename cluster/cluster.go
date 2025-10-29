@@ -245,6 +245,14 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 	return c.shardMapper.GetNodeForShard(ctx, shardID)
 }
 
+// InvalidateShardMappingCache clears the local shard mapping cache
+// This forces the next GetShardMapping call to reload from etcd
+func (c *Cluster) InvalidateShardMappingCache() {
+	if c.shardMapper != nil {
+		c.shardMapper.InvalidateCache()
+	}
+}
+
 // StartShardMappingManagement starts a background goroutine that periodically manages shard mapping
 // If this node is the leader and the node list has been stable for NodeStabilityDuration,
 // it will update/initialize the shard mapping.

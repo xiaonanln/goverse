@@ -224,7 +224,7 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 	}
 
 	// Invalidate cache
-	cluster.shardMapper.InvalidateCache()
+	cluster.InvalidateShardMappingCache()
 
 	// After invalidation, GetShardMapping should try to fetch from etcd
 	// Since we don't have etcd running, this should fail
