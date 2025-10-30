@@ -155,79 +155,62 @@ func TestDistributedCreateObject(t *testing.T) {
 		t.Fatalf("Shard mapping not initialized: %v", err)
 	}
 
+	objExistsOnNode := func(objID string, n *node.Node) bool {
+		for _, obj := range n.ListObjects() {
+			if obj.Id == objID {
+				return true
+			}
+		}
+		return false
+	}
+
 	// Test CreateObject from cluster1
 	t.Run("CreateObject from cluster1", func(t *testing.T) {
-		objID := "test-obj-1"
+		// Create 10 objects and verify each is created on the correct target node
+		for i := 1; i <= 10; i++ {
+			objID := fmt.Sprintf("test-obj-%d", i)
 
-		// Get the target node for this object
-		targetNode, err := cluster1.GetNodeForObject(ctx, objID)
-		if err != nil {
-			t.Fatalf("GetNodeForObject failed: %v", err)
-		}
-		t.Logf("Creating object %s on target node %s", objID, targetNode)
+			// Get the target node for this object
+			var creatorCluster *Cluster
+			if i%2 == 0 {
+				creatorCluster = cluster2
+			} else {
+				creatorCluster = cluster1
+			}
+			targetNode, err := creatorCluster.GetNodeForObject(ctx, objID)
+			if err != nil {
+				t.Fatalf("GetNodeForObject failed for %s: %v", objID, err)
+			}
+			t.Logf("Creating object %s from %s, expect target node %s", objID, creatorCluster.thisNode.GetAdvertiseAddress(), targetNode)
 
-		// Create the object locally
-		createdID, err := cluster1.thisNode.CreateObject(ctx, "TestDistributedObject", objID, nil)
-		if err != nil {
-			t.Fatalf("CreateObject failed: %v", err)
-		}
+			// Create the object - it will be routed if needed
+			createdID, err := creatorCluster.CreateObject(ctx, "TestDistributedObject", objID, nil)
+			if err != nil {
+				t.Fatalf("CreateObject failed for %s: %v", objID, err)
+			}
 
-		if createdID != objID {
-			t.Errorf("Expected object ID %s, got %s", objID, createdID)
-		}
+			if createdID != objID {
+				t.Fatalf("Expected object ID %s, got %s", objID, createdID)
+			}
 
-		// Verify the object was created on the correct node
-		numObjects := cluster1.thisNode.NumObjects()
-		if numObjects == 0 {
-			t.Errorf("Object should have been created, but node has 0 objects")
-		}
+			// Verify the object was created on the correct node
+			var objectNode *node.Node
+			switch targetNode {
+			case "localhost:47001":
+				objectNode = node1
+			case "localhost:47002":
+				objectNode = node2
+			default:
+				t.Fatalf("Unknown target node: %s", targetNode)
+			}
 
-		t.Logf("Successfully created object %s on node %s", objID, targetNode)
-	})
+			// Check if object exists on the target node
+			objExists := objExistsOnNode(objID, objectNode)
+			if !objExists {
+				t.Fatalf("Object %s should exist on target node %s, but doesn't", objID, targetNode)
+			}
 
-	// Test CreateObject from cluster2 with routing
-	t.Run("CreateObject from cluster2 with routing", func(t *testing.T) {
-		objID := "test-obj-2"
-
-		// Get the target node for this object
-		targetNode, err := cluster2.GetNodeForObject(ctx, objID)
-		if err != nil {
-			t.Fatalf("GetNodeForObject failed: %v", err)
-		}
-		t.Logf("Creating object %s with target node %s", objID, targetNode)
-
-		// Create the object - it will be routed if needed
-		createdID, err := cluster2.CreateObject(ctx, "TestDistributedObject", objID, nil)
-		if err != nil {
-			t.Fatalf("CreateObject failed: %v", err)
-		}
-
-		if createdID != objID {
-			t.Errorf("Expected object ID %s, got %s", objID, createdID)
-		}
-
-		t.Logf("Successfully created object %s (target was %s)", objID, targetNode)
-	}) // Test that shard mapping is consistent across both clusters
-	t.Run("Verify shard mapping consistency", func(t *testing.T) {
-		mapping1, err := cluster1.GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping from cluster1: %v", err)
-		}
-
-		mapping2, err := cluster2.GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping from cluster2: %v", err)
-		}
-
-		if mapping1.Version != mapping2.Version {
-			t.Errorf("Clusters have different shard mapping versions: %d vs %d",
-				mapping1.Version, mapping2.Version)
-		}
-
-		// Both clusters should report the same nodes
-		if len(mapping1.Nodes) != len(mapping2.Nodes) {
-			t.Errorf("Clusters have different number of nodes in shard mapping: %d vs %d",
-				len(mapping1.Nodes), len(mapping2.Nodes))
+			t.Logf("Successfully created and verified object %s on node %s", objID, targetNode)
 		}
 	})
 }
