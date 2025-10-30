@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -97,12 +99,16 @@ func (tsh *TestServerHelper) IsRunning() bool {
 	return tsh.running
 }
 
+type nodeInterface interface {
+	CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error)
+}
+
 // MockGoverseServer is a minimal implementation of the Goverse gRPC service for testing
 // It delegates actual operations to a provided Node instance
 type MockGoverseServer struct {
 	goverse_pb.UnimplementedGoverseServer
 	logger *logger.Logger
-	node   interface{} // *node.Node - using interface{} to avoid circular import
+	node   nodeInterface
 	mu     sync.Mutex
 }
 
@@ -114,7 +120,7 @@ func NewMockGoverseServer() *MockGoverseServer {
 }
 
 // SetNode sets the node instance for the server to delegate to
-func (m *MockGoverseServer) SetNode(node interface{}) {
+func (m *MockGoverseServer) SetNode(node nodeInterface) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.node = node
@@ -157,10 +163,22 @@ func (m *MockGoverseServer) CreateObject(ctx context.Context, req *goverse_pb.Cr
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
-	// For testing purposes, we just return success with the object ID
-	// In a real implementation, this would create the object on the node
+	// Call CreateObject on the actual node
+	var initData proto.Message
+	var err error
+	if req.InitData != nil {
+		initData, err = anypb.UnmarshalNew(req.InitData, proto.UnmarshalOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal init data: %v", err)
+		}
+	}
+	createdID, err := node.CreateObject(ctx, req.Type, req.Id, initData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create object: %v", err)
+	}
+
 	return &goverse_pb.CreateObjectResponse{
-		Id: req.Id,
+		Id: createdID,
 	}, nil
 }
 
