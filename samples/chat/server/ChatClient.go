@@ -29,6 +29,13 @@ func (cc *ChatClient) ListChatRooms(ctx context.Context, request *chat_pb.Client
 
 func (cc *ChatClient) Join(ctx context.Context, request *chat_pb.Client_JoinChatRoomRequest) (*chat_pb.Client_JoinChatRoomResponse, error) {
 	cc.Logger.Infof("Joining chat room %s as user %s", request.RoomName, request.UserName)
+	
+	// Ensure chat rooms are created by calling ListChatRooms first
+	_, err := goverseapi.CallObject(ctx, "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
+	if err != nil {
+		cc.Logger.Warnf("Failed to list chat rooms (will try to join anyway): %v", err)
+	}
+	
 	resp, err := goverseapi.CallObject(ctx, "ChatRoom-"+request.RoomName, "Join", &chat_pb.ChatRoom_JoinRequest{
 		UserName: request.UserName,
 		ClientId: cc.Id(), // Pass client ID for push notifications
