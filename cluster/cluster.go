@@ -102,7 +102,7 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 
 	// Route to the appropriate node
 	c.logger.Infof("Routing CallObject for %s.%s to node %s", id, method, nodeAddr)
-	
+
 	if c.nodeConnections == nil {
 		return nil, fmt.Errorf("node connections not initialized")
 	}
@@ -175,7 +175,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 
 	// Route to the appropriate node
 	c.logger.Infof("Routing CreateObject for %s to node %s", objID, nodeAddr)
-	
+
 	if c.nodeConnections == nil {
 		return "", fmt.Errorf("node connections not initialized")
 	}
@@ -533,4 +533,3 @@ func (c *Cluster) StopNodeConnections() {
 func (c *Cluster) GetNodeConnections() *NodeConnections {
 	return c.nodeConnections
 }
-
