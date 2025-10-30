@@ -90,14 +90,13 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetNodeForObject(ctx, id)
 	if err != nil {
-		// If shard mapping is not available, try locally
-		c.logger.Warnf("Could not determine node for object %s: %v, calling locally", id, err)
-		return c.thisNode.CallObject(ctx, id, method, request)
+		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
 
 	// Check if the object is on this node
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Call locally
+		c.logger.Infof("Calling object %s.%s locally", id, method)
 		return c.thisNode.CallObject(ctx, id, method, request)
 	}
 
@@ -164,9 +163,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 	// Determine which node should host this object
 	nodeAddr, err := c.GetNodeForObject(ctx, objID)
 	if err != nil {
-		// If shard mapping is not available, create locally
-		c.logger.Warnf("Could not determine node for object %s: %v, creating locally", objID, err)
-		return c.thisNode.CreateObject(ctx, objType, objID, initData)
+		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
 	// Check if the object should be created on this node
