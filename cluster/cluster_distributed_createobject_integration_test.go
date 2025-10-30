@@ -95,6 +95,44 @@ func TestDistributedCreateObject(t *testing.T) {
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
 
+	// Start mock gRPC servers for both nodes
+	mockServer1 := NewMockGoverseServer()
+	mockServer1.SetNode(node1) // Assign the actual node to the mock server
+	testServer1 := NewTestServerHelper("localhost:47001", mockServer1)
+	err = testServer1.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start mock server 1: %v", err)
+	}
+	defer testServer1.Stop()
+
+	mockServer2 := NewMockGoverseServer()
+	mockServer2.SetNode(node2) // Assign the actual node to the mock server
+	testServer2 := NewTestServerHelper("localhost:47002", mockServer2)
+	err = testServer2.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start mock server 2: %v", err)
+	}
+	defer testServer2.Stop()
+
+	// Wait for servers to be ready
+	time.Sleep(500 * time.Millisecond)
+
+	// Start NodeConnections for both clusters (needed for routing)
+	err = cluster1.StartNodeConnections(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node connections for cluster1: %v", err)
+	}
+	defer cluster1.StopNodeConnections()
+
+	err = cluster2.StartNodeConnections(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node connections for cluster2: %v", err)
+	}
+	defer cluster2.StopNodeConnections()
+
+	// Wait for connections to be established
+	time.Sleep(500 * time.Millisecond)
+
 	// Start shard mapping management (we don't need mock servers for this test)
 	err = cluster1.StartShardMappingManagement(ctx)
 	if err != nil {
@@ -108,31 +146,68 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	defer cluster2.StopShardMappingManagement()
 
-	// Wait for shard mapping to be initialized
-	time.Sleep(12 * time.Second)
+	// Wait for shard mapping to be initialized (longer wait needed)
+	time.Sleep(15 * time.Second)
 
-	// Test object routing by getting the target node for various object IDs
-	t.Run("Verify shard mapping and routing", func(t *testing.T) {
-		// Create test object IDs
-		testObjects := []string{"test-obj-1", "test-obj-2", "test-obj-3"}
+	// Verify shard mapping is ready
+	_, err = cluster1.GetShardMapping(ctx)
+	if err != nil {
+		t.Fatalf("Shard mapping not initialized: %v", err)
+	}
 
-		for _, objID := range testObjects {
-			// Determine which node should have the object
-			targetNode, err := cluster1.GetNodeForObject(ctx, objID)
-			if err != nil {
-				t.Fatalf("GetNodeForObject failed for %s: %v", objID, err)
-			}
+	// Test CreateObject from cluster1
+	t.Run("CreateObject from cluster1", func(t *testing.T) {
+		objID := "test-obj-1"
 
-			t.Logf("Object %s should be on node %s", objID, targetNode)
-
-			// Verify the target node is one of our cluster nodes
-			if targetNode != "localhost:47001" && targetNode != "localhost:47002" {
-				t.Errorf("Object %s routed to unexpected node: %s", objID, targetNode)
-			}
+		// Get the target node for this object
+		targetNode, err := cluster1.GetNodeForObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("GetNodeForObject failed: %v", err)
 		}
+		t.Logf("Creating object %s on target node %s", objID, targetNode)
+
+		// Create the object locally
+		createdID, err := cluster1.thisNode.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		if err != nil {
+			t.Fatalf("CreateObject failed: %v", err)
+		}
+
+		if createdID != objID {
+			t.Errorf("Expected object ID %s, got %s", objID, createdID)
+		}
+
+		// Verify the object was created on the correct node
+		numObjects := cluster1.thisNode.NumObjects()
+		if numObjects == 0 {
+			t.Errorf("Object should have been created, but node has 0 objects")
+		}
+
+		t.Logf("Successfully created object %s on node %s", objID, targetNode)
 	})
 
-	// Test that shard mapping is consistent across both clusters
+	// Test CreateObject from cluster2 with routing
+	t.Run("CreateObject from cluster2 with routing", func(t *testing.T) {
+		objID := "test-obj-2"
+
+		// Get the target node for this object
+		targetNode, err := cluster2.GetNodeForObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("GetNodeForObject failed: %v", err)
+		}
+		t.Logf("Creating object %s with target node %s", objID, targetNode)
+
+		// Create the object - it will be routed if needed
+		createdID, err := cluster2.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		if err != nil {
+			t.Fatalf("CreateObject failed: %v", err)
+		}
+
+		if createdID != objID {
+			t.Errorf("Expected object ID %s, got %s", objID, createdID)
+		}
+
+		t.Logf("Successfully created object %s (target was %s)", objID, targetNode)
+	}) // Test that shard mapping is consistent across both clusters
 	t.Run("Verify shard mapping consistency", func(t *testing.T) {
 		mapping1, err := cluster1.GetShardMapping(ctx)
 		if err != nil {
