@@ -21,9 +21,12 @@ func main() {
 		ClientListenAddress: *clientListenAddr,
 	}
 	// Create and run the server
-	server := goverseapi.NewServer(config)
+	server, err := goverseapi.NewServer(config)
+	if err != nil {
+		panic(err)
+	}
 	initializeChatServer()
-	err := server.Run()
+	err = server.Run()
 	if err != nil {
 		panic(err)
 	}
