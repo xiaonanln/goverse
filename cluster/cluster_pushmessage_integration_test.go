@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -147,66 +148,96 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 		t.Fatalf("Client ID should start with node2 address, got: %s", clientID)
 	}
 
-	// Create test message
-	testMsg := &chat_pb.Client_NewMessageNotification{
-		Message: &chat_pb.ChatMessage{
-			UserName:  "TestUser",
-			Message:   "Cross-node message!",
-			Timestamp: 99999,
-		},
+	// Push 100 messages: 50 cross-node and 50 local
+	const numMessages = 100
+	const numCrossNode = 50
+	const numLocal = 50
+
+	// Track received messages
+	type messageStats struct {
+		total     int
+		crossNode int
+		local     int
+	}
+	stats := &messageStats{}
+
+	// Consume messages concurrently to avoid channel buffer overflow
+	done := make(chan bool)
+	go func() {
+		timeout := time.After(10 * time.Second)
+		for stats.total < numMessages {
+			select {
+			case msg := <-clientObj.MessageChan():
+				notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
+				if !ok {
+					t.Errorf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
+					continue
+				}
+				if notification.Message.UserName == "CrossNodeUser" {
+					stats.crossNode++
+				} else if notification.Message.UserName == "LocalUser" {
+					stats.local++
+				} else {
+					t.Errorf("Unexpected UserName: %s", notification.Message.UserName)
+				}
+				stats.total++
+			case <-timeout:
+				t.Errorf("Timeout waiting for messages. Received %d/%d messages (CrossNode: %d, Local: %d)",
+					stats.total, numMessages, stats.crossNode, stats.local)
+				done <- false
+				return
+			}
+		}
+		done <- true
+	}()
+
+	// Push cross-node messages from cluster1 (node1) to client on node2
+	for i := 0; i < numCrossNode; i++ {
+		testMsg := &chat_pb.Client_NewMessageNotification{
+			Message: &chat_pb.ChatMessage{
+				UserName:  "CrossNodeUser",
+				Message:   fmt.Sprintf("Cross-node message %d", i),
+				Timestamp: int64(10000 + i),
+			},
+		}
+		err = cluster1.PushMessageToClient(ctx, clientID, testMsg)
+		if err != nil {
+			t.Fatalf("Failed to push cross-node message %d from node1 to client on node2: %v", i, err)
+		}
+		// Small delay to avoid overwhelming the channel buffer
+		time.Sleep(1 * time.Millisecond)
 	}
 
-	// Push message from cluster1 (node1) to client on node2
-	err = cluster1.PushMessageToClient(ctx, clientID, testMsg)
-	if err != nil {
-		t.Fatalf("Failed to push message from node1 to client on node2: %v", err)
+	// Push local messages from cluster2 (node2) to client on node2
+	for i := 0; i < numLocal; i++ {
+		localTestMsg := &chat_pb.Client_NewMessageNotification{
+			Message: &chat_pb.ChatMessage{
+				UserName:  "LocalUser",
+				Message:   fmt.Sprintf("Local message %d", i),
+				Timestamp: int64(20000 + i),
+			},
+		}
+		err = cluster2.PushMessageToClient(ctx, clientID, localTestMsg)
+		if err != nil {
+			t.Fatalf("Failed to push local message %d on node2: %v", i, err)
+		}
+		// Small delay to avoid overwhelming the channel buffer
+		time.Sleep(1 * time.Millisecond)
 	}
 
-	// Verify message was received on node2
-	select {
-	case msg := <-clientObj.MessageChan():
-		notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
-		if !ok {
-			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
-		}
-		if notification.Message.UserName != "TestUser" {
-			t.Errorf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
-		}
-		if notification.Message.Message != "Cross-node message!" {
-			t.Errorf("Expected Message 'Cross-node message!', got '%s'", notification.Message.Message)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Timeout waiting for message on client channel")
+	// Wait for all messages to be received
+	success := <-done
+	if !success {
+		t.Fatal("Failed to receive all messages")
 	}
 
-	// Test pushing from node2 to itself (local push through cluster API)
-	localTestMsg := &chat_pb.Client_NewMessageNotification{
-		Message: &chat_pb.ChatMessage{
-			UserName:  "LocalUser",
-			Message:   "Local message!",
-			Timestamp: 88888,
-		},
+	// Verify counts
+	if stats.crossNode != numCrossNode {
+		t.Errorf("Expected %d cross-node messages, got %d", numCrossNode, stats.crossNode)
 	}
-
-	err = cluster2.PushMessageToClient(ctx, clientID, localTestMsg)
-	if err != nil {
-		t.Fatalf("Failed to push message locally on node2: %v", err)
+	if stats.local != numLocal {
+		t.Errorf("Expected %d local messages, got %d", numLocal, stats.local)
 	}
-
-	// Verify local message was received
-	select {
-	case msg := <-clientObj.MessageChan():
-		notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
-		if !ok {
-			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
-		}
-		if notification.Message.UserName != "LocalUser" {
-			t.Errorf("Expected UserName 'LocalUser', got '%s'", notification.Message.UserName)
-		}
-		if notification.Message.Message != "Local message!" {
-			t.Errorf("Expected Message 'Local message!', got '%s'", notification.Message.Message)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Timeout waiting for local message on client channel")
-	}
+	t.Logf("Successfully received all %d messages (CrossNode: %d, Local: %d)",
+		numMessages, stats.crossNode, stats.local)
 }
