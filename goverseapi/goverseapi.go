@@ -41,29 +41,30 @@ func CallObject(ctx context.Context, id string, method string, request proto.Mes
 	return cluster.Get().CallObject(ctx, id, method, request)
 }
 
-// PushMessageToClient sends a message to a client's message channel
+// PushMessageToClient sends a message to a client via their client object
 // This allows distributed objects to push notifications/messages to connected clients
 // The client ID has the format: nodeAddress/uniqueId (e.g., "localhost:7001/abc123")
 // This method automatically routes the message to the correct node in the cluster
-func PushMessageToClient(clientID string, message proto.Message) error {
-	return cluster.Get().PushMessageToClient(context.Background(), clientID, message)
+func PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
+	return cluster.Get().PushMessageToClient(ctx, clientID, message)
 }
 
 // ClusterReady returns a channel that will be closed when the cluster is ready.
 // The cluster is considered ready when:
 // - Nodes are connected
 // - Shard mapping has been successfully generated and loaded
-// 
+//
 // Usage:
-//   <-goverseapi.ClusterReady()  // blocks until cluster is ready
-//   
-//   // or with select:
-//   select {
-//   case <-goverseapi.ClusterReady():
-//       // cluster is ready
-//   case <-ctx.Done():
-//       // timeout or cancel
-//   }
+//
+//	<-goverseapi.ClusterReady()  // blocks until cluster is ready
+//
+//	// or with select:
+//	select {
+//	case <-goverseapi.ClusterReady():
+//	    // cluster is ready
+//	case <-ctx.Done():
+//	    // timeout or cancel
+//	}
 func ClusterReady() <-chan bool {
 	return cluster.Get().ClusterReady()
 }
