@@ -301,8 +301,16 @@ def main():
         # Run push messaging test
         push_ok = run_push_messaging_test(num_servers)
 
+        if not push_ok:
+            print("\n❌ Push messaging test failed!")
+            return 1
+        
         # Run chat test
         chat_ok = run_chat_test(num_servers)
+
+        if not chat_ok:
+            print("\n❌ Chat test failed!")
+            return 1
 
         # Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
@@ -321,12 +329,6 @@ def main():
         if code != 0:
             inspector_ok = False
 
-        if not push_ok:
-            print("\n❌ Push messaging test failed!")
-            return 1
-        if not chat_ok:
-            print("\n❌ Chat test failed!")
-            return 1
         if not servers_ok:
             print("\n❌ One or more chat servers exited with non-zero status")
             return 1
