@@ -36,13 +36,13 @@ type Cluster struct {
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
 	shardMappingRunning bool
-	clusterReadyMu      sync.Mutex
-	clusterReady        bool
-	clusterReadyCallbacks []func()
+	clusterReadyChan    chan bool
+	clusterReadyOnce    sync.Once
 }
 
 func init() {
 	thisCluster.logger = logger.NewLogger("Cluster")
+	thisCluster.clusterReadyChan = make(chan bool)
 }
 
 func Get() *Cluster {
@@ -52,7 +52,8 @@ func Get() *Cluster {
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
 func newClusterForTesting(name string) *Cluster {
 	return &Cluster{
-		logger: logger.NewLogger(name),
+		logger:           logger.NewLogger(name),
+		clusterReadyChan: make(chan bool),
 	}
 }
 
@@ -80,62 +81,40 @@ func (c *Cluster) ResetForTesting() {
 	c.shardMappingCtx = nil
 	c.shardMappingCancel = nil
 	c.shardMappingRunning = false
-	c.clusterReady = false
-	c.clusterReadyCallbacks = nil
+	c.clusterReadyChan = make(chan bool)
+	c.clusterReadyOnce = sync.Once{}
 }
 
 func (c *Cluster) GetThisNode() *node.Node {
 	return c.thisNode
 }
 
-// RegisterClusterReadyCallback registers a callback to be invoked when the cluster is ready.
-// If the cluster is already ready, the callback will be invoked immediately.
+// ClusterReady returns a channel that will be closed when the cluster is ready.
 // The cluster is considered ready when:
 // - Nodes are connected
 // - Shard mapping has been successfully generated and loaded
-func (c *Cluster) RegisterClusterReadyCallback(callback func()) {
-	c.clusterReadyMu.Lock()
-	defer c.clusterReadyMu.Unlock()
-	
-	if c.clusterReady {
-		// Cluster is already ready, invoke callback immediately
-		c.logger.Infof("Cluster already ready, invoking callback immediately")
-		callback()
-		return
-	}
-	
-	// Cluster not ready yet, register callback to be invoked later
-	c.clusterReadyCallbacks = append(c.clusterReadyCallbacks, callback)
-	c.logger.Infof("Registered cluster ready callback (total: %d)", len(c.clusterReadyCallbacks))
+// 
+// Usage:
+//   <-cluster.Get().ClusterReady()  // blocks until cluster is ready
+//   
+//   // or with select:
+//   select {
+//   case <-cluster.Get().ClusterReady():
+//       // cluster is ready
+//   case <-ctx.Done():
+//       // timeout or cancel
+//   }
+func (c *Cluster) ClusterReady() <-chan bool {
+	return c.clusterReadyChan
 }
 
-// IsClusterReady returns true if the cluster is ready (nodes connected and shard mapping available)
-func (c *Cluster) IsClusterReady() bool {
-	c.clusterReadyMu.Lock()
-	defer c.clusterReadyMu.Unlock()
-	return c.clusterReady
-}
-
-// markClusterReady marks the cluster as ready and invokes all registered callbacks
+// markClusterReady marks the cluster as ready by closing the clusterReadyChan
+// This is called when shard mapping is successfully loaded or created
 func (c *Cluster) markClusterReady() {
-	c.clusterReadyMu.Lock()
-	defer c.clusterReadyMu.Unlock()
-	
-	if c.clusterReady {
-		return // Already marked as ready
-	}
-	
-	c.clusterReady = true
-	c.logger.Infof("Cluster is now ready, invoking %d callbacks", len(c.clusterReadyCallbacks))
-	
-	// Invoke all registered callbacks
-	for i, callback := range c.clusterReadyCallbacks {
-		c.logger.Debugf("Invoking cluster ready callback %d/%d", i+1, len(c.clusterReadyCallbacks))
-		callback()
-	}
-	
-	// Clear callbacks after invocation
-	c.clusterReadyCallbacks = nil
+	c.clusterReadyOnce.Do(func() {
+		c.logger.Infof("Cluster is now ready")
+		close(c.clusterReadyChan)
+	})
 }
 
 func (c *Cluster) CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {

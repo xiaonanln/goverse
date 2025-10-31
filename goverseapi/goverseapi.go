@@ -47,16 +47,21 @@ func PushMessageToClient(clientID string, message proto.Message) error {
 	return cluster.Get().GetThisNode().PushMessageToClient(clientID, message)
 }
 
-// RegisterClusterReadyCallback registers a callback to be invoked when the cluster is ready.
-// If the cluster is already ready, the callback will be invoked immediately.
+// ClusterReady returns a channel that will be closed when the cluster is ready.
 // The cluster is considered ready when:
 // - Nodes are connected
 // - Shard mapping has been successfully generated and loaded
-func RegisterClusterReadyCallback(callback func()) {
-	cluster.Get().RegisterClusterReadyCallback(callback)
-}
-
-// IsClusterReady returns true if the cluster is ready (nodes connected and shard mapping available)
-func IsClusterReady() bool {
-	return cluster.Get().IsClusterReady()
+// 
+// Usage:
+//   <-goverseapi.ClusterReady()  // blocks until cluster is ready
+//   
+//   // or with select:
+//   select {
+//   case <-goverseapi.ClusterReady():
+//       // cluster is ready
+//   case <-ctx.Done():
+//       // timeout or cancel
+//   }
+func ClusterReady() <-chan bool {
+	return cluster.Get().ClusterReady()
 }
