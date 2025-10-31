@@ -257,7 +257,7 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	// Parse client ID to extract node address
 	// Client ID format: nodeAddress/uniqueId
 	parts := strings.SplitN(clientID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return fmt.Errorf("invalid client ID format: %s (expected format: nodeAddress/uniqueId)", clientID)
 	}
 

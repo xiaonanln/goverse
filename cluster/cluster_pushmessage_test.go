@@ -47,6 +47,9 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 		{"empty", ""},
 		{"only slash", "/"},
 		{"slash at end", "localhost:7001/"},
+		{"slash at start", "/uniqueid"},
+		{"empty node", "/abc123"},
+		{"empty unique id", "localhost:7001/"},
 	}
 
 	ctx := context.Background()
