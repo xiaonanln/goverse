@@ -244,6 +244,60 @@ func TestWithCluster(t *testing.T) {
 }
 ```
 
+### Mock gRPC Server for Distributed Testing
+
+When testing distributed scenarios that require inter-node gRPC communication, use the `TestServerHelper` and `MockGoverseServer` pattern:
+
+```go
+import "github.com/xiaonanln/goverse/cluster"
+
+func TestDistributedScenario(t *testing.T) {
+    t.Parallel()
+    testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+    ctx := context.Background()
+
+    // Create nodes
+    node1 := node.NewNode("localhost:47001")
+    node2 := node.NewNode("localhost:47002")
+    
+    // Start mock gRPC servers for inter-node communication
+    mockServer1 := cluster.NewMockGoverseServer()
+    mockServer1.SetNode(node1)  // Delegate to actual node
+    testServer1 := cluster.NewTestServerHelper("localhost:47001", mockServer1)
+    err := testServer1.Start(ctx)
+    if err != nil {
+        t.Fatalf("Failed to start mock server: %v", err)
+    }
+    defer testServer1.Stop()
+
+    mockServer2 := cluster.NewMockGoverseServer()
+    mockServer2.SetNode(node2)
+    testServer2 := cluster.NewTestServerHelper("localhost:47002", mockServer2)
+    err = testServer2.Start(ctx)
+    if err != nil {
+        t.Fatalf("Failed to start mock server: %v", err)
+    }
+    defer testServer2.Stop()
+
+    // Now NodeConnections can establish gRPC connections
+    err = cluster1.StartNodeConnections(ctx)
+    if err != nil {
+        t.Fatalf("Failed to start node connections: %v", err)
+    }
+    defer cluster1.StopNodeConnections()
+
+    // Test distributed operations (routing, remote CreateObject, etc.)
+}
+```
+
+**Key Points for Mock Server Testing:**
+- `TestServerHelper` creates real TCP socket-based gRPC servers for testing (lightweight, localhost only)
+- `MockGoverseServer` implements the Goverse gRPC service and delegates to actual nodes
+- Always call `SetNode()` to connect the mock server to the real node implementation
+- Mock servers enable actual gRPC calls through NodeConnections without requiring full server infrastructure
+- Use unique ports (47001, 47002, etc.) to avoid conflicts between parallel tests
+- Always defer `Stop()` to ensure cleanup even if tests fail
+
 ### Writing Tests
 
 - Place tests in `*_test.go` files alongside the code
@@ -279,6 +333,43 @@ func TestMyFunction(t *testing.T) {
             }
         })
     }
+}
+```
+
+### Verifying Distributed Object Creation
+
+When testing that objects are created on the correct nodes:
+
+```go
+// Get target node for an object based on shard mapping
+targetNode, err := cluster.GetNodeForObject(ctx, objID)
+if err != nil {
+    t.Fatalf("GetNodeForObject failed: %v", err)
+}
+
+// Create the object (will be routed to target node)
+createdID, err := cluster.CreateObject(ctx, "ObjectType", objID, nil)
+if err != nil {
+    t.Fatalf("CreateObject failed: %v", err)
+}
+
+// Verify object exists on the target node
+var objectNode *node.Node
+if targetNode == "localhost:47001" {
+    objectNode = node1
+} else if targetNode == "localhost:47002" {
+    objectNode = node2
+}
+
+objExists := false
+for _, obj := range objectNode.ListObjects() {
+    if obj.Id == objID {
+        objExists = true
+        break
+    }
+}
+if !objExists {
+    t.Errorf("Object %s should exist on target node %s", objID, targetNode)
 }
 ```
 
