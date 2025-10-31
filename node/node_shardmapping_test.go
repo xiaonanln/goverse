@@ -22,17 +22,17 @@ func TestNode_OnShardMappingChanged(t *testing.T) {
 	obj2ID := "TestObject-obj2"
 	obj3ID := "TestObject-obj3"
 
-	_, err := node.createObject("TestObject", obj1ID, nil)
+	_, err := node.CreateObject(ctx, "TestObject", obj1ID, nil)
 	if err != nil {
 		t.Fatalf("Failed to create object 1: %v", err)
 	}
 
-	_, err = node.createObject("TestObject", obj2ID, nil)
+	_, err = node.CreateObject(ctx, "TestObject", obj2ID, nil)
 	if err != nil {
 		t.Fatalf("Failed to create object 2: %v", err)
 	}
 
-	_, err = node.createObject("TestObject", obj3ID, nil)
+	_, err = node.CreateObject(ctx, "TestObject", obj3ID, nil)
 	if err != nil {
 		t.Fatalf("Failed to create object 3: %v", err)
 	}
@@ -83,12 +83,12 @@ func TestNode_OnShardMappingChanged_AllObjectsStay(t *testing.T) {
 	obj1ID := "TestObject-obj1"
 	obj2ID := "TestObject-obj2"
 
-	_, err := node.createObject("TestObject", obj1ID, nil)
+	_, err := node.CreateObject(ctx, "TestObject", obj1ID, nil)
 	if err != nil {
 		t.Fatalf("Failed to create object 1: %v", err)
 	}
 
-	_, err = node.createObject("TestObject", obj2ID, nil)
+	_, err = node.CreateObject(ctx, "TestObject", obj2ID, nil)
 	if err != nil {
 		t.Fatalf("Failed to create object 2: %v", err)
 	}
