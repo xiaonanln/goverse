@@ -101,6 +101,7 @@ func (tsh *TestServerHelper) IsRunning() bool {
 
 type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error)
+	PushMessageToClient(clientID string, message proto.Message) error
 }
 
 // MockGoverseServer is a minimal implementation of the Goverse gRPC service for testing
@@ -188,3 +189,33 @@ func (m *MockGoverseServer) ListObjects(ctx context.Context, req *goverse_pb.Emp
 		Objects: []*goverse_pb.ObjectInfo{},
 	}, nil
 }
+
+// PushMessageToClient handles remote push message by delegating to the node
+func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
+	m.mu.Lock()
+	node := m.node
+	m.mu.Unlock()
+
+	if node == nil {
+		return nil, fmt.Errorf("no node assigned to mock server")
+	}
+
+	// Unmarshal the message
+	var message proto.Message
+	var err error
+	if req.Message != nil {
+		message, err = anypb.UnmarshalNew(req.Message, proto.UnmarshalOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal message: %v", err)
+		}
+	}
+
+	// Push message to the client on this node
+	err = node.PushMessageToClient(req.ClientId, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &goverse_pb.PushMessageToClientResponse{}, nil
+}
+

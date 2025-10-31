@@ -43,8 +43,10 @@ func CallObject(ctx context.Context, id string, method string, request proto.Mes
 
 // PushMessageToClient sends a message to a client's message channel
 // This allows distributed objects to push notifications/messages to connected clients
+// The client ID has the format: nodeAddress/uniqueId (e.g., "localhost:7001/abc123")
+// This method automatically routes the message to the correct node in the cluster
 func PushMessageToClient(clientID string, message proto.Message) error {
-	return cluster.Get().GetThisNode().PushMessageToClient(clientID, message)
+	return cluster.Get().PushMessageToClient(context.Background(), clientID, message)
 }
 
 // ClusterReady returns a channel that will be closed when the cluster is ready.

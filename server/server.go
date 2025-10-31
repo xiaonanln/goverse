@@ -337,3 +337,25 @@ func (server *Server) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*
 	}
 	return response, nil
 }
+
+func (server *Server) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
+	server.logRPC("PushMessageToClient", req)
+
+	// Unmarshal the Any message to concrete proto.Message
+	var message proto.Message
+	var err error
+	if req.Message != nil {
+		message, err = req.Message.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+	}
+
+	// Push the message to the client on this node
+	err = server.Node.PushMessageToClient(req.GetClientId(), message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &goverse_pb.PushMessageToClientResponse{}, nil
+}

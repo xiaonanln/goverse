@@ -13,6 +13,7 @@ service Goverse {
   rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
   rpc ListObjects (Empty) returns (ListObjectsResponse);
+  rpc PushMessageToClient (PushMessageToClientRequest) returns (PushMessageToClientResponse);
 }
 
 message StatusResponse {
@@ -49,6 +50,15 @@ message ObjectInfo {
 
 message ListObjectsResponse {
   repeated ObjectInfo objects = 1;
+}
+
+message PushMessageToClientRequest {
+  string client_id = 1;
+  google.protobuf.Any message = 2;
+}
+
+message PushMessageToClientResponse {
+  // Empty response - success is indicated by no error
 }
 
 message Empty {}
