@@ -460,6 +460,11 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 			return fmt.Errorf("failed to store shard mapping: %w", err)
 		}
 		c.logger.Infof("Successfully updated shard mapping (version %d)", mapping.Version)
+		
+		// Notify this node about shard mapping change
+		if c.thisNode != nil {
+			c.thisNode.OnShardMappingChanged(ctx, mapping)
+		}
 	} else {
 		c.logger.Debugf("Shard mapping unchanged (version %d)", mapping.Version)
 	}
@@ -570,7 +575,7 @@ func (c *Cluster) handleShardMappingCheck() {
 			c.logger.Debugf("Node list stable, managing shard mapping as leader")
 
 			// Try to get existing mapping first
-			_, err := c.shardMapper.GetShardMapping(ctx)
+			oldMapping, err := c.shardMapper.GetShardMapping(ctx)
 			if err != nil {
 				// No existing mapping, initialize
 				c.logger.Infof("No existing shard mapping, initializing")
@@ -580,16 +585,23 @@ func (c *Cluster) handleShardMappingCheck() {
 				} else {
 					// Successfully initialized shard mapping
 					c.markClusterReady()
+					// Get the new mapping and notify node
+					if newMapping, err := c.shardMapper.GetShardMapping(ctx); err == nil && c.thisNode != nil {
+						c.thisNode.OnShardMappingChanged(ctx, newMapping)
+					}
 				}
 			} else {
 				// Existing mapping, update if needed
+				oldVersion := oldMapping.Version
 				err = c.UpdateShardMapping(ctx)
 				if err != nil {
 					c.logger.Errorf("Failed to update shard mapping: %v", err)
 				} else {
 					// Successfully loaded/updated shard mapping
 					c.markClusterReady()
+					// Note: UpdateShardMapping already calls OnShardMappingChanged if version changed
 				}
+				_ = oldVersion // oldVersion tracked for potential future use
 			}
 		} else {
 			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
@@ -598,17 +610,28 @@ func (c *Cluster) handleShardMappingCheck() {
 		// Not leader: just refresh shard mapping from etcd
 		c.logger.Debugf("Not leader, refreshing shard mapping from etcd")
 
+		// Get current version before refresh
+		var oldVersion int64 = -1
+		if oldMapping, err := c.shardMapper.GetShardMapping(ctx); err == nil {
+			oldVersion = oldMapping.Version
+		}
+
 		// Invalidate cache to force refresh from etcd
 		c.shardMapper.InvalidateCache()
 
 		// Try to load the mapping
-		_, err := c.shardMapper.GetShardMapping(ctx)
+		newMapping, err := c.shardMapper.GetShardMapping(ctx)
 		if err != nil {
 			c.logger.Debugf("Could not load shard mapping: %v", err)
 		} else {
 			c.logger.Debugf("Refreshed shard mapping from etcd")
 			// Successfully loaded shard mapping
 			c.markClusterReady()
+			
+			// If version changed, notify node
+			if newMapping.Version != oldVersion && c.thisNode != nil {
+				c.thisNode.OnShardMappingChanged(ctx, newMapping)
+			}
 		}
 	}
 }
