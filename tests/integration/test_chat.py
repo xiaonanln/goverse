@@ -233,12 +233,46 @@ def main():
                 return 1
 
         # Wait for cluster to be ready and objects to be created
-        # We expect: 1 ChatRoomMgr + 5 ChatRooms = 6 objects minimum
+        # We expect: 1 ChatRoomMgr + 5 ChatRooms = 6 objects minimum across all servers
         print("\nWaiting for chat rooms to be created (cluster ready)...")
-        for server in chat_servers:
-            if not server.wait_for_objects(min_count=6, timeout=30):
-                print(f"❌ {server.name} failed to create required objects")
-                return 1
+        
+        # In a clustered setup, objects are distributed across servers based on sharding
+        # So we need to wait for at least 6 objects total across all servers
+        start_time = time.time()
+        timeout = 30
+        expected_total_objects = 6
+        
+        while time.time() - start_time < timeout:
+            total_objects = 0
+            object_counts = []
+            
+            # Count objects on all servers
+            for server in chat_servers:
+                try:
+                    server.connect()
+                    from proto import goverse_pb2
+                    response = server.stub.ListObjects(goverse_pb2.Empty(), timeout=5)
+                    server_obj_count = len(response.objects)
+                    total_objects += server_obj_count
+                    object_counts.append(f"{server.name}: {server_obj_count}")
+                except Exception:
+                    # Ignore errors and keep retrying
+                    pass
+            
+            if total_objects >= expected_total_objects:
+                print(f"✅ Cluster has {total_objects} total objects across all servers (>= {expected_total_objects} required)")
+                for count_info in object_counts:
+                    print(f"   {count_info}")
+                break
+            
+            time.sleep(1)
+        else:
+            # Timeout - print details and fail
+            print(f"❌ Timeout waiting for {expected_total_objects} objects across all servers")
+            print(f"   Total objects found: {total_objects}")
+            for count_info in object_counts:
+                print(f"   {count_info}")
+            return 1
 
         # Call Status RPC for each chat server
         print("\n" + "=" * 60)
