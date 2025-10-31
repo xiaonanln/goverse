@@ -259,7 +259,17 @@ func (server *Server) Call(ctx context.Context, req *client_pb.CallRequest) (*cl
 func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
 	server.logRPC("CallObject", req)
 
-	resp, err := server.Node.CallObject(ctx, req.GetId(), req.GetMethod(), req.GetRequest())
+	// Unmarshal the Any request to concrete proto.Message
+	var requestMsg proto.Message
+	var err error
+	if req.Request != nil {
+		requestMsg, err = req.Request.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal request: %w", err)
+		}
+	}
+
+	resp, err := server.Node.CallObject(ctx, req.GetId(), req.GetMethod(), requestMsg)
 	if err != nil {
 		return nil, err
 	}
