@@ -12,8 +12,8 @@ import (
 type ChatRoom struct {
 	goverseapi.BaseObject
 
-	users     map[string]bool   // userName -> bool
-	clientIDs map[string]string // userName -> clientID for push notifications
+	users     map[string]bool       // userName -> bool
+	clientIDs map[string]string     // userName -> clientID for push notifications
 	messages  []*chat_pb.ChatMessage
 	mu        sync.Mutex
 }
@@ -81,8 +81,8 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 		if userName == request.GetUserName() {
 			continue
 		}
-
-		err := goverseapi.PushMessageToClient(ctx, clientID, notification)
+		
+		err := goverseapi.PushMessageToClient(clientID, notification)
 		if err != nil {
 			room.Logger.Warnf("Failed to push message to client %s: %v", clientID, err)
 			// Don't fail the send if push fails - client can still poll
