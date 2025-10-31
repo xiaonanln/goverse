@@ -65,8 +65,8 @@ class ChatServer:
         
         self.process = subprocess.Popen(
             cmd, 
-            stdout=subprocess.DEVNULL, 
-            stderr=subprocess.DEVNULL
+            stdout=None, 
+            stderr=None
         )
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     

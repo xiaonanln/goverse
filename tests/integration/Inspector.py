@@ -64,8 +64,8 @@ class Inspector:
         # Start the process (inherits GOCOVERDIR from environment if set)
         self.process = subprocess.Popen(
             [self.binary_path], 
-            stdout=subprocess.DEVNULL, 
-            stderr=subprocess.DEVNULL
+            stdout=None, 
+            stderr=None
         )
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     
