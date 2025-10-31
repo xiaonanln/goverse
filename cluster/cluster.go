@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
@@ -35,6 +36,7 @@ type Cluster struct {
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
 	shardMappingRunning bool
+	clusterReadyMu      sync.Mutex
 	clusterReady        bool
 	clusterReadyCallbacks []func()
 }
@@ -92,6 +94,9 @@ func (c *Cluster) GetThisNode() *node.Node {
 // - Nodes are connected
 // - Shard mapping has been successfully generated and loaded
 func (c *Cluster) RegisterClusterReadyCallback(callback func()) {
+	c.clusterReadyMu.Lock()
+	defer c.clusterReadyMu.Unlock()
+	
 	if c.clusterReady {
 		// Cluster is already ready, invoke callback immediately
 		c.logger.Infof("Cluster already ready, invoking callback immediately")
@@ -106,11 +111,16 @@ func (c *Cluster) RegisterClusterReadyCallback(callback func()) {
 
 // IsClusterReady returns true if the cluster is ready (nodes connected and shard mapping available)
 func (c *Cluster) IsClusterReady() bool {
+	c.clusterReadyMu.Lock()
+	defer c.clusterReadyMu.Unlock()
 	return c.clusterReady
 }
 
 // markClusterReady marks the cluster as ready and invokes all registered callbacks
 func (c *Cluster) markClusterReady() {
+	c.clusterReadyMu.Lock()
+	defer c.clusterReadyMu.Unlock()
+	
 	if c.clusterReady {
 		return // Already marked as ready
 	}
