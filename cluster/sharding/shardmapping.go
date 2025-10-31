@@ -180,7 +180,7 @@ func (sm *ShardMapper) GetNodeForObject(ctx context.Context, objectID string) (s
 			return nodeAddr, nil
 		}
 	}
-	
+
 	// Standard shard-based assignment
 	shardID := GetShardID(objectID)
 	return sm.GetNodeForShard(ctx, shardID)
