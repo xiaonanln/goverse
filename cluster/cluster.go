@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -243,6 +244,66 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 
 	c.logger.Infof("Successfully created object %s on node %s", resp.Id, nodeAddr)
 	return resp.Id, nil
+}
+
+// PushMessageToClient sends a message to a client by its ID
+// Client IDs have the format: {nodeAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
+// This method parses the client ID to determine the target node and routes the message accordingly
+func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
+	if c.thisNode == nil {
+		return fmt.Errorf("ThisNode is not set")
+	}
+
+	// Parse client ID to extract node address
+	// Client ID format: nodeAddress/uniqueId
+	parts := strings.SplitN(clientID, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid client ID format: %s (expected format: nodeAddress/uniqueId)", clientID)
+	}
+
+	nodeAddr := parts[0]
+
+	// Check if the client is on this node
+	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+		// Push locally
+		c.logger.Infof("Pushing message to client %s locally", clientID)
+		return c.thisNode.PushMessageToClient(clientID, message)
+	}
+
+	// Route to the appropriate node
+	c.logger.Infof("Routing PushMessageToClient for %s to node %s", clientID, nodeAddr)
+
+	if c.nodeConnections == nil {
+		return fmt.Errorf("node connections not initialized")
+	}
+
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
+
+	// Marshal message to Any
+	var messageAny *anypb.Any
+	if message != nil {
+		messageAny = &anypb.Any{}
+		if err := messageAny.MarshalFrom(message); err != nil {
+			return fmt.Errorf("failed to marshal message: %w", err)
+		}
+	}
+
+	// Call PushMessageToClient on the remote node
+	req := &goverse_pb.PushMessageToClientRequest{
+		ClientId: clientID,
+		Message:  messageAny,
+	}
+
+	_, err = client.PushMessageToClient(ctx, req)
+	if err != nil {
+		return fmt.Errorf("remote PushMessageToClient failed on node %s: %w", nodeAddr, err)
+	}
+
+	c.logger.Infof("Successfully pushed message to client %s on node %s", clientID, nodeAddr)
+	return nil
 }
 
 // SetEtcdManager sets the etcd manager for the cluster
