@@ -33,5 +33,9 @@ func initializeChatServer() {
 	goverseapi.RegisterClientType((*ChatClient)(nil))
 	goverseapi.RegisterObjectType((*ChatRoomMgr)(nil))
 	goverseapi.RegisterObjectType((*ChatRoom)(nil))
-	goverseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0", nil)
+	
+	// Register callback to create ChatRoomMgr0 when cluster is ready
+	goverseapi.RegisterClusterReadyCallback(func() {
+		goverseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0", nil)
+	})
 }

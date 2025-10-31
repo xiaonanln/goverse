@@ -35,6 +35,8 @@ type Cluster struct {
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
 	shardMappingRunning bool
+	clusterReady        bool
+	clusterReadyCallbacks []func()
 }
 
 func init() {
@@ -76,10 +78,54 @@ func (c *Cluster) ResetForTesting() {
 	c.shardMappingCtx = nil
 	c.shardMappingCancel = nil
 	c.shardMappingRunning = false
+	c.clusterReady = false
+	c.clusterReadyCallbacks = nil
 }
 
 func (c *Cluster) GetThisNode() *node.Node {
 	return c.thisNode
+}
+
+// RegisterClusterReadyCallback registers a callback to be invoked when the cluster is ready.
+// If the cluster is already ready, the callback will be invoked immediately.
+// The cluster is considered ready when:
+// - Nodes are connected
+// - Shard mapping has been successfully generated and loaded
+func (c *Cluster) RegisterClusterReadyCallback(callback func()) {
+	if c.clusterReady {
+		// Cluster is already ready, invoke callback immediately
+		c.logger.Infof("Cluster already ready, invoking callback immediately")
+		callback()
+		return
+	}
+	
+	// Cluster not ready yet, register callback to be invoked later
+	c.clusterReadyCallbacks = append(c.clusterReadyCallbacks, callback)
+	c.logger.Infof("Registered cluster ready callback (total: %d)", len(c.clusterReadyCallbacks))
+}
+
+// IsClusterReady returns true if the cluster is ready (nodes connected and shard mapping available)
+func (c *Cluster) IsClusterReady() bool {
+	return c.clusterReady
+}
+
+// markClusterReady marks the cluster as ready and invokes all registered callbacks
+func (c *Cluster) markClusterReady() {
+	if c.clusterReady {
+		return // Already marked as ready
+	}
+	
+	c.clusterReady = true
+	c.logger.Infof("Cluster is now ready, invoking %d callbacks", len(c.clusterReadyCallbacks))
+	
+	// Invoke all registered callbacks
+	for i, callback := range c.clusterReadyCallbacks {
+		c.logger.Debugf("Invoking cluster ready callback %d/%d", i+1, len(c.clusterReadyCallbacks))
+		callback()
+	}
+	
+	// Clear callbacks after invocation
+	c.clusterReadyCallbacks = nil
 }
 
 func (c *Cluster) CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
@@ -481,12 +527,18 @@ func (c *Cluster) handleShardMappingCheck() {
 				err = c.InitializeShardMapping(ctx)
 				if err != nil {
 					c.logger.Errorf("Failed to initialize shard mapping: %v", err)
+				} else {
+					// Successfully initialized shard mapping
+					c.markClusterReady()
 				}
 			} else {
 				// Existing mapping, update if needed
 				err = c.UpdateShardMapping(ctx)
 				if err != nil {
 					c.logger.Errorf("Failed to update shard mapping: %v", err)
+				} else {
+					// Successfully loaded/updated shard mapping
+					c.markClusterReady()
 				}
 			}
 		} else {
@@ -505,6 +557,8 @@ func (c *Cluster) handleShardMappingCheck() {
 			c.logger.Debugf("Could not load shard mapping: %v", err)
 		} else {
 			c.logger.Debugf("Refreshed shard mapping from etcd")
+			// Successfully loaded shard mapping
+			c.markClusterReady()
 		}
 	}
 }
