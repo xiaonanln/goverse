@@ -150,6 +150,38 @@ class ChatServer:
         )
         return self.stub.CallObject(call_request, timeout=timeout)
     
+    def wait_for_objects(self, min_count: int, timeout: float = 30) -> bool:
+        """Wait for at least min_count objects to be created on the server.
+        
+        This is useful for waiting for the cluster to be ready and objects to be initialized.
+        
+        Args:
+            min_count: Minimum number of objects to wait for
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if the minimum object count is reached, False if timeout
+        """
+        self.connect()
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                response: goverse_pb2.ListObjectsResponse = self.stub.ListObjects(goverse_pb2.Empty(), timeout=5)
+                object_count = len(response.objects)
+                
+                if object_count >= min_count:
+                    print(f"✅ {self.name} has {object_count} objects (>= {min_count} required)")
+                    return True
+                    
+                time.sleep(1)
+            except Exception as e:
+                # Ignore errors and keep retrying
+                time.sleep(1)
+        
+        print(f"❌ Timeout waiting for {min_count} objects on {self.name}")
+        return False
+    
     def close(self) -> int:
         self._close_channel()
         return self._stop_process()
