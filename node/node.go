@@ -443,16 +443,8 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 func (node *Node) OnShardMappingChanged(ctx context.Context, newMapping *sharding.ShardMapping) {
 	node.logger.Infof("Shard mapping changed - checking object ownership")
 	
-	node.objectsMu.RLock()
-	objects := make([]ObjectInfo, 0, len(node.objects))
-	for _, obj := range node.objects {
-		objects = append(objects, ObjectInfo{
-			Type:         obj.Type(),
-			Id:           obj.Id(),
-			CreationTime: obj.CreationTime(),
-		})
-	}
-	node.objectsMu.RUnlock()
+	// Get snapshot of all objects
+	objects := node.ListObjects()
 	
 	// Check each object to see if it still belongs to this node
 	for _, objInfo := range objects {
