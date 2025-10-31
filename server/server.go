@@ -288,6 +288,25 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateObjectRequest) (*goverse_pb.CreateObjectResponse, error) {
 	server.logRPC("CreateObject", req)
 
+	// ID must be specified in the request
+	if req.GetId() == "" {
+		return nil, fmt.Errorf("object ID must be specified in CreateObject request")
+	}
+
+	// Check with cluster that this ID is sharded to this node
+	clusterInstance := cluster.Get()
+	if clusterInstance != nil && clusterInstance.GetThisNode() != nil {
+		targetNode, err := clusterInstance.GetNodeForObject(ctx, req.GetId())
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine target node for object %s: %w", req.GetId(), err)
+		}
+		
+		thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
+		if targetNode != thisNodeAddr {
+			return nil, fmt.Errorf("object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
+		}
+	}
+
 	// Unmarshal the Any initData to concrete proto.Message
 	var initData proto.Message
 	var err error

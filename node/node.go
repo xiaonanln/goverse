@@ -282,6 +282,12 @@ func (node *Node) CallObject(ctx context.Context, id string, method string, requ
 // CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error) {
 	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
+	
+	// ID must be specified to ensure it belongs to this node according to shard mapping
+	if id == "" {
+		return "", fmt.Errorf("object ID must be specified")
+	}
+	
 	obj, err := node.createObject(typ, id, initData)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
@@ -291,6 +297,11 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, initD
 }
 
 func (node *Node) createObject(typ string, id string, initData proto.Message) (Object, error) {
+	// ID must be specified to ensure proper shard mapping
+	if id == "" {
+		return nil, fmt.Errorf("object ID must be specified")
+	}
+	
 	node.objectTypesMu.RLock()
 	objectType, ok := node.objectTypes[typ]
 	node.objectTypesMu.RUnlock()
@@ -308,7 +319,7 @@ func (node *Node) createObject(typ string, id string, initData proto.Message) (O
 	// Lock once, check if exists, create if not, unlock
 	node.objectsMu.Lock()
 
-	if id != "" && node.objects[id] != nil {
+	if node.objects[id] != nil {
 		node.objectsMu.Unlock()
 		return nil, fmt.Errorf("object with id %s already exists: %v", id, node.objects[id])
 	}
