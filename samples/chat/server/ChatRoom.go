@@ -82,7 +82,7 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 			continue
 		}
 		
-		err := goverseapi.PushMessageToClient(clientID, notification)
+		err := goverseapi.PushMessageToClient(ctx, clientID, notification)
 		if err != nil {
 			room.Logger.Warnf("Failed to push message to client %s: %v", clientID, err)
 			// Don't fail the send if push fails - client can still poll
