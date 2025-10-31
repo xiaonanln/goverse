@@ -12,8 +12,8 @@ import (
 type ChatRoom struct {
 	goverseapi.BaseObject
 
-	users     map[string]bool       // userName -> bool
-	clientIDs map[string]string     // userName -> clientID for push notifications
+	users     map[string]bool   // userName -> bool
+	clientIDs map[string]string // userName -> clientID for push notifications
 	messages  []*chat_pb.ChatMessage
 	mu        sync.Mutex
 }
@@ -76,12 +76,14 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 	notification := &chat_pb.Client_NewMessageNotification{
 		Message: chatMsg,
 	}
+	// Log clientIDs: how many and the list
+	room.Logger.Infof("Active clientIDs in room %s: count=%d ids=%v", room.Id(), len(room.clientIDs), room.clientIDs)
 	for userName, clientID := range room.clientIDs {
 		// Don't send to the sender (they already know about their own message)
 		if userName == request.GetUserName() {
 			continue
 		}
-		
+
 		err := goverseapi.PushMessageToClient(clientID, notification)
 		if err != nil {
 			room.Logger.Warnf("Failed to push message to client %s: %v", clientID, err)
