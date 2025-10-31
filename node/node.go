@@ -284,6 +284,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, initD
 	node.logger.Infof("CreateObject received: type=%s", typ)
 	obj, err := node.createObject(typ, id, initData)
 	if err != nil {
+		node.logger.Errorf("Failed to create object: %v", err)
 		return "", err
 	}
 	return obj.Id(), nil
@@ -304,11 +305,19 @@ func (node *Node) createObject(typ string, id string, initData proto.Message) (O
 		return nil, fmt.Errorf("type %s does not implement Object interface", typ)
 	}
 
+	// Lock once, check if exists, create if not, unlock
+	node.objectsMu.Lock()
+
+	if id != "" && node.objects[id] != nil {
+		node.objectsMu.Unlock()
+		return nil, fmt.Errorf("object with id %s already exists: %v", id, node.objects[id])
+	}
+
 	object.OnInit(object, id, initData)
 	id = object.Id()
-	node.objectsMu.Lock()
 	node.objects[id] = object
 	node.objectsMu.Unlock()
+
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	object.OnCreated()
 
