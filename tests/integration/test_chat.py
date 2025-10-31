@@ -232,6 +232,14 @@ def main():
             if not server.wait_for_ready(timeout=20):
                 return 1
 
+        # Wait for cluster to be ready and objects to be created
+        # We expect: 1 ChatRoomMgr + 5 ChatRooms = 6 objects minimum
+        print("\nWaiting for chat rooms to be created (cluster ready)...")
+        for server in chat_servers:
+            if not server.wait_for_objects(min_count=6, timeout=30):
+                print(f"❌ {server.name} failed to create required objects")
+                return 1
+
         # Call Status RPC for each chat server
         print("\n" + "=" * 60)
         print("Calling Status RPC for each chat server:")
