@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,6 +213,69 @@ func TestDistributedCreateObject(t *testing.T) {
 
 			t.Logf("Successfully created and verified object %s on node %s", objID, targetNode)
 		}
+	})
+
+	// Test that duplicate CreateObject with same ID returns error
+	t.Run("Duplicate CreateObject returns error", func(t *testing.T) {
+		objID := "test-duplicate-obj"
+
+		// Create the object first time
+		createdID, err := cluster1.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		if err != nil {
+			t.Fatalf("First CreateObject failed: %v", err)
+		}
+		if createdID != objID {
+			t.Fatalf("Expected object ID %s, got %s", objID, createdID)
+		}
+
+		// Get the target node to verify object count later
+		targetNode, err := cluster1.GetNodeForObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("GetNodeForObject failed: %v", err)
+		}
+
+		var objectNode *node.Node
+		switch targetNode {
+		case "localhost:47001":
+			objectNode = node1
+		case "localhost:47002":
+			objectNode = node2
+		default:
+			t.Fatalf("Unknown target node: %s", targetNode)
+		}
+
+		// Count objects on the node before duplicate attempt
+		objCountBefore := objectNode.NumObjects()
+
+		// Attempt to create the same object again - should fail
+		_, err = cluster1.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		if err == nil {
+			t.Fatalf("Expected error when creating duplicate object, but got nil")
+		}
+
+		// Verify error message mentions the duplicate
+		if !strings.Contains(err.Error(), "already exists") {
+			t.Errorf("Expected error message to mention 'already exists', got: %v", err)
+		}
+
+		// Verify object count hasn't increased
+		objCountAfter := objectNode.NumObjects()
+		if objCountAfter != objCountBefore {
+			t.Errorf("Object count changed from %d to %d after duplicate create attempt", objCountBefore, objCountAfter)
+		}
+
+		// Verify only one instance of the object exists
+		objectCount := 0
+		for _, obj := range objectNode.ListObjects() {
+			if obj.Id == objID {
+				objectCount++
+			}
+		}
+		if objectCount != 1 {
+			t.Errorf("Expected exactly 1 instance of object %s, found %d", objID, objectCount)
+		}
+
+		t.Logf("Successfully verified duplicate CreateObject returns error and doesn't create object")
 	})
 }
 
