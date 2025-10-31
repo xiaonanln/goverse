@@ -319,6 +319,7 @@ func (node *Node) createObject(typ string, id string, initData proto.Message) (O
 	// Lock once, check if exists, create if not, unlock
 	node.objectsMu.Lock()
 
+	// Check for duplicate ID (ID is guaranteed to be non-empty at this point)
 	if node.objects[id] != nil {
 		node.objectsMu.Unlock()
 		return nil, fmt.Errorf("object with id %s already exists: %v", id, node.objects[id])
