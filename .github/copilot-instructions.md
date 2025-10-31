@@ -378,7 +378,9 @@ if !objExists {
 ### Creating and Calling Objects
 
 ```go
-// Create an object
+// Create an object with a unique ID
+// Note: Creating an object with the same ID multiple times will fail
+// The second and subsequent attempts will return an error: "object with id <id> already exists"
 goverseapi.CreateObject(ctx, "ObjectType", "ObjectType-uniqueId", initRequest)
 
 // Call a method on an object
@@ -388,6 +390,8 @@ if err != nil {
 }
 result := resp.(*proto.ResponseType)
 ```
+
+**Important**: Object IDs must be unique within a node. Attempting to create multiple objects with the same ID will fail with an error. The creation operation is atomic - the system checks for existence and creates the object under a single lock to prevent race conditions.
 
 ### Server Setup
 
