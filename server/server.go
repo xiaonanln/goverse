@@ -288,7 +288,17 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateObjectRequest) (*goverse_pb.CreateObjectResponse, error) {
 	server.logRPC("CreateObject", req)
 
-	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId(), req.GetInitData())
+	// Unmarshal the Any initData to concrete proto.Message
+	var initData proto.Message
+	var err error
+	if req.InitData != nil {
+		initData, err = req.InitData.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal init data: %w", err)
+		}
+	}
+
+	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId(), initData)
 	if err != nil {
 		return nil, err
 	}
