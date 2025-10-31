@@ -10,9 +10,9 @@ package goverse;
 
 service Goverse {
   rpc Status (Empty) returns (StatusResponse);
+  rpc ListObjects (Empty) returns (ListObjectsResponse);
   rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
-  rpc ListObjects (Empty) returns (ListObjectsResponse);
   rpc PushMessageToClient (PushMessageToClientRequest) returns (PushMessageToClientResponse);
 }
 
