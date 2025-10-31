@@ -244,6 +244,10 @@ def main():
         timeout = 30
         expected_total_objects = 6
         
+        # Initialize counters
+        total_objects = 0
+        object_counts = []
+        
         while time.time() - start_time < timeout:
             # Reset counters each iteration to get fresh counts
             total_objects = 0
@@ -257,7 +261,7 @@ def main():
                     server_obj_count = len(response.objects)
                     total_objects += server_obj_count
                     object_counts.append(f"{server.name}: {server_obj_count}")
-                except (grpc.RpcError, ConnectionError) as e:
+                except (grpc.RpcError, ConnectionError):
                     # Ignore connection errors during startup and keep retrying
                     pass
             
