@@ -575,7 +575,7 @@ func (c *Cluster) handleShardMappingCheck() {
 			c.logger.Debugf("Node list stable, managing shard mapping as leader")
 
 			// Try to get existing mapping first
-			oldMapping, err := c.shardMapper.GetShardMapping(ctx)
+			_, err := c.shardMapper.GetShardMapping(ctx)
 			if err != nil {
 				// No existing mapping, initialize
 				c.logger.Infof("No existing shard mapping, initializing")
@@ -592,7 +592,6 @@ func (c *Cluster) handleShardMappingCheck() {
 				}
 			} else {
 				// Existing mapping, update if needed
-				oldVersion := oldMapping.Version
 				err = c.UpdateShardMapping(ctx)
 				if err != nil {
 					c.logger.Errorf("Failed to update shard mapping: %v", err)
@@ -601,7 +600,6 @@ func (c *Cluster) handleShardMappingCheck() {
 					c.markClusterReady()
 					// Note: UpdateShardMapping already calls OnShardMappingChanged if version changed
 				}
-				_ = oldVersion // oldVersion tracked for potential future use
 			}
 		} else {
 			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
