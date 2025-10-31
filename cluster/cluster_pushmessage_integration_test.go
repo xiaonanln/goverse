@@ -152,25 +152,28 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	const numMessages = 100
 	const numCrossNode = 50
 	const numLocal = 50
+	const messageDelay = 1 * time.Millisecond  // Small delay to avoid overwhelming channel buffer
+	const receiveTimeout = 10 * time.Second    // Timeout for receiving all messages
 
 	// Track received messages
 	type messageStats struct {
 		total     int
 		crossNode int
 		local     int
+		errors    []string
 	}
 	stats := &messageStats{}
 
 	// Consume messages concurrently to avoid channel buffer overflow
 	done := make(chan bool)
 	go func() {
-		timeout := time.After(10 * time.Second)
+		timeout := time.After(receiveTimeout)
 		for stats.total < numMessages {
 			select {
 			case msg := <-clientObj.MessageChan():
 				notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
 				if !ok {
-					t.Errorf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
+					stats.errors = append(stats.errors, fmt.Sprintf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg))
 					continue
 				}
 				if notification.Message.UserName == "CrossNodeUser" {
@@ -178,12 +181,12 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 				} else if notification.Message.UserName == "LocalUser" {
 					stats.local++
 				} else {
-					t.Errorf("Unexpected UserName: %s", notification.Message.UserName)
+					stats.errors = append(stats.errors, fmt.Sprintf("Unexpected UserName: %s", notification.Message.UserName))
 				}
 				stats.total++
 			case <-timeout:
-				t.Errorf("Timeout waiting for messages. Received %d/%d messages (CrossNode: %d, Local: %d)",
-					stats.total, numMessages, stats.crossNode, stats.local)
+				stats.errors = append(stats.errors, fmt.Sprintf("Timeout waiting for messages. Received %d/%d messages (CrossNode: %d, Local: %d)",
+					stats.total, numMessages, stats.crossNode, stats.local))
 				done <- false
 				return
 			}
@@ -204,8 +207,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to push cross-node message %d from node1 to client on node2: %v", i, err)
 		}
-		// Small delay to avoid overwhelming the channel buffer
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(messageDelay)
 	}
 
 	// Push local messages from cluster2 (node2) to client on node2
@@ -221,12 +223,17 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to push local message %d on node2: %v", i, err)
 		}
-		// Small delay to avoid overwhelming the channel buffer
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(messageDelay)
 	}
 
 	// Wait for all messages to be received
 	success := <-done
+	
+	// Report any errors collected by the goroutine
+	for _, err := range stats.errors {
+		t.Error(err)
+	}
+	
 	if !success {
 		t.Fatal("Failed to receive all messages")
 	}
