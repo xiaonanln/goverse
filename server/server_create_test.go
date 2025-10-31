@@ -35,7 +35,10 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 		EtcdPrefix:          etcdPrefix,
 	}
 
-	server := NewServer(config)
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 	if server == nil {
 		t.Fatal("NewServer should return a server instance")
 	}
@@ -52,13 +55,13 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 		InitData: nil,
 	}
 
-	_, err := server.CreateObject(ctx, req)
-	if err == nil {
+	_, err2 := server.CreateObject(ctx, req)
+	if err2 == nil {
 		t.Fatal("Expected error when creating object with empty ID, got nil")
 	}
 	expectedMsg := "object ID must be specified in CreateObject request"
-	if err.Error() != expectedMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	if err2.Error() != expectedMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err2.Error())
 	}
 
 	// Test 2: Non-empty ID
@@ -70,23 +73,23 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 
 	// The server will try to check shard mapping which requires etcd
 	// If etcd is not running, this is expected to fail with a shard-related error
-	_, err = server.CreateObject(ctx, req2)
-	if err != nil {
+	_, err3 := server.CreateObject(ctx, req2)
+	if err3 != nil {
 		// Expected errors when etcd is not available:
 		// - "shard mapper not initialized"
 		// - "failed to determine target node"
 		// - "etcd client not connected"
-		if strings.Contains(err.Error(), "shard mapper not initialized") || 
-		   strings.Contains(err.Error(), "failed to determine target node") ||
-		   strings.Contains(err.Error(), "etcd client not connected") {
-			t.Logf("Expected error due to shard mapping/etcd not being available: %v", err)
+		if strings.Contains(err3.Error(), "shard mapper not initialized") || 
+		   strings.Contains(err3.Error(), "failed to determine target node") ||
+		   strings.Contains(err3.Error(), "etcd client not connected") {
+			t.Logf("Expected error due to shard mapping/etcd not being available: %v", err3)
 		} else {
 			// If we got a different error, it might be the "object ID must be specified" check passing
 			// which is what we want to verify
-			if strings.Contains(err.Error(), "object ID must be specified") {
-				t.Fatalf("Should not get 'object ID must be specified' error for non-empty ID, got: %v", err)
+			if strings.Contains(err3.Error(), "object ID must be specified") {
+				t.Fatalf("Should not get 'object ID must be specified' error for non-empty ID, got: %v", err3)
 			}
-			t.Logf("Got error (acceptable if not about ID validation): %v", err)
+			t.Logf("Got error (acceptable if not about ID validation): %v", err3)
 		}
 	}
 }

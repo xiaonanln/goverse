@@ -21,7 +21,7 @@ type BaseObject = object.BaseObject
 type BaseClient = client.BaseClient
 type Cluster = cluster.Cluster
 
-func NewServer(config *ServerConfig) *Server {
+func NewServer(config *ServerConfig) (*Server, error) {
 	return server.NewServer(config)
 }
 

@@ -11,7 +11,10 @@ func TestNewServer(t *testing.T) {
 		ClientListenAddress: "localhost:7071",
 	}
 	
-	server := NewServer(config)
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 	
 	if server == nil {
 		t.Error("NewServer should return a server instance")
@@ -19,11 +22,45 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestNewServer_InvalidConfig(t *testing.T) {
-	// Test with nil config - should panic or exit
-	// Since the actual implementation calls log.Fatalf which exits,
-	// we can't test this in a unit test without subprocess isolation
-	// This test documents the expected behavior
-	t.Skip("Skipping test that would cause process exit via log.Fatalf")
+	// Test with nil config - should return error
+	_, err := NewServer(nil)
+	if err == nil {
+		t.Error("NewServer with nil config should return error")
+	}
+	expectedMsg := "invalid server configuration: config cannot be nil"
+	if err.Error() != expectedMsg {
+		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+	}
+	
+	// Test with empty ListenAddress - should return error
+	config := &ServerConfig{
+		ListenAddress:       "",
+		AdvertiseAddress:    "localhost:7072",
+		ClientListenAddress: "localhost:7073",
+	}
+	_, err = NewServer(config)
+	if err == nil {
+		t.Error("NewServer with empty ListenAddress should return error")
+	}
+	expectedMsg = "invalid server configuration: ListenAddress cannot be empty"
+	if err.Error() != expectedMsg {
+		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+	}
+	
+	// Test with empty AdvertiseAddress - should return error
+	config = &ServerConfig{
+		ListenAddress:       "localhost:7074",
+		AdvertiseAddress:    "",
+		ClientListenAddress: "localhost:7075",
+	}
+	_, err = NewServer(config)
+	if err == nil {
+		t.Error("NewServer with empty AdvertiseAddress should return error")
+	}
+	expectedMsg = "invalid server configuration: AdvertiseAddress cannot be empty"
+	if err.Error() != expectedMsg {
+		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+	}
 }
 
 func TestTypeAliases(t *testing.T) {

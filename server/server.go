@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -40,9 +39,9 @@ type Server struct {
 	logger *logger.Logger
 }
 
-func NewServer(config *ServerConfig) *Server {
+func NewServer(config *ServerConfig) (*Server, error) {
 	if err := validateServerConfig(config); err != nil {
-		log.Fatalf("Invalid server configuration: %v", err)
+		return nil, fmt.Errorf("invalid server configuration: %w", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -50,7 +49,7 @@ func NewServer(config *ServerConfig) *Server {
 	// Use the configured EtcdPrefix, or empty string to use the default prefix
 	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, config.EtcdPrefix)
 	if err != nil {
-		log.Fatalf("Failed to create etcd manager: %v", err)
+		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
 	}
 	cluster.Get().SetEtcdManager(etcdMgr)
 
@@ -64,7 +63,7 @@ func NewServer(config *ServerConfig) *Server {
 
 	// Set this node on the cluster
 	cluster.Get().SetThisNode(server.Node)
-	return server
+	return server, nil
 }
 
 func validateServerConfig(config *ServerConfig) error {

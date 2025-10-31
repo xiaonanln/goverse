@@ -86,7 +86,10 @@ func TestNewServer_ValidConfig(t *testing.T) {
 		ClientListenAddress: "localhost:9091",
 	}
 
-	server := NewServer(config)
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 
 	if server == nil {
 		t.Error("NewServer should return a server instance")
@@ -153,7 +156,10 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 		EtcdPrefix:          customPrefix,
 	}
 
-	server := NewServer(config)
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 
 	if server == nil {
 		t.Error("NewServer should return a server instance")
@@ -181,7 +187,7 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 
 	// Verify the node is registered in the correct etcd key
 	// Connect etcd manager to verify node registration
-	err := etcdMgr.Connect()
+	err = etcdMgr.Connect()
 	if err != nil {
 		t.Skipf("Skipping etcd verification: failed to connect to etcd: %v", err)
 		return
@@ -254,7 +260,10 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	}
 
 	// Create server
-	server := NewServer(config)
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 	if server == nil {
 		t.Fatal("NewServer should return a server instance")
 	}
