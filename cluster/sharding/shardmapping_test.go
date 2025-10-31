@@ -553,3 +553,138 @@ func TestNewShardMapper(t *testing.T) {
 		t.Errorf("NewShardMapper() logger not initialized")
 	}
 }
+
+func TestGetNodeForObject_FixedNodeAddress(t *testing.T) {
+	sm := NewShardMapper(nil)
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		objectID     string
+		wantNode     string
+		wantErr      bool
+		setupMapping bool
+	}{
+		{
+			name:     "fixed node address format",
+			objectID: "localhost:7001/object-123",
+			wantNode: "localhost:7001",
+			wantErr:  false,
+		},
+		{
+			name:     "different fixed node",
+			objectID: "localhost:7002/user-456",
+			wantNode: "localhost:7002",
+			wantErr:  false,
+		},
+		{
+			name:     "complex object ID with fixed node",
+			objectID: "192.168.1.100:8080/session-abc-def-123",
+			wantNode: "192.168.1.100:8080",
+			wantErr:  false,
+		},
+		{
+			name:         "regular object ID without fixed node",
+			objectID:     "object-without-slash",
+			wantNode:     "", // Will be determined by shard mapping
+			wantErr:      false,
+			setupMapping: true,
+		},
+		{
+			name:     "invalid format - empty node",
+			objectID: "/object-123",
+			wantNode: "", // Falls back to shard-based mapping
+			wantErr:  false,
+			setupMapping: true,
+		},
+		{
+			name:     "invalid format - empty object part",
+			objectID: "localhost:7001/",
+			wantNode: "", // Falls back to shard-based mapping
+			wantErr:  false,
+			setupMapping: true,
+		},
+		{
+			name:     "slash in middle of regular object ID",
+			objectID: "type/subtype-123",
+			wantNode: "type",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMapping {
+				// Create a test mapping for cases that need it
+				nodes := []string{"node1", "node2", "node3"}
+				mapping, err := sm.CreateShardMapping(ctx, nodes)
+				if err != nil {
+					t.Fatalf("CreateShardMapping() error: %v", err)
+				}
+				sm.mu.Lock()
+				sm.mapping = mapping
+				sm.mu.Unlock()
+			}
+
+			node, err := sm.GetNodeForObject(ctx, tt.objectID)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("GetNodeForObject() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("GetNodeForObject() unexpected error: %v", err)
+				return
+			}
+
+			if tt.wantNode != "" && node != tt.wantNode {
+				t.Errorf("GetNodeForObject(%s) = %s, want %s", tt.objectID, node, tt.wantNode)
+			}
+
+			// For cases where we expect a valid node from mapping
+			if tt.setupMapping && tt.wantNode == "" {
+				// Just verify we got a valid node from the mapping
+				validNodes := []string{"node1", "node2", "node3"}
+				found := false
+				for _, validNode := range validNodes {
+					if node == validNode {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("GetNodeForObject(%s) returned invalid node: %s", tt.objectID, node)
+				}
+			}
+		})
+	}
+}
+
+func TestGetNodeForObject_ConsistencyWithFixedNode(t *testing.T) {
+	sm := NewShardMapper(nil)
+	ctx := context.Background()
+
+	// Test that the same fixed node address always returns the same result
+	objectID := "localhost:7001/my-object"
+
+	node1, err1 := sm.GetNodeForObject(ctx, objectID)
+	if err1 != nil {
+		t.Fatalf("GetNodeForObject() first call error: %v", err1)
+	}
+
+	node2, err2 := sm.GetNodeForObject(ctx, objectID)
+	if err2 != nil {
+		t.Fatalf("GetNodeForObject() second call error: %v", err2)
+	}
+
+	if node1 != node2 {
+		t.Errorf("GetNodeForObject() not consistent: %s vs %s", node1, node2)
+	}
+
+	if node1 != "localhost:7001" {
+		t.Errorf("GetNodeForObject() = %s, want localhost:7001", node1)
+	}
+}
