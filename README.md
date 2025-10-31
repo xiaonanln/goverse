@@ -184,7 +184,10 @@ func main() {
         AdvertiseAddress:    "localhost:47000",
         ClientListenAddress: "localhost:48000",
     }
-    server := goverseapi.NewServer(config)
+    server, err := goverseapi.NewServer(config)
+    if err != nil {
+        panic(err)
+    }
     
     // Register types and create initial objects
     goverseapi.RegisterClientType((*ChatClient)(nil))

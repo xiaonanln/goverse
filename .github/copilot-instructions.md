@@ -401,7 +401,10 @@ config := &goverseapi.ServerConfig{
     AdvertiseAddress:    "localhost:47000",
     ClientListenAddress: "localhost:48000",
 }
-server := goverseapi.NewServer(config)
+server, err := goverseapi.NewServer(config)
+if err != nil {
+    log.Fatal(err)
+}
 
 // Register types
 goverseapi.RegisterClientType((*MyClient)(nil))
