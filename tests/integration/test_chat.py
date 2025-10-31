@@ -35,6 +35,8 @@ sys.path.insert(0, str(INTEGRATION_DIR))
 from ChatServer import ChatServer
 from Inspector import Inspector
 from ChatClient import ChatClient
+from proto import goverse_pb2
+import grpc
 
 def run_push_messaging_test(num_servers=1):
     """Test push-based messaging between two chat clients."""
@@ -243,6 +245,7 @@ def main():
         expected_total_objects = 6
         
         while time.time() - start_time < timeout:
+            # Reset counters each iteration to get fresh counts
             total_objects = 0
             object_counts = []
             
@@ -250,13 +253,12 @@ def main():
             for server in chat_servers:
                 try:
                     server.connect()
-                    from proto import goverse_pb2
                     response = server.stub.ListObjects(goverse_pb2.Empty(), timeout=5)
                     server_obj_count = len(response.objects)
                     total_objects += server_obj_count
                     object_counts.append(f"{server.name}: {server_obj_count}")
-                except Exception:
-                    # Ignore errors and keep retrying
+                except (grpc.RpcError, ConnectionError) as e:
+                    # Ignore connection errors during startup and keep retrying
                     pass
             
             if total_objects >= expected_total_objects:
