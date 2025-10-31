@@ -281,7 +281,7 @@ func (node *Node) CallObject(ctx context.Context, id string, method string, requ
 
 // CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error) {
-	node.logger.Infof("CreateObject received: type=%s", typ)
+	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
 	obj, err := node.createObject(typ, id, initData)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
