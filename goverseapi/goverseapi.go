@@ -53,17 +53,18 @@ func PushMessageToClient(ctx context.Context, clientID string, message proto.Mes
 // The cluster is considered ready when:
 // - Nodes are connected
 // - Shard mapping has been successfully generated and loaded
-// 
+//
 // Usage:
-//   <-goverseapi.ClusterReady()  // blocks until cluster is ready
-//   
-//   // or with select:
-//   select {
-//   case <-goverseapi.ClusterReady():
-//       // cluster is ready
-//   case <-ctx.Done():
-//       // timeout or cancel
-//   }
+//
+//	<-goverseapi.ClusterReady()  // blocks until cluster is ready
+//
+//	// or with select:
+//	select {
+//	case <-goverseapi.ClusterReady():
+//	    // cluster is ready
+//	case <-ctx.Done():
+//	    // timeout or cancel
+//	}
 func ClusterReady() <-chan bool {
 	return cluster.Get().ClusterReady()
 }
