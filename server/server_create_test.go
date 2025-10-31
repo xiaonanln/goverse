@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/xiaonanln/goverse/object"
@@ -75,14 +76,14 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 		// - "shard mapper not initialized"
 		// - "failed to determine target node"
 		// - "etcd client not connected"
-		if containsStr(err.Error(), "shard mapper not initialized") || 
-		   containsStr(err.Error(), "failed to determine target node") ||
-		   containsStr(err.Error(), "etcd client not connected") {
+		if strings.Contains(err.Error(), "shard mapper not initialized") || 
+		   strings.Contains(err.Error(), "failed to determine target node") ||
+		   strings.Contains(err.Error(), "etcd client not connected") {
 			t.Logf("Expected error due to shard mapping/etcd not being available: %v", err)
 		} else {
 			// If we got a different error, it might be the "object ID must be specified" check passing
 			// which is what we want to verify
-			if containsStr(err.Error(), "object ID must be specified") {
+			if strings.Contains(err.Error(), "object ID must be specified") {
 				t.Fatalf("Should not get 'object ID must be specified' error for non-empty ID, got: %v", err)
 			}
 			t.Logf("Got error (acceptable if not about ID validation): %v", err)
@@ -99,14 +100,4 @@ func TestServerCreateObject_ValidatesShardMapping(t *testing.T) {
 	// 3. Creating an object with an ID that doesn't belong to this node
 	// 4. Verifying the error message
 	// This is better tested in integration tests where the full cluster is running
-}
-
-// Helper function to check if a string contains a substring
-func containsStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

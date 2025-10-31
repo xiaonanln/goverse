@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/xiaonanln/goverse/object"
@@ -79,9 +80,8 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 	}
 	
 	// Error message should indicate the object already exists
-	expectedSubstring := "already exists"
-	if !contains(err.Error(), expectedSubstring) {
-		t.Errorf("Expected error message to contain '%s', got '%s'", expectedSubstring, err.Error())
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("Expected error message to contain 'already exists', got '%s'", err.Error())
 	}
 }
 
@@ -97,22 +97,7 @@ func TestCreateObject_UnknownType(t *testing.T) {
 		t.Fatal("Expected error when creating object with unknown type, got nil")
 	}
 	
-	expectedSubstring := "unknown object type"
-	if !contains(err.Error(), expectedSubstring) {
-		t.Errorf("Expected error message to contain '%s', got '%s'", expectedSubstring, err.Error())
+	if !strings.Contains(err.Error(), "unknown object type") {
+		t.Errorf("Expected error message to contain 'unknown object type', got '%s'", err.Error())
 	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
