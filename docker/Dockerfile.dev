@@ -54,6 +54,7 @@ RUN mkdir -p /var/run/postgresql && chown -R postgres:postgres /var/run/postgres
 RUN su - postgres -c "/usr/lib/postgresql/*/bin/initdb -D /var/lib/postgresql/data"
 
 # Configure PostgreSQL to accept local connections
+# Note: This configuration is for development only. In production, restrict to localhost or specific IPs.
 RUN echo "host all all 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf && \
     echo "listen_addresses='*'" >> /var/lib/postgresql/data/postgresql.conf
 
