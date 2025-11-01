@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -12,14 +11,14 @@ import (
 type ObjectData struct {
 	ObjectID   string
 	ObjectType string
-	Data       map[string]interface{}
+	Data       []byte
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
 
 // SaveObject saves an object to the database
 // If the object already exists, it updates the data and updated_at timestamp
-func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data map[string]interface{}) error {
+func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
 	if objectID == "" {
 		return fmt.Errorf("object_id cannot be empty")
 	}
@@ -27,12 +26,7 @@ func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data 
 		return fmt.Errorf("object_type cannot be empty")
 	}
 	if data == nil {
-		data = make(map[string]interface{})
-	}
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal data: %w", err)
+		data = []byte("{}")
 	}
 
 	query := `
@@ -43,7 +37,7 @@ func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data 
 	`
 
 	now := time.Now()
-	_, err = db.conn.ExecContext(ctx, query, objectID, objectType, jsonData, now, now)
+	_, err := db.conn.ExecContext(ctx, query, objectID, objectType, data, now, now)
 	if err != nil {
 		return fmt.Errorf("failed to save object: %w", err)
 	}
@@ -52,27 +46,19 @@ func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data 
 }
 
 // LoadObject retrieves an object from the database by its ID
-func (db *DB) LoadObject(ctx context.Context, objectID string) (*ObjectData, error) {
+func (db *DB) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
 	if objectID == "" {
 		return nil, fmt.Errorf("object_id cannot be empty")
 	}
 
 	query := `
-		SELECT object_id, object_type, data, created_at, updated_at
+		SELECT data
 		FROM goverse_objects
 		WHERE object_id = $1
 	`
 
-	var objData ObjectData
 	var jsonData []byte
-
-	err := db.conn.QueryRowContext(ctx, query, objectID).Scan(
-		&objData.ObjectID,
-		&objData.ObjectType,
-		&jsonData,
-		&objData.CreatedAt,
-		&objData.UpdatedAt,
-	)
+	err := db.conn.QueryRowContext(ctx, query, objectID).Scan(&jsonData)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("object not found: %s", objectID)
@@ -81,12 +67,7 @@ func (db *DB) LoadObject(ctx context.Context, objectID string) (*ObjectData, err
 		return nil, fmt.Errorf("failed to load object: %w", err)
 	}
 
-	err = json.Unmarshal(jsonData, &objData.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data: %w", err)
-	}
-
-	return &objData, nil
+	return jsonData, nil
 }
 
 // DeleteObject deletes an object from the database
@@ -151,22 +132,16 @@ func (db *DB) ListObjectsByType(ctx context.Context, objectType string) ([]*Obje
 	var objects []*ObjectData
 	for rows.Next() {
 		var objData ObjectData
-		var jsonData []byte
 
 		err := rows.Scan(
 			&objData.ObjectID,
 			&objData.ObjectType,
-			&jsonData,
+			&objData.Data,
 			&objData.CreatedAt,
 			&objData.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		err = json.Unmarshal(jsonData, &objData.Data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal data: %w", err)
 		}
 
 		objects = append(objects, &objData)
