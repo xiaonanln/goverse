@@ -58,8 +58,31 @@ jobs:
             sleep 1
           done
 
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+          sudo systemctl status postgresql --no-pager
+          # Configure PostgreSQL for testing
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres psql -c "CREATE DATABASE IF NOT EXISTS goverse;"
+          # Wait for PostgreSQL to be ready
+          for i in {1..10}; do
+            if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL to start... ($i/10)"
+            sleep 1
+          done
+
       - name: Run tests with coverage
         run: go test -v -p 1 -failfast -coverprofile=coverage.out -covermode=atomic ./...
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
 
       - name: Calculate coverage percentage
         id: coverage
