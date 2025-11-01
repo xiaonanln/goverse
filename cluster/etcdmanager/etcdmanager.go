@@ -18,23 +18,23 @@ const (
 
 // EtcdManager manages the connection to etcd
 type EtcdManager struct {
-	client            *clientv3.Client
-	endpoints         []string
-	logger            *logger.Logger
-	prefix            string          // global prefix for all etcd keys
-	leaseID           clientv3.LeaseID
-	registeredNodeID  string          // the node ID that was registered
-	nodes             map[string]bool // map of node addresses
-	nodesMu           sync.RWMutex
-	watchCancel       context.CancelFunc
-	watchCtx          context.Context
-	watchStarted      bool
-	lastNodeChange    time.Time // timestamp of last node list change
-	keepAliveCancel   context.CancelFunc
-	keepAliveMu       sync.Mutex
-	keepAliveCtx      context.Context
-	keepAliveStopped  bool
-	keepAliveWg       sync.WaitGroup
+	client           *clientv3.Client
+	endpoints        []string
+	logger           *logger.Logger
+	prefix           string // global prefix for all etcd keys
+	leaseID          clientv3.LeaseID
+	registeredNodeID string          // the node ID that was registered
+	nodes            map[string]bool // map of node addresses
+	nodesMu          sync.RWMutex
+	watchCancel      context.CancelFunc
+	watchCtx         context.Context
+	watchStarted     bool
+	lastNodeChange   time.Time // timestamp of last node list change
+	keepAliveCancel  context.CancelFunc
+	keepAliveMu      sync.Mutex
+	keepAliveCtx     context.Context
+	keepAliveStopped bool
+	keepAliveWg      sync.WaitGroup
 }
 
 // NewEtcdManager creates a new etcd manager.
@@ -246,8 +246,8 @@ func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
 	defer mgr.keepAliveWg.Done()
 
 	retryDelay := 1 * time.Second
-	maxRetryDelay := 30 * time.Second
-	
+	maxRetryDelay := 4 * time.Second
+
 	for {
 		// Check if we should stop
 		mgr.keepAliveMu.Lock()
@@ -266,16 +266,16 @@ func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
 
 		// Try to establish lease and keep-alive
 		err := mgr.maintainLease(ctx, nodeAddress)
-		
+
 		if ctx.Err() != nil {
 			// Context was cancelled, exit cleanly
 			mgr.logger.Infof("Keep-alive context cancelled for node %s", nodeAddress)
 			return
 		}
-		
+
 		if err != nil {
 			mgr.logger.Warnf("Failed to maintain lease for node %s: %v, retrying in %v", nodeAddress, err, retryDelay)
-			
+
 			// Wait before retrying with exponential backoff
 			select {
 			case <-time.After(retryDelay):
@@ -338,14 +338,14 @@ func (mgr *EtcdManager) maintainLease(ctx context.Context, nodeAddress string) e
 		// Revoke the lease using a background context since the original context may be cancelled
 		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		_, err := mgr.client.Revoke(revokeCtx, lease.ID)
 		if err != nil {
 			mgr.logger.Debugf("Failed to revoke lease %d on cleanup: %v", lease.ID, err)
 		} else {
 			mgr.logger.Debugf("Revoked lease %d on cleanup", lease.ID)
 		}
-		
+
 		// Clear the lease ID
 		mgr.keepAliveMu.Lock()
 		if mgr.leaseID == lease.ID {
@@ -561,12 +561,12 @@ func (mgr *EtcdManager) GetLastNodeChangeTime() time.Time {
 func (mgr *EtcdManager) IsNodeListStable(duration time.Duration) bool {
 	mgr.nodesMu.RLock()
 	defer mgr.nodesMu.RUnlock()
-	
+
 	// If lastNodeChange is zero, nodes have never changed (not initialized)
 	if mgr.lastNodeChange.IsZero() {
 		return false
 	}
-	
+
 	return time.Since(mgr.lastNodeChange) >= duration
 }
 

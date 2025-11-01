@@ -940,7 +940,7 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 	}
 
 	// Wait for the crash to be detected
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	// Verify that EtcdManager is still running (didn't panic or crash)
 	// The manager should still be accessible and not cause panic
@@ -991,7 +991,7 @@ func TestEtcdManagerServerCrash(t *testing.T) {
 
 	// After etcd restart, verify that get/put operations work again
 	// Wait a bit for etcd to be ready
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Second)
 	// After etcd restart, verify that the original manager (mgr) can reconnect and resume operations
 
 	ctx2 := context.Background()
