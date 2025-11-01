@@ -59,7 +59,7 @@ func (u *UserProfile) FromData(data proto.Message) error {
 }
 
 func main() {
-	fmt.Println("=== Goverse Object Persistence Example ===\n")
+	fmt.Println("=== Goverse Object Persistence Example ===")
 
 	// This example demonstrates how to use PostgreSQL persistence with Goverse objects
 	// Note: This requires a running PostgreSQL database
@@ -108,7 +108,7 @@ func main() {
 
 	// Example 1: Create and save a persistent object
 	fmt.Println("\n--- Example 1: Creating and Saving a Persistent Object ---")
-	
+
 	user1 := &UserProfile{}
 	user1.OnInit(user1, "user-alice", nil)
 	user1.Username = "alice"

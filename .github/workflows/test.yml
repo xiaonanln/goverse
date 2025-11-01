@@ -59,7 +59,7 @@ jobs:
           done
 
       - name: Run tests with coverage
-        run: go test -v -p 1 -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -v -p 1 -failfast -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Calculate coverage percentage
         id: coverage
