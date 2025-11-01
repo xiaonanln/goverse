@@ -18,18 +18,22 @@ const (
 
 // EtcdManager manages the connection to etcd
 type EtcdManager struct {
-	client           *clientv3.Client
-	endpoints        []string
-	logger           *logger.Logger
-	prefix           string          // global prefix for all etcd keys
-	leaseID          clientv3.LeaseID
-	registeredNodeID string          // the node ID that was registered
-	nodes            map[string]bool // map of node addresses
-	nodesMu          sync.RWMutex
-	watchCancel      context.CancelFunc
-	watchCtx         context.Context
-	watchStarted     bool
-	lastNodeChange   time.Time // timestamp of last node list change
+	client            *clientv3.Client
+	endpoints         []string
+	logger            *logger.Logger
+	prefix            string          // global prefix for all etcd keys
+	leaseID           clientv3.LeaseID
+	registeredNodeID  string          // the node ID that was registered
+	nodes             map[string]bool // map of node addresses
+	nodesMu           sync.RWMutex
+	watchCancel       context.CancelFunc
+	watchCtx          context.Context
+	watchStarted      bool
+	lastNodeChange    time.Time // timestamp of last node list change
+	keepAliveCancel   context.CancelFunc
+	keepAliveMu       sync.Mutex
+	keepAliveCtx      context.Context
+	keepAliveStopped  bool
 }
 
 // NewEtcdManager creates a new etcd manager.
@@ -96,6 +100,15 @@ func (mgr *EtcdManager) Close() error {
 		mgr.watchCancel()
 		mgr.watchCancel = nil
 	}
+
+	// Stop the keep-alive loop
+	mgr.keepAliveMu.Lock()
+	if mgr.keepAliveCancel != nil {
+		mgr.keepAliveCancel()
+		mgr.keepAliveCancel = nil
+	}
+	mgr.keepAliveStopped = true
+	mgr.keepAliveMu.Unlock()
 
 	if mgr.client != nil {
 		mgr.logger.Infof("Closing etcd connection")
@@ -199,6 +212,81 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 		return nil
 	}
 
+	// Mark this node as registered
+	mgr.registeredNodeID = nodeAddress
+
+	// Create a cancellable context for the keep-alive loop
+	mgr.keepAliveMu.Lock()
+	mgr.keepAliveStopped = false
+	mgr.keepAliveCtx, mgr.keepAliveCancel = context.WithCancel(context.Background())
+	mgr.keepAliveMu.Unlock()
+
+	// Start the keep-alive loop in a goroutine
+	go mgr.keepAliveLoop(nodeAddress)
+
+	mgr.logger.Infof("Started keep-alive loop for node %s", nodeAddress)
+	return nil
+}
+
+// keepAliveLoop maintains the lease and registration for a node with automatic retry
+func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
+	retryDelay := 1 * time.Second
+	maxRetryDelay := 30 * time.Second
+	
+	for {
+		// Check if we should stop
+		mgr.keepAliveMu.Lock()
+		if mgr.keepAliveStopped {
+			mgr.keepAliveMu.Unlock()
+			mgr.logger.Infof("Keep-alive loop stopped for node %s", nodeAddress)
+			return
+		}
+		ctx := mgr.keepAliveCtx
+		mgr.keepAliveMu.Unlock()
+
+		if ctx.Err() != nil {
+			mgr.logger.Infof("Keep-alive context cancelled for node %s", nodeAddress)
+			return
+		}
+
+		// Try to establish lease and keep-alive
+		err := mgr.maintainLease(ctx, nodeAddress)
+		
+		if ctx.Err() != nil {
+			// Context was cancelled, exit cleanly
+			mgr.logger.Infof("Keep-alive context cancelled for node %s", nodeAddress)
+			return
+		}
+		
+		if err != nil {
+			mgr.logger.Warnf("Failed to maintain lease for node %s: %v, retrying in %v", nodeAddress, err, retryDelay)
+			
+			// Wait before retrying with exponential backoff
+			select {
+			case <-time.After(retryDelay):
+				// Exponential backoff
+				retryDelay = retryDelay * 2
+				if retryDelay > maxRetryDelay {
+					retryDelay = maxRetryDelay
+				}
+			case <-ctx.Done():
+				mgr.logger.Infof("Keep-alive context cancelled during retry wait for node %s", nodeAddress)
+				return
+			}
+		} else {
+			// Successfully maintained lease, reset retry delay
+			retryDelay = 1 * time.Second
+		}
+	}
+}
+
+// maintainLease creates a lease and maintains it with keep-alive
+// Returns when keep-alive channel closes or context is cancelled
+func (mgr *EtcdManager) maintainLease(ctx context.Context, nodeAddress string) error {
+	if mgr.client == nil {
+		return fmt.Errorf("etcd client not connected")
+	}
+
 	// Create a lease
 	lease, err := mgr.client.Grant(ctx, NodeLeaseTTL)
 	if err != nil {
@@ -214,9 +302,6 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 		return fmt.Errorf("failed to register node: %w", err)
 	}
 
-	// Mark this node as registered
-	mgr.registeredNodeID = nodeAddress
-
 	mgr.logger.Infof("Registered node %s with lease ID %d", nodeAddress, lease.ID)
 
 	// Keep the lease alive
@@ -225,30 +310,35 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 		return fmt.Errorf("failed to keep alive lease: %w", err)
 	}
 
-	// Start a goroutine to process keep-alive responses
-	go func() {
-		for {
-			select {
-			case ka, ok := <-keepAliveCh:
-				if !ok {
-					mgr.logger.Warnf("Keep-alive channel closed for lease %d", lease.ID)
-					return
-				}
-				if ka != nil {
-					mgr.logger.Debugf("Keep-alive response for lease %d, TTL: %d", ka.ID, ka.TTL)
-				}
-			case <-ctx.Done():
-				mgr.logger.Infof("Context cancelled, stopping keep-alive for lease %d", lease.ID)
-				return
+	// Process keep-alive responses until channel closes or context is cancelled
+	for {
+		select {
+		case ka, ok := <-keepAliveCh:
+			if !ok {
+				mgr.logger.Warnf("Keep-alive channel closed for lease %d, will retry", lease.ID)
+				return fmt.Errorf("keep-alive channel closed")
 			}
+			if ka != nil {
+				mgr.logger.Debugf("Keep-alive response for lease %d, TTL: %d", ka.ID, ka.TTL)
+			}
+		case <-ctx.Done():
+			mgr.logger.Infof("Context cancelled, stopping keep-alive for lease %d", lease.ID)
+			return nil
 		}
-	}()
-
-	return nil
+	}
 }
 
 // UnregisterNode removes a node from etcd
 func (mgr *EtcdManager) UnregisterNode(ctx context.Context, nodeAddress string) error {
+	// Stop the keep-alive loop first
+	mgr.keepAliveMu.Lock()
+	if mgr.keepAliveCancel != nil {
+		mgr.keepAliveCancel()
+		mgr.keepAliveCancel = nil
+	}
+	mgr.keepAliveStopped = true
+	mgr.keepAliveMu.Unlock()
+
 	if mgr.client == nil {
 		// No-op if client is not connected
 		return nil
