@@ -283,12 +283,12 @@ func (node *Node) CallObject(ctx context.Context, id string, method string, requ
 // CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error) {
 	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
-	
+
 	// ID must be specified to ensure it belongs to this node according to shard mapping
 	if id == "" {
 		return "", fmt.Errorf("object ID must be specified")
 	}
-	
+
 	obj, err := node.createObject(typ, id, initData)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
@@ -302,7 +302,7 @@ func (node *Node) createObject(typ string, id string, initData proto.Message) (O
 	if id == "" {
 		return nil, fmt.Errorf("object ID must be specified")
 	}
-	
+
 	node.objectTypesMu.RLock()
 	objectType, ok := node.objectTypes[typ]
 	node.objectTypesMu.RUnlock()
@@ -441,31 +441,31 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 // whether it still belongs to this node according to the new shard mapping.
 // TODO: Implement actual shard migration logic
 func (node *Node) OnShardMappingChanged(ctx context.Context, newMapping *sharding.ShardMapping) {
-	node.logger.Infof("Shard mapping changed - checking object ownership")
-	
+	node.logger.Infof("=== OnShardMappingChanged === checking object ownership")
+
 	// Get snapshot of all objects
 	objects := node.ListObjects()
-	
+
 	// Check each object to see if it still belongs to this node
 	for _, objInfo := range objects {
 		shardID := sharding.GetShardID(objInfo.Id)
 		targetNode, ok := newMapping.Shards[shardID]
-		
+
 		stillBelongsHere := ok && targetNode == node.advertiseAddress
-		
+
 		if stillBelongsHere {
-			node.logger.Infof("Object %s (type=%s, shard=%d) still belongs to this node", 
+			node.logger.Infof("Object %s (type=%s, shard=%d) still belongs to this node",
 				objInfo.Id, objInfo.Type, shardID)
 		} else {
 			if ok {
-				node.logger.Infof("Object %s (type=%s, shard=%d) should be migrated to node %s", 
+				node.logger.Infof("Object %s (type=%s, shard=%d) should be migrated to node %s",
 					objInfo.Id, objInfo.Type, shardID, targetNode)
 			} else {
-				node.logger.Warnf("Object %s (type=%s, shard=%d) has no assigned node in mapping", 
+				node.logger.Warnf("Object %s (type=%s, shard=%d) has no assigned node in mapping",
 					objInfo.Id, objInfo.Type, shardID)
 			}
 		}
 	}
-	
-	node.logger.Infof("Shard mapping check complete - checked %d objects", len(objects))
+
+	node.logger.Infof("=== OnShardMappingChanged === Shard mapping check complete - checked %d objects", len(objects))
 }
