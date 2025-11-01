@@ -29,5 +29,10 @@ jobs:
           file: docker/Dockerfile.dev
           push: false
           tags: goverse-dev:latest
+          load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      
+      - name: Run tests in Docker container
+        run: |
+          docker run --rm goverse-dev:latest bash /app/script/docker/test-all.sh
