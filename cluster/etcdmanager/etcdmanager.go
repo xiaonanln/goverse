@@ -316,6 +316,7 @@ func (mgr *EtcdManager) maintainLease(ctx context.Context, nodeAddress string) e
 	if oldLeaseID != 0 {
 		// Best effort revoke - don't fail if it doesn't work
 		// The lease will expire naturally if revoke fails
+		mgr.logger.Infof("Revoking stale lease %d before creating new lease", oldLeaseID)
 		_, err := mgr.client.Revoke(ctx, oldLeaseID)
 		if err != nil {
 			mgr.logger.Debugf("Failed to revoke old lease %d: %v (will create new lease anyway)", oldLeaseID, err)
