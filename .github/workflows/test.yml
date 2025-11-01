@@ -65,7 +65,8 @@ jobs:
           sudo systemctl status postgresql --no-pager
           # Configure PostgreSQL for testing
           sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
-          sudo -u postgres psql -c "CREATE DATABASE IF NOT EXISTS goverse;"
+          # Create database if it doesn't exist (PostgreSQL doesn't support IF NOT EXISTS for CREATE DATABASE)
+          sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw goverse || sudo -u postgres psql -c "CREATE DATABASE goverse;"
           # Wait for PostgreSQL to be ready
           for i in {1..10}; do
             if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
