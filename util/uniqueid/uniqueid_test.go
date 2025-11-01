@@ -72,6 +72,21 @@ func TestUniqueIdTiming(t *testing.T) {
 	t.Logf("Generated %d unique IDs in 10ms", len(ids))
 }
 
+func TestUniqueIdNoSlash(t *testing.T) {
+	// Test that UniqueId never contains '/' character
+	// This is important because '/' is commonly used as a path separator
+	// and could cause issues in various contexts (URLs, file paths, etc.)
+	const numTests = 10000
+	for i := 0; i < numTests; i++ {
+		id := UniqueId()
+		for _, char := range id {
+			if char == '/' {
+				t.Errorf("UniqueId() returned string containing '/': %s", id)
+			}
+		}
+	}
+}
+
 func BenchmarkUniqueId(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		UniqueId()
