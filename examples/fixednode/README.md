@@ -14,8 +14,10 @@ nodeAddress/objectID
 
 Where:
 - `nodeAddress`: The address of the specific node where the object should be created/accessed (e.g., `localhost:7001`, `192.168.1.100:8080`)
-- `/`: The separator character
-- `objectID`: The actual object identifier (e.g., `my-object`, `session-abc123`)
+- `/`: The separator character (the first `/` in the object ID)
+- `objectID`: The actual object identifier (e.g., `my-object`, `session-abc123`, or even `path/to/object` with additional slashes)
+
+**Note**: The system uses the first `/` as the separator. Everything before the first `/` is treated as the node address, and everything after it is the object identifier. This allows for flexible object ID formats including paths.
 
 ## Examples
 
@@ -24,6 +26,10 @@ Where:
 // This object will always be created/accessed on localhost:7001
 objectID := "localhost:7001/my-special-object"
 _, err := goverseapi.CreateObject(ctx, "MyObjectType", objectID, nil)
+
+// Object IDs can include additional slashes (paths)
+objectID := "localhost:7001/users/session/abc123"
+_, err := goverseapi.CreateObject(ctx, "SessionType", objectID, nil)
 ```
 
 ### Regular Object ID (Shard-based routing)
@@ -44,10 +50,13 @@ _, err := goverseapi.CreateObject(ctx, "MyObjectType", objectID, nil)
 
 When you call `CreateObject` or `CallObject` with an object ID containing a `/` separator:
 
-1. The system extracts the node address (part before `/`)
-2. The request is routed directly to that node
-3. If the node address matches the current node, the operation is handled locally
-4. If it's a different node, the operation is forwarded via gRPC
+1. The system extracts the node address (part before the first `/`)
+2. Everything after the first `/` becomes the actual object identifier
+3. The request is routed directly to that node
+4. If the node address matches the current node, the operation is handled locally
+5. If it's a different node, the operation is forwarded via gRPC
+
+This flexible approach allows object IDs to contain paths or multiple segments while still supporting fixed node addressing.
 
 This is consistent with how client IDs work in the format `nodeAddress/clientID`.
 
