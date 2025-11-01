@@ -591,23 +591,28 @@ func TestGetNodeForObject_FixedNodeAddress(t *testing.T) {
 			setupMapping: true,
 		},
 		{
-			name:     "invalid format - empty node",
-			objectID: "/object-123",
-			wantNode: "", // Falls back to shard-based mapping
-			wantErr:  false,
+			name:         "invalid format - empty node",
+			objectID:     "/object-123",
+			wantNode:     "", // Falls back to shard-based mapping
+			wantErr:      false,
 			setupMapping: true,
 		},
 		{
-			name:     "invalid format - empty object part",
+			name:     "trailing slash - node address extracted",
 			objectID: "localhost:7001/",
-			wantNode: "", // Falls back to shard-based mapping
+			wantNode: "localhost:7001",
 			wantErr:  false,
-			setupMapping: true,
 		},
 		{
 			name:     "slash in middle of regular object ID",
 			objectID: "type/subtype-123",
 			wantNode: "type",
+			wantErr:  false,
+		},
+		{
+			name:     "multiple slashes - uses first part",
+			objectID: "localhost:7001/path/to/object",
+			wantNode: "localhost:7001",
 			wantErr:  false,
 		},
 	}
