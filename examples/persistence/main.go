@@ -11,7 +11,7 @@ import (
 
 // UserProfile is an example of a persistent distributed object
 type UserProfile struct {
-	object.BasePersistentObject
+	object.BaseObject
 	Username string
 	Email    string
 	Score    int
@@ -24,25 +24,18 @@ func (u *UserProfile) OnCreated() {
 
 // ToData serializes the UserProfile to a map for persistence
 func (u *UserProfile) ToData() (map[string]interface{}, error) {
-	data, err := u.BasePersistentObject.ToData()
-	if err != nil {
-		return nil, err
+	data := map[string]interface{}{
+		"id":       u.Id(),
+		"type":     u.Type(),
+		"username": u.Username,
+		"email":    u.Email,
+		"score":    u.Score,
 	}
-
-	data["username"] = u.Username
-	data["email"] = u.Email
-	data["score"] = u.Score
-
 	return data, nil
 }
 
 // FromData deserializes the UserProfile from a map
 func (u *UserProfile) FromData(data map[string]interface{}) error {
-	err := u.BasePersistentObject.FromData(data)
-	if err != nil {
-		return err
-	}
-
 	if username, ok := data["username"].(string); ok {
 		u.Username = username
 	}
@@ -85,8 +78,17 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize schema
+	// Verify connection
 	ctx := context.Background()
+	err = db.Ping(ctx)
+	if err != nil {
+		log.Printf("Failed to ping database: %v\n", err)
+		log.Println("This example requires a running PostgreSQL database.")
+		log.Println("See docs/postgres-setup.md for setup instructions.")
+		return
+	}
+
+	// Initialize schema
 	fmt.Println("Initializing database schema...")
 	err = db.InitSchema(ctx)
 	if err != nil {
@@ -101,7 +103,6 @@ func main() {
 	
 	user1 := &UserProfile{}
 	user1.OnInit(user1, "user-alice", nil)
-	user1.SetPersistent(true)
 	user1.Username = "alice"
 	user1.Email = "alice@example.com"
 	user1.Score = 100
@@ -111,7 +112,7 @@ func main() {
 	fmt.Printf("  Email: %s\n", user1.Email)
 	fmt.Printf("  Score: %d\n", user1.Score)
 
-	err = object.SavePersistentObject(ctx, provider, user1)
+	err = object.SaveObject(ctx, provider, user1)
 	if err != nil {
 		log.Fatalf("Failed to save object: %v", err)
 	}
@@ -123,7 +124,7 @@ func main() {
 	user2 := &UserProfile{}
 	user2.OnInit(user2, "user-alice", nil)
 
-	err = object.LoadPersistentObject(ctx, provider, user2, "user-alice")
+	err = object.LoadObject(ctx, provider, user2, "user-alice")
 	if err != nil {
 		log.Fatalf("Failed to load object: %v", err)
 	}
@@ -144,7 +145,7 @@ func main() {
 	fmt.Printf("  Email: %s\n", user2.Email)
 	fmt.Printf("  Score: %d\n", user2.Score)
 
-	err = object.SavePersistentObject(ctx, provider, user2)
+	err = object.SaveObject(ctx, provider, user2)
 	if err != nil {
 		log.Fatalf("Failed to update object: %v", err)
 	}
@@ -166,12 +167,11 @@ func main() {
 	for _, u := range users {
 		userObj := &UserProfile{}
 		userObj.OnInit(userObj, u.id, nil)
-		userObj.SetPersistent(true)
 		userObj.Username = u.username
 		userObj.Email = u.email
 		userObj.Score = u.score
 
-		err = object.SavePersistentObject(ctx, provider, userObj)
+		err = object.SaveObject(ctx, provider, userObj)
 		if err != nil {
 			log.Fatalf("Failed to save user %s: %v", u.id, err)
 		}
@@ -195,8 +195,8 @@ func main() {
 
 	fmt.Println("\n=== Example Complete ===")
 	fmt.Println("\nKey Takeaways:")
-	fmt.Println("1. Objects can extend BasePersistentObject for persistence support")
-	fmt.Println("2. Implement ToData() and FromData() to control serialization")
-	fmt.Println("3. Use SavePersistentObject() and LoadPersistentObject() helpers")
+	fmt.Println("1. Persistent objects extend BaseObject and override ToData()/FromData()")
+	fmt.Println("2. Non-persistent objects just use the default BaseObject implementation")
+	fmt.Println("3. Use SaveObject() and LoadObject() - they handle persistence automatically")
 	fmt.Println("4. PostgreSQL stores object state as JSONB with automatic timestamps")
 }

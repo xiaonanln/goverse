@@ -42,57 +42,56 @@ func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID str
 	return nil
 }
 
-// TestPersistentObject is a test implementation
+// TestPersistentObject is a test implementation of a persistent object
 type TestPersistentObject struct {
-	BasePersistentObject
+	BaseObject
 	CustomData string
 }
 
 func (t *TestPersistentObject) OnCreated() {}
 
+// ToData implements persistence for TestPersistentObject
 func (t *TestPersistentObject) ToData() (map[string]interface{}, error) {
-	data, err := t.BasePersistentObject.ToData()
-	if err != nil {
-		return nil, err
+	data := map[string]interface{}{
+		"id":            t.id,
+		"type":          t.Type(),
+		"creation_time": t.creationTime.Unix(),
+		"custom_data":   t.CustomData,
 	}
-	data["custom_data"] = t.CustomData
 	return data, nil
 }
 
+// FromData implements deserialization for TestPersistentObject
 func (t *TestPersistentObject) FromData(data map[string]interface{}) error {
-	err := t.BasePersistentObject.FromData(data)
-	if err != nil {
-		return err
-	}
 	if customData, ok := data["custom_data"].(string); ok {
 		t.CustomData = customData
 	}
 	return nil
 }
 
-func TestBasePersistentObject_IsPersistent(t *testing.T) {
-	obj := &TestPersistentObject{}
+func TestBaseObject_ToData_NotPersistent(t *testing.T) {
+	obj := &TestObject{}
 	obj.OnInit(obj, "test-id", nil)
 
-	if obj.IsPersistent() {
-		t.Error("New object should not be persistent by default")
-	}
-
-	obj.SetPersistent(true)
-	if !obj.IsPersistent() {
-		t.Error("Object should be persistent after SetPersistent(true)")
-	}
-
-	obj.SetPersistent(false)
-	if obj.IsPersistent() {
-		t.Error("Object should not be persistent after SetPersistent(false)")
+	_, err := obj.ToData()
+	if err == nil {
+		t.Error("ToData() should return error for non-persistent object")
 	}
 }
 
-func TestBasePersistentObject_ToData(t *testing.T) {
+func TestBaseObject_FromData_NotPersistent(t *testing.T) {
+	obj := &TestObject{}
+	obj.OnInit(obj, "test-id", nil)
+
+	err := obj.FromData(map[string]interface{}{})
+	if err == nil {
+		t.Error("FromData() should return error for non-persistent object")
+	}
+}
+
+func TestPersistentObject_ToData(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id", nil)
-	obj.SetPersistent(true)
 	obj.CustomData = "test-value"
 
 	data, err := obj.ToData()
@@ -108,21 +107,16 @@ func TestBasePersistentObject_ToData(t *testing.T) {
 		t.Errorf("ToData() type = %v; want TestPersistentObject", data["type"])
 	}
 
-	if data["persistent"] != true {
-		t.Errorf("ToData() persistent = %v; want true", data["persistent"])
-	}
-
 	if data["custom_data"] != "test-value" {
 		t.Errorf("ToData() custom_data = %v; want test-value", data["custom_data"])
 	}
 }
 
-func TestBasePersistentObject_FromData(t *testing.T) {
+func TestPersistentObject_FromData(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id", nil)
 
 	data := map[string]interface{}{
-		"persistent":  true,
 		"custom_data": "loaded-value",
 	}
 
@@ -131,26 +125,21 @@ func TestBasePersistentObject_FromData(t *testing.T) {
 		t.Fatalf("FromData() returned error: %v", err)
 	}
 
-	if !obj.IsPersistent() {
-		t.Error("Object should be persistent after FromData")
-	}
-
 	if obj.CustomData != "loaded-value" {
 		t.Errorf("CustomData = %s; want loaded-value", obj.CustomData)
 	}
 }
 
-func TestSavePersistentObject(t *testing.T) {
+func TestSaveObject_Persistent(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id", nil)
-	obj.SetPersistent(true)
 	obj.CustomData = "test-data"
 
 	ctx := context.Background()
-	err := SavePersistentObject(ctx, provider, obj)
+	err := SaveObject(ctx, provider, obj)
 	if err != nil {
-		t.Fatalf("SavePersistentObject() returned error: %v", err)
+		t.Fatalf("SaveObject() returned error: %v", err)
 	}
 
 	// Verify data was saved
@@ -164,16 +153,15 @@ func TestSavePersistentObject(t *testing.T) {
 	}
 }
 
-func TestSavePersistentObject_NotPersistent(t *testing.T) {
+func TestSaveObject_NotPersistent(t *testing.T) {
 	provider := NewMockPersistenceProvider()
-	obj := &TestPersistentObject{}
+	obj := &TestObject{} // Non-persistent object
 	obj.OnInit(obj, "test-id", nil)
-	obj.SetPersistent(false) // Not persistent
 
 	ctx := context.Background()
-	err := SavePersistentObject(ctx, provider, obj)
+	err := SaveObject(ctx, provider, obj)
 	if err != nil {
-		t.Fatalf("SavePersistentObject() returned error: %v", err)
+		t.Fatalf("SaveObject() returned error: %v", err)
 	}
 
 	// Verify nothing was saved
@@ -182,12 +170,11 @@ func TestSavePersistentObject_NotPersistent(t *testing.T) {
 	}
 }
 
-func TestLoadPersistentObject(t *testing.T) {
+func TestLoadObject(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	
 	// Setup saved data
 	provider.storage["test-id"] = map[string]interface{}{
-		"persistent":  true,
 		"custom_data": "loaded-value",
 	}
 
@@ -195,23 +182,14 @@ func TestLoadPersistentObject(t *testing.T) {
 	obj.OnInit(obj, "test-id", nil)
 
 	ctx := context.Background()
-	err := LoadPersistentObject(ctx, provider, obj, "test-id")
+	err := LoadObject(ctx, provider, obj, "test-id")
 	if err != nil {
-		t.Fatalf("LoadPersistentObject() returned error: %v", err)
-	}
-
-	if !obj.IsPersistent() {
-		t.Error("Loaded object should be persistent")
+		t.Fatalf("LoadObject() returned error: %v", err)
 	}
 
 	if obj.CustomData != "loaded-value" {
 		t.Errorf("CustomData = %s; want loaded-value", obj.CustomData)
 	}
-}
-
-func TestPersistentObjectInterface(t *testing.T) {
-	// Test that TestPersistentObject implements PersistentObject interface
-	var _ PersistentObject = (*TestPersistentObject)(nil)
 }
 
 func TestMarshalToJSON(t *testing.T) {

@@ -17,6 +17,11 @@ type Object interface {
 	CreationTime() time.Time
 	OnInit(self Object, id string, data proto.Message)
 	OnCreated()
+	// ToData serializes the object state to a map for persistence
+	// Returns (nil, error) for non-persistent objects
+	ToData() (map[string]interface{}, error)
+	// FromData deserializes object state from a map
+	FromData(data map[string]interface{}) error
 }
 
 type BaseObject struct {
@@ -51,4 +56,16 @@ func (base *BaseObject) Type() string {
 
 func (base *BaseObject) CreationTime() time.Time {
 	return base.creationTime
+}
+
+// ToData provides a default implementation for non-persistent objects
+// Returns an error indicating this object type is not persistent
+func (base *BaseObject) ToData() (map[string]interface{}, error) {
+	return nil, fmt.Errorf("object type %s is not persistent", base.Type())
+}
+
+// FromData provides a default implementation for non-persistent objects
+// Returns an error indicating this object type is not persistent
+func (base *BaseObject) FromData(data map[string]interface{}) error {
+	return fmt.Errorf("object type %s is not persistent", base.Type())
 }

@@ -123,13 +123,13 @@ defer db.Close()
 
 ### 1. Define Your Object
 
-Extend `BasePersistentObject` and implement serialization methods:
+Extend `BaseObject` and implement serialization methods:
 
 ```go
 import "github.com/xiaonanln/goverse/object"
 
 type UserProfile struct {
-    object.BasePersistentObject
+    object.BaseObject
     Username string
     Email    string
     Score    int
@@ -141,22 +141,16 @@ func (u *UserProfile) OnCreated() {
 
 // Serialize object state
 func (u *UserProfile) ToData() (map[string]interface{}, error) {
-    data, err := u.BasePersistentObject.ToData()
-    if err != nil {
-        return nil, err
+    data := map[string]interface{}{
+        "username": u.Username,
+        "email":    u.Email,
+        "score":    u.Score,
     }
-    data["username"] = u.Username
-    data["email"] = u.Email
-    data["score"] = u.Score
     return data, nil
 }
 
 // Deserialize object state
 func (u *UserProfile) FromData(data map[string]interface{}) error {
-    err := u.BasePersistentObject.FromData(data)
-    if err != nil {
-        return err
-    }
     if username, ok := data["username"].(string); ok {
         u.Username = username
     }
@@ -186,17 +180,17 @@ ctx := context.Background()
 // Create and save
 user := &UserProfile{}
 user.OnInit(user, "user-123", nil)
-user.SetPersistent(true)
+user.// No SetPersistent needed - persistence is type-based
 user.Username = "alice"
 user.Email = "alice@example.com"
 user.Score = 100
 
-err := object.SavePersistentObject(ctx, provider, user)
+err := object.SaveObject(ctx, provider, user)
 
 // Load existing object
 loadedUser := &UserProfile{}
 loadedUser.OnInit(loadedUser, "user-123", nil)
-err = object.LoadPersistentObject(ctx, provider, loadedUser, "user-123")
+err = object.LoadObject(ctx, provider, loadedUser, "user-123")
 ```
 
 ## Production Considerations
