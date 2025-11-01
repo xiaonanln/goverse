@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/xiaonanln/goverse/object"
 )
@@ -23,17 +22,13 @@ func NewPostgresPersistenceProvider(db *DB) *PostgresPersistenceProvider {
 }
 
 // SaveObject saves an object to the PostgreSQL database
-func (p *PostgresPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data map[string]interface{}) error {
+func (p *PostgresPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
 	return p.db.SaveObject(ctx, objectID, objectType, data)
 }
 
 // LoadObject loads an object from the PostgreSQL database
-func (p *PostgresPersistenceProvider) LoadObject(ctx context.Context, objectID string) (map[string]interface{}, error) {
-	objData, err := p.db.LoadObject(ctx, objectID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load object from database: %w", err)
-	}
-	return objData.Data, nil
+func (p *PostgresPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+	return p.db.LoadObject(ctx, objectID)
 }
 
 // DeleteObject deletes an object from the PostgreSQL database

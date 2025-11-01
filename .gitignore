@@ -42,4 +42,5 @@ default.etcd/
 
 # etcd downloads
 etcd-*.tar.gz
-etcd-*/
+etcd-*/# Compiled binaries
+persistence

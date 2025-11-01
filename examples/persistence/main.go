@@ -7,6 +7,8 @@ import (
 
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/postgres"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // UserProfile is an example of a persistent distributed object
@@ -22,29 +24,35 @@ func (u *UserProfile) OnCreated() {
 	u.Logger.Infof("UserProfile created: %s", u.Id())
 }
 
-// ToData serializes the UserProfile to a map for persistence
-func (u *UserProfile) ToData() (map[string]interface{}, error) {
-	data := map[string]interface{}{
+// ToData serializes the UserProfile to a proto.Message for persistence
+func (u *UserProfile) ToData() (proto.Message, error) {
+	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":       u.Id(),
 		"type":     u.Type(),
 		"username": u.Username,
 		"email":    u.Email,
 		"score":    u.Score,
+	})
+	if err != nil {
+		return nil, err
 	}
 	return data, nil
 }
 
-// FromData deserializes the UserProfile from a map
-func (u *UserProfile) FromData(data map[string]interface{}) error {
-	if username, ok := data["username"].(string); ok {
-		u.Username = username
+// FromData deserializes the UserProfile from a proto.Message
+func (u *UserProfile) FromData(data proto.Message) error {
+	structData, ok := data.(*structpb.Struct)
+	if !ok {
+		return nil
 	}
-	if email, ok := data["email"].(string); ok {
-		u.Email = email
+	if username, ok := structData.Fields["username"]; ok {
+		u.Username = username.GetStringValue()
 	}
-	// JSON numbers are unmarshaled as float64
-	if score, ok := data["score"].(float64); ok {
-		u.Score = int(score)
+	if email, ok := structData.Fields["email"]; ok {
+		u.Email = email.GetStringValue()
+	}
+	if score, ok := structData.Fields["score"]; ok {
+		u.Score = int(score.GetNumberValue())
 	}
 
 	return nil
@@ -188,9 +196,16 @@ func main() {
 
 	fmt.Printf("Found %d UserProfile objects:\n", len(objects))
 	for i, obj := range objects {
-		username := obj.Data["username"]
-		score := obj.Data["score"]
-		fmt.Printf("  %d. %s - Username: %v, Score: %v\n", i+1, obj.ObjectID, username, score)
+		// Unmarshal the JSONB data
+		structData := &structpb.Struct{}
+		err := object.UnmarshalProtoFromJSON(obj.Data, structData)
+		if err == nil {
+			username := structData.Fields["username"].GetStringValue()
+			score := int(structData.Fields["score"].GetNumberValue())
+			fmt.Printf("  %d. %s - Username: %s, Score: %d\n", i+1, obj.ObjectID, username, score)
+		} else {
+			fmt.Printf("  %d. %s - (failed to unmarshal data)\n", i+1, obj.ObjectID)
+		}
 	}
 
 	fmt.Println("\n=== Example Complete ===")

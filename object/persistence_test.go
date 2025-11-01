@@ -3,22 +3,25 @@ package object
 import (
 	"context"
 	"testing"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // MockPersistenceProvider is a mock implementation for testing
 type MockPersistenceProvider struct {
-	storage map[string]map[string]interface{}
+	storage map[string][]byte
 	SaveErr error
 	LoadErr error
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage: make(map[string]map[string]interface{}),
+		storage: make(map[string][]byte),
 	}
 }
 
-func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data map[string]interface{}) error {
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
 	if m.SaveErr != nil {
 		return m.SaveErr
 	}
@@ -26,7 +29,7 @@ func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, obje
 	return nil
 }
 
-func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) (map[string]interface{}, error) {
+func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
 	if m.LoadErr != nil {
 		return nil, m.LoadErr
 	}
@@ -51,20 +54,26 @@ type TestPersistentObject struct {
 func (t *TestPersistentObject) OnCreated() {}
 
 // ToData implements persistence for TestPersistentObject
-func (t *TestPersistentObject) ToData() (map[string]interface{}, error) {
-	data := map[string]interface{}{
-		"id":            t.id,
-		"type":          t.Type(),
-		"creation_time": t.creationTime.Unix(),
-		"custom_data":   t.CustomData,
+func (t *TestPersistentObject) ToData() (proto.Message, error) {
+	data, err := structpb.NewStruct(map[string]interface{}{
+		"id":          t.id,
+		"type":        t.Type(),
+		"custom_data": t.CustomData,
+	})
+	if err != nil {
+		return nil, err
 	}
 	return data, nil
 }
 
 // FromData implements deserialization for TestPersistentObject
-func (t *TestPersistentObject) FromData(data map[string]interface{}) error {
-	if customData, ok := data["custom_data"].(string); ok {
-		t.CustomData = customData
+func (t *TestPersistentObject) FromData(data proto.Message) error {
+	structData, ok := data.(*structpb.Struct)
+	if !ok {
+		return nil
+	}
+	if customData, ok := structData.Fields["custom_data"]; ok {
+		t.CustomData = customData.GetStringValue()
 	}
 	return nil
 }
@@ -83,7 +92,8 @@ func TestBaseObject_FromData_NotPersistent(t *testing.T) {
 	obj := &TestObject{}
 	obj.OnInit(obj, "test-id", nil)
 
-	err := obj.FromData(map[string]interface{}{})
+	emptyStruct, _ := structpb.NewStruct(map[string]interface{}{})
+	err := obj.FromData(emptyStruct)
 	if err == nil {
 		t.Error("FromData() should return error for non-persistent object")
 	}
@@ -94,21 +104,26 @@ func TestPersistentObject_ToData(t *testing.T) {
 	obj.OnInit(obj, "test-id", nil)
 	obj.CustomData = "test-value"
 
-	data, err := obj.ToData()
+	protoMsg, err := obj.ToData()
 	if err != nil {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	if data["id"] != "test-id" {
-		t.Errorf("ToData() id = %v; want test-id", data["id"])
+	structData, ok := protoMsg.(*structpb.Struct)
+	if !ok {
+		t.Fatal("ToData() did not return *structpb.Struct")
 	}
 
-	if data["type"] != "TestPersistentObject" {
-		t.Errorf("ToData() type = %v; want TestPersistentObject", data["type"])
+	if structData.Fields["id"].GetStringValue() != "test-id" {
+		t.Errorf("ToData() id = %v; want test-id", structData.Fields["id"])
 	}
 
-	if data["custom_data"] != "test-value" {
-		t.Errorf("ToData() custom_data = %v; want test-value", data["custom_data"])
+	if structData.Fields["type"].GetStringValue() != "TestPersistentObject" {
+		t.Errorf("ToData() type = %v; want TestPersistentObject", structData.Fields["type"])
+	}
+
+	if structData.Fields["custom_data"].GetStringValue() != "test-value" {
+		t.Errorf("ToData() custom_data = %v; want test-value", structData.Fields["custom_data"])
 	}
 }
 
@@ -116,9 +131,9 @@ func TestPersistentObject_FromData(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id", nil)
 
-	data := map[string]interface{}{
+	data, _ := structpb.NewStruct(map[string]interface{}{
 		"custom_data": "loaded-value",
-	}
+	})
 
 	err := obj.FromData(data)
 	if err != nil {
@@ -148,8 +163,8 @@ func TestSaveObject_Persistent(t *testing.T) {
 		t.Fatal("Object was not saved to provider")
 	}
 
-	if savedData["custom_data"] != "test-data" {
-		t.Errorf("Saved custom_data = %v; want test-data", savedData["custom_data"])
+	if len(savedData) == 0 {
+		t.Error("Saved data is empty")
 	}
 }
 
@@ -172,55 +187,64 @@ func TestSaveObject_NotPersistent(t *testing.T) {
 
 func TestLoadObject(t *testing.T) {
 	provider := NewMockPersistenceProvider()
-	
-	// Setup saved data
-	provider.storage["test-id"] = map[string]interface{}{
-		"custom_data": "loaded-value",
-	}
-
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id", nil)
+	obj.CustomData = "test-data"
 
+	// First save an object
 	ctx := context.Background()
-	err := LoadObject(ctx, provider, obj, "test-id")
+	err := SaveObject(ctx, provider, obj)
+	if err != nil {
+		t.Fatalf("SaveObject() returned error: %v", err)
+	}
+
+	// Now load it
+	loadedObj := &TestPersistentObject{}
+	loadedObj.OnInit(loadedObj, "test-id", nil)
+
+	err = LoadObject(ctx, provider, loadedObj, "test-id")
 	if err != nil {
 		t.Fatalf("LoadObject() returned error: %v", err)
 	}
 
-	if obj.CustomData != "loaded-value" {
-		t.Errorf("CustomData = %s; want loaded-value", obj.CustomData)
+	if loadedObj.CustomData != "test-data" {
+		t.Errorf("CustomData = %s; want test-data", loadedObj.CustomData)
 	}
 }
 
-func TestMarshalToJSON(t *testing.T) {
-	data := map[string]interface{}{
+func TestMarshalProtoToJSON(t *testing.T) {
+	data, err := structpb.NewStruct(map[string]interface{}{
 		"key1": "value1",
 		"key2": 123,
+	})
+	if err != nil {
+		t.Fatalf("NewStruct() returned error: %v", err)
 	}
 
-	jsonData, err := MarshalToJSON(data)
+	jsonData, err := MarshalProtoToJSON(data)
 	if err != nil {
-		t.Fatalf("MarshalToJSON() returned error: %v", err)
+		t.Fatalf("MarshalProtoToJSON() returned error: %v", err)
 	}
 
 	if len(jsonData) == 0 {
-		t.Error("MarshalToJSON() returned empty data")
+		t.Error("MarshalProtoToJSON() returned empty data")
 	}
 }
 
-func TestUnmarshalFromJSON(t *testing.T) {
+func TestUnmarshalProtoFromJSON(t *testing.T) {
 	jsonData := []byte(`{"key1":"value1","key2":123}`)
 
-	data, err := UnmarshalFromJSON(jsonData)
+	data := &structpb.Struct{}
+	err := UnmarshalProtoFromJSON(jsonData, data)
 	if err != nil {
-		t.Fatalf("UnmarshalFromJSON() returned error: %v", err)
+		t.Fatalf("UnmarshalProtoFromJSON() returned error: %v", err)
 	}
 
-	if data["key1"] != "value1" {
-		t.Errorf("key1 = %v; want value1", data["key1"])
+	if data.Fields["key1"].GetStringValue() != "value1" {
+		t.Errorf("key1 = %v; want value1", data.Fields["key1"])
 	}
 
-	if data["key2"] != float64(123) { // JSON numbers are float64
-		t.Errorf("key2 = %v; want 123", data["key2"])
+	if data.Fields["key2"].GetNumberValue() != 123 {
+		t.Errorf("key2 = %v; want 123", data.Fields["key2"])
 	}
 }
