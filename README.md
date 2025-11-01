@@ -14,6 +14,7 @@ It lets you build systems around **stateful entities with identity and methods**
 
 - **Distributed Objects (Grains):** Uniquely addressable, stateful entities with custom methods.
 - **Virtual Actor Lifecycle:** Objects are activated on demand, deactivated when idle, and reactivated seamlessly.
+- **Object Persistence:** Optional PostgreSQL persistence with JSONB storage for durable state.
 - **Client Service:** Client connection management and method routing through server-side client objects.
 - **Sharding & Rebalancing:** Fixed shard model with automatic remapping via etcd.
 - **Fault-Tolerance:** Lease + epoch fencing prevent split-brain; safe recovery after node failures.
@@ -30,8 +31,9 @@ It lets you build systems around **stateful entities with identity and methods**
 - `cmd/inspector/` – Inspector web server for cluster visualization.
 - `server/` – Node server implementation.
 - `node/` – Core node logic and object management.
-- `object/` – Object base types and helpers.
+- `object/` – Object base types and helpers, including persistence framework.
 - `client/` – Client service implementation and protocol definitions.
+- `util/postgres/` – PostgreSQL persistence utilities and JSONB storage.
 - `samples/chat/` – Sample distributed chat application:
   - `server/ChatRoom.go` – Chat room distributed object.
   - `server/ChatClient.go` – Server-side client object for orchestrating operations.
@@ -39,6 +41,7 @@ It lets you build systems around **stateful entities with identity and methods**
   - `server/chat_server.go` – Chat server main entry point.
   - `client/client.go` – Interactive chat client application.
   - `proto/chat.proto` – Chat protocol definitions.
+- `examples/persistence/` – Example of using PostgreSQL persistence.
 - `proto/` – GoVerse protocol definitions.
 - `util/` – Logging and utility helpers.
 
@@ -250,6 +253,93 @@ The chat system provides message management through distributed ChatRoom objects
 
 ---
 
+## 💾 Object Persistence
+
+GoVerse supports optional PostgreSQL persistence for distributed objects, enabling durable state management across server restarts:
+
+### Features
+
+- **JSONB Storage**: Objects are serialized to JSONB for flexible schema and efficient queries
+- **Automatic Timestamps**: Created and updated timestamps tracked automatically
+- **Type-based Indexing**: Fast lookups by object type
+- **Flexible Interface**: Easy to implement custom persistence providers
+
+### Quick Start
+
+1. **Set up PostgreSQL** (see [docs/postgres-setup.md](docs/postgres-setup.md)):
+   ```bash
+   # Create database and user
+   sudo -u postgres psql
+   CREATE DATABASE goverse;
+   CREATE USER goverse WITH PASSWORD 'goverse';
+   GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;
+   ```
+
+2. **Create a Persistent Object**:
+   ```go
+   import "github.com/xiaonanln/goverse/object"
+
+   type UserProfile struct {
+       object.BasePersistentObject
+       Username string
+       Email    string
+       Score    int
+   }
+
+   func (u *UserProfile) ToData() (map[string]interface{}, error) {
+       data, _ := u.BasePersistentObject.ToData()
+       data["username"] = u.Username
+       data["email"] = u.Email
+       data["score"] = u.Score
+       return data, nil
+   }
+
+   func (u *UserProfile) FromData(data map[string]interface{}) error {
+       u.BasePersistentObject.FromData(data)
+       if username, ok := data["username"].(string); ok {
+           u.Username = username
+       }
+       // ... load other fields
+       return nil
+   }
+   ```
+
+3. **Save and Load**:
+   ```go
+   import (
+       "github.com/xiaonanln/goverse/object"
+       "github.com/xiaonanln/goverse/util/postgres"
+   )
+
+   // Connect to database
+   config := postgres.DefaultConfig()
+   db, _ := postgres.NewDB(config)
+   db.InitSchema(ctx)
+
+   // Create provider
+   provider := postgres.NewPostgresPersistenceProvider(db)
+
+   // Save object
+   user := &UserProfile{}
+   user.OnInit(user, "user-123", nil)
+   user.SetPersistent(true)
+   user.Username = "alice"
+   object.SavePersistentObject(ctx, provider, user)
+
+   // Load object
+   loadedUser := &UserProfile{}
+   loadedUser.OnInit(loadedUser, "user-123", nil)
+   object.LoadPersistentObject(ctx, provider, loadedUser, "user-123")
+   ```
+
+### Examples and Documentation
+
+- **Full Example**: See `examples/persistence/main.go` for a complete working example
+- **Setup Guide**: See `docs/postgres-setup.md` for detailed PostgreSQL setup instructions
+- **Production Guide**: Learn about SSL, connection pooling, and performance tuning
+
+---
+
 ## 🛠 Getting Started
 
 1. **Start the inspector UI (optional):**
@@ -307,6 +397,8 @@ This script is used in CI/CD but can also be run locally for testing.
 
 ## 📚 Documentation
 
+- [PostgreSQL Setup](docs/postgres-setup.md): Guide for setting up object persistence with PostgreSQL.
+- [Persistence Example](examples/persistence/): Complete example of using PostgreSQL persistence.
 - [Inspector UI](inspector/web/index.html): Visualize cluster state and objects.
 - [Chat Sample](samples/chat/): Example distributed chat with multiple rooms.
 - [Client Service](client/): Client connection management and RPC routing.
