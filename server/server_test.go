@@ -201,6 +201,9 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 		t.Fatalf("Failed to register node: %v", err)
 	}
 
+	// Wait for maintainLease to complete registration
+	time.Sleep(500 * time.Millisecond)
+
 	// Verify the node is stored at the correct etcd path with custom prefix
 	expectedNodePath := customPrefix + "/nodes/" + config.AdvertiseAddress
 	getResp, err := etcdMgr.GetClient().Get(ctx, expectedNodePath)
