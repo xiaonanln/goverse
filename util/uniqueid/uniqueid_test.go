@@ -2,6 +2,7 @@ package uniqueid
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,10 +80,8 @@ func TestUniqueIdNoSlash(t *testing.T) {
 	const numTests = 10000
 	for i := 0; i < numTests; i++ {
 		id := UniqueId()
-		for _, char := range id {
-			if char == '/' {
-				t.Errorf("UniqueId() returned string containing '/': %s", id)
-			}
+		if strings.Contains(id, "/") {
+			t.Errorf("UniqueId() returned string containing '/': %s", id)
 		}
 	}
 }
