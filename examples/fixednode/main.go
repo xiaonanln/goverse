@@ -40,16 +40,28 @@ func main() {
 	fmt.Printf("Target Node: %s\n", node2)
 	fmt.Println()
 
-	// Example 3: Regular object ID without fixed node (would use shard mapping)
-	// Note: This would fail without a configured shard mapping, but shows the syntax
-	objectID3 := "regular-object-without-fixed-node"
+	// Example 3: Object ID with multiple slashes (path-like structure)
+	objectID3 := "localhost:7001/users/sessions/abc-123"
+	node3, err := sm.GetNodeForObject(ctx, objectID3)
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
 	fmt.Printf("Object ID: %s\n", objectID3)
+	fmt.Printf("Target Node: %s\n", node3)
+	fmt.Printf("Note: Everything after first '/' is the object identifier\n")
+	fmt.Println()
+
+	// Example 4: Regular object ID without fixed node (would use shard mapping)
+	// Note: This would fail without a configured shard mapping, but shows the syntax
+	objectID4 := "regular-object-without-fixed-node"
+	fmt.Printf("Object ID: %s\n", objectID4)
 	fmt.Printf("Note: This uses shard-based routing (requires shard mapping setup)\n")
 	fmt.Println()
 
 	fmt.Println("Summary:")
 	fmt.Println("- Object IDs with '/' separator pin objects to specific nodes")
-	fmt.Println("- Format: nodeAddress/objectID")
+	fmt.Println("- The first '/' separates node address from object identifier")
+	fmt.Println("- Object IDs can contain additional slashes (paths)")
 	fmt.Println("- Regular object IDs use shard-based routing")
 	fmt.Println("- This is similar to how client IDs work in the system")
 }

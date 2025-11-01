@@ -165,7 +165,7 @@ func (sm *ShardMapper) GetNodeForShard(ctx context.Context, shardID int) (string
 
 // GetNodeForObject returns the node address that should handle the given object ID
 // If the object ID contains a "/" separator (e.g., "localhost:7001/object-123"),
-// the part before the "/" is treated as a fixed node address and returned directly.
+// the part before the first "/" is treated as a fixed node address and returned directly.
 // This allows objects to be pinned to specific nodes, similar to client IDs.
 // Otherwise, the object is assigned to a node based on consistent hashing.
 func (sm *ShardMapper) GetNodeForObject(ctx context.Context, objectID string) (string, error) {
@@ -173,8 +173,8 @@ func (sm *ShardMapper) GetNodeForObject(ctx context.Context, objectID string) (s
 	// Format: nodeAddress/actualObjectID (e.g., "localhost:7001/object-123")
 	if strings.Contains(objectID, "/") {
 		parts := strings.SplitN(objectID, "/", 2)
-		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-			// Fixed node address specified
+		if len(parts) >= 1 && parts[0] != "" {
+			// Fixed node address specified (first part before /)
 			nodeAddr := parts[0]
 			sm.logger.Debugf("Object %s pinned to node %s", objectID, nodeAddr)
 			return nodeAddr, nil
