@@ -64,6 +64,7 @@ RUN su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/da
     su - postgres -c "psql -c \"CREATE DATABASE goverse;\"" && \
     su - postgres -c "psql -c \"CREATE USER goverse WITH PASSWORD 'goverse';\"" && \
     su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;\"" && \
+    su - postgres -c "psql -d goverse -c \"GRANT ALL ON SCHEMA public TO goverse;\"" && \
     su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data stop"
 
 # Default command
