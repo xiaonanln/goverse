@@ -1,7 +1,7 @@
 # Use official Golang image as the base
 FROM golang:1.25-bookworm
 
-# Install system dependencies (including Python and etcd for test_chat.py)
+# Install system dependencies (including Python, etcd, and PostgreSQL)
 RUN apt-get update && apt-get install -y \
     dos2unix \
     protobuf-compiler \
@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     wget \
     curl \
+    ca-certificates \
+    postgresql \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install etcd
@@ -42,6 +45,26 @@ RUN go mod download
 
 # Compile protocol buffers
 RUN ./script/compile-proto.sh
+
+# Configure PostgreSQL
+# Create directories for PostgreSQL
+RUN mkdir -p /var/run/postgresql && chown -R postgres:postgres /var/run/postgresql
+
+# Initialize PostgreSQL database cluster
+RUN su - postgres -c "/usr/lib/postgresql/*/bin/initdb -D /var/lib/postgresql/data"
+
+# Configure PostgreSQL to accept local connections
+RUN echo "host all all 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf && \
+    echo "listen_addresses='*'" >> /var/lib/postgresql/data/postgresql.conf
+
+# Start PostgreSQL, create database and user, then stop
+RUN su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data start" && \
+    sleep 5 && \
+    su - postgres -c "psql -c \"ALTER USER postgres PASSWORD 'postgres';\"" && \
+    su - postgres -c "psql -c \"CREATE DATABASE goverse;\"" && \
+    su - postgres -c "psql -c \"CREATE USER goverse WITH PASSWORD 'goverse';\"" && \
+    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;\"" && \
+    su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data stop"
 
 # Default command
 CMD ["bash"]
