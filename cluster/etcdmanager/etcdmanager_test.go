@@ -479,6 +479,9 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 		}
 	}
 
+	// Wait a bit to allow maintainLease goroutine to create the lease and complete registration
+	time.Sleep(500 * time.Millisecond)
+
 	// Get all registered nodes
 	registeredNodes, _, err := mgr.getAllNodes(ctx)
 	if err != nil {
@@ -532,6 +535,9 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 		t.Fatalf("RegisterNode() error = %v", err)
 		return
 	}
+
+	// Wait for maintainLease to complete registration
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify node is registered
 	nodes, _, err := mgr.getAllNodes(ctx)
@@ -587,6 +593,9 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 	} else {
 		t.Logf("Expected error: %v", err)
 	}
+
+	// Wait for maintainLease to complete registration
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify only first node is registered
 	nodes, _, err := mgr.getAllNodes(ctx)
@@ -687,6 +696,9 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 		// to avoid lease conflict
 		break // For now, just test with one node
 	}
+
+	// Wait for maintainLease to complete registration
+	time.Sleep(500 * time.Millisecond)
 
 	// Get all nodes
 	nodes, _, err := mgr.getAllNodes(ctx)
