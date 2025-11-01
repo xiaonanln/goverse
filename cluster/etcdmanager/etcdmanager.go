@@ -34,6 +34,7 @@ type EtcdManager struct {
 	keepAliveMu       sync.Mutex
 	keepAliveCtx      context.Context
 	keepAliveStopped  bool
+	keepAliveWg       sync.WaitGroup
 }
 
 // NewEtcdManager creates a new etcd manager.
@@ -109,6 +110,9 @@ func (mgr *EtcdManager) Close() error {
 	}
 	mgr.keepAliveStopped = true
 	mgr.keepAliveMu.Unlock()
+
+	// Wait for the keep-alive loop to stop
+	mgr.keepAliveWg.Wait()
 
 	if mgr.client != nil {
 		mgr.logger.Infof("Closing etcd connection")
@@ -222,6 +226,7 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 	mgr.keepAliveMu.Unlock()
 
 	// Start the keep-alive loop in a goroutine
+	mgr.keepAliveWg.Add(1)
 	go mgr.keepAliveLoop(nodeAddress)
 
 	mgr.logger.Infof("Started keep-alive loop for node %s", nodeAddress)
@@ -230,6 +235,8 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 
 // keepAliveLoop maintains the lease and registration for a node with automatic retry
 func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
+	defer mgr.keepAliveWg.Done()
+	
 	retryDelay := 1 * time.Second
 	maxRetryDelay := 30 * time.Second
 	
@@ -293,7 +300,10 @@ func (mgr *EtcdManager) maintainLease(ctx context.Context, nodeAddress string) e
 		return fmt.Errorf("failed to grant lease: %w", err)
 	}
 
+	// Store the lease ID (protected by mutex)
+	mgr.keepAliveMu.Lock()
 	mgr.leaseID = lease.ID
+	mgr.keepAliveMu.Unlock()
 
 	// Register the node with the lease
 	key := mgr.GetNodesPrefix() + nodeAddress
@@ -339,18 +349,28 @@ func (mgr *EtcdManager) UnregisterNode(ctx context.Context, nodeAddress string) 
 	mgr.keepAliveStopped = true
 	mgr.keepAliveMu.Unlock()
 
+	// Wait for the keep-alive loop to stop
+	mgr.keepAliveWg.Wait()
+
 	if mgr.client == nil {
 		// No-op if client is not connected
 		return nil
 	}
 
+	// Get the current lease ID
+	mgr.keepAliveMu.Lock()
+	leaseID := mgr.leaseID
+	mgr.keepAliveMu.Unlock()
+
 	// Revoke the lease
-	if mgr.leaseID != 0 {
-		_, err := mgr.client.Revoke(ctx, mgr.leaseID)
+	if leaseID != 0 {
+		_, err := mgr.client.Revoke(ctx, leaseID)
 		if err != nil {
 			mgr.logger.Warnf("Failed to revoke lease: %v", err)
 		}
+		mgr.keepAliveMu.Lock()
 		mgr.leaseID = 0
+		mgr.keepAliveMu.Unlock()
 	}
 
 	// Delete the node key
