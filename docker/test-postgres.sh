@@ -88,12 +88,14 @@ echo "✓ Can connect as goverse user with password authentication"
 # Test creating a table
 echo ""
 echo "8. Testing table creation and data insertion..."
-if ! PGPASSWORD=goverse psql -h localhost -U goverse -d goverse -c '
-    CREATE TABLE IF NOT EXISTS test_table (id SERIAL PRIMARY KEY, name TEXT);
-    INSERT INTO test_table (name) VALUES ('\''test'\'');
-    SELECT COUNT(*) FROM test_table;
-    DROP TABLE test_table;
-' > /dev/null 2>&1; then
+PGPASSWORD=goverse psql -h localhost -U goverse -d goverse > /dev/null 2>&1 << 'EOSQL'
+CREATE TABLE IF NOT EXISTS test_table (id SERIAL PRIMARY KEY, name TEXT);
+INSERT INTO test_table (name) VALUES ('test');
+SELECT COUNT(*) FROM test_table;
+DROP TABLE test_table;
+EOSQL
+
+if [ $? -ne 0 ]; then
     echo "❌ Cannot create table and insert data"
     su - postgres -c '/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data stop' > /dev/null 2>&1
     exit 1
