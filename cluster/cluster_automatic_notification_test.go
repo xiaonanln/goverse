@@ -2,12 +2,10 @@ package cluster
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -76,7 +74,6 @@ func TestAutomaticShardMappingNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes: %v", err)
 	}
-	defer cluster.StopWatchingNodes()
 
 	// Wait for node to be registered
 	time.Sleep(500 * time.Millisecond)
@@ -171,7 +168,6 @@ func TestShardMappingChangeAfterClusterReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes: %v", err)
 	}
-	defer cluster1.StopWatchingNodes()
 
 	// Wait for node to be registered
 	time.Sleep(500 * time.Millisecond)
@@ -216,7 +212,6 @@ func TestShardMappingChangeAfterClusterReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes on node2: %v", err)
 	}
-	defer cluster2.StopWatchingNodes()
 
 	err = cluster2.StartShardMappingManagement(ctx)
 	if err != nil {
