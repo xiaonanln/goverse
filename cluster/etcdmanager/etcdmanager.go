@@ -216,11 +216,19 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 		return nil
 	}
 
+	// Check if keep-alive loop is already running for this node
+	mgr.keepAliveMu.Lock()
+	if mgr.keepAliveCtx != nil && mgr.keepAliveCtx.Err() == nil && !mgr.keepAliveStopped {
+		// Keep-alive loop is already running
+		mgr.keepAliveMu.Unlock()
+		mgr.logger.Debugf("Keep-alive loop already running for node %s, skipping", nodeAddress)
+		return nil
+	}
+
 	// Mark this node as registered
 	mgr.registeredNodeID = nodeAddress
 
 	// Create a cancellable context for the keep-alive loop
-	mgr.keepAliveMu.Lock()
 	mgr.keepAliveStopped = false
 	mgr.keepAliveCtx, mgr.keepAliveCancel = context.WithCancel(context.Background())
 	mgr.keepAliveMu.Unlock()
@@ -236,7 +244,7 @@ func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) er
 // keepAliveLoop maintains the lease and registration for a node with automatic retry
 func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
 	defer mgr.keepAliveWg.Done()
-	
+
 	retryDelay := 1 * time.Second
 	maxRetryDelay := 30 * time.Second
 	
@@ -292,6 +300,21 @@ func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
 func (mgr *EtcdManager) maintainLease(ctx context.Context, nodeAddress string) error {
 	if mgr.client == nil {
 		return fmt.Errorf("etcd client not connected")
+	}
+
+	// Get and revoke any previous lease before creating a new one
+	// This prevents lease leaks when retrying after keep-alive failures
+	mgr.keepAliveMu.Lock()
+	oldLeaseID := mgr.leaseID
+	mgr.keepAliveMu.Unlock()
+
+	if oldLeaseID != 0 {
+		// Best effort revoke - don't fail if it doesn't work
+		// The lease will expire naturally if revoke fails
+		_, err := mgr.client.Revoke(ctx, oldLeaseID)
+		if err != nil {
+			mgr.logger.Debugf("Failed to revoke old lease %d: %v (will create new lease anyway)", oldLeaseID, err)
+		}
 	}
 
 	// Create a lease
