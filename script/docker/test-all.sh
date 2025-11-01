@@ -23,6 +23,12 @@ if ! bash /app/script/docker/start-etcd.sh; then
     exit 1
 fi
 
+# Start PostgreSQL
+if ! bash /app/script/docker/start-postgres.sh; then
+    echo "✗ Failed to start PostgreSQL"
+    exit 1
+fi
+
 echo
 echo "Running Go unit tests..."
 echo
