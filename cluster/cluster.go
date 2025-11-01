@@ -109,12 +109,29 @@ func (c *Cluster) ClusterReady() <-chan bool {
 	return c.clusterReadyChan
 }
 
+// IsReady returns true if the cluster is ready (shard mapping is loaded)
+func (c *Cluster) IsReady() bool {
+	select {
+	case <-c.clusterReadyChan:
+		return true
+	default:
+		return false
+	}
+}
+
 // markClusterReady marks the cluster as ready by closing the clusterReadyChan
 // This is called when shard mapping is successfully loaded or created
 func (c *Cluster) markClusterReady() {
 	c.clusterReadyOnce.Do(func() {
 		c.logger.Infof("Cluster is now ready")
 		close(c.clusterReadyChan)
+		
+		// When cluster becomes ready, always trigger OnShardMappingChanged
+		if c.thisNode != nil {
+			if mapping, err := c.shardMapper.GetShardMapping(c.shardMappingCtx); err == nil {
+				c.thisNode.OnShardMappingChanged(c.shardMappingCtx, mapping)
+			}
+		}
 	})
 }
 
@@ -461,8 +478,8 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 		}
 		c.logger.Infof("Successfully updated shard mapping (version %d)", mapping.Version)
 		
-		// Notify this node about shard mapping change
-		if c.thisNode != nil {
+		// Notify this node about shard mapping change only if cluster is ready
+		if c.IsReady() && c.thisNode != nil {
 			c.thisNode.OnShardMappingChanged(ctx, mapping)
 		}
 	} else {
@@ -584,11 +601,8 @@ func (c *Cluster) handleShardMappingCheck() {
 					c.logger.Errorf("Failed to initialize shard mapping: %v", err)
 				} else {
 					// Successfully initialized shard mapping
+					// markClusterReady will trigger OnShardMappingChanged
 					c.markClusterReady()
-					// Get the new mapping and notify node
-					if newMapping, err := c.shardMapper.GetShardMapping(ctx); err == nil && c.thisNode != nil {
-						c.thisNode.OnShardMappingChanged(ctx, newMapping)
-					}
 				}
 			} else {
 				// Existing mapping, update if needed
@@ -597,8 +611,9 @@ func (c *Cluster) handleShardMappingCheck() {
 					c.logger.Errorf("Failed to update shard mapping: %v", err)
 				} else {
 					// Successfully loaded/updated shard mapping
+					// markClusterReady will trigger OnShardMappingChanged on first ready
+					// UpdateShardMapping handles subsequent changes
 					c.markClusterReady()
-					// Note: UpdateShardMapping already calls OnShardMappingChanged if version changed
 				}
 			}
 		} else {
@@ -624,10 +639,12 @@ func (c *Cluster) handleShardMappingCheck() {
 		} else {
 			c.logger.Debugf("Refreshed shard mapping from etcd")
 			// Successfully loaded shard mapping
+			// markClusterReady will trigger OnShardMappingChanged on first ready
+			wasReady := c.IsReady()
 			c.markClusterReady()
 			
-			// If version changed, notify node
-			if newMapping.Version != oldVersion && c.thisNode != nil {
+			// If cluster was already ready and version changed, notify node
+			if wasReady && newMapping.Version != oldVersion && c.thisNode != nil {
 				c.thisNode.OnShardMappingChanged(ctx, newMapping)
 			}
 		}
