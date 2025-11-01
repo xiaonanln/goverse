@@ -397,6 +397,44 @@ func TestUpdateShardMapping(t *testing.T) {
 	}
 }
 
+func TestUpdateShardMapping_SameNodesDifferentOrder(t *testing.T) {
+	sm := NewShardMapper(nil)
+	ctx := context.Background()
+
+	// Create initial mapping with nodes in one order
+	initialNodes := []string{"node1", "node2", "node3"}
+	initialMapping, err := sm.CreateShardMapping(ctx, initialNodes)
+	if err != nil {
+		t.Fatalf("CreateShardMapping() error: %v", err)
+	}
+
+	// Store in cache to simulate it being loaded from etcd
+	sm.mu.Lock()
+	sm.mapping = initialMapping
+	sm.mu.Unlock()
+
+	// Update with same nodes but in different order (should NOT increment version)
+	updatedNodes := []string{"node3", "node1", "node2"}
+	updatedMapping, err := sm.UpdateShardMapping(ctx, updatedNodes)
+	if err != nil {
+		t.Fatalf("UpdateShardMapping() error: %v", err)
+	}
+
+	// Verify version is NOT bumped (no changes detected)
+	if updatedMapping.Version != initialMapping.Version {
+		t.Errorf("UpdateShardMapping() version = %d, want %d (no change expected for same nodes in different order)", updatedMapping.Version, initialMapping.Version)
+	}
+
+	// Verify all shards stayed on same nodes (identical mapping)
+	for shardID := 0; shardID < NumShards; shardID++ {
+		initialNode := initialMapping.Shards[shardID]
+		updatedNode := updatedMapping.Shards[shardID]
+		if initialNode != updatedNode {
+			t.Errorf("Shard %d moved from %s to %s when it should have stayed (same nodes, different order)", shardID, initialNode, updatedNode)
+		}
+	}
+}
+
 func TestUpdateShardMapping_NodeRemoved(t *testing.T) {
 	sm := NewShardMapper(nil)
 	ctx := context.Background()
