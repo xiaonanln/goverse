@@ -280,22 +280,22 @@ GoVerse supports optional PostgreSQL persistence for distributed objects, enabli
    import "github.com/xiaonanln/goverse/object"
 
    type UserProfile struct {
-       object.BasePersistentObject
+       object.BaseObject
        Username string
        Email    string
        Score    int
    }
 
    func (u *UserProfile) ToData() (map[string]interface{}, error) {
-       data, _ := u.BasePersistentObject.ToData()
-       data["username"] = u.Username
-       data["email"] = u.Email
-       data["score"] = u.Score
+       data := map[string]interface{}{
+           "username": u.Username,
+           "email":    u.Email,
+           "score":    u.Score,
+       }
        return data, nil
    }
 
    func (u *UserProfile) FromData(data map[string]interface{}) error {
-       u.BasePersistentObject.FromData(data)
        if username, ok := data["username"].(string); ok {
            u.Username = username
        }
@@ -314,6 +314,7 @@ GoVerse supports optional PostgreSQL persistence for distributed objects, enabli
    // Connect to database
    config := postgres.DefaultConfig()
    db, _ := postgres.NewDB(config)
+   db.Ping(ctx)  // Verify connection
    db.InitSchema(ctx)
 
    // Create provider
@@ -322,14 +323,13 @@ GoVerse supports optional PostgreSQL persistence for distributed objects, enabli
    // Save object
    user := &UserProfile{}
    user.OnInit(user, "user-123", nil)
-   user.SetPersistent(true)
    user.Username = "alice"
-   object.SavePersistentObject(ctx, provider, user)
+   object.SaveObject(ctx, provider, user)
 
    // Load object
    loadedUser := &UserProfile{}
    loadedUser.OnInit(loadedUser, "user-123", nil)
-   object.LoadPersistentObject(ctx, provider, loadedUser, "user-123")
+   object.LoadObject(ctx, provider, loadedUser, "user-123")
    ```
 
 ### Examples and Documentation

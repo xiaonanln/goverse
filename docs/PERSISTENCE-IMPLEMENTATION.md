@@ -20,8 +20,8 @@ This implementation adds optional persistence support for Goverse distributed ob
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │              Object Persistence Framework                    │
-│  - BasePersistentObject (base implementation)               │
-│  - SavePersistentObject() / LoadPersistentObject()          │
+│  - BaseObject (base implementation)               │
+│  - SaveObject() / LoadObject()          │
 │  - PersistenceProvider interface                            │
 └────────────────────┬────────────────────────────────────────┘
                      │
@@ -64,7 +64,7 @@ The `PersistenceProvider` interface allows easy addition of other storage backen
 ### 2. Opt-In Persistence
 Objects must explicitly enable persistence:
 ```go
-obj.SetPersistent(true)
+obj.// Persistence is determined by ToData() implementation
 ```
 This ensures backward compatibility and avoids unintended storage costs.
 
@@ -133,7 +133,7 @@ CREATE INDEX idx_goverse_objects_updated_at ON goverse_objects(updated_at);
 
 ```go
 type UserProfile struct {
-    object.BasePersistentObject
+    object.BaseObject
     Username string
     Email    string
     Score    int
@@ -141,16 +141,16 @@ type UserProfile struct {
 
 // Implement serialization
 func (u *UserProfile) ToData() (map[string]interface{}, error) {
-    data, _ := u.BasePersistentObject.ToData()
-    data["username"] = u.Username
-    data["email"] = u.Email
-    data["score"] = u.Score
+    data := map[string]interface{}{
+        "username": u.Username,
+        "email":    u.Email,
+        "score":    u.Score,
+    }
     return data, nil
 }
 
 // Implement deserialization
 func (u *UserProfile) FromData(data map[string]interface{}) error {
-    u.BasePersistentObject.FromData(data)
     if username, ok := data["username"].(string); ok {
         u.Username = username
     }
@@ -201,21 +201,21 @@ provider := postgres.NewPostgresPersistenceProvider(db)
 // Create and save
 user := &UserProfile{}
 user.OnInit(user, "user-123", nil)
-user.SetPersistent(true)
+user.// Persistence is determined by ToData() implementation
 user.Username = "alice"
 user.Email = "alice@example.com"
 user.Score = 100
 
-err := object.SavePersistentObject(ctx, provider, user)
+err := object.SaveObject(ctx, provider, user)
 
 // Load
 loadedUser := &UserProfile{}
 loadedUser.OnInit(loadedUser, "user-123", nil)
-err = object.LoadPersistentObject(ctx, provider, loadedUser, "user-123")
+err = object.LoadObject(ctx, provider, loadedUser, "user-123")
 
 // Update
 loadedUser.Score += 50
-err = object.SavePersistentObject(ctx, provider, loadedUser)
+err = object.SaveObject(ctx, provider, loadedUser)
 ```
 
 ## Testing Strategy
@@ -315,7 +315,7 @@ type MyObject struct {
 To:
 ```go
 type MyObject struct {
-    object.BasePersistentObject
+    object.BaseObject
     // fields...
 }
 
@@ -327,8 +327,8 @@ Follow `docs/postgres-setup.md`
 
 ### Step 4: Enable Persistence
 ```go
-obj.SetPersistent(true)
-object.SavePersistentObject(ctx, provider, obj)
+obj.// Persistence is determined by ToData() implementation
+object.SaveObject(ctx, provider, obj)
 ```
 
 ## Conclusion

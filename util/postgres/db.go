@@ -31,14 +31,6 @@ func NewDB(config *Config) (*DB, error) {
 	conn.SetMaxIdleConns(5)
 	conn.SetConnMaxLifetime(5 * time.Minute)
 
-	// Verify connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := conn.PingContext(ctx); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
 	return &DB{
 		conn:   conn,
 		config: config,
