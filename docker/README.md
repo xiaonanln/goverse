@@ -60,6 +60,23 @@ cd /app/examples/persistence
 go run main.go
 ```
 
+### Verifying PostgreSQL Setup
+
+A test script is provided to verify that PostgreSQL is correctly configured:
+
+```bash
+# Inside the container
+/app/docker/test-postgres.sh
+```
+
+This script will:
+- Verify PostgreSQL is installed
+- Start the PostgreSQL server
+- Test database and user creation
+- Verify connection and permissions
+- Test table creation and data insertion
+- Stop the PostgreSQL server
+
 ### Connecting to PostgreSQL
 
 You can connect to the database using psql:
