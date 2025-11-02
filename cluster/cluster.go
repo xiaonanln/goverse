@@ -159,6 +159,8 @@ func (c *Cluster) ResetForTesting() {
 	c.thisNode = nil
 	c.etcdManager = nil
 	c.consensusManager = nil
+	c.etcdAddress = ""
+	c.etcdPrefix = ""
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil
