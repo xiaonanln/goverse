@@ -16,10 +16,6 @@ import (
 type ShardMapping struct {
 	// Map from shard ID to node address
 	Shards map[int]string `json:"shards"`
-	// Sorted list of nodes in the cluster
-	Nodes []string `json:"nodes"`
-	// Version for optimistic concurrency control
-	Version int64 `json:"version"`
 }
 
 // ShardMapper manages the shard-to-node mapping
@@ -63,9 +59,7 @@ func (sm *ShardMapper) CreateShardMapping(ctx context.Context, nodes []string) (
 
 	// Create the mapping by distributing shards evenly across nodes
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string, NumShards),
-		Nodes:   sortedNodes,
-		Version: 1,
+		Shards: make(map[int]string, NumShards),
 	}
 
 	for shardID := 0; shardID < NumShards; shardID++ {
@@ -95,7 +89,7 @@ func (sm *ShardMapper) StoreShardMapping(ctx context.Context, mapping *ShardMapp
 		return fmt.Errorf("failed to store shard mapping in etcd: %w", err)
 	}
 
-	sm.logger.Infof("Stored shard mapping (version %d) in etcd", mapping.Version)
+	sm.logger.Infof("Stored shard mapping in etcd")
 
 	// Update local cache
 	sm.mu.Lock()
@@ -134,7 +128,7 @@ func (sm *ShardMapper) GetShardMapping(ctx context.Context) (*ShardMapping, erro
 		return nil, fmt.Errorf("failed to unmarshal shard mapping: %w", err)
 	}
 
-	sm.logger.Infof("Retrieved shard mapping (version %d) from etcd", mapping.Version)
+	sm.logger.Infof("Retrieved shard mapping from etcd")
 
 	// Update local cache
 	sm.mu.Lock()
@@ -202,7 +196,7 @@ func (sm *ShardMapper) UpdateShardMapping(ctx context.Context, nodes []string) (
 		return sm.CreateShardMapping(ctx, nodes)
 	}
 
-	sm.logger.Infof("Updating shard mapping for %d nodes (current version: %d)", len(nodes), currentMapping.Version)
+	sm.logger.Infof("Updating shard mapping for %d nodes", len(nodes))
 
 	// Sort nodes for deterministic assignment
 	sortedNodes := make([]string, len(nodes))
@@ -232,25 +226,18 @@ func (sm *ShardMapper) UpdateShardMapping(ctx context.Context, nodes []string) (
 		}
 	}
 
-	// Check if node list changed (even if no shards moved)
-	if !nodesEqual(currentMapping.Nodes, sortedNodes) {
-		needsUpdate = true
-	}
-
 	// If no changes needed, return the current mapping
 	if !needsUpdate {
-		sm.logger.Infof("No changes needed to shard mapping, keeping version %d", currentMapping.Version)
+		sm.logger.Infof("No changes needed to shard mapping")
 		return currentMapping, nil
 	}
 
-	// Create new mapping with incremented version
+	// Create new mapping
 	newMapping := &ShardMapping{
-		Shards:  newShards,
-		Nodes:   sortedNodes,
-		Version: currentMapping.Version + 1,
+		Shards: newShards,
 	}
 
-	sm.logger.Infof("Updated shard mapping to version %d", newMapping.Version)
+	sm.logger.Infof("Updated shard mapping")
 	return newMapping, nil
 }
 

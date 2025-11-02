@@ -17,10 +17,11 @@ import (
 
 // ClusterState represents the current state of the cluster
 type ClusterState struct {
-	Nodes        map[string]bool
-	ShardMapping *sharding.ShardMapping
-	Revision     int64
-	LastChange   time.Time
+	Nodes              map[string]bool
+	ShardMapping       *sharding.ShardMapping
+	ShardMappingVersion int64 // Version for shard mapping updates
+	Revision           int64
+	LastChange         time.Time
 }
 
 // StateChangeListener is the interface for components that want to be notified of state changes
@@ -113,17 +114,17 @@ func (cm *ConsensusManager) Initialize(ctx context.Context) error {
 	cm.mu.Unlock()
 
 	cm.logger.Infof("Loaded cluster state: %d nodes, shard mapping version %d, revision %d",
-		len(state.Nodes), getShardMappingVersion(state.ShardMapping), state.Revision)
+		len(state.Nodes), state.ShardMappingVersion, state.Revision)
 
 	return nil
 }
 
-// getShardMappingVersion safely gets the shard mapping version
-func getShardMappingVersion(mapping *sharding.ShardMapping) int64 {
-	if mapping == nil {
+// getShardMappingVersion safely gets the shard mapping version from ClusterState
+func getShardMappingVersion(state *ClusterState) int64 {
+	if state == nil {
 		return -1
 	}
-	return mapping.Version
+	return state.ShardMappingVersion
 }
 
 // StartWatch starts watching for changes to cluster state
@@ -251,22 +252,20 @@ func (cm *ConsensusManager) handleShardMappingEvent(event *clientv3.Event) {
 		}
 
 		cm.mu.Lock()
-		oldVersion := int64(-1)
-		if cm.state.ShardMapping != nil {
-			oldVersion = cm.state.ShardMapping.Version
-		}
+		oldVersion := cm.state.ShardMappingVersion
 		cm.state.ShardMapping = &mapping
+		cm.state.ShardMappingVersion++
+		newVersion := cm.state.ShardMappingVersion
 		cm.mu.Unlock()
 
-		if mapping.Version != oldVersion {
-			cm.logger.Infof("Shard mapping updated (version %d -> %d)", oldVersion, mapping.Version)
-			// Asynchronously notify listeners to prevent deadlocks
-			// Note: rapid mapping changes may result in out-of-order notifications
-			go cm.notifyStateChanged()
-		}
+		cm.logger.Infof("Shard mapping updated (version %d -> %d)", oldVersion, newVersion)
+		// Asynchronously notify listeners to prevent deadlocks
+		// Note: rapid mapping changes may result in out-of-order notifications
+		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		cm.mu.Lock()
 		cm.state.ShardMapping = nil
+		cm.state.ShardMappingVersion = 0
 		cm.mu.Unlock()
 		cm.logger.Infof("Shard mapping deleted")
 		// Notify listeners about the deletion
@@ -290,9 +289,10 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	}
 
 	state := &ClusterState{
-		Nodes:      make(map[string]bool),
-		Revision:   resp.Header.Revision,
-		LastChange: time.Now(),
+		Nodes:               make(map[string]bool),
+		ShardMappingVersion: 0, // Will be set to 1 if mapping exists
+		Revision:            resp.Header.Revision,
+		LastChange:          time.Now(),
 	}
 
 	nodesPrefix := cm.etcdManager.GetNodesPrefix()
@@ -306,6 +306,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 			var mapping sharding.ShardMapping
 			if err := json.Unmarshal(kv.Value, &mapping); err == nil {
 				state.ShardMapping = &mapping
+				state.ShardMappingVersion = 1 // Initial version if mapping exists
 			}
 		}
 	}
@@ -429,12 +430,14 @@ func (cm *ConsensusManager) StoreShardMapping(ctx context.Context, mapping *shar
 		return fmt.Errorf("failed to store shard mapping: %w", err)
 	}
 
-	cm.logger.Infof("Stored shard mapping (version %d) in etcd", mapping.Version)
-
 	// Update in-memory state
 	cm.mu.Lock()
 	cm.state.ShardMapping = mapping
+	cm.state.ShardMappingVersion++
+	version := cm.state.ShardMappingVersion
 	cm.mu.Unlock()
+
+	cm.logger.Infof("Stored shard mapping (version %d) in etcd", version)
 
 	return nil
 }
@@ -453,9 +456,7 @@ func (cm *ConsensusManager) CreateShardMapping() (*sharding.ShardMapping, error)
 
 	// Create the mapping
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string, sharding.NumShards),
-		Nodes:   sortedNodes,
-		Version: 1,
+		Shards: make(map[int]string, sharding.NumShards),
 	}
 
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
@@ -510,25 +511,21 @@ func (cm *ConsensusManager) UpdateShardMapping() (*sharding.ShardMapping, error)
 		}
 	}
 
-	// Check if node list changed
-	if !nodesEqual(currentMapping.Nodes, sortedNodes) {
-		needsUpdate = true
-	}
-
 	// If no changes needed, return current mapping
 	if !needsUpdate {
-		cm.logger.Infof("No changes needed to shard mapping (version %d)", currentMapping.Version)
+		cm.mu.RLock()
+		version := cm.state.ShardMappingVersion
+		cm.mu.RUnlock()
+		cm.logger.Infof("No changes needed to shard mapping (version %d)", version)
 		return currentMapping, nil
 	}
 
-	// Create new mapping with incremented version
+	// Create new mapping
 	newMapping := &sharding.ShardMapping{
-		Shards:  newShards,
-		Nodes:   sortedNodes,
-		Version: currentMapping.Version + 1,
+		Shards: newShards,
 	}
 
-	cm.logger.Infof("Updated shard mapping to version %d", newMapping.Version)
+	cm.logger.Infof("Updated shard mapping")
 	return newMapping, nil
 }
 

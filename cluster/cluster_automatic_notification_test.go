@@ -108,8 +108,9 @@ func TestAutomaticShardMappingNotification(t *testing.T) {
 		t.Fatalf("Failed to get shard mapping: %v", err)
 	}
 
-	if mapping.Version < 1 {
-		t.Errorf("Expected shard mapping version >= 1, got %d", mapping.Version)
+	// Note: Version is now tracked in ClusterState
+	if mapping == nil {
+		t.Error("Expected shard mapping to exist")
 	}
 
 	// Verify objects are still on the node
@@ -242,14 +243,19 @@ func TestShardMappingChangeAfterClusterReady(t *testing.T) {
 		t.Fatalf("Failed to get shard mapping from cluster2: %v", err)
 	}
 
-	// Both should have the same version
-	if mapping1.Version != mapping2.Version {
-		t.Errorf("Shard mapping versions differ: cluster1=%d, cluster2=%d", mapping1.Version, mapping2.Version)
+	// Note: Version is now tracked in ClusterState, not ShardMapping
+	// Both should have the same mapping (pointer comparison not valid across clusters)
+	if len(mapping1.Shards) != len(mapping2.Shards) {
+		t.Errorf("Shard mapping sizes differ: cluster1=%d, cluster2=%d", len(mapping1.Shards), len(mapping2.Shards))
 	}
 
-	// The mapping should include both nodes
-	if len(mapping1.Nodes) != 2 {
-		t.Errorf("Expected 2 nodes in mapping, got %d", len(mapping1.Nodes))
+	// The mapping should include both nodes (verify by checking shard assignments)
+	nodeSet := make(map[string]bool)
+	for _, node := range mapping1.Shards {
+		nodeSet[node] = true
+	}
+	if len(nodeSet) != 2 {
+		t.Errorf("Expected 2 nodes in mapping, got %d unique nodes", len(nodeSet))
 	}
 
 	t.Log("Test completed - shard mapping change after cluster ready triggers automatic notifications")
