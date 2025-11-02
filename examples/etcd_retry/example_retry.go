@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 func main() {
@@ -74,13 +75,26 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
-			// Try to get all nodes (this might fail if etcd is down)
-			nodes := mgr.GetNodes()
-			fmt.Printf("Currently tracking %d node(s)\n", len(nodes))
-			
+			// Try to get all nodes from etcd (this might fail if etcd is down)
+			nodesPrefix := mgr.GetNodesPrefix()
+			client := mgr.GetClient()
+			if client != nil {
+				ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				resp, err := client.Get(ctx, nodesPrefix, clientv3.WithPrefix())
+				cancel()
+
+				if err != nil {
+					fmt.Printf("Could not query nodes (etcd may be down): %v\n", err)
+				} else {
+					fmt.Printf("Currently tracking %d node(s)\n", len(resp.Kvs))
+				}
+			} else {
+				fmt.Println("etcd client not available")
+			}
+
 		case <-sigChan:
 			fmt.Println("\nReceived interrupt, cleaning up...")
-			
+
 			// Unregister node
 			err = mgr.UnregisterNode(ctx, nodeAddress)
 			if err != nil {
@@ -88,7 +102,7 @@ func main() {
 			} else {
 				fmt.Printf("Unregistered node %s\n", nodeAddress)
 			}
-			
+
 			return
 		}
 	}
