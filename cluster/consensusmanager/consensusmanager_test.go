@@ -180,10 +180,9 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 	cm.state.Nodes["localhost:47002"] = true
 
 	// Set initial mapping
-	cm.state.ShardMapping = &sharding.ShardMapping{
+	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]string),
 	}
-	cm.state.ShardMappingVersion = 5
 	for i := 0; i < sharding.NumShards; i++ {
 		cm.state.ShardMapping.Shards[i] = "localhost:47001"
 	}
@@ -217,10 +216,9 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	cm.state.Nodes["localhost:47002"] = true
 
 	// Set mapping with same nodes
-	cm.state.ShardMapping = &sharding.ShardMapping{
+	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]string),
 	}
-	cm.state.ShardMappingVersion = 5
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
@@ -238,7 +236,7 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	cm.mu.RLock()
 	sameMapping := (mapping == cm.state.ShardMapping)
 	cm.mu.RUnlock()
-	
+
 	if !sameMapping {
 		t.Error("Expected same mapping object when no changes needed")
 	}
@@ -327,10 +325,9 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 
 	// Set a mapping
 	cm.mu.Lock()
-	cm.state.ShardMapping = &sharding.ShardMapping{
+	cm.state.ShardMapping = &ShardMapping{
 		Shards: map[int]string{0: "localhost:47001", 1: "localhost:47002"},
 	}
-	cm.state.ShardMappingVersion = 1
 	cm.mu.Unlock()
 
 	node, err := cm.GetNodeForShard(0)
@@ -359,10 +356,9 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 
 	// Set a complete mapping
 	cm.mu.Lock()
-	cm.state.ShardMapping = &sharding.ShardMapping{
+	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]string),
 	}
-	cm.state.ShardMappingVersion = 1
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2

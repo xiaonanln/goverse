@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
@@ -434,38 +433,4 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 	default:
 		return fmt.Errorf("client %s message channel is full or closed", clientID)
 	}
-}
-
-// OnShardMappingChanged is called when the shard mapping changes in the cluster
-// This is a placeholder function that checks each object on this node and prints
-// whether it still belongs to this node according to the new shard mapping.
-// TODO: Implement actual shard migration logic
-func (node *Node) OnShardMappingChanged(ctx context.Context, newMapping *sharding.ShardMapping) {
-	node.logger.Infof("=== OnShardMappingChanged === checking object ownership")
-
-	// Get snapshot of all objects
-	objects := node.ListObjects()
-
-	// Check each object to see if it still belongs to this node
-	for _, objInfo := range objects {
-		shardID := sharding.GetShardID(objInfo.Id)
-		targetNode, ok := newMapping.Shards[shardID]
-
-		stillBelongsHere := ok && targetNode == node.advertiseAddress
-
-		if stillBelongsHere {
-			node.logger.Infof("Object %s (type=%s, shard=%d) still belongs to this node",
-				objInfo.Id, objInfo.Type, shardID)
-		} else {
-			if ok {
-				node.logger.Infof("Object %s (type=%s, shard=%d) should be migrated to node %s",
-					objInfo.Id, objInfo.Type, shardID, targetNode)
-			} else {
-				node.logger.Warnf("Object %s (type=%s, shard=%d) has no assigned node in mapping",
-					objInfo.Id, objInfo.Type, shardID)
-			}
-		}
-	}
-
-	node.logger.Infof("=== OnShardMappingChanged === Shard mapping check complete - checked %d objects", len(objects))
 }
