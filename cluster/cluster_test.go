@@ -165,10 +165,10 @@ func TestWatchNodes_NoEtcdManager(t *testing.T) {
 	err := cluster.WatchNodes(ctx)
 
 	if err == nil {
-		t.Error("WatchNodes should return error when etcd manager is not set")
+		t.Error("WatchNodes should return error when consensus manager is not set")
 	}
 
-	expectedErr := "etcd manager not set"
+	expectedErr := "consensus manager not initialized"
 	if err.Error() != expectedErr {
 		t.Errorf("WatchNodes error = %v; want %v", err.Error(), expectedErr)
 	}
