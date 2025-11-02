@@ -85,6 +85,32 @@ start_postgres() {
     return 1
 }
 
+# Function to compile protocol buffers
+compile_proto() {
+    echo "Compiling protocol buffers..."
+    
+    # Check if compile-proto.sh exists
+    if [ ! -f "/app/script/compile-proto.sh" ]; then
+        echo "✗ compile-proto.sh not found at /app/script/compile-proto.sh"
+        return 1
+    fi
+    
+    # Make script executable if needed
+    chmod +x /app/script/compile-proto.sh
+    
+    # Run the compilation script
+    cd /app
+    if ./script/compile-proto.sh > /tmp/proto-compile.log 2>&1; then
+        echo "✓ Protocol buffers compiled successfully"
+        return 0
+    else
+        echo "✗ Failed to compile protocol buffers"
+        echo "Compilation logs:"
+        cat /tmp/proto-compile.log
+        return 1
+    fi
+}
+
 # Main entrypoint logic
 echo "========================================"
 echo "Goverse Docker Entrypoint"
@@ -106,6 +132,11 @@ if is_postgres_running; then
 else
     start_postgres
 fi
+
+echo ""
+
+# Compile protocol buffers
+compile_proto
 
 echo ""
 echo "========================================"
