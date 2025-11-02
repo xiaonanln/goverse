@@ -193,8 +193,7 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 
 	// Set up a test mapping in ConsensusManager
 	testMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	// Use testing helper to set the mapping

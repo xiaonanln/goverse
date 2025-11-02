@@ -376,9 +376,11 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get shard mapping from cluster %d: %v", i, err)
 		}
-		if shardMapping.Version != shardMapping1.Version {
-			t.Errorf("Cluster %d has different shard mapping version (%d) than cluster 0 (%d)",
-				i, shardMapping.Version, shardMapping1.Version)
+		// Note: Version is now tracked in ClusterState
+		// Verify they have same number of shards
+		if len(shardMapping.Shards) != len(shardMapping1.Shards) {
+			t.Errorf("Cluster %d has different shard count (%d) than cluster 0 (%d)",
+				i, len(shardMapping.Shards), len(shardMapping1.Shards))
 		}
 	}
 

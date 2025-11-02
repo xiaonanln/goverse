@@ -71,9 +71,7 @@ func TestShardMappingChangeNotification(t *testing.T) {
 	cluster1.SetEtcdManager(mgr)
 
 	initialMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001"},
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	// Assign all shards to node1
@@ -86,9 +84,7 @@ func TestShardMappingChangeNotification(t *testing.T) {
 
 	// Create a new mapping with node2 added
 	newMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 2,
+		Shards: make(map[int]string),
 	}
 
 	// Distribute shards between node1 and node2
@@ -160,9 +156,7 @@ func TestShardMappingChangeWithCluster(t *testing.T) {
 
 	// Create and store initial mapping
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001"},
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	for i := 0; i < sharding.NumShards; i++ {
@@ -174,9 +168,7 @@ func TestShardMappingChangeWithCluster(t *testing.T) {
 
 	// Simulate a mapping update by creating a new version
 	newMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 2,
+		Shards: make(map[int]string),
 	}
 
 	// Distribute shards

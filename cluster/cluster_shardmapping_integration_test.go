@@ -157,13 +157,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 			t.Errorf("mapping2 has %d shards, want %d", len(mapping2.Shards), sharding.NumShards)
 		}
 
-		if mapping1.Version != 1 {
-			t.Errorf("mapping1 version = %d, want 1", mapping1.Version)
-		}
-
-		if mapping2.Version != 1 {
-			t.Errorf("mapping2 version = %d, want 1", mapping2.Version)
-		}
+		// Note: Version is now tracked in ClusterState
 
 		// Verify all shards are assigned to valid nodes
 		validNodes := map[string]bool{
@@ -340,14 +334,12 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Get initial mapping
-	initialMapping, err := cluster1.GetShardMapping(ctx)
+	_, err = cluster1.GetShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get initial mapping: %v", err)
 	}
 
-	if initialMapping.Version != 1 {
-		t.Errorf("Initial mapping version = %d, want 1", initialMapping.Version)
-	}
+	// Note: Version is now tracked in ClusterState
 
 	// Now add a third node
 	cluster3 := newClusterForTesting("TestCluster3")
@@ -410,12 +402,9 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 
 	// Version should remain 1 if no shards needed reassignment (all stayed on node1/node2)
-	// or increment to 2 if shards were reassigned
-	if updatedMapping.Version != 1 && updatedMapping.Version != 2 {
-		t.Errorf("Updated mapping version = %d, want 1 or 2", updatedMapping.Version)
-	}
+	// Note: Version is now tracked in ClusterState
 
-	t.Logf("Updated mapping version: %d", updatedMapping.Version)
+	t.Logf("Updated mapping retrieved")
 
 	// All three clusters should see the same mapping
 	mapping2, err := cluster2.GetShardMapping(ctx)
@@ -428,12 +417,13 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 		t.Fatalf("cluster3 failed to get updated mapping: %v", err)
 	}
 
-	if mapping2.Version != updatedMapping.Version {
-		t.Errorf("cluster2 mapping version = %d, want %d", mapping2.Version, updatedMapping.Version)
+	// Verify they all have the same number of shards
+	if len(mapping2.Shards) != len(updatedMapping.Shards) {
+		t.Errorf("cluster2 has %d shards, want %d", len(mapping2.Shards), len(updatedMapping.Shards))
 	}
 
-	if mapping3.Version != updatedMapping.Version {
-		t.Errorf("cluster3 mapping version = %d, want %d", mapping3.Version, updatedMapping.Version)
+	if len(mapping3.Shards) != len(updatedMapping.Shards) {
+		t.Errorf("cluster3 has %d shards, want %d", len(mapping3.Shards), len(updatedMapping.Shards))
 	}
 
 	// Verify all shards are assigned to valid nodes
