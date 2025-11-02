@@ -400,10 +400,8 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	// Invalidate cache so we fetch from etcd
-	cluster1.shardMapper.InvalidateCache()
-	cluster2.shardMapper.InvalidateCache()
-	cluster3.shardMapper.InvalidateCache()
+	// With ConsensusManager, cache is automatically updated via watch
+	// No need to manually invalidate
 
 	// Get updated mapping
 	updatedMapping, err := cluster1.GetShardMapping(ctx)

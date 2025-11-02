@@ -169,7 +169,8 @@ func TestShardMappingChangeWithCluster(t *testing.T) {
 		mapping.Shards[i] = "localhost:47001"
 	}
 
-	cluster.shardMapper.SetMappingForTesting(mapping)
+	// Set mapping in ConsensusManager using testing helper
+	cluster.consensusManager.SetMappingForTesting(mapping)
 
 	// Simulate a mapping update by creating a new version
 	newMapping := &sharding.ShardMapping{
