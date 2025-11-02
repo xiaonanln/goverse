@@ -269,9 +269,9 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 		mgr.UnregisterNode(ctx, thisNode.GetAdvertiseAddress())
 	})
 
-	// Start watching nodes
-	if err := mgr.WatchNodes(ctx); err != nil {
-		t.Fatalf("Failed to start watching nodes: %v", err)
+	// Start watching cluster state
+	if err := cluster.StartWatching(ctx); err != nil {
+		t.Fatalf("Failed to start watching: %v", err)
 	}
 
 	// Wait for node registration to propagate

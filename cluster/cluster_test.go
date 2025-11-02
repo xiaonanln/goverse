@@ -157,20 +157,20 @@ func TestGetNodes_NoEtcdManager(t *testing.T) {
 	}
 }
 
-func TestWatchNodes_NoEtcdManager(t *testing.T) {
+func TestStartWatching_NoConsensusManager(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := &Cluster{}
 
 	ctx := context.Background()
-	err := cluster.WatchNodes(ctx)
+	err := cluster.StartWatching(ctx)
 
 	if err == nil {
-		t.Error("WatchNodes should return error when consensus manager is not set")
+		t.Error("StartWatching should return error when consensus manager is not set")
 	}
 
 	expectedErr := "consensus manager not initialized"
 	if err.Error() != expectedErr {
-		t.Errorf("WatchNodes error = %v; want %v", err.Error(), expectedErr)
+		t.Errorf("StartWatching error = %v; want %v", err.Error(), expectedErr)
 	}
 }
 
