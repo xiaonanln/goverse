@@ -68,5 +68,12 @@ RUN su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/da
     su - postgres -c "psql -d goverse -c \"GRANT ALL ON SCHEMA public TO goverse;\"" && \
     su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data stop"
 
-# Default command
+# Copy and set up entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Default command (will be passed to entrypoint)
 CMD ["bash"]
