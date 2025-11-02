@@ -343,8 +343,8 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 			t.Fatalf("Failed to start shard mapping management for cluster%d: %v", i+1, err)
 		}
 		// Capture loop variable for closure
-		idx := i
-		t.Cleanup(func() { clusters[idx].StopShardMappingManagement() })
+		clusterIdx := i
+		t.Cleanup(func() { clusters[clusterIdx].StopShardMappingManagement() })
 	}
 
 	// Wait for shard mapping to be initialized
