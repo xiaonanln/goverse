@@ -9,7 +9,6 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -95,17 +94,18 @@ func (c *Cluster) GetThisNode() *node.Node {
 // The cluster is considered ready when:
 // - Nodes are connected
 // - Shard mapping has been successfully generated and loaded
-// 
+//
 // Usage:
-//   <-cluster.Get().ClusterReady()  // blocks until cluster is ready
-//   
-//   // or with select:
-//   select {
-//   case <-cluster.Get().ClusterReady():
-//       // cluster is ready
-//   case <-ctx.Done():
-//       // timeout or cancel
-//   }
+//
+//	<-cluster.Get().ClusterReady()  // blocks until cluster is ready
+//
+//	// or with select:
+//	select {
+//	case <-cluster.Get().ClusterReady():
+//	    // cluster is ready
+//	case <-ctx.Done():
+//	    // timeout or cancel
+//	}
 func (c *Cluster) ClusterReady() <-chan bool {
 	return c.clusterReadyChan
 }
@@ -126,13 +126,6 @@ func (c *Cluster) markClusterReady() {
 	c.clusterReadyOnce.Do(func() {
 		c.logger.Infof("Cluster is now ready")
 		close(c.clusterReadyChan)
-		
-		// When cluster becomes ready, always trigger OnShardMappingChanged
-		if c.thisNode != nil && c.consensusManager != nil {
-			if mapping, err := c.consensusManager.GetShardMapping(); err == nil {
-				c.thisNode.OnShardMappingChanged(c.shardMappingCtx, mapping)
-			}
-		}
 	})
 }
 
@@ -381,19 +374,19 @@ func (c *Cluster) StartWatching(ctx context.Context) error {
 	if c.consensusManager == nil {
 		return fmt.Errorf("consensus manager not initialized")
 	}
-	
+
 	// Initialize consensus manager state from etcd
 	err := c.consensusManager.Initialize(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize consensus manager: %w", err)
 	}
-	
+
 	// Start watching for changes
 	err = c.consensusManager.StartWatch(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start consensus manager watch: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -488,11 +481,6 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 			return fmt.Errorf("failed to store shard mapping: %w", err)
 		}
 		c.logger.Infof("Successfully updated shard mapping")
-		
-		// Notify this node about shard mapping change only if cluster is ready
-		if c.IsReady() && c.thisNode != nil {
-			c.thisNode.OnShardMappingChanged(ctx, mapping)
-		}
 	} else {
 		c.logger.Debugf("Shard mapping unchanged")
 	}
@@ -501,7 +489,7 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 }
 
 // GetShardMapping retrieves the current shard mapping
-func (c *Cluster) GetShardMapping(ctx context.Context) (*sharding.ShardMapping, error) {
+func (c *Cluster) GetShardMapping(ctx context.Context) (*consensusmanager.ShardMapping, error) {
 	if c.consensusManager == nil {
 		return nil, fmt.Errorf("consensus manager not initialized")
 	}
@@ -524,7 +512,7 @@ func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string
 			return parts[0], nil
 		}
 	}
-	
+
 	// For standard shard-based routing, we need consensus manager
 	if c.consensusManager == nil {
 		return "", fmt.Errorf("consensus manager not initialized")
@@ -643,23 +631,7 @@ func (c *Cluster) handleShardMappingCheck() {
 			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
 		}
 	} else {
-		// Not leader: ConsensusManager automatically updates shard mapping via watch
-		c.logger.Debugf("Not leader, shard mapping is automatically refreshed via watch")
-
-		// Get current mapping to check if cluster is ready
-		newMapping, err := c.consensusManager.GetShardMapping()
-		if err != nil {
-			c.logger.Debugf("Could not get shard mapping: %v", err)
-		} else {
-			// Successfully have shard mapping
-			wasReady := c.IsReady()
-			c.markClusterReady()
-			
-			// If cluster was just becoming ready, notify node
-			if !wasReady && c.thisNode != nil {
-				c.thisNode.OnShardMappingChanged(ctx, newMapping)
-			}
-		}
+		c.markClusterReady()
 	}
 }
 
