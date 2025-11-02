@@ -15,8 +15,8 @@ import (
 
 // TestDistributedPushMessageToClient tests pushing messages to clients on different nodes
 // This test requires a running etcd instance at localhost:2379
+// Note: This test does NOT run in parallel because it uses mock servers on specific ports
 func TestDistributedPushMessageToClient(t *testing.T) {
-	t.Parallel()
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -38,19 +38,19 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
-	defer node1.Stop(ctx)
+	t.Cleanup(func() { node1.Stop(ctx) })
 
 	err = cluster1.ConnectEtcd()
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	t.Cleanup(func() { cluster1.CloseEtcd() })
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	t.Cleanup(func() { cluster1.UnregisterNode(ctx) })
 
 	err = cluster1.WatchNodes(ctx)
 	if err != nil {
@@ -73,19 +73,19 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
-	defer node2.Stop(ctx)
+	t.Cleanup(func() { node2.Stop(ctx) })
 
 	err = cluster2.ConnectEtcd()
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	t.Cleanup(func() { cluster2.CloseEtcd() })
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	t.Cleanup(func() { cluster2.UnregisterNode(ctx) })
 
 	err = cluster2.WatchNodes(ctx)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
-	defer testServer1.Stop()
+	t.Cleanup(func() { testServer1.Stop() })
 
 	mockServer2 := NewMockGoverseServer()
 	mockServer2.SetNode(node2)
@@ -112,7 +112,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
 	}
-	defer testServer2.Stop()
+	t.Cleanup(func() { testServer2.Stop() })
 
 	// Wait for servers to be ready
 	time.Sleep(500 * time.Millisecond)
@@ -122,13 +122,13 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster1: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	t.Cleanup(func() { cluster1.StopNodeConnections() })
 
 	err = cluster2.StartNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster2: %v", err)
 	}
-	defer cluster2.StopNodeConnections()
+	t.Cleanup(func() { cluster2.StopNodeConnections() })
 
 	// Wait for connections to be established
 	time.Sleep(1 * time.Second)

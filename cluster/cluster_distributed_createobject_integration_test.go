@@ -16,8 +16,8 @@ import (
 // TestDistributedCreateObject tests shard mapping and routing logic
 // by verifying that objects are correctly assigned to nodes based on shards
 // This test requires a running etcd instance at localhost:2379
+// Note: This test does NOT run in parallel because it uses mock servers on specific ports
 func TestDistributedCreateObject(t *testing.T) {
-	t.Parallel()
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -39,19 +39,19 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
-	defer node1.Stop(ctx)
+	t.Cleanup(func() { node1.Stop(ctx) })
 
 	err = cluster1.ConnectEtcd()
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	t.Cleanup(func() { cluster1.CloseEtcd() })
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	t.Cleanup(func() { cluster1.UnregisterNode(ctx) })
 
 	err = cluster1.WatchNodes(ctx)
 	if err != nil {
@@ -74,19 +74,19 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
-	defer node2.Stop(ctx)
+	t.Cleanup(func() { node2.Stop(ctx) })
 
 	err = cluster2.ConnectEtcd()
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	t.Cleanup(func() { cluster2.CloseEtcd() })
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	t.Cleanup(func() { cluster2.UnregisterNode(ctx) })
 
 	err = cluster2.WatchNodes(ctx)
 	if err != nil {
@@ -104,7 +104,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
-	defer testServer1.Stop()
+	t.Cleanup(func() { testServer1.Stop() })
 
 	mockServer2 := NewMockGoverseServer()
 	mockServer2.SetNode(node2) // Assign the actual node to the mock server
@@ -113,7 +113,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
 	}
-	defer testServer2.Stop()
+	t.Cleanup(func() { testServer2.Stop() })
 
 	// Wait for servers to be ready
 	time.Sleep(500 * time.Millisecond)
@@ -123,13 +123,13 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster1: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	t.Cleanup(func() { cluster1.StopNodeConnections() })
 
 	err = cluster2.StartNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster2: %v", err)
 	}
-	defer cluster2.StopNodeConnections()
+	t.Cleanup(func() { cluster2.StopNodeConnections() })
 
 	// Wait for connections to be established
 	time.Sleep(500 * time.Millisecond)
@@ -139,13 +139,13 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start shard mapping management for cluster1: %v", err)
 	}
-	defer cluster1.StopShardMappingManagement()
+	t.Cleanup(func() { cluster1.StopShardMappingManagement() })
 
 	err = cluster2.StartShardMappingManagement(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start shard mapping management for cluster2: %v", err)
 	}
-	defer cluster2.StopShardMappingManagement()
+	t.Cleanup(func() { cluster2.StopShardMappingManagement() })
 
 	// Wait for shard mapping to be initialized (longer wait needed)
 	time.Sleep(15 * time.Second)
@@ -282,9 +282,8 @@ func TestDistributedCreateObject(t *testing.T) {
 // TestDistributedCreateObject_EvenDistribution tests that shard mapping
 // correctly distributes shards across 3 nodes for even load distribution
 // This test requires a running etcd instance at localhost:2379
+// Note: This test does NOT run in parallel because it uses specific ports that may conflict with other tests
 func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
-	t.Parallel()
-
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -312,19 +311,21 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
-		defer nodes[i].Stop(ctx)
+		// Capture loop variable for closure
+		idx := i
+		t.Cleanup(func() { nodes[idx].Stop(ctx) })
 
 		err = clusters[i].ConnectEtcd()
 		if err != nil {
 			t.Fatalf("Failed to connect etcd for cluster%d: %v", i+1, err)
 		}
-		defer clusters[i].CloseEtcd()
+		t.Cleanup(func() { clusters[idx].CloseEtcd() })
 
 		err = clusters[i].RegisterNode(ctx)
 		if err != nil {
 			t.Fatalf("Failed to register node%d: %v", i+1, err)
 		}
-		defer clusters[i].UnregisterNode(ctx)
+		t.Cleanup(func() { clusters[idx].UnregisterNode(ctx) })
 
 		err = clusters[i].WatchNodes(ctx)
 		if err != nil {
@@ -341,7 +342,9 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to start shard mapping management for cluster%d: %v", i+1, err)
 		}
-		defer clusters[i].StopShardMappingManagement()
+		// Capture loop variable for closure
+		clusterIdx := i
+		t.Cleanup(func() { clusters[clusterIdx].StopShardMappingManagement() })
 	}
 
 	// Wait for shard mapping to be initialized
