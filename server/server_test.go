@@ -332,13 +332,11 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		t.Fatal("Cluster instance should not be nil")
 	}
 
-	etcdMgr := clusterInstance.GetEtcdManager()
-	if etcdMgr == nil {
-		t.Fatal("Etcd manager should be set in cluster")
-	}
+	// Give cluster time to process node list changes
+	time.Sleep(500 * time.Millisecond)
 
 	// The node should see itself in the node list
-	nodeAddresses := etcdMgr.GetNodes()
+	nodeAddresses := clusterInstance.GetNodes()
 	if len(nodeAddresses) < 1 {
 		t.Fatal("Node should see at least itself in the node list")
 	}
