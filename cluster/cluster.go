@@ -323,15 +323,6 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	return nil
 }
 
-// SetEtcdManager sets the etcd manager for the cluster
-// Deprecated: This method is kept for backward compatibility.
-// Use ConnectEtcd with parameters instead, which auto-creates the managers.
-func (c *Cluster) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
-	c.etcdManager = mgr
-	// Initialize consensus manager
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
-}
-
 // GetEtcdManager returns the cluster's etcd manager
 func (c *Cluster) GetEtcdManager() *etcdmanager.EtcdManager {
 	return c.etcdManager
