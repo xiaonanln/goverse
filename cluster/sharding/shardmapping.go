@@ -378,8 +378,9 @@ func nodesEqual(a, b []string) bool {
 	return true
 }
 
-// UpdateShardState updates the state of a specific shard in etcd
+// UpdateShardState updates the state of a specific shard
 // This is used to coordinate shard migration between nodes
+// If etcd manager is available, updates both etcd and cache, otherwise just updates cache
 func (sm *ShardMapper) UpdateShardState(ctx context.Context, shardID int, newState ShardState, newCurrentNode string) error {
 	if shardID < 0 || shardID >= NumShards {
 		return fmt.Errorf("invalid shard ID: %d", shardID)
@@ -400,10 +401,17 @@ func (sm *ShardMapper) UpdateShardState(ctx context.Context, shardID int, newSta
 	shardInfo.State = newState
 	shardInfo.CurrentNode = newCurrentNode
 
-	// Store updated mapping
-	err = sm.StoreShardMapping(ctx, mapping)
-	if err != nil {
-		return fmt.Errorf("failed to store updated shard mapping: %w", err)
+	// Store updated mapping (if etcd is available, otherwise just update cache)
+	if sm.etcdManager != nil {
+		err = sm.StoreShardMapping(ctx, mapping)
+		if err != nil {
+			return fmt.Errorf("failed to store updated shard mapping: %w", err)
+		}
+	} else {
+		// Just update cache for testing
+		sm.mu.Lock()
+		sm.mapping = mapping
+		sm.mu.Unlock()
 	}
 
 	sm.logger.Infof("Updated shard %d: state=%s, currentNode=%s", shardID, newState.String(), newCurrentNode)
@@ -412,6 +420,7 @@ func (sm *ShardMapper) UpdateShardState(ctx context.Context, shardID int, newSta
 
 // MarkShardForMigration marks a shard as migrating from its current node to the target node
 // This should be called when beginning a shard migration
+// If etcd manager is available, updates both etcd and cache, otherwise just updates cache
 func (sm *ShardMapper) MarkShardForMigration(ctx context.Context, shardID int) error {
 	if shardID < 0 || shardID >= NumShards {
 		return fmt.Errorf("invalid shard ID: %d", shardID)
@@ -436,9 +445,17 @@ func (sm *ShardMapper) MarkShardForMigration(ctx context.Context, shardID int) e
 	// Mark as migrating
 	shardInfo.State = ShardStateMigrating
 	
-	err = sm.StoreShardMapping(ctx, mapping)
-	if err != nil {
-		return fmt.Errorf("failed to store updated shard mapping: %w", err)
+	// Store updated mapping (if etcd is available, otherwise just update cache)
+	if sm.etcdManager != nil {
+		err = sm.StoreShardMapping(ctx, mapping)
+		if err != nil {
+			return fmt.Errorf("failed to store updated shard mapping: %w", err)
+		}
+	} else {
+		// Just update cache for testing
+		sm.mu.Lock()
+		sm.mapping = mapping
+		sm.mu.Unlock()
 	}
 
 	sm.logger.Infof("Marked shard %d for migration from %s to %s", shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
@@ -447,6 +464,7 @@ func (sm *ShardMapper) MarkShardForMigration(ctx context.Context, shardID int) e
 
 // CompleteMigration completes the migration of a shard to its target node
 // This should be called after the shard has been successfully migrated and cleaned up from the source node
+// If etcd manager is available, updates both etcd and cache, otherwise just updates cache
 func (sm *ShardMapper) CompleteMigration(ctx context.Context, shardID int) error {
 	if shardID < 0 || shardID >= NumShards {
 		return fmt.Errorf("invalid shard ID: %d", shardID)
@@ -466,9 +484,17 @@ func (sm *ShardMapper) CompleteMigration(ctx context.Context, shardID int) error
 	shardInfo.CurrentNode = shardInfo.TargetNode
 	shardInfo.State = ShardStateAvailable
 
-	err = sm.StoreShardMapping(ctx, mapping)
-	if err != nil {
-		return fmt.Errorf("failed to store updated shard mapping: %w", err)
+	// Store updated mapping (if etcd is available, otherwise just update cache)
+	if sm.etcdManager != nil {
+		err = sm.StoreShardMapping(ctx, mapping)
+		if err != nil {
+			return fmt.Errorf("failed to store updated shard mapping: %w", err)
+		}
+	} else {
+		// Just update cache for testing
+		sm.mu.Lock()
+		sm.mapping = mapping
+		sm.mu.Unlock()
 	}
 
 	sm.logger.Infof("Completed migration of shard %d to %s", shardID, shardInfo.TargetNode)
