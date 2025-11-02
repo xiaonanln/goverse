@@ -18,7 +18,8 @@ import (
 )
 
 var (
-	thisCluster Cluster
+	thisCluster      Cluster
+	clusterInitMutex sync.Mutex
 )
 
 const (
@@ -52,18 +53,9 @@ func Get() *Cluster {
 	return &thisCluster
 }
 
-// NewCluster initializes the cluster singleton with the given etcd address and prefix.
-// It automatically connects to etcd and initializes the etcd manager and consensus manager.
-// This function should be called once during application initialization.
-// If the cluster is already initialized, this function will return an error.
-func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
-	if thisCluster.etcdManager != nil {
-		return nil, fmt.Errorf("cluster already initialized")
-	}
-
-	thisCluster.etcdAddress = etcdAddress
-	thisCluster.etcdPrefix = etcdPrefix
-
+// createAndConnectEtcdManager creates an etcd manager and connects to etcd
+// This is a shared helper for cluster initialization
+func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdmanager.EtcdManager, error) {
 	// Create etcd manager
 	mgr, err := etcdmanager.NewEtcdManager(etcdAddress, etcdPrefix)
 	if err != nil {
@@ -72,7 +64,33 @@ func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
 
 	// Connect to etcd
 	if err := mgr.Connect(); err != nil {
+		// Clean up the manager if connection fails
+		_ = mgr.Close()
 		return nil, fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+
+	return mgr, nil
+}
+
+// NewCluster initializes the cluster singleton with the given etcd address and prefix.
+// It automatically connects to etcd and initializes the etcd manager and consensus manager.
+// This function should be called once during application initialization.
+// If the cluster is already initialized, this function will return an error.
+// This function is thread-safe.
+func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
+	clusterInitMutex.Lock()
+	defer clusterInitMutex.Unlock()
+
+	if thisCluster.etcdManager != nil {
+		return nil, fmt.Errorf("cluster already initialized")
+	}
+
+	thisCluster.etcdAddress = etcdAddress
+	thisCluster.etcdPrefix = etcdPrefix
+
+	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
+	if err != nil {
+		return nil, err
 	}
 
 	thisCluster.etcdManager = mgr
@@ -99,15 +117,9 @@ func newClusterWithEtcdForTesting(name string, etcdAddress string, etcdPrefix st
 		etcdPrefix:       etcdPrefix,
 	}
 
-	// Create etcd manager
-	mgr, err := etcdmanager.NewEtcdManager(etcdAddress, etcdPrefix)
+	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
-	}
-
-	// Connect to etcd
-	if err := mgr.Connect(); err != nil {
-		return nil, fmt.Errorf("failed to connect to etcd: %w", err)
+		return c, err // Return cluster instance even if connection fails, for testing
 	}
 
 	c.etcdManager = mgr
@@ -127,15 +139,9 @@ func (c *Cluster) initializeEtcdForTesting(etcdAddress string, etcdPrefix string
 	c.etcdAddress = etcdAddress
 	c.etcdPrefix = etcdPrefix
 
-	// Create etcd manager
-	mgr, err := etcdmanager.NewEtcdManager(etcdAddress, etcdPrefix)
+	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
 	if err != nil {
-		return fmt.Errorf("failed to create etcd manager: %w", err)
-	}
-
-	// Connect to etcd
-	if err := mgr.Connect(); err != nil {
-		return fmt.Errorf("failed to connect to etcd: %w", err)
+		return err
 	}
 
 	c.etcdManager = mgr
