@@ -24,6 +24,22 @@ docker build -f docker/Dockerfile.dev -t goverse-dev .
 docker run -it --rm goverse-dev
 ```
 
+### Automatic Service Management
+
+The container uses an entrypoint script that **automatically starts etcd and PostgreSQL** when the container starts. The entrypoint is reentrant, meaning:
+
+- It checks if services are already running before attempting to start them
+- Multiple commands can be run without restarting services unnecessarily
+- Services start in the background and remain available throughout the container's lifetime
+
+You don't need to manually start etcd or PostgreSQL - they're ready to use immediately.
+
+To run a specific command with services auto-started:
+
+```bash
+docker run -it --rm goverse-dev go test ./...
+```
+
 ## PostgreSQL Setup
 
 PostgreSQL is pre-installed and configured in the development container with the following defaults:
@@ -34,9 +50,9 @@ PostgreSQL is pre-installed and configured in the development container with the
 - **postgres user password**: `postgres`
 - **Data directory**: `/var/lib/postgresql/data`
 
-### Starting PostgreSQL
+### Starting PostgreSQL Manually
 
-When you start the container, PostgreSQL is not running by default. To start it:
+PostgreSQL is **automatically started** by the entrypoint script. If you need to manually control it:
 
 ```bash
 # Inside the container
@@ -102,9 +118,9 @@ For more information about using PostgreSQL with Goverse objects, see [docs/post
 
 ## etcd Setup
 
-etcd is also pre-installed for cluster coordination. The Goverse tests and examples that require etcd will start it automatically when needed.
+etcd is pre-installed for cluster coordination and is **automatically started** by the entrypoint script.
 
-To manually start etcd:
+To manually start etcd (if needed):
 
 ```bash
 # Inside the container
