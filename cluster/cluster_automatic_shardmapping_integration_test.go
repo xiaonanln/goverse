@@ -256,7 +256,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Waiting for initial shard mapping...")
 	time.Sleep(NodeStabilityDuration + ShardMappingCheckInterval + 2*time.Second)
 
-	_, err := cluster1.GetShardMapping(ctx)
+	_, err = cluster1.GetShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get initial shard mapping: %v", err)
 	}
