@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
@@ -31,7 +32,8 @@ const (
 type Cluster struct {
 	thisNode            *node.Node
 	etcdManager         *etcdmanager.EtcdManager
-	shardMapper         *sharding.ShardMapper
+	consensusManager    *consensusmanager.ConsensusManager
+	shardMapper         *sharding.ShardMapper // Deprecated: kept for backward compatibility
 	nodeConnections     *NodeConnections
 	logger              *logger.Logger
 	shardMappingCtx     context.Context
@@ -71,6 +73,7 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 func (c *Cluster) ResetForTesting() {
 	c.thisNode = nil
 	c.etcdManager = nil
+	c.consensusManager = nil
 	c.shardMapper = nil
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
@@ -127,8 +130,8 @@ func (c *Cluster) markClusterReady() {
 		close(c.clusterReadyChan)
 		
 		// When cluster becomes ready, always trigger OnShardMappingChanged
-		if c.thisNode != nil {
-			if mapping, err := c.shardMapper.GetShardMapping(c.shardMappingCtx); err == nil {
+		if c.thisNode != nil && c.consensusManager != nil {
+			if mapping, err := c.consensusManager.GetShardMapping(); err == nil {
 				c.thisNode.OnShardMappingChanged(c.shardMappingCtx, mapping)
 			}
 		}
@@ -326,8 +329,10 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 // SetEtcdManager sets the etcd manager for the cluster
 func (c *Cluster) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
 	c.etcdManager = mgr
-	// Initialize shard mapper when etcd manager is set
+	// Initialize shard mapper when etcd manager is set (for backward compatibility)
 	c.shardMapper = sharding.NewShardMapper(mgr)
+	// Initialize consensus manager
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
 }
 
 // GetEtcdManager returns the cluster's etcd manager
@@ -376,28 +381,41 @@ func (c *Cluster) CloseEtcd() error {
 
 // WatchNodes starts watching for node changes in etcd
 func (c *Cluster) WatchNodes(ctx context.Context) error {
-	if c.etcdManager == nil {
-		return fmt.Errorf("etcd manager not set")
+	if c.consensusManager == nil {
+		return fmt.Errorf("consensus manager not initialized")
 	}
-	return c.etcdManager.WatchNodes(ctx)
+	
+	// Initialize consensus manager state from etcd
+	err := c.consensusManager.Initialize(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize consensus manager: %w", err)
+	}
+	
+	// Start watching for changes
+	err = c.consensusManager.StartWatch(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start consensus manager watch: %w", err)
+	}
+	
+	return nil
 }
 
 // GetNodes returns a list of all registered nodes
 func (c *Cluster) GetNodes() []string {
-	if c.etcdManager == nil {
+	if c.consensusManager == nil {
 		return []string{}
 	}
-	return c.etcdManager.GetNodes()
+	return c.consensusManager.GetNodes()
 }
 
 // GetLeaderNode returns the leader node address.
 // The leader is the node with the smallest advertised address in lexicographic order.
-// Returns an empty string if there are no registered nodes or if etcd manager is not set.
+// Returns an empty string if there are no registered nodes or if consensus manager is not set.
 func (c *Cluster) GetLeaderNode() string {
-	if c.etcdManager == nil {
+	if c.consensusManager == nil {
 		return ""
 	}
-	return c.etcdManager.GetLeaderNode()
+	return c.consensusManager.GetLeaderNode()
 }
 
 // IsLeader returns true if this node is the cluster leader
@@ -416,8 +434,8 @@ func (c *Cluster) InitializeShardMapping(ctx context.Context) error {
 		return fmt.Errorf("only the leader can initialize shard mapping")
 	}
 
-	if c.shardMapper == nil {
-		return fmt.Errorf("shard mapper not initialized")
+	if c.consensusManager == nil {
+		return fmt.Errorf("consensus manager not initialized")
 	}
 
 	nodes := c.GetNodes()
@@ -427,12 +445,12 @@ func (c *Cluster) InitializeShardMapping(ctx context.Context) error {
 
 	c.logger.Infof("Initializing shard mapping with %d nodes", len(nodes))
 
-	mapping, err := c.shardMapper.CreateShardMapping(ctx, nodes)
+	mapping, err := c.consensusManager.CreateShardMapping()
 	if err != nil {
 		return fmt.Errorf("failed to create shard mapping: %w", err)
 	}
 
-	err = c.shardMapper.StoreShardMapping(ctx, mapping)
+	err = c.consensusManager.StoreShardMapping(ctx, mapping)
 	if err != nil {
 		return fmt.Errorf("failed to store shard mapping: %w", err)
 	}
@@ -448,8 +466,8 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 		return fmt.Errorf("only the leader can update shard mapping")
 	}
 
-	if c.shardMapper == nil {
-		return fmt.Errorf("shard mapper not initialized")
+	if c.consensusManager == nil {
+		return fmt.Errorf("consensus manager not initialized")
 	}
 
 	nodes := c.GetNodes()
@@ -460,19 +478,19 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 	c.logger.Infof("Updating shard mapping with %d nodes", len(nodes))
 
 	// Get current mapping for version comparison
-	currentMapping, err := c.shardMapper.GetShardMapping(ctx)
+	currentMapping, err := c.consensusManager.GetShardMapping()
 	if err != nil {
 		return fmt.Errorf("failed to get current shard mapping: %w", err)
 	}
 
-	mapping, err := c.shardMapper.UpdateShardMapping(ctx, nodes)
+	mapping, err := c.consensusManager.UpdateShardMapping()
 	if err != nil {
 		return fmt.Errorf("failed to update shard mapping: %w", err)
 	}
 
 	// Only store if the mapping was actually updated (version changed)
 	if mapping.Version > currentMapping.Version {
-		err = c.shardMapper.StoreShardMapping(ctx, mapping)
+		err = c.consensusManager.StoreShardMapping(ctx, mapping)
 		if err != nil {
 			return fmt.Errorf("failed to store shard mapping: %w", err)
 		}
@@ -491,37 +509,37 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 
 // GetShardMapping retrieves the current shard mapping
 func (c *Cluster) GetShardMapping(ctx context.Context) (*sharding.ShardMapping, error) {
-	if c.shardMapper == nil {
-		return nil, fmt.Errorf("shard mapper not initialized")
+	if c.consensusManager == nil {
+		return nil, fmt.Errorf("consensus manager not initialized")
 	}
 
-	return c.shardMapper.GetShardMapping(ctx)
+	return c.consensusManager.GetShardMapping()
 }
 
 // GetNodeForObject returns the node address that should handle the given object ID
 func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string, error) {
-	if c.shardMapper == nil {
-		return "", fmt.Errorf("shard mapper not initialized")
+	if c.consensusManager == nil {
+		return "", fmt.Errorf("consensus manager not initialized")
 	}
 
-	return c.shardMapper.GetNodeForObject(ctx, objectID)
+	return c.consensusManager.GetNodeForObject(objectID)
 }
 
 // GetNodeForShard returns the node address that owns the given shard
 func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, error) {
-	if c.shardMapper == nil {
-		return "", fmt.Errorf("shard mapper not initialized")
+	if c.consensusManager == nil {
+		return "", fmt.Errorf("consensus manager not initialized")
 	}
 
-	return c.shardMapper.GetNodeForShard(ctx, shardID)
+	return c.consensusManager.GetNodeForShard(shardID)
 }
 
 // InvalidateShardMappingCache clears the local shard mapping cache
-// This forces the next GetShardMapping call to reload from etcd
+// This method is deprecated and kept for backward compatibility
 func (c *Cluster) InvalidateShardMappingCache() {
-	if c.shardMapper != nil {
-		c.shardMapper.InvalidateCache()
-	}
+	// With ConsensusManager, the cache is automatically updated via watch
+	// This is a no-op for backward compatibility
+	c.logger.Debugf("InvalidateShardMappingCache is deprecated with ConsensusManager")
 }
 
 // StartShardMappingManagement starts a background goroutine that periodically manages shard mapping
@@ -529,11 +547,8 @@ func (c *Cluster) InvalidateShardMappingCache() {
 // it will update/initialize the shard mapping.
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
 func (c *Cluster) StartShardMappingManagement(ctx context.Context) error {
-	if c.etcdManager == nil {
-		return fmt.Errorf("etcd manager not set")
-	}
-	if c.shardMapper == nil {
-		return fmt.Errorf("shard mapper not initialized")
+	if c.consensusManager == nil {
+		return fmt.Errorf("consensus manager not initialized")
 	}
 	if c.shardMappingRunning {
 		c.logger.Warnf("Shard mapping management already running")
@@ -582,7 +597,7 @@ func (c *Cluster) handleShardMappingCheck() {
 
 	if c.IsLeader() {
 		// Leader: manage shard mapping if nodes are stable
-		if c.etcdManager.IsNodeListStable(NodeStabilityDuration) {
+		if c.consensusManager.IsNodeListStable(NodeStabilityDuration) {
 			nodes := c.GetNodes()
 			if len(nodes) == 0 {
 				c.logger.Debugf("No nodes available, skipping shard mapping update")
@@ -592,7 +607,7 @@ func (c *Cluster) handleShardMappingCheck() {
 			c.logger.Debugf("Node list stable, managing shard mapping as leader")
 
 			// Try to get existing mapping first
-			_, err := c.shardMapper.GetShardMapping(ctx)
+			_, err := c.consensusManager.GetShardMapping()
 			if err != nil {
 				// No existing mapping, initialize
 				c.logger.Infof("No existing shard mapping, initializing")
@@ -620,31 +635,20 @@ func (c *Cluster) handleShardMappingCheck() {
 			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
 		}
 	} else {
-		// Not leader: just refresh shard mapping from etcd
-		c.logger.Debugf("Not leader, refreshing shard mapping from etcd")
+		// Not leader: ConsensusManager automatically updates shard mapping via watch
+		c.logger.Debugf("Not leader, shard mapping is automatically refreshed via watch")
 
-		// Get current version before refresh
-		var oldVersion int64 = -1
-		if oldMapping, err := c.shardMapper.GetShardMapping(ctx); err == nil {
-			oldVersion = oldMapping.Version
-		}
-
-		// Invalidate cache to force refresh from etcd
-		c.shardMapper.InvalidateCache()
-
-		// Try to load the mapping
-		newMapping, err := c.shardMapper.GetShardMapping(ctx)
+		// Get current mapping to check if cluster is ready
+		newMapping, err := c.consensusManager.GetShardMapping()
 		if err != nil {
-			c.logger.Debugf("Could not load shard mapping: %v", err)
+			c.logger.Debugf("Could not get shard mapping: %v", err)
 		} else {
-			c.logger.Debugf("Refreshed shard mapping from etcd")
-			// Successfully loaded shard mapping
-			// markClusterReady will trigger OnShardMappingChanged on first ready
+			// Successfully have shard mapping
 			wasReady := c.IsReady()
 			c.markClusterReady()
 			
-			// If cluster was already ready and version changed, notify node
-			if wasReady && newMapping.Version != oldVersion && c.thisNode != nil {
+			// If cluster was just becoming ready, notify node
+			if !wasReady && c.thisNode != nil {
 				c.thisNode.OnShardMappingChanged(ctx, newMapping)
 			}
 		}
