@@ -48,30 +48,32 @@ func PrepareEtcdPrefix(t *testing.T, etcdAddress string) string {
 	// Create a temporary etcd client for cleanup operations with a timeout
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{etcdAddress},
-		DialTimeout: 2 * time.Second,
+		DialTimeout: 10 * time.Second,
 	})
 	if err != nil {
-		t.Skipf("Skipping test: failed to connect to etcd at %s: %v", etcdAddress, err)
+		t.Fatalf("Failed to connect to etcd at %s: %v", etcdAddress, err)
 		return ""
 	}
 
+	cleanupTime := 10 * time.Second
+
 	// Clean up everything under the prefix before the test starts
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cleanupTime)
 	defer cancel()
 
 	_, err = cli.Delete(ctx, prefix+"/", clientv3.WithPrefix())
 	if err != nil {
-		t.Logf("Warning: failed to clean etcd prefix before test: %v", err)
+		t.Fatalf("Warning: failed to clean etcd prefix before test: %v", err)
 	}
 
 	// Register cleanup to remove everything under the prefix after the test
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), cleanupTime)
 		defer cancel()
 
 		_, err := cli.Delete(ctx, prefix+"/", clientv3.WithPrefix())
 		if err != nil {
-			t.Logf("Warning: failed to clean etcd prefix after test: %v", err)
+			t.Fatalf("Warning: failed to clean etcd prefix after test: %v", err)
 		}
 		cli.Close()
 	})
