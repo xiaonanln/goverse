@@ -23,11 +23,7 @@ type EtcdManager struct {
 	logger           *logger.Logger
 	prefix           string // global prefix for all etcd keys
 	leaseID          clientv3.LeaseID
-	registeredNodeID string          // the node ID that was registered
-	nodes            map[string]bool // map of node addresses
-	nodesMu          sync.RWMutex
-	watchCancel      context.CancelFunc
-	watchCtx         context.Context
+	registeredNodeID string // the node ID that was registered
 	watchStarted     bool
 	lastNodeChange   time.Time // timestamp of last node list change
 	keepAliveCancel  context.CancelFunc
@@ -60,7 +56,6 @@ func NewEtcdManager(etcdAddress string, prefix string) (*EtcdManager, error) {
 		endpoints: endpoints,
 		logger:    logger.NewLogger("EtcdManager"),
 		prefix:    prefix,
-		nodes:     make(map[string]bool),
 	}
 
 	return mgr, nil
@@ -97,11 +92,6 @@ func (mgr *EtcdManager) Connect() error {
 
 // Close closes the etcd connection
 func (mgr *EtcdManager) Close() error {
-	if mgr.watchCancel != nil {
-		mgr.watchCancel()
-		mgr.watchCancel = nil
-	}
-
 	// Stop the keep-alive loop
 	mgr.keepAliveMu.Lock()
 	if mgr.keepAliveCancel != nil {
@@ -423,8 +413,8 @@ func (mgr *EtcdManager) UnregisterNode(ctx context.Context, nodeAddress string) 
 	return nil
 }
 
-// getAllNodes retrieves all registered nodes from etcd (internal use only)
-func (mgr *EtcdManager) getAllNodes(ctx context.Context) ([]string, int64, error) {
+// getAllNodesForTesting retrieves all registered nodes from etcd (internal use only)
+func (mgr *EtcdManager) getAllNodesForTesting(ctx context.Context) ([]string, int64, error) {
 	if mgr.client == nil {
 		return nil, 0, fmt.Errorf("etcd client not connected")
 	}
@@ -441,140 +431,4 @@ func (mgr *EtcdManager) getAllNodes(ctx context.Context) ([]string, int64, error
 
 	mgr.logger.Debugf("Retrieved %d nodes from etcd", len(nodes))
 	return nodes, resp.Header.Revision, nil
-}
-
-// WatchNodes starts watching for node changes and maintains an internal list
-func (mgr *EtcdManager) WatchNodes(ctx context.Context) error {
-	if mgr.client == nil {
-		return fmt.Errorf("etcd client not connected")
-	}
-
-	if mgr.watchStarted {
-		mgr.logger.Warnf("Watch already started")
-		return nil
-	}
-
-	// First, get all existing nodes
-	nodes, rev, err := mgr.getAllNodes(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get initial nodes: %w", err)
-	}
-
-	mgr.nodesMu.Lock()
-	for _, node := range nodes {
-		mgr.nodes[node] = true
-	}
-	mgr.lastNodeChange = time.Now()
-	mgr.nodesMu.Unlock()
-
-	mgr.logger.Infof("Initialized with %d nodes", len(nodes))
-
-	// Create a cancellable context for watching
-	mgr.watchCtx, mgr.watchCancel = context.WithCancel(ctx)
-
-	// Start watching for changes
-	watchChan := mgr.client.Watch(mgr.watchCtx, mgr.GetNodesPrefix(), clientv3.WithPrefix(), clientv3.WithRev(rev))
-
-	go func() {
-		mgr.logger.Infof("Started watching nodes at prefix %s", mgr.GetNodesPrefix())
-		for {
-			select {
-			case <-mgr.watchCtx.Done():
-				mgr.logger.Infof("Node watch stopped")
-				return
-			case watchResp, ok := <-watchChan:
-				if !ok {
-					mgr.logger.Warnf("Watch channel closed")
-					return
-				}
-				if watchResp.Err() != nil {
-					mgr.logger.Errorf("Watch error: %v", watchResp.Err())
-					continue
-				}
-
-				for _, event := range watchResp.Events {
-					mgr.nodesMu.Lock()
-					switch event.Type {
-					case clientv3.EventTypePut:
-						nodeAddress := string(event.Kv.Value)
-						mgr.nodes[nodeAddress] = true
-						mgr.lastNodeChange = time.Now()
-						mgr.logger.Infof("Node added: %s", nodeAddress)
-					case clientv3.EventTypeDelete:
-						// For DELETE events, extract node address from the key
-						key := string(event.Kv.Key)
-						nodeAddress := key[len(mgr.GetNodesPrefix()):]
-						delete(mgr.nodes, nodeAddress)
-						mgr.lastNodeChange = time.Now()
-						mgr.logger.Infof("Node removed: %s", nodeAddress)
-					}
-					mgr.nodesMu.Unlock()
-				}
-			}
-		}
-	}()
-
-	mgr.watchStarted = true
-	return nil
-}
-
-// GetNodes returns a copy of the current node list
-func (mgr *EtcdManager) GetNodes() []string {
-	mgr.nodesMu.RLock()
-	defer mgr.nodesMu.RUnlock()
-
-	nodes := make([]string, 0, len(mgr.nodes))
-	for node := range mgr.nodes {
-		nodes = append(nodes, node)
-	}
-	return nodes
-}
-
-// GetLeaderNode returns the leader node address.
-// The leader is the node with the smallest advertised address in lexicographic order.
-// Returns an empty string if there are no registered nodes.
-func (mgr *EtcdManager) GetLeaderNode() string {
-	mgr.nodesMu.RLock()
-	defer mgr.nodesMu.RUnlock()
-
-	if len(mgr.nodes) == 0 {
-		return ""
-	}
-
-	// Find the smallest address (leader)
-	var leader string
-	for node := range mgr.nodes {
-		if leader == "" || node < leader {
-			leader = node
-		}
-	}
-	return leader
-}
-
-// GetLastNodeChangeTime returns the timestamp of the last node list change
-func (mgr *EtcdManager) GetLastNodeChangeTime() time.Time {
-	mgr.nodesMu.RLock()
-	defer mgr.nodesMu.RUnlock()
-	return mgr.lastNodeChange
-}
-
-// IsNodeListStable returns true if the node list has not changed for the specified duration
-func (mgr *EtcdManager) IsNodeListStable(duration time.Duration) bool {
-	mgr.nodesMu.RLock()
-	defer mgr.nodesMu.RUnlock()
-
-	// If lastNodeChange is zero, nodes have never changed (not initialized)
-	if mgr.lastNodeChange.IsZero() {
-		return false
-	}
-
-	return time.Since(mgr.lastNodeChange) >= duration
-}
-
-// SetLastNodeChangeForTesting sets the last node change timestamp for testing purposes
-// This should only be used in tests
-func (mgr *EtcdManager) SetLastNodeChangeForTesting(t time.Time) {
-	mgr.nodesMu.Lock()
-	defer mgr.nodesMu.Unlock()
-	mgr.lastNodeChange = t
 }

@@ -129,67 +129,6 @@ func TestStartShardMappingManagement_AlreadyRunning(t *testing.T) {
 	}
 }
 
-func TestEtcdManager_NodeStability(t *testing.T) {
-	t.Parallel()
-
-	// Use PrepareEtcdPrefix for test isolation
-	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager: %v", err)
-	}
-
-	// Initially, nodes are not stable (lastNodeChange is zero)
-	if mgr.IsNodeListStable(1 * time.Second) {
-		t.Error("Node list should not be stable when lastNodeChange is zero")
-	}
-
-	// Simulate a node change by using the testing helper
-	mgr.SetLastNodeChangeForTesting(time.Now())
-
-	// Right after a change, should not be stable
-	if mgr.IsNodeListStable(1 * time.Second) {
-		t.Error("Node list should not be stable immediately after a change")
-	}
-
-	// Wait a bit
-	time.Sleep(1100 * time.Millisecond)
-
-	// Now it should be stable
-	if !mgr.IsNodeListStable(1 * time.Second) {
-		t.Error("Node list should be stable after waiting")
-	}
-}
-
-func TestEtcdManager_GetLastNodeChangeTime(t *testing.T) {
-	t.Parallel()
-
-	// Use PrepareEtcdPrefix for test isolation
-	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager: %v", err)
-	}
-
-	// Initially, should be zero time
-	lastChange := mgr.GetLastNodeChangeTime()
-	if !lastChange.IsZero() {
-		t.Error("GetLastNodeChangeTime should return zero time initially")
-	}
-
-	// Set a time using the testing helper
-	now := time.Now()
-	mgr.SetLastNodeChangeForTesting(now)
-
-	// Should return the set time
-	lastChange = mgr.GetLastNodeChangeTime()
-	if lastChange != now {
-		t.Errorf("GetLastNodeChangeTime = %v; want %v", lastChange, now)
-	}
-}
-
 func TestHandleShardMappingCheck_NoNodes(t *testing.T) {
 	t.Parallel()
 
@@ -249,15 +188,15 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 	// With ConsensusManager, there's no manual cache invalidation
 	// The in-memory state is automatically updated via watch
 	// This test now verifies that InvalidateShardMappingCache is a no-op
-	
+
 	ctx := context.Background()
-	
+
 	// Set up a test mapping in ConsensusManager
 	testMapping := &sharding.ShardMapping{
 		Shards:  make(map[int]string),
 		Version: 1,
 	}
-	
+
 	// Use testing helper to set the mapping
 	cluster.consensusManager.SetMappingForTesting(testMapping)
 

@@ -483,9 +483,9 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Get all registered nodes
-	registeredNodes, _, err := mgr.getAllNodes(ctx)
+	registeredNodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 		return
 	}
 
@@ -506,9 +506,9 @@ func TestEtcdManagerRegisterMultipleNodes(t *testing.T) {
 	}
 
 	// Verify node is unregistered
-	remainingNodes, _, err := mgr.getAllNodes(ctx)
+	remainingNodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 		return
 	}
 
@@ -540,9 +540,9 @@ func TestEtcdManagerRegisterNode(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify node is registered
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 		return
 	}
 
@@ -598,9 +598,9 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify only first node is registered
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 		return
 	}
 
@@ -661,9 +661,9 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 	}
 
 	// Verify node is unregistered
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 		return
 	}
 
@@ -674,8 +674,8 @@ func TestEtcdManagerUnregisterNode(t *testing.T) {
 	}
 }
 
-// TestEtcdManagerGetAllNodes tests retrieving all nodes
-func TestEtcdManagerGetAllNodes(t *testing.T) {
+// TestEtcdManagergetAllNodesForTesting tests retrieving all nodes
+func TestEtcdManagergetAllNodesForTesting(t *testing.T) {
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -701,139 +701,20 @@ func TestEtcdManagerGetAllNodes(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Get all nodes
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 		return
 	}
 
 	if len(nodes) == 0 {
-		t.Fatal("getAllNodes() returned empty list")
+		t.Fatal("getAllNodesForTesting() returned empty list")
 	}
 
 	// Cleanup
 	for _, addr := range nodeAddresses {
 		mgr.UnregisterNode(ctx, addr)
 	}
-}
-
-// TestEtcdManagerWatchNodes tests watching for node changes
-func TestEtcdManagerWatchNodes(t *testing.T) {
-	t.Parallel()
-
-	mgr := setupEtcdTest(t)
-	if mgr == nil {
-		return
-	}
-
-	ctx := context.Background()
-
-	// Start watching nodes
-	err := mgr.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() error = %v", err)
-	}
-
-	// Register a node
-	nodeAddress := "localhost:47006"
-	err = mgr.RegisterNode(ctx, nodeAddress)
-	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
-	}
-
-	// Wait for watch to process the event
-	time.Sleep(3 * time.Second)
-
-	// Check if node appears in the list
-	nodes := mgr.GetNodes()
-	found := false
-	for _, node := range nodes {
-		if node == nodeAddress {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Fatalf("Registered node %s not found in watched node list", nodeAddress)
-	}
-
-	// Unregister node
-	err = mgr.UnregisterNode(ctx, nodeAddress)
-	if err != nil {
-		t.Fatalf("UnregisterNode() error = %v", err)
-	}
-
-	// Wait for watch to process the delete event
-	time.Sleep(3 * time.Second)
-
-	// Check if node is removed from the list
-	nodes = mgr.GetNodes()
-	for _, node := range nodes {
-		if node == nodeAddress {
-			t.Fatalf("Unregistered node %s still in watched node list", nodeAddress)
-		}
-	}
-}
-
-// TestEtcdManagerMultipleNodes tests multiple nodes scenario
-func TestEtcdManagerMultipleNodes(t *testing.T) {
-	t.Parallel()
-
-	// Create two separate managers for two nodes with same unique prefix
-	mgr1 := setupEtcdTest(t)
-	if mgr1 == nil {
-		return
-	}
-
-	// Create second manager with same prefix to simulate multiple nodes
-	mgr2 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
-
-	ctx := context.Background()
-
-	// Start watching on both managers
-	err := mgr1.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr1 error = %v", err)
-	}
-
-	err = mgr2.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr2 error = %v", err)
-	}
-
-	// Register node 1
-	node1Address := "localhost:47007"
-	err = mgr1.RegisterNode(ctx, node1Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node1 error = %v", err)
-	}
-
-	// Register node 2
-	node2Address := "localhost:47008"
-	err = mgr2.RegisterNode(ctx, node2Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node2 error = %v", err)
-	}
-
-	// Wait for watches to process
-	time.Sleep(500 * time.Millisecond)
-
-	// Both managers should see both nodes
-	nodes1 := mgr1.GetNodes()
-	nodes2 := mgr2.GetNodes()
-
-	if len(nodes1) < 2 {
-		t.Fatalf("Manager 1 should see at least 2 nodes, got %d", len(nodes1))
-	}
-
-	if len(nodes2) < 2 {
-		t.Fatalf("Manager 2 should see at least 2 nodes, got %d", len(nodes2))
-	}
-
-	// Cleanup
-	mgr1.UnregisterNode(ctx, node1Address)
-	mgr2.UnregisterNode(ctx, node2Address)
 }
 
 // TestEtcdManagerRegisterNodeWithoutConnect tests registering without connection
@@ -854,220 +735,9 @@ func TestEtcdManagerRegisterNodeWithoutConnect(t *testing.T) {
 	}
 }
 
-// TestEtcdManagerGetNodesInitiallyEmpty tests that GetNodes returns empty list initially
-func TestEtcdManagerGetNodesInitiallyEmpty(t *testing.T) {
-	t.Parallel()
-
-	// Use PrepareEtcdPrefix for test isolation
-	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	nodes := mgr.GetNodes()
-	if len(nodes) != 0 {
-		t.Fatalf("GetNodes() should return empty list initially, got %d nodes", len(nodes))
-	}
-}
 func isGithubAction() bool {
 	// GitHub Actions sets GITHUB_ACTIONS=true; check the environment variable directly
 	return os.Getenv("GITHUB_ACTIONS") == "true"
-}
-
-// TestEtcdManagerServerCrash tests that EtcdManager handles etcd server crash gracefully
-// This test simulates an etcd server crash by stopping the etcd service, verifying that:
-// 1. The EtcdManager continues to run without panicking
-// 2. Keep-alive channel closure is handled gracefully
-// 3. Watch channel closure is handled gracefully
-// 4. Operations after crash return appropriate errors without causing failures
-func TestEtcdManagerServerCrash(t *testing.T) {
-	// Only skip when NOT running in GitHub Actions (we want this to run in CI)
-	if !isGithubAction() {
-		t.Skipf("Skipping test: manual etcd crash simulation is intended for local runs")
-	} else {
-		t.Log("Running in GitHub Actions - will attempt to stop etcd service for crash simulation")
-	}
-	// Use PrepareEtcdPrefix for test isolation
-	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-
-	// First, verify etcd is running
-	mgr, err := NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Skipf("Skipping test: etcd not available: %v", err)
-		return
-	}
-
-	// Cleanup handled by PrepareEtcdPrefix via t.Cleanup
-	t.Cleanup(func() {
-		mgr.Close()
-	})
-
-	ctx := context.Background()
-	nodeAddress := "localhost:47010"
-
-	// Start watching nodes to ensure watch channel is active
-	err = mgr.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() error = %v", err)
-	}
-
-	// Register a node to ensure keep-alive channel is active
-	err = mgr.RegisterNode(ctx, nodeAddress)
-	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
-	}
-
-	// Wait a bit to ensure registration and watch are fully established
-	time.Sleep(500 * time.Millisecond)
-
-	// Simulate etcd crash by stopping the service
-	if isGithubAction() {
-		t.Log("Simulating etcd server crash by stopping etcd service (GitHub Action)...")
-		stopCmd := "sudo systemctl stop etcd"
-		result, err := executeCommand(stopCmd)
-		if err != nil {
-			t.Fatalf("Failed to stop etcd service: %v, output: %s", err, result)
-		}
-	} else {
-		t.Log("PLEASE MANUALLY STOP THE ETCD SERVER NOW, THEN PRESS ENTER IN THE TERMINAL. SLEEPING FOR 10 SECONDS TO ALLOW ETCD TO STOP...")
-		time.Sleep(5 * time.Second)
-	}
-
-	// Wait for the crash to be detected
-	time.Sleep(10 * time.Second)
-
-	// Verify that EtcdManager is still running (didn't panic or crash)
-	// The manager should still be accessible and not cause panic
-	t.Log("Verifying EtcdManager continues to run after etcd crash...")
-
-	// Test 1: GetNodes should still work and return existing data
-	nodes := mgr.GetNodes()
-	t.Logf("GetNodes() returned %d nodes after crash (expected to have cached data)", len(nodes))
-	// This should not panic and should return the last known state
-
-	// Test 2: Operations should fail gracefully with errors, not panic
-	// Use a short timeout to avoid blocking the test
-	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	err = mgr.Put(ctxWithTimeout, "test-key-after-crash", "test-value")
-	if err == nil {
-		t.Log("Put() succeeded despite etcd being down (unexpected but not a failure)")
-	} else {
-		t.Logf("Put() failed as expected after etcd crash: %v", err)
-	}
-
-	// Test 3: Get operation should fail gracefully
-	ctxGet, cancelGet := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancelGet()
-
-	_, err = mgr.Get(ctxGet, "test-key-after-crash")
-	if err == nil {
-		t.Log("Get() succeeded despite etcd being down (unexpected but not a failure)")
-	} else {
-		t.Logf("Get() failed as expected after etcd crash: %v", err)
-	}
-
-	// Restart etcd for subsequent tests
-	if isGithubAction() {
-		t.Log("Restarting etcd service for subsequent tests (GitHub Action)...")
-		startCmd := "sudo systemctl start etcd"
-		result, err := executeCommand(startCmd)
-		if err != nil {
-			t.Logf("Warning: Failed to restart etcd service: %v, output: %s", err, result)
-		}
-		// Wait for etcd to be ready
-		time.Sleep(2 * time.Second)
-	} else {
-		t.Log("PLEASE MANUALLY RESTART THE ETCD SERVER NOW.")
-		time.Sleep(5 * time.Second)
-	}
-
-	// After etcd restart, verify that get/put operations work again
-	// Wait a bit for etcd to be ready
-	time.Sleep(10 * time.Second)
-	// After etcd restart, verify that the original manager (mgr) can reconnect and resume operations
-
-	ctx2 := context.Background()
-	testKey := "test-key-after-restart"
-	testValue := "test-value-after-restart"
-
-	// Put should succeed using the original manager
-	err = mgr.Put(ctx2, testKey, testValue)
-	if err != nil {
-		t.Fatalf("Put() after etcd restart (original manager) failed: %v", err)
-	}
-
-	// Get should succeed using the original manager
-	got, err := mgr.Get(ctx2, testKey)
-	if err != nil {
-		t.Fatalf("Get() after etcd restart (original manager) failed: %v", err)
-	} else if got != testValue {
-		t.Fatalf("Get() after etcd restart (original manager) = %v, want %v", got, testValue)
-	}
-
-	// Cleanup
-	err = mgr.Delete(ctx2, testKey)
-	if err != nil {
-		t.Logf("Cleanup Delete() after etcd restart (original manager) failed: %v", err)
-	}
-
-	t.Logf("Wait for 20 seconds for invalid leases to expire")
-	time.Sleep(20 * time.Second) // Wait for etcd to stabilize
-
-	// Create a new manager and connect after etcd restart with same prefix
-	mgr2 := setupEtcdTestWithPrefix(t, mgr.GetPrefix())
-
-	err = mgr2.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() (mgr2) after etcd restart failed: %v", err)
-	}
-
-	// Register a new node address with mgr2
-	newNodeAddr := "localhost:47011"
-	err = mgr2.RegisterNode(ctx2, newNodeAddr)
-	if err != nil {
-		t.Fatalf("RegisterNode() (mgr2) failed: %v", err)
-	}
-
-	// Wait for etcd propagation
-	time.Sleep(500 * time.Millisecond)
-
-	// Old manager (mgr) should see the new node in GetNodes()
-	nodesAfter := mgr.GetNodes()
-	t.Logf("Nodes after etcd restart: %v", nodesAfter)
-	foundNew := false
-	for _, addr := range nodesAfter {
-		if addr == newNodeAddr {
-			foundNew = true
-			break
-		}
-	}
-	if !foundNew {
-		t.Fatalf("Old manager did not see new node %s registered by mgr2", newNodeAddr)
-	}
-
-	// Verify mgr2 sees both nodes (newNodeAddr and nodeAddress)
-	nodesMgr2 := mgr2.GetNodes()
-	t.Logf("mgr2.GetNodes() returned: %v", nodesMgr2)
-	if len(nodesMgr2) < 2 {
-		t.Fatalf("mgr2.GetNodes() returned %d nodes, want at least 2", len(nodesMgr2))
-	}
-
-	// Cleanup
-	err = mgr2.UnregisterNode(ctx2, newNodeAddr)
-	if err != nil {
-		t.Logf("Cleanup UnregisterNode() (mgr2) failed: %v", err)
-	}
-
-	// Verify the test passed - if we got here without panic, the test succeeded
-	t.Log("Test passed: EtcdManager handled etcd server crash gracefully without failure")
 }
 
 // executeCommand is a helper function to execute shell commands
@@ -1088,274 +758,4 @@ func executeCommand(cmd string) (string, error) {
 	// Import os/exec if not already imported
 	output, err = exec.Command(execCmd.name, execCmd.args...).CombinedOutput()
 	return string(output), err
-}
-
-// TestEtcdManagerGetLeaderNode_EmptyNodes tests GetLeaderNode with no nodes
-func TestEtcdManagerGetLeaderNode_EmptyNodes(t *testing.T) {
-	t.Parallel()
-
-	mgr, err := NewEtcdManager("localhost:2379", "")
-	if err != nil {
-		t.Fatalf("NewEtcdManager() failed: %v", err)
-	}
-
-	leader := mgr.GetLeaderNode()
-	if leader != "" {
-		t.Fatalf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
-	}
-}
-
-// TestEtcdManagerGetLeaderNode_SingleNode tests GetLeaderNode with one node
-func TestEtcdManagerGetLeaderNode_SingleNode(t *testing.T) {
-	t.Parallel()
-
-	mgr := setupEtcdTest(t)
-	if mgr == nil {
-		return
-	}
-
-	ctx := context.Background()
-
-	// Start watching nodes
-	err := mgr.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() error = %v", err)
-	}
-
-	// Register a single node
-	nodeAddress := "localhost:50001"
-	err = mgr.RegisterNode(ctx, nodeAddress)
-	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
-	}
-
-	// Wait for watch to process
-	time.Sleep(500 * time.Millisecond)
-
-	// The leader should be the only node
-	leader := mgr.GetLeaderNode()
-	if leader != nodeAddress {
-		t.Fatalf("GetLeaderNode() = %s, want %s", leader, nodeAddress)
-	}
-
-	// Cleanup
-	mgr.UnregisterNode(ctx, nodeAddress)
-}
-
-// TestEtcdManagerGetLeaderNode_MultipleNodes tests GetLeaderNode with multiple nodes
-func TestEtcdManagerGetLeaderNode_MultipleNodes(t *testing.T) {
-	t.Parallel()
-
-	// Create multiple managers for multiple nodes
-	mgr1 := setupEtcdTest(t)
-	if mgr1 == nil {
-		return
-	}
-
-	mgr2 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
-	mgr3 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
-
-	ctx := context.Background()
-
-	// Start watching on all managers
-	err := mgr1.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr1 error = %v", err)
-	}
-
-	err = mgr2.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr2 error = %v", err)
-	}
-
-	err = mgr3.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr3 error = %v", err)
-	}
-
-	// Register nodes with different addresses
-	// Note: lexicographically ordered, node2 < node1 < node3
-	node1Address := "localhost:50003"
-	node2Address := "localhost:50001"
-	node3Address := "localhost:50005"
-
-	err = mgr1.RegisterNode(ctx, node1Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node1 error = %v", err)
-	}
-
-	err = mgr2.RegisterNode(ctx, node2Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node2 error = %v", err)
-	}
-
-	err = mgr3.RegisterNode(ctx, node3Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node3 error = %v", err)
-	}
-
-	// Wait for watches to process all registrations
-	time.Sleep(1 * time.Second)
-
-	// All managers should see the same leader (node2 with smallest address)
-	leader1 := mgr1.GetLeaderNode()
-	leader2 := mgr2.GetLeaderNode()
-	leader3 := mgr3.GetLeaderNode()
-
-	expectedLeader := node2Address // "localhost:50001" is smallest
-
-	if leader1 != expectedLeader {
-		t.Fatalf("GetLeaderNode() on mgr1 = %s, want %s", leader1, expectedLeader)
-	}
-
-	if leader2 != expectedLeader {
-		t.Fatalf("GetLeaderNode() on mgr2 = %s, want %s", leader2, expectedLeader)
-	}
-
-	if leader3 != expectedLeader {
-		t.Fatalf("GetLeaderNode() on mgr3 = %s, want %s", leader3, expectedLeader)
-	}
-
-	// Cleanup
-	mgr1.UnregisterNode(ctx, node1Address)
-	mgr2.UnregisterNode(ctx, node2Address)
-	mgr3.UnregisterNode(ctx, node3Address)
-}
-
-// TestEtcdManagerGetLeaderNode_LeaderChanges tests leader changes when nodes leave
-func TestEtcdManagerGetLeaderNode_LeaderChanges(t *testing.T) {
-	t.Parallel()
-
-	// Create two managers for two nodes
-	mgr1 := setupEtcdTest(t)
-	if mgr1 == nil {
-		return
-	}
-
-	mgr2 := setupEtcdTestWithPrefix(t, mgr1.GetPrefix())
-
-	ctx := context.Background()
-
-	// Start watching on both managers
-	err := mgr1.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr1 error = %v", err)
-	}
-
-	err = mgr2.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() on mgr2 error = %v", err)
-	}
-
-	// Register nodes - node1 is lexicographically smaller
-	node1Address := "localhost:50010"
-	node2Address := "localhost:50020"
-
-	err = mgr1.RegisterNode(ctx, node1Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node1 error = %v", err)
-	}
-
-	err = mgr2.RegisterNode(ctx, node2Address)
-	if err != nil {
-		t.Fatalf("RegisterNode() for node2 error = %v", err)
-	}
-
-	// Wait for watches to process
-	time.Sleep(1 * time.Second)
-
-	// Leader should be node1 (smallest address)
-	leader := mgr2.GetLeaderNode()
-	if leader != node1Address {
-		t.Fatalf("Initial leader = %s, want %s", leader, node1Address)
-	}
-
-	// Unregister node1 (current leader)
-	err = mgr1.UnregisterNode(ctx, node1Address)
-	if err != nil {
-		t.Fatalf("UnregisterNode() for node1 error = %v", err)
-	}
-
-	// Wait for watch to detect removal
-	time.Sleep(1 * time.Second)
-
-	// Leader should now be node2 (the only remaining node)
-	leader = mgr2.GetLeaderNode()
-	if leader != node2Address {
-		t.Fatalf("After node1 left, leader = %s, want %s", leader, node2Address)
-	}
-
-	// Cleanup
-	mgr2.UnregisterNode(ctx, node2Address)
-}
-
-// TestEtcdManagerGetLeaderNode_LexicographicOrder tests lexicographic ordering
-func TestEtcdManagerGetLeaderNode_LexicographicOrder(t *testing.T) {
-	t.Parallel()
-
-	mgr := setupEtcdTest(t)
-	if mgr == nil {
-		return
-	}
-
-	ctx := context.Background()
-
-	// Start watching
-	err := mgr.WatchNodes(ctx)
-	if err != nil {
-		t.Fatalf("WatchNodes() error = %v", err)
-	}
-
-	// Create managers for different node addresses
-	managers := make([]*EtcdManager, 0)
-	nodeAddresses := []string{
-		"node-b:5000",
-		"node-a:5000",
-		"node-c:5000",
-		"127.0.0.1:5000",
-		"192.168.1.1:5000",
-	}
-
-	// Register first node with mgr
-	err = mgr.RegisterNode(ctx, nodeAddresses[0])
-	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
-	}
-
-	// Create and register other nodes with same prefix
-	prefix := mgr.GetPrefix()
-	for i := 1; i < len(nodeAddresses); i++ {
-		m := setupEtcdTestWithPrefix(t, prefix)
-		managers = append(managers, m)
-
-		err = m.WatchNodes(ctx)
-		if err != nil {
-			t.Fatalf("WatchNodes() error = %v", err)
-		}
-
-		err = m.RegisterNode(ctx, nodeAddresses[i])
-		if err != nil {
-			t.Fatalf("RegisterNode(%s) error = %v", nodeAddresses[i], err)
-		}
-	}
-
-	// Wait for all watches to process
-	time.Sleep(1 * time.Second)
-
-	// The expected leader is the lexicographically smallest address
-	// Among: "127.0.0.1:5000", "192.168.1.1:5000", "node-a:5000", "node-b:5000", "node-c:5000"
-	// "127.0.0.1:5000" is the smallest (numbers come before letters in ASCII)
-	expectedLeader := "127.0.0.1:5000"
-
-	leader := mgr.GetLeaderNode()
-	if leader != expectedLeader {
-		t.Fatalf("GetLeaderNode() = %s, want %s", leader, expectedLeader)
-	}
-
-	// Cleanup
-	mgr.UnregisterNode(ctx, nodeAddresses[0])
-	for i, m := range managers {
-		m.UnregisterNode(ctx, nodeAddresses[i+1])
-		m.Close()
-	}
 }

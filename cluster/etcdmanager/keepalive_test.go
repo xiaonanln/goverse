@@ -26,9 +26,9 @@ func TestKeepAliveRetry(t *testing.T) {
 
 	// Verify the node is registered by checking it exists in etcd
 	time.Sleep(500 * time.Millisecond)
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 	}
 
 	found := false
@@ -49,9 +49,9 @@ func TestKeepAliveRetry(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Check again - node should still be registered
-	nodes, _, err = mgr.getAllNodes(ctx)
+	nodes, _, err = mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() after delay error = %v", err)
+		t.Fatalf("getAllNodesForTesting() after delay error = %v", err)
 	}
 
 	found = false
@@ -74,9 +74,9 @@ func TestKeepAliveRetry(t *testing.T) {
 
 	// Verify node is unregistered
 	time.Sleep(500 * time.Millisecond)
-	nodes, _, err = mgr.getAllNodes(ctx)
+	nodes, _, err = mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() after unregister error = %v", err)
+		t.Fatalf("getAllNodesForTesting() after unregister error = %v", err)
 	}
 
 	for _, node := range nodes {
@@ -108,9 +108,9 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify registered
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 	}
 
 	found := false
@@ -172,9 +172,9 @@ func TestRegisterNodeIdempotent(t *testing.T) {
 	}
 
 	// Verify only one instance of the node exists
-	nodes, _, err := mgr.getAllNodes(ctx)
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
 	if err != nil {
-		t.Fatalf("getAllNodes() error = %v", err)
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
 	}
 
 	count := 0
