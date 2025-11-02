@@ -39,7 +39,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 	defer node3.Stop(ctx)
 
-	err = cluster3.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster3.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster3: %v", err)
 	}

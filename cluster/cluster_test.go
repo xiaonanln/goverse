@@ -75,61 +75,59 @@ func TestCallObject_NodeNotSet(t *testing.T) {
 	}
 }
 
-func TestConnectEtcd_CreatesManagers(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestCluster")
-
+func TestNewCluster(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Connect to etcd (this will create the managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
-	// Connection may fail if etcd is not running, but managers should be created
+	// Create a new cluster instance (not the singleton) for testing
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	// Connection may fail if etcd is not running, but cluster and managers should be created
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
+		// Even if connection failed, cluster should be created
+		if cluster == nil {
+			t.Fatal("cluster should be created even if etcd connection fails")
+		}
 	}
 
-	if cluster.GetEtcdManager() == nil {
-		t.Error("GetEtcdManager() should return the manager after ConnectEtcd()")
+	if cluster.GetEtcdManagerForTesting() == nil {
+		t.Error("GetEtcdManagerForTesting() should return the manager after NewCluster")
 	}
 }
 
-func TestConnectEtcd_WithNode(t *testing.T) {
+func TestNewCluster_WithNode(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestCluster")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testutil.PrepareEtcdPrefix(t, "localhost:2379"))
+	// Connection may fail if etcd is not running
+	if err != nil {
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
+		if cluster == nil {
+			t.Fatal("cluster should be created even if etcd connection fails")
+		}
+	}
 
-	// Set a node first
+	// Set a node
 	n := node.NewNode("test-address")
 	cluster.SetThisNode(n)
 
-	// Use PrepareEtcdPrefix for test isolation
-	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-
-	// Connect to etcd
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
-	// Connection may fail if etcd is not running, but managers should be created
-	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
-	}
-
 	// Cluster should have the manager
-	if cluster.GetEtcdManager() == nil {
+	if cluster.GetEtcdManagerForTesting() == nil {
 		t.Error("Cluster should have the etcd manager")
 	}
 }
 
-func TestSetThisNode_WithEtcdConfig(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestCluster")
-
+func TestNewCluster_WithEtcdConfig(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Connect to etcd first
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
-	// Connection may fail if etcd is not running, but managers should be created
+	// Create cluster with etcd
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	// Connection may fail if etcd is not running
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
+		if cluster == nil {
+			t.Fatal("cluster should be created even if etcd connection fails")
+		}
 	}
 
 	// Then set the node
@@ -137,7 +135,7 @@ func TestSetThisNode_WithEtcdConfig(t *testing.T) {
 	cluster.SetThisNode(n)
 
 	// Cluster should have the manager
-	if cluster.GetEtcdManager() == nil {
+	if cluster.GetEtcdManagerForTesting() == nil {
 		t.Error("Cluster should have the etcd manager")
 	}
 }
@@ -182,17 +180,17 @@ func TestGetLeaderNode_NoEtcdManager(t *testing.T) {
 }
 
 func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestCluster")
-
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Connect to etcd
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
-	// Connection may fail if etcd is not running, but managers should be created
+	// Create a new cluster with etcd initialized
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	// Connection may fail if etcd is not running
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
+		if cluster == nil {
+			t.Fatal("cluster should be created even if etcd connection fails")
+		}
 	}
 
 	// When there are no nodes, leader should be empty
