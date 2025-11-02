@@ -375,8 +375,9 @@ func (c *Cluster) CloseEtcd() error {
 	return c.etcdManager.Close()
 }
 
-// WatchNodes starts watching for node changes in etcd
-func (c *Cluster) WatchNodes(ctx context.Context) error {
+// StartWatching initializes and starts watching all cluster state changes in etcd
+// This includes node changes and shard mapping updates
+func (c *Cluster) StartWatching(ctx context.Context) error {
 	if c.consensusManager == nil {
 		return fmt.Errorf("consensus manager not initialized")
 	}
@@ -667,7 +668,7 @@ func (c *Cluster) handleShardMappingCheck() {
 }
 
 // StartNodeConnections initializes and starts the node connections manager
-// This should be called after WatchNodes is started
+// This should be called after StartWatching is started
 func (c *Cluster) StartNodeConnections(ctx context.Context) error {
 	if c.nodeConnections != nil {
 		c.logger.Warnf("NodeConnections already started")

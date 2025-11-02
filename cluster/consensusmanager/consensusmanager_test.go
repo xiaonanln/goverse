@@ -11,20 +11,11 @@ import (
 
 // mockListener implements StateChangeListener for testing
 type mockListener struct {
-	nodesChangedCount   int
-	mappingChangedCount int
-	lastNodes           []string
-	lastMapping         *sharding.ShardMapping
+	stateChangedCount int
 }
 
-func (m *mockListener) OnNodesChanged(nodes []string) {
-	m.nodesChangedCount++
-	m.lastNodes = nodes
-}
-
-func (m *mockListener) OnShardMappingChanged(mapping *sharding.ShardMapping) {
-	m.mappingChangedCount++
-	m.lastMapping = mapping
+func (m *mockListener) OnClusterStateChanged() {
+	m.stateChangedCount++
 }
 
 func TestNewConsensusManager(t *testing.T) {

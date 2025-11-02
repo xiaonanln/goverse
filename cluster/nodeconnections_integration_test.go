@@ -54,7 +54,7 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	defer cluster1.UnregisterNode(ctx)
 
 	// Start watching nodes
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}

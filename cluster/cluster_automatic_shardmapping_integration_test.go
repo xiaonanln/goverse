@@ -63,7 +63,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	}
 	defer cluster2.UnregisterNode(ctx)
 
-	err = cluster2.WatchNodes(ctx)
+	err = cluster2.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}

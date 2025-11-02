@@ -62,7 +62,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	}
 	defer cluster2.UnregisterNode(ctx)
 
-	err = cluster2.WatchNodes(ctx)
+	err = cluster2.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	}
 	defer cluster2.UnregisterNode(ctx)
 
-	err = cluster2.WatchNodes(ctx)
+	err = cluster2.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	}
 	defer cluster1.UnregisterNode(ctx)
 
-	err = cluster1.WatchNodes(ctx)
+	err = cluster1.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -314,7 +314,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
 
-	err = cluster2.WatchNodes(ctx)
+	err = cluster2.StartWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
@@ -409,7 +409,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 		}
 		defer clusters[i].UnregisterNode(ctx)
 
-		err = clusters[i].WatchNodes(ctx)
+		err = clusters[i].StartWatching(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start watching nodes for cluster%d: %v", i+1, err)
 		}
@@ -488,7 +488,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 			t.Fatalf("Failed to register node%d: %v", i+1, err)
 		}
 
-		err = c.WatchNodes(ctx)
+		err = c.StartWatching(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start watching nodes for cluster%d: %v", i+1, err)
 		}

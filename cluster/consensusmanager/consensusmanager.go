@@ -17,10 +17,9 @@ import (
 
 // StateChangeListener is the interface for components that want to be notified of state changes
 type StateChangeListener interface {
-	// OnNodesChanged is called when the node list changes
-	OnNodesChanged(nodes []string)
-	// OnShardMappingChanged is called when the shard mapping changes
-	OnShardMappingChanged(mapping *sharding.ShardMapping)
+	// OnClusterStateChanged is called when any cluster state changes (nodes or shard mapping)
+	// Listeners should call ConsensusManager methods to get the current state
+	OnClusterStateChanged()
 }
 
 // ConsensusManager handles all etcd interactions and maintains in-memory cluster state
@@ -74,34 +73,15 @@ func (cm *ConsensusManager) RemoveListener(listener StateChangeListener) {
 	}
 }
 
-// notifyNodesChanged notifies all listeners about node list changes
-func (cm *ConsensusManager) notifyNodesChanged() {
-	cm.mu.RLock()
-	nodes := make([]string, 0, len(cm.nodes))
-	for node := range cm.nodes {
-		nodes = append(nodes, node)
-	}
-	cm.mu.RUnlock()
-	
+// notifyStateChanged notifies all listeners about cluster state changes
+func (cm *ConsensusManager) notifyStateChanged() {
 	cm.listenersMu.RLock()
 	listeners := make([]StateChangeListener, len(cm.listeners))
 	copy(listeners, cm.listeners)
 	cm.listenersMu.RUnlock()
 	
 	for _, listener := range listeners {
-		listener.OnNodesChanged(nodes)
-	}
-}
-
-// notifyShardMappingChanged notifies all listeners about shard mapping changes
-func (cm *ConsensusManager) notifyShardMappingChanged(mapping *sharding.ShardMapping) {
-	cm.listenersMu.RLock()
-	listeners := make([]StateChangeListener, len(cm.listeners))
-	copy(listeners, cm.listeners)
-	cm.listenersMu.RUnlock()
-	
-	for _, listener := range listeners {
-		listener.OnShardMappingChanged(mapping)
+		listener.OnClusterStateChanged()
 	}
 }
 
@@ -234,7 +214,7 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
 		// Notifications may arrive out of order if rapid changes occur
-		go cm.notifyNodesChanged()
+		go cm.notifyStateChanged()
 		
 	case clientv3.EventTypeDelete:
 		// Extract node address from the key
@@ -247,7 +227,7 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
 		// Notifications may arrive out of order if rapid changes occur
-		go cm.notifyNodesChanged()
+		go cm.notifyStateChanged()
 	default:
 		cm.mu.Unlock()
 	}
@@ -275,13 +255,15 @@ func (cm *ConsensusManager) handleShardMappingEvent(event *clientv3.Event) {
 			cm.logger.Infof("Shard mapping updated (version %d -> %d)", oldVersion, mapping.Version)
 			// Asynchronously notify listeners to prevent deadlocks
 			// Note: rapid mapping changes may result in out-of-order notifications
-			go cm.notifyShardMappingChanged(&mapping)
+			go cm.notifyStateChanged()
 		}
 	} else if event.Type == clientv3.EventTypeDelete {
 		cm.mu.Lock()
 		cm.shardMapping = nil
 		cm.mu.Unlock()
 		cm.logger.Infof("Shard mapping deleted")
+		// Notify listeners about the deletion
+		go cm.notifyStateChanged()
 	}
 }
 
