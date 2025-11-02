@@ -434,7 +434,9 @@ func (c *Cluster) StartWatching(ctx context.Context) error {
 // GetNodes returns a list of all registered nodes
 func (c *Cluster) GetNodes() []string {
 	// Try to ensure etcd manager exists, but don't fail if it doesn't
-	// This allows GetNodes to return empty list gracefully
+	// This allows GetNodes to return empty list gracefully when cluster is not fully initialized
+	// The error is intentionally ignored because GetNodes is often called for informational
+	// purposes (e.g., checking node count) before the cluster is fully configured
 	if c.consensusManager == nil {
 		_ = c.ensureEtcdManager()
 	}
@@ -449,7 +451,9 @@ func (c *Cluster) GetNodes() []string {
 // Returns an empty string if there are no registered nodes or if consensus manager is not set.
 func (c *Cluster) GetLeaderNode() string {
 	// Try to ensure etcd manager exists, but don't fail if it doesn't
-	// This allows GetLeaderNode to return empty string gracefully
+	// This allows GetLeaderNode to return empty string gracefully when cluster is not fully initialized
+	// The error is intentionally ignored because GetLeaderNode is often called for informational
+	// purposes before the cluster is fully configured (e.g., in IsLeader checks)
 	if c.consensusManager == nil {
 		_ = c.ensureEtcdManager()
 	}
