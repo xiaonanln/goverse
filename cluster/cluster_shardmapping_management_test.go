@@ -248,7 +248,8 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 
 	// Create a test mapping and set it
 	testMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*sharding.ShardInfo),
+		Nodes:   []string{"localhost:47001"},
 		Version: 1,
 	}
 	cluster.shardMapper.SetMappingForTesting(testMapping)

@@ -172,12 +172,12 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 		}
 
 		for shardID := 0; shardID < sharding.NumShards; shardID++ {
-			node, ok := mapping1.Shards[shardID]
+			shardInfo, ok := mapping1.Shards[shardID]
 			if !ok {
 				t.Errorf("Shard %d is not assigned", shardID)
 			}
-			if !validNodes[node] {
-				t.Errorf("Shard %d assigned to invalid node %s", shardID, node)
+			if !validNodes[shardInfo.TargetNode] {
+				t.Errorf("Shard %d assigned to invalid node %s", shardID, shardInfo.TargetNode)
 			}
 		}
 	})
@@ -446,12 +446,12 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
-		node, ok := updatedMapping.Shards[shardID]
+		shardInfo, ok := updatedMapping.Shards[shardID]
 		if !ok {
 			t.Errorf("Shard %d is not assigned in updated mapping", shardID)
 		}
-		if !validNodes[node] {
-			t.Errorf("Shard %d assigned to invalid node %s in updated mapping", shardID, node)
+		if !validNodes[shardInfo.TargetNode] {
+			t.Errorf("Shard %d assigned to invalid node %s in updated mapping", shardID, shardInfo.TargetNode)
 		}
 	}
 }

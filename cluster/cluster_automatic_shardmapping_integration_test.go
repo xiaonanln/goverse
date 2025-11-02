@@ -165,8 +165,8 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	shardCount := 0
 	for _, node := range nodes {
 		count := 0
-		for _, assignedNode := range mapping1.Shards {
-			if assignedNode == node {
+		for _, shardInfo := range mapping1.Shards {
+			if shardInfo.TargetNode == node {
 				count++
 			}
 		}
@@ -313,8 +313,8 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 
 	// Verify mapping still only contains the original node (second node should not be included)
 	nodeSet := make(map[string]bool)
-	for _, assignedNode := range updatedMapping.Shards {
-		nodeSet[assignedNode] = true
+	for _, shardInfo := range updatedMapping.Shards {
+		nodeSet[shardInfo.TargetNode] = true
 	}
 
 	expectedNode := "localhost:50021"

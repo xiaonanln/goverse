@@ -437,8 +437,10 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 }
 
 // OnShardMappingChanged is called when the shard mapping changes in the cluster
-// This is a placeholder function that checks each object on this node and prints
-// whether it still belongs to this node according to the new shard mapping.
+// This function checks each object on this node and logs whether it still belongs
+// to this node according to the new shard mapping.
+// In the new design, shards have states (AVAILABLE, MIGRATING, OFFLINE) and explicit
+// current/target nodes. This function identifies which objects need migration.
 // TODO: Implement actual shard migration logic
 func (node *Node) OnShardMappingChanged(ctx context.Context, newMapping *sharding.ShardMapping) {
 	node.logger.Infof("=== OnShardMappingChanged === checking object ownership")
@@ -449,21 +451,23 @@ func (node *Node) OnShardMappingChanged(ctx context.Context, newMapping *shardin
 	// Check each object to see if it still belongs to this node
 	for _, objInfo := range objects {
 		shardID := sharding.GetShardID(objInfo.Id)
-		targetNode, ok := newMapping.Shards[shardID]
+		shardInfo, ok := newMapping.Shards[shardID]
 
-		stillBelongsHere := ok && targetNode == node.advertiseAddress
+		if !ok {
+			node.logger.Warnf("Object %s (type=%s, shard=%d) has no assigned node in mapping",
+				objInfo.Id, objInfo.Type, shardID)
+			continue
+		}
+
+		// Check if this object should stay on this node
+		stillBelongsHere := shardInfo.TargetNode == node.advertiseAddress
 
 		if stillBelongsHere {
-			node.logger.Infof("Object %s (type=%s, shard=%d) still belongs to this node",
-				objInfo.Id, objInfo.Type, shardID)
+			node.logger.Infof("Object %s (type=%s, shard=%d) still belongs to this node (target=%s, current=%s, state=%s)",
+				objInfo.Id, objInfo.Type, shardID, shardInfo.TargetNode, shardInfo.CurrentNode, shardInfo.State.String())
 		} else {
-			if ok {
-				node.logger.Infof("Object %s (type=%s, shard=%d) should be migrated to node %s",
-					objInfo.Id, objInfo.Type, shardID, targetNode)
-			} else {
-				node.logger.Warnf("Object %s (type=%s, shard=%d) has no assigned node in mapping",
-					objInfo.Id, objInfo.Type, shardID)
-			}
+			node.logger.Infof("Object %s (type=%s, shard=%d) should be migrated to node %s (current state=%s)",
+				objInfo.Id, objInfo.Type, shardID, shardInfo.TargetNode, shardInfo.State.String())
 		}
 	}
 

@@ -71,14 +71,19 @@ func TestShardMappingChangeNotification(t *testing.T) {
 	cluster1.SetEtcdManager(mgr)
 
 	initialMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*sharding.ShardInfo),
 		Nodes:   []string{"localhost:47001"},
 		Version: 1,
 	}
 
 	// Assign all shards to node1
 	for i := 0; i < sharding.NumShards; i++ {
-		initialMapping.Shards[i] = "localhost:47001"
+		initialMapping.Shards[i] = &sharding.ShardInfo{
+			ShardID:     i,
+			TargetNode:  "localhost:47001",
+			CurrentNode: "localhost:47001",
+			State:       sharding.ShardStateAvailable,
+		}
 	}
 
 	// Call OnShardMappingChanged with initial mapping - all objects should stay
@@ -86,7 +91,7 @@ func TestShardMappingChangeNotification(t *testing.T) {
 
 	// Create a new mapping with node2 added
 	newMapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*sharding.ShardInfo),
 		Nodes:   []string{"localhost:47001", "localhost:47002"},
 		Version: 2,
 	}
@@ -97,17 +102,39 @@ func TestShardMappingChangeNotification(t *testing.T) {
 	shard3 := sharding.GetShardID(obj3ID)
 
 	// Let's say obj1 and obj2 stay on node1, but obj3 moves to node2
-	newMapping.Shards[shard1] = "localhost:47001"
-	newMapping.Shards[shard2] = "localhost:47001"
-	newMapping.Shards[shard3] = "localhost:47002"
+	newMapping.Shards[shard1] = &sharding.ShardInfo{
+		ShardID:     shard1,
+		TargetNode:  "localhost:47001",
+		CurrentNode: "localhost:47001",
+		State:       sharding.ShardStateAvailable,
+	}
+	newMapping.Shards[shard2] = &sharding.ShardInfo{
+		ShardID:     shard2,
+		TargetNode:  "localhost:47001",
+		CurrentNode: "localhost:47001",
+		State:       sharding.ShardStateAvailable,
+	}
+	newMapping.Shards[shard3] = &sharding.ShardInfo{
+		ShardID:     shard3,
+		TargetNode:  "localhost:47002",
+		CurrentNode: "localhost:47001",
+		State:       sharding.ShardStateMigrating,
+	}
 
 	// Assign remaining shards
 	for i := 0; i < sharding.NumShards; i++ {
 		if _, exists := newMapping.Shards[i]; !exists {
+			var targetNode string
 			if i%2 == 0 {
-				newMapping.Shards[i] = "localhost:47001"
+				targetNode = "localhost:47001"
 			} else {
-				newMapping.Shards[i] = "localhost:47002"
+				targetNode = "localhost:47002"
+			}
+			newMapping.Shards[i] = &sharding.ShardInfo{
+				ShardID:     i,
+				TargetNode:  targetNode,
+				CurrentNode: targetNode,
+				State:       sharding.ShardStateAvailable,
 			}
 		}
 	}

@@ -45,7 +45,7 @@ func TestNode_OnShardMappingChanged(t *testing.T) {
 	// Create a test shard mapping
 	// Let's say obj1 and obj2 stay on this node, but obj3 should move to another node
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*sharding.ShardInfo),
 		Nodes:   []string{"localhost:47001", "localhost:47002"},
 		Version: 1,
 	}
@@ -56,9 +56,24 @@ func TestNode_OnShardMappingChanged(t *testing.T) {
 	shard3 := sharding.GetShardID(obj3ID)
 
 	// Assign shards
-	mapping.Shards[shard1] = "localhost:47001" // stays on this node
-	mapping.Shards[shard2] = "localhost:47001" // stays on this node
-	mapping.Shards[shard3] = "localhost:47002" // should move to another node
+	mapping.Shards[shard1] = &sharding.ShardInfo{
+		ShardID:     shard1,
+		TargetNode:  "localhost:47001",
+		CurrentNode: "localhost:47001",
+		State:       sharding.ShardStateAvailable,
+	}
+	mapping.Shards[shard2] = &sharding.ShardInfo{
+		ShardID:     shard2,
+		TargetNode:  "localhost:47001",
+		CurrentNode: "localhost:47001",
+		State:       sharding.ShardStateAvailable,
+	}
+	mapping.Shards[shard3] = &sharding.ShardInfo{
+		ShardID:     shard3,
+		TargetNode:  "localhost:47002",
+		CurrentNode: "localhost:47001",
+		State:       sharding.ShardStateMigrating,
+	}
 
 	// Call OnShardMappingChanged - this should just log, not actually migrate
 	node.OnShardMappingChanged(ctx, mapping)
@@ -95,14 +110,19 @@ func TestNode_OnShardMappingChanged_AllObjectsStay(t *testing.T) {
 
 	// Create a test shard mapping where all objects stay
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*sharding.ShardInfo),
 		Nodes:   []string{"localhost:47001"},
 		Version: 1,
 	}
 
 	// Assign all shards to this node
 	for i := 0; i < sharding.NumShards; i++ {
-		mapping.Shards[i] = "localhost:47001"
+		mapping.Shards[i] = &sharding.ShardInfo{
+			ShardID:     i,
+			TargetNode:  "localhost:47001",
+			CurrentNode: "localhost:47001",
+			State:       sharding.ShardStateAvailable,
+		}
 	}
 
 	// Call OnShardMappingChanged
@@ -122,17 +142,24 @@ func TestNode_OnShardMappingChanged_EmptyNode(t *testing.T) {
 
 	// Create a test shard mapping
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*sharding.ShardInfo),
 		Nodes:   []string{"localhost:47001", "localhost:47002"},
 		Version: 1,
 	}
 
 	// Assign shards
 	for i := 0; i < sharding.NumShards; i++ {
+		var targetNode string
 		if i%2 == 0 {
-			mapping.Shards[i] = "localhost:47001"
+			targetNode = "localhost:47001"
 		} else {
-			mapping.Shards[i] = "localhost:47002"
+			targetNode = "localhost:47002"
+		}
+		mapping.Shards[i] = &sharding.ShardInfo{
+			ShardID:     i,
+			TargetNode:  targetNode,
+			CurrentNode: targetNode,
+			State:       sharding.ShardStateAvailable,
 		}
 	}
 
