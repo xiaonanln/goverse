@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+option go_package = "github.com/xiaonanln/goverse/cluster/sharding/proto/sharding_pb";
+
+package sharding;
+
+// ShardState represents the current state of a shard
+enum ShardState {
+  // AVAILABLE: Shard is ready and available for operations on the current node
+  AVAILABLE = 0;
+  
+  // MIGRATING: Shard is in the process of being migrated from current node to target node
+  MIGRATING = 1;
+  
+  // OFFLINE: Shard is offline and not available on any node
+  OFFLINE = 2;
+}
+
+// ShardInfo represents detailed information about a single shard
+message ShardInfo {
+  // shard_id: The ID of this shard (0-8191)
+  int32 shard_id = 1;
+  
+  // target_node: The node where this shard should ultimately reside (leader-specified)
+  string target_node = 2;
+  
+  // current_node: The node where this shard is currently located
+  string current_node = 3;
+  
+  // state: The current state of this shard
+  ShardState state = 4;
+}
+
+// ShardMappingProto represents the complete shard mapping for the cluster
+// This is stored in etcd for cluster coordination
+message ShardMappingProto {
+  // shards: Map from shard ID to shard information
+  // Using map instead of repeated to allow efficient lookups
+  map<int32, ShardInfo> shards = 1;
+  
+  // nodes: Sorted list of all nodes in the cluster
+  repeated string nodes = 2;
+  
+  // version: Version number for optimistic concurrency control
+  int64 version = 3;
+}

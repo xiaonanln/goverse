@@ -2,10 +2,11 @@ package sharding
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	sharding_pb "github.com/xiaonanln/goverse/cluster/sharding/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestCreateShardMapping(t *testing.T) {
@@ -66,12 +67,21 @@ func TestCreateShardMapping(t *testing.T) {
 			}
 
 			for shardID := 0; shardID < NumShards; shardID++ {
-				node, ok := mapping.Shards[shardID]
+				shardInfo, ok := mapping.Shards[shardID]
 				if !ok {
 					t.Errorf("Shard %d is not assigned to any node", shardID)
 				}
-				if !nodeSet[node] {
-					t.Errorf("Shard %d is assigned to unknown node %s", shardID, node)
+				if !nodeSet[shardInfo.TargetNode] {
+					t.Errorf("Shard %d is assigned to unknown node %s", shardID, shardInfo.TargetNode)
+				}
+				// Verify initial state is AVAILABLE
+				if shardInfo.State != ShardStateAvailable {
+					t.Errorf("Shard %d has state %s, want AVAILABLE", shardID, shardInfo.State.String())
+				}
+				// Verify CurrentNode equals TargetNode initially
+				if shardInfo.CurrentNode != shardInfo.TargetNode {
+					t.Errorf("Shard %d has currentNode=%s, targetNode=%s, should be equal", 
+						shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
 				}
 			}
 
@@ -95,8 +105,8 @@ func TestCreateShardMapping_Distribution(t *testing.T) {
 
 	// Count shards per node
 	shardCounts := make(map[string]int)
-	for _, node := range mapping.Shards {
-		shardCounts[node]++
+	for _, shardInfo := range mapping.Shards {
+		shardCounts[shardInfo.TargetNode]++
 	}
 
 	// Verify relatively even distribution
@@ -133,8 +143,8 @@ func TestCreateShardMapping_Deterministic(t *testing.T) {
 
 	// Verify they produce the same shard assignments
 	for shardID := 0; shardID < NumShards; shardID++ {
-		node1 := mapping1.Shards[shardID]
-		node2 := mapping2.Shards[shardID]
+		node1 := mapping1.Shards[shardID].TargetNode
+		node2 := mapping2.Shards[shardID].TargetNode
 		if node1 != node2 {
 			t.Errorf("Shard %d assigned to different nodes: %s vs %s", shardID, node1, node2)
 		}
@@ -161,8 +171,8 @@ func TestCreateShardMapping_NodeOrderIndependent(t *testing.T) {
 
 	// Verify they produce the same shard assignments (sorted internally)
 	for shardID := 0; shardID < NumShards; shardID++ {
-		node1 := mapping1.Shards[shardID]
-		node2 := mapping2.Shards[shardID]
+		node1 := mapping1.Shards[shardID].TargetNode
+		node2 := mapping2.Shards[shardID].TargetNode
 		if node1 != node2 {
 			t.Errorf("Shard %d assigned to different nodes with different input order: %s vs %s", shardID, node1, node2)
 		}
@@ -171,26 +181,58 @@ func TestCreateShardMapping_NodeOrderIndependent(t *testing.T) {
 
 func TestShardMapping_Serialization(t *testing.T) {
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*ShardInfo),
+		Nodes:   []string{"node1", "node2", "node3"},
 		Version: 5,
 	}
 
 	// Add some sample shard assignments
-	mapping.Shards[0] = "node1"
-	mapping.Shards[1] = "node2"
-	mapping.Shards[100] = "node3"
+	mapping.Shards[0] = &ShardInfo{
+		ShardID:     0,
+		TargetNode:  "node1",
+		CurrentNode: "node1",
+		State:       ShardStateAvailable,
+	}
+	mapping.Shards[1] = &ShardInfo{
+		ShardID:     1,
+		TargetNode:  "node2",
+		CurrentNode: "node2",
+		State:       ShardStateAvailable,
+	}
+	mapping.Shards[100] = &ShardInfo{
+		ShardID:     100,
+		TargetNode:  "node3",
+		CurrentNode: "node3",
+		State:       ShardStateAvailable,
+	}
+
+	// Convert to protobuf
+	pbMapping := &sharding_pb.ShardMappingProto{
+		Shards:  make(map[int32]*sharding_pb.ShardInfo),
+		Nodes:   mapping.Nodes,
+		Version: mapping.Version,
+	}
+	
+	for shardID, shardInfo := range mapping.Shards {
+		pbMapping.Shards[int32(shardID)] = &sharding_pb.ShardInfo{
+			ShardId:     int32(shardInfo.ShardID),
+			TargetNode:  shardInfo.TargetNode,
+			CurrentNode: shardInfo.CurrentNode,
+			State:       sharding_pb.ShardState(shardInfo.State),
+		}
+	}
 
 	// Serialize
-	data, err := json.Marshal(mapping)
+	data, err := proto.Marshal(pbMapping)
 	if err != nil {
-		t.Fatalf("json.Marshal() error: %v", err)
+		t.Fatalf("proto.Marshal() error: %v", err)
 	}
 
 	// Deserialize
-	var decoded ShardMapping
-	err = json.Unmarshal(data, &decoded)
+	var decoded sharding_pb.ShardMappingProto
+	err = proto.Unmarshal(data, &decoded)
 	if err != nil {
-		t.Fatalf("json.Unmarshal() error: %v", err)
+		t.Fatalf("proto.Unmarshal() error: %v", err)
 	}
 
 	// Verify
@@ -202,13 +244,20 @@ func TestShardMapping_Serialization(t *testing.T) {
 		t.Errorf("Shards length = %d, want %d", len(decoded.Shards), len(mapping.Shards))
 	}
 
-	for shardID, node := range mapping.Shards {
-		decodedNode, ok := decoded.Shards[shardID]
+	for shardID, shardInfo := range mapping.Shards {
+		decodedShardInfo, ok := decoded.Shards[int32(shardID)]
 		if !ok {
 			t.Errorf("Shard %d missing in decoded mapping", shardID)
+			continue
 		}
-		if decodedNode != node {
-			t.Errorf("Shard %d node = %s, want %s", shardID, decodedNode, node)
+		if decodedShardInfo.TargetNode != shardInfo.TargetNode {
+			t.Errorf("Shard %d target node = %s, want %s", shardID, decodedShardInfo.TargetNode, shardInfo.TargetNode)
+		}
+		if decodedShardInfo.CurrentNode != shardInfo.CurrentNode {
+			t.Errorf("Shard %d current node = %s, want %s", shardID, decodedShardInfo.CurrentNode, shardInfo.CurrentNode)
+		}
+		if ShardState(decodedShardInfo.State) != shardInfo.State {
+			t.Errorf("Shard %d state = %v, want %v", shardID, decodedShardInfo.State, shardInfo.State)
 		}
 	}
 }
@@ -218,18 +267,26 @@ func TestGetNodeForShard(t *testing.T) {
 
 	// Create a test mapping with all shards assigned
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*ShardInfo),
+		Nodes:   []string{"node1", "node2", "node3"},
 		Version: 1,
 	}
 
 	// Assign all shards for testing
 	for i := 0; i < NumShards; i++ {
+		var targetNode string
 		if i%3 == 0 {
-			mapping.Shards[i] = "node1"
+			targetNode = "node1"
 		} else if i%3 == 1 {
-			mapping.Shards[i] = "node2"
+			targetNode = "node2"
 		} else {
-			mapping.Shards[i] = "node3"
+			targetNode = "node3"
+		}
+		mapping.Shards[i] = &ShardInfo{
+			ShardID:     i,
+			TargetNode:  targetNode,
+			CurrentNode: targetNode,
+			State:       ShardStateAvailable,
 		}
 	}
 
@@ -389,8 +446,8 @@ func TestUpdateShardMapping(t *testing.T) {
 
 	// Verify shards stayed on same nodes
 	for shardID := 0; shardID < NumShards; shardID++ {
-		initialNode := initialMapping.Shards[shardID]
-		updatedNode := updatedMapping.Shards[shardID]
+		initialNode := initialMapping.Shards[shardID].TargetNode
+		updatedNode := updatedMapping.Shards[shardID].TargetNode
 		if initialNode != updatedNode {
 			t.Errorf("Shard %d moved from %s to %s when it should have stayed", shardID, initialNode, updatedNode)
 		}
@@ -427,8 +484,8 @@ func TestUpdateShardMapping_SameNodesDifferentOrder(t *testing.T) {
 
 	// Verify all shards stayed on same nodes (identical mapping)
 	for shardID := 0; shardID < NumShards; shardID++ {
-		initialNode := initialMapping.Shards[shardID]
-		updatedNode := updatedMapping.Shards[shardID]
+		initialNode := initialMapping.Shards[shardID].TargetNode
+		updatedNode := updatedMapping.Shards[shardID].TargetNode
 		if initialNode != updatedNode {
 			t.Errorf("Shard %d moved from %s to %s when it should have stayed (same nodes, different order)", shardID, initialNode, updatedNode)
 		}
@@ -458,22 +515,22 @@ func TestUpdateShardMapping_NodeRemoved(t *testing.T) {
 		t.Fatalf("UpdateShardMapping() error: %v", err)
 	}
 
-	// Verify all shards are assigned to remaining nodes
+	// Verify all shards have target nodes assigned to remaining nodes
 	for shardID := 0; shardID < NumShards; shardID++ {
-		node := updatedMapping.Shards[shardID]
-		if node != "node1" && node != "node2" {
-			t.Errorf("Shard %d assigned to removed node %s", shardID, node)
+		targetNode := updatedMapping.Shards[shardID].TargetNode
+		if targetNode != "node1" && targetNode != "node2" {
+			t.Errorf("Shard %d has target node %s, should be node1 or node2", shardID, targetNode)
 		}
 	}
 
-	// Count how many shards stayed on their original nodes
+	// Count how many shards had their target nodes stay stable
 	stableCount := 0
 	for shardID := 0; shardID < NumShards; shardID++ {
-		initialNode := initialMapping.Shards[shardID]
-		updatedNode := updatedMapping.Shards[shardID]
+		initialTargetNode := initialMapping.Shards[shardID].TargetNode
+		updatedTargetNode := updatedMapping.Shards[shardID].TargetNode
 
-		if initialNode == "node1" || initialNode == "node2" {
-			if initialNode == updatedNode {
+		if initialTargetNode == "node1" || initialTargetNode == "node2" {
+			if initialTargetNode == updatedTargetNode {
 				stableCount++
 			}
 		}
@@ -513,27 +570,27 @@ func TestUpdateShardMapping_NodeAdded(t *testing.T) {
 		t.Fatalf("UpdateShardMapping() error: %v", err)
 	}
 
-	// Verify all shards are assigned to valid nodes
+	// Verify all shards have target nodes assigned to valid nodes
 	validNodes := map[string]bool{"node1": true, "node2": true, "node3": true}
 	for shardID := 0; shardID < NumShards; shardID++ {
-		node := updatedMapping.Shards[shardID]
-		if !validNodes[node] {
-			t.Errorf("Shard %d assigned to invalid node %s", shardID, node)
+		targetNode := updatedMapping.Shards[shardID].TargetNode
+		if !validNodes[targetNode] {
+			t.Errorf("Shard %d has target node %s, should be node1, node2 or node3", shardID, targetNode)
 		}
 	}
 
 	// Verify shards on node1 or node2 stayed there (stability)
 	movedCount := 0
 	for shardID := 0; shardID < NumShards; shardID++ {
-		initialNode := initialMapping.Shards[shardID]
-		updatedNode := updatedMapping.Shards[shardID]
+		initialTargetNode := initialMapping.Shards[shardID].TargetNode
+		updatedTargetNode := updatedMapping.Shards[shardID].TargetNode
 
-		if initialNode != updatedNode {
+		if initialTargetNode != updatedTargetNode {
 			movedCount++
 		}
 	}
 
-	// All shards should stay on their original nodes when adding a new node
+	// All shards should stay on their original target nodes when adding a new node
 	// because the update logic preserves existing assignments
 	if movedCount != 0 {
 		t.Errorf("Expected 0 shards to move when adding a node, got %d", movedCount)
@@ -545,10 +602,16 @@ func TestInvalidateCache(t *testing.T) {
 
 	// Set a mapping in cache
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string),
+		Shards:  make(map[int]*ShardInfo),
+		Nodes:   []string{"node1"},
 		Version: 1,
 	}
-	mapping.Shards[0] = "node1"
+	mapping.Shards[0] = &ShardInfo{
+		ShardID:     0,
+		TargetNode:  "node1",
+		CurrentNode: "node1",
+		State:       ShardStateAvailable,
+	}
 
 	sm.mu.Lock()
 	sm.mapping = mapping
