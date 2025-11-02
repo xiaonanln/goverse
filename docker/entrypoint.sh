@@ -30,10 +30,13 @@ start_etcd() {
     # Clean up any stale etcd data directory to ensure a fresh start
     if [ -d "/app/default.etcd" ]; then
         echo "Removing stale etcd data directory at /app/default.etcd"
-        rm -rf /app/default.etcd || true
+        if ! rm -rf /app/default.etcd 2>/dev/null; then
+            echo "Warning: Could not remove stale etcd data directory"
+        fi
     fi
     
     # Start etcd in background
+    # Note: Listens on 0.0.0.0 for development convenience (consistent with script/docker/start-etcd.sh)
     etcd \
       --listen-client-urls http://0.0.0.0:2379 \
       --advertise-client-urls http://0.0.0.0:2379 \
@@ -63,6 +66,7 @@ start_postgres() {
     echo "Starting PostgreSQL..."
     
     # Start PostgreSQL in background
+    # Note: Uses wildcard for version-independent path (consistent with script/docker/start-postgres.sh)
     su - postgres -c '/usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data start' > /tmp/postgres.log 2>&1
     
     # Wait for PostgreSQL to be ready
