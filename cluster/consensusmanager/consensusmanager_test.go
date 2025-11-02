@@ -144,13 +144,7 @@ func TestCreateShardMapping_WithNodes(t *testing.T) {
 		t.Fatal("Mapping should not be nil")
 	}
 
-	if mapping.Version != 1 {
-		t.Errorf("Expected version 1, got %d", mapping.Version)
-	}
-
-	if len(mapping.Nodes) != 2 {
-		t.Errorf("Expected 2 nodes, got %d", len(mapping.Nodes))
-	}
+	// Note: Version is now tracked in ClusterState, not ShardMapping
 
 	if len(mapping.Shards) != sharding.NumShards {
 		t.Errorf("Expected %d shards, got %d", sharding.NumShards, len(mapping.Shards))
@@ -168,14 +162,12 @@ func TestUpdateShardMapping_NoExisting(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Update should create new mapping
-	mapping, err := cm.UpdateShardMapping()
+	_, err := cm.UpdateShardMapping()
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
 
-	if mapping.Version != 1 {
-		t.Errorf("Expected version 1 for new mapping, got %d", mapping.Version)
-	}
+	// Note: Version is now tracked in ClusterState, not ShardMapping
 }
 
 func TestUpdateShardMapping_WithExisting(t *testing.T) {
@@ -189,10 +181,9 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 
 	// Set initial mapping
 	cm.state.ShardMapping = &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 5,
+		Shards: make(map[int]string),
 	}
+	cm.state.ShardMappingVersion = 5
 	for i := 0; i < sharding.NumShards; i++ {
 		cm.state.ShardMapping.Shards[i] = "localhost:47001"
 	}
@@ -203,18 +194,16 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 	cm.state.Nodes["localhost:47003"] = true
 	cm.mu.Unlock()
 
-	// Update should increment version
+	// Update should create a new mapping (old shard assignments may change)
 	mapping, err := cm.UpdateShardMapping()
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
 
-	if mapping.Version != 6 {
-		t.Errorf("Expected version 6, got %d", mapping.Version)
-	}
-
-	if len(mapping.Nodes) != 3 {
-		t.Errorf("Expected 3 nodes in updated mapping, got %d", len(mapping.Nodes))
+	// Note: Version tracking happens in ClusterState when StoreShardMapping is called
+	// Just verify the mapping is valid
+	if len(mapping.Shards) != sharding.NumShards {
+		t.Errorf("Expected %d shards in updated mapping, got %d", sharding.NumShards, len(mapping.Shards))
 	}
 }
 
@@ -229,24 +218,29 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 
 	// Set mapping with same nodes
 	cm.state.ShardMapping = &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 5,
+		Shards: make(map[int]string),
 	}
+	cm.state.ShardMappingVersion = 5
+	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = cm.state.ShardMapping.Nodes[nodeIdx]
+		cm.state.ShardMapping.Shards[i] = nodes[nodeIdx]
 	}
 	cm.mu.Unlock()
 
-	// Update with same nodes should not change version
+	// Update with same nodes should return same mapping
 	mapping, err := cm.UpdateShardMapping()
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
 
-	if mapping.Version != 5 {
-		t.Errorf("Expected version 5 (unchanged), got %d", mapping.Version)
+	// Verify the mapping is the same (pointer comparison)
+	cm.mu.RLock()
+	sameMapping := (mapping == cm.state.ShardMapping)
+	cm.mu.RUnlock()
+	
+	if !sameMapping {
+		t.Error("Expected same mapping object when no changes needed")
 	}
 }
 
@@ -334,10 +328,9 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 	// Set a mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &sharding.ShardMapping{
-		Shards:  map[int]string{0: "localhost:47001", 1: "localhost:47002"},
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 1,
+		Shards: map[int]string{0: "localhost:47001", 1: "localhost:47002"},
 	}
+	cm.state.ShardMappingVersion = 1
 	cm.mu.Unlock()
 
 	node, err := cm.GetNodeForShard(0)
@@ -367,13 +360,13 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	// Set a complete mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 1,
+		Shards: make(map[int]string),
 	}
+	cm.state.ShardMappingVersion = 1
+	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = cm.state.ShardMapping.Nodes[nodeIdx]
+		cm.state.ShardMapping.Shards[i] = nodes[nodeIdx]
 	}
 	cm.mu.Unlock()
 

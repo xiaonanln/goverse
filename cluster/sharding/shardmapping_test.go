@@ -75,10 +75,7 @@ func TestCreateShardMapping(t *testing.T) {
 				}
 			}
 
-			// Verify version is set
-			if mapping.Version != 1 {
-				t.Errorf("CreateShardMapping() version = %d, want 1", mapping.Version)
-			}
+			// Note: Version is now managed by ClusterState, not ShardMapping
 		})
 	}
 }
@@ -171,8 +168,7 @@ func TestCreateShardMapping_NodeOrderIndependent(t *testing.T) {
 
 func TestShardMapping_Serialization(t *testing.T) {
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string),
-		Version: 5,
+		Shards: make(map[int]string),
 	}
 
 	// Add some sample shard assignments
@@ -193,11 +189,7 @@ func TestShardMapping_Serialization(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error: %v", err)
 	}
 
-	// Verify
-	if decoded.Version != mapping.Version {
-		t.Errorf("Version = %d, want %d", decoded.Version, mapping.Version)
-	}
-
+	// Verify - Note: Version is now managed by ClusterState
 	if len(decoded.Shards) != len(mapping.Shards) {
 		t.Errorf("Shards length = %d, want %d", len(decoded.Shards), len(mapping.Shards))
 	}
@@ -218,8 +210,7 @@ func TestGetNodeForShard(t *testing.T) {
 
 	// Create a test mapping with all shards assigned
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string),
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	// Assign all shards for testing
@@ -383,9 +374,7 @@ func TestUpdateShardMapping(t *testing.T) {
 		t.Fatalf("UpdateShardMapping() error: %v", err)
 	}
 
-	if updatedMapping.Version != initialMapping.Version {
-		t.Errorf("UpdateShardMapping() version = %d, want %d (no change expected)", updatedMapping.Version, initialMapping.Version)
-	}
+	// Note: Version comparison removed - versions are now managed by ClusterState
 
 	// Verify shards stayed on same nodes
 	for shardID := 0; shardID < NumShards; shardID++ {
@@ -420,10 +409,7 @@ func TestUpdateShardMapping_SameNodesDifferentOrder(t *testing.T) {
 		t.Fatalf("UpdateShardMapping() error: %v", err)
 	}
 
-	// Verify version is NOT bumped (no changes detected)
-	if updatedMapping.Version != initialMapping.Version {
-		t.Errorf("UpdateShardMapping() version = %d, want %d (no change expected for same nodes in different order)", updatedMapping.Version, initialMapping.Version)
-	}
+	// Note: Version comparison removed - versions are now managed by ClusterState
 
 	// Verify all shards stayed on same nodes (identical mapping)
 	for shardID := 0; shardID < NumShards; shardID++ {
@@ -545,8 +531,7 @@ func TestInvalidateCache(t *testing.T) {
 
 	// Set a mapping in cache
 	mapping := &ShardMapping{
-		Shards:  make(map[int]string),
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 	mapping.Shards[0] = "node1"
 

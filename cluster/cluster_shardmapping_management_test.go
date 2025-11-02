@@ -205,8 +205,9 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get shard mapping: %v", err)
 	}
-	if mapping.Version != 1 {
-		t.Errorf("Expected version 1, got %d", mapping.Version)
+	// Note: Version is now tracked in ClusterState, not ShardMapping
+	if mapping == nil {
+		t.Error("Expected mapping to exist")
 	}
 
 	// Call InvalidateShardMappingCache (should be a no-op)
@@ -217,7 +218,7 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Mapping should still be available after InvalidateShardMappingCache: %v", err)
 	}
-	if mapping.Version != 1 {
-		t.Errorf("Expected version 1 after no-op invalidation, got %d", mapping.Version)
+	if mapping == nil {
+		t.Error("Expected mapping to exist after no-op invalidation")
 	}
 }

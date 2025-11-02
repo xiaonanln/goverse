@@ -452,7 +452,7 @@ func (c *Cluster) InitializeShardMapping(ctx context.Context) error {
 		return fmt.Errorf("failed to store shard mapping: %w", err)
 	}
 
-	c.logger.Infof("Successfully initialized shard mapping (version %d)", mapping.Version)
+	c.logger.Infof("Successfully initialized shard mapping")
 	return nil
 }
 
@@ -474,31 +474,27 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 
 	c.logger.Infof("Updating shard mapping with %d nodes", len(nodes))
 
-	// Get current mapping for version comparison
-	currentMapping, err := c.consensusManager.GetShardMapping()
-	if err != nil {
-		return fmt.Errorf("failed to get current shard mapping: %w", err)
-	}
-
 	mapping, err := c.consensusManager.UpdateShardMapping()
 	if err != nil {
 		return fmt.Errorf("failed to update shard mapping: %w", err)
 	}
 
-	// Only store if the mapping was actually updated (version changed)
-	if mapping.Version > currentMapping.Version {
+	// Check if mapping actually changed by comparing pointers
+	// If UpdateShardMapping returned the same mapping, no update is needed
+	currentMapping, _ := c.consensusManager.GetShardMapping()
+	if mapping != currentMapping {
 		err = c.consensusManager.StoreShardMapping(ctx, mapping)
 		if err != nil {
 			return fmt.Errorf("failed to store shard mapping: %w", err)
 		}
-		c.logger.Infof("Successfully updated shard mapping (version %d)", mapping.Version)
+		c.logger.Infof("Successfully updated shard mapping")
 		
 		// Notify this node about shard mapping change only if cluster is ready
 		if c.IsReady() && c.thisNode != nil {
 			c.thisNode.OnShardMappingChanged(ctx, mapping)
 		}
 	} else {
-		c.logger.Debugf("Shard mapping unchanged (version %d)", mapping.Version)
+		c.logger.Debugf("Shard mapping unchanged")
 	}
 
 	return nil
