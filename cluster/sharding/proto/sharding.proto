@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/xiaonanln/goverse/cluster/sharding/proto/sharding_pb";
+option go_package = "github.com/xiaonanln/goverse/cluster/sharding/proto";
 
 package sharding;
 

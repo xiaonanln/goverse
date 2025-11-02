@@ -206,21 +206,8 @@ func TestShardMapping_Serialization(t *testing.T) {
 		State:       ShardStateAvailable,
 	}
 
-	// Convert to protobuf
-	pbMapping := &sharding_pb.ShardMappingProto{
-		Shards:  make(map[int32]*sharding_pb.ShardInfo),
-		Nodes:   mapping.Nodes,
-		Version: mapping.Version,
-	}
-	
-	for shardID, shardInfo := range mapping.Shards {
-		pbMapping.Shards[int32(shardID)] = &sharding_pb.ShardInfo{
-			ShardId:     int32(shardInfo.ShardID),
-			TargetNode:  shardInfo.TargetNode,
-			CurrentNode: shardInfo.CurrentNode,
-			State:       sharding_pb.ShardState(shardInfo.State),
-		}
-	}
+	// Convert to protobuf using helper
+	pbMapping := toProtobuf(mapping)
 
 	// Serialize
 	data, err := proto.Marshal(pbMapping)
@@ -235,17 +222,20 @@ func TestShardMapping_Serialization(t *testing.T) {
 		t.Fatalf("proto.Unmarshal() error: %v", err)
 	}
 
+	// Convert back using helper
+	decodedMapping := fromProtobuf(&decoded)
+
 	// Verify
-	if decoded.Version != mapping.Version {
-		t.Errorf("Version = %d, want %d", decoded.Version, mapping.Version)
+	if decodedMapping.Version != mapping.Version {
+		t.Errorf("Version = %d, want %d", decodedMapping.Version, mapping.Version)
 	}
 
-	if len(decoded.Shards) != len(mapping.Shards) {
-		t.Errorf("Shards length = %d, want %d", len(decoded.Shards), len(mapping.Shards))
+	if len(decodedMapping.Shards) != len(mapping.Shards) {
+		t.Errorf("Shards length = %d, want %d", len(decodedMapping.Shards), len(mapping.Shards))
 	}
 
 	for shardID, shardInfo := range mapping.Shards {
-		decodedShardInfo, ok := decoded.Shards[int32(shardID)]
+		decodedShardInfo, ok := decodedMapping.Shards[shardID]
 		if !ok {
 			t.Errorf("Shard %d missing in decoded mapping", shardID)
 			continue
@@ -256,7 +246,7 @@ func TestShardMapping_Serialization(t *testing.T) {
 		if decodedShardInfo.CurrentNode != shardInfo.CurrentNode {
 			t.Errorf("Shard %d current node = %s, want %s", shardID, decodedShardInfo.CurrentNode, shardInfo.CurrentNode)
 		}
-		if ShardState(decodedShardInfo.State) != shardInfo.State {
+		if decodedShardInfo.State != shardInfo.State {
 			t.Errorf("Shard %d state = %v, want %v", shardID, decodedShardInfo.State, shardInfo.State)
 		}
 	}

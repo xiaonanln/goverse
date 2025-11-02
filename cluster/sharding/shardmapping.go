@@ -130,21 +130,8 @@ func (sm *ShardMapper) StoreShardMapping(ctx context.Context, mapping *ShardMapp
 		return fmt.Errorf("etcd manager not set")
 	}
 
-	// Convert to protobuf message
-	pbMapping := &sharding_pb.ShardMappingProto{
-		Shards:  make(map[int32]*sharding_pb.ShardInfo, NumShards),
-		Nodes:   mapping.Nodes,
-		Version: mapping.Version,
-	}
-
-	for shardID, shardInfo := range mapping.Shards {
-		pbMapping.Shards[int32(shardID)] = &sharding_pb.ShardInfo{
-			ShardId:     int32(shardInfo.ShardID),
-			TargetNode:  shardInfo.TargetNode,
-			CurrentNode: shardInfo.CurrentNode,
-			State:       sharding_pb.ShardState(shardInfo.State),
-		}
-	}
+	// Convert to protobuf message using helper
+	pbMapping := toProtobuf(mapping)
 
 	// Serialize to protobuf bytes
 	data, err := proto.Marshal(pbMapping)
@@ -197,21 +184,8 @@ func (sm *ShardMapper) GetShardMapping(ctx context.Context) (*ShardMapping, erro
 		return nil, fmt.Errorf("failed to unmarshal shard mapping: %w", err)
 	}
 
-	// Convert from protobuf to our internal structure
-	mapping := &ShardMapping{
-		Shards:  make(map[int]*ShardInfo, len(pbMapping.Shards)),
-		Nodes:   pbMapping.Nodes,
-		Version: pbMapping.Version,
-	}
-
-	for shardID, pbShardInfo := range pbMapping.Shards {
-		mapping.Shards[int(shardID)] = &ShardInfo{
-			ShardID:     int(pbShardInfo.ShardId),
-			TargetNode:  pbShardInfo.TargetNode,
-			CurrentNode: pbShardInfo.CurrentNode,
-			State:       ShardState(pbShardInfo.State),
-		}
-	}
+	// Convert from protobuf to our internal structure using helper
+	mapping := fromProtobuf(&pbMapping)
 
 	sm.logger.Infof("Retrieved shard mapping (version %d) from etcd", mapping.Version)
 
@@ -243,7 +217,19 @@ func (sm *ShardMapper) GetNodeForShard(ctx context.Context, shardID int) (string
 	// Return the current node (where the shard actually is)
 	// For available shards, this will be the same as target node
 	// For migrating shards, this might be different from target node
-	return shardInfo.CurrentNode, nil
+	// For offline shards, CurrentNode may be empty - fall back to target node
+	if shardInfo.CurrentNode != "" {
+		return shardInfo.CurrentNode, nil
+	}
+	
+	// Shard is offline (no current node), return target node as fallback
+	if shardInfo.TargetNode != "" {
+		sm.logger.Warnf("Shard %d is offline (state=%s), returning target node %s", 
+			shardID, shardInfo.State.String(), shardInfo.TargetNode)
+		return shardInfo.TargetNode, nil
+	}
+	
+	return "", fmt.Errorf("shard %d has no current or target node (state=%s)", shardID, shardInfo.State.String())
 }
 
 // GetNodeForObject returns the node address that should handle the given object ID
@@ -576,4 +562,44 @@ func (sm *ShardMapper) SetMappingForTesting(mapping *ShardMapping) {
 	sm.mu.Lock()
 	sm.mapping = mapping
 	sm.mu.Unlock()
+}
+
+// toProtobuf converts internal ShardMapping to protobuf representation
+func toProtobuf(mapping *ShardMapping) *sharding_pb.ShardMappingProto {
+	pbMapping := &sharding_pb.ShardMappingProto{
+		Shards:  make(map[int32]*sharding_pb.ShardInfo, len(mapping.Shards)),
+		Nodes:   mapping.Nodes,
+		Version: mapping.Version,
+	}
+
+	for shardID, shardInfo := range mapping.Shards {
+		pbMapping.Shards[int32(shardID)] = &sharding_pb.ShardInfo{
+			ShardId:     int32(shardInfo.ShardID),
+			TargetNode:  shardInfo.TargetNode,
+			CurrentNode: shardInfo.CurrentNode,
+			State:       sharding_pb.ShardState(shardInfo.State),
+		}
+	}
+
+	return pbMapping
+}
+
+// fromProtobuf converts protobuf ShardMappingProto to internal ShardMapping
+func fromProtobuf(pbMapping *sharding_pb.ShardMappingProto) *ShardMapping {
+	mapping := &ShardMapping{
+		Shards:  make(map[int]*ShardInfo, len(pbMapping.Shards)),
+		Nodes:   pbMapping.Nodes,
+		Version: pbMapping.Version,
+	}
+
+	for shardID, pbShardInfo := range pbMapping.Shards {
+		mapping.Shards[int(shardID)] = &ShardInfo{
+			ShardID:     int(pbShardInfo.ShardId),
+			TargetNode:  pbShardInfo.TargetNode,
+			CurrentNode: pbShardInfo.CurrentNode,
+			State:       ShardState(pbShardInfo.State),
+		}
+	}
+
+	return mapping
 }
