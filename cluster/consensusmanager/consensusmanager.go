@@ -194,7 +194,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 			for _, event := range watchResp.Events {
 				key := string(event.Kv.Key)
 
-				cm.logger.Infof("Received watch event: %s %#v", event.Type.String(), event.Kv)
+				cm.logger.Infof("Received watch event: %s %s=%s", event.Type.String(), event.Kv.Key, event.Kv.Value)
 				// Handle node changes
 				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
 					cm.handleNodeEvent(event, nodesPrefix)
