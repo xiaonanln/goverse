@@ -5,57 +5,57 @@ package main
 // to pin objects to specific nodes, similar to how client IDs work.
 
 import (
-	"context"
 	"fmt"
-	"log"
-
-	"github.com/xiaonanln/goverse/cluster/sharding"
+	"strings"
 )
 
-func main() {
-	sm := sharding.NewShardMapper(nil)
-	ctx := context.Background()
+// getNodeForFixedAddress extracts the node address from object IDs with fixed node format
+func getNodeForFixedAddress(objectID string) (string, bool) {
+	if strings.Contains(objectID, "/") {
+		parts := strings.SplitN(objectID, "/", 2)
+		if len(parts) >= 1 && parts[0] != "" {
+			return parts[0], true
+		}
+	}
+	return "", false
+}
 
+func main() {
 	fmt.Println("Fixed Node Address Example for Object IDs")
 	fmt.Println("==========================================")
 	fmt.Println()
 
 	// Example 1: Object with fixed node address
 	objectID1 := "localhost:7001/my-special-object"
-	node1, err := sm.GetNodeForObject(ctx, objectID1)
-	if err != nil {
-		log.Fatalf("Error: %v", err)
+	if node, ok := getNodeForFixedAddress(objectID1); ok {
+		fmt.Printf("Object ID: %s\n", objectID1)
+		fmt.Printf("Target Node: %s\n", node)
+		fmt.Println()
 	}
-	fmt.Printf("Object ID: %s\n", objectID1)
-	fmt.Printf("Target Node: %s\n", node1)
-	fmt.Println()
 
 	// Example 2: Another object with different fixed node
 	objectID2 := "192.168.1.100:8080/session-abc123"
-	node2, err := sm.GetNodeForObject(ctx, objectID2)
-	if err != nil {
-		log.Fatalf("Error: %v", err)
+	if node, ok := getNodeForFixedAddress(objectID2); ok {
+		fmt.Printf("Object ID: %s\n", objectID2)
+		fmt.Printf("Target Node: %s\n", node)
+		fmt.Println()
 	}
-	fmt.Printf("Object ID: %s\n", objectID2)
-	fmt.Printf("Target Node: %s\n", node2)
-	fmt.Println()
 
 	// Example 3: Object ID with multiple slashes (path-like structure)
 	objectID3 := "localhost:7001/users/sessions/abc-123"
-	node3, err := sm.GetNodeForObject(ctx, objectID3)
-	if err != nil {
-		log.Fatalf("Error: %v", err)
+	if node, ok := getNodeForFixedAddress(objectID3); ok {
+		fmt.Printf("Object ID: %s\n", objectID3)
+		fmt.Printf("Target Node: %s\n", node)
+		fmt.Printf("Note: Everything after first '/' is the object identifier\n")
+		fmt.Println()
 	}
-	fmt.Printf("Object ID: %s\n", objectID3)
-	fmt.Printf("Target Node: %s\n", node3)
-	fmt.Printf("Note: Everything after first '/' is the object identifier\n")
-	fmt.Println()
 
 	// Example 4: Regular object ID without fixed node (would use shard mapping)
-	// Note: This would fail without a configured shard mapping, but shows the syntax
 	objectID4 := "regular-object-without-fixed-node"
 	fmt.Printf("Object ID: %s\n", objectID4)
-	fmt.Printf("Note: This uses shard-based routing (requires shard mapping setup)\n")
+	if _, ok := getNodeForFixedAddress(objectID4); !ok {
+		fmt.Printf("Note: This uses shard-based routing (requires shard mapping setup)\n")
+	}
 	fmt.Println()
 
 	fmt.Println("Summary:")
