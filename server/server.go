@@ -299,7 +299,7 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine target node for object %s: %w", req.GetId(), err)
 		}
-		
+
 		thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
 		if targetNode != thisNodeAddr {
 			return nil, fmt.Errorf("object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
@@ -318,6 +318,7 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 
 	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId(), initData)
 	if err != nil {
+		server.logger.Errorf("CreateObject failed: %v", err)
 		return nil, err
 	}
 	response := &goverse_pb.CreateObjectResponse{
