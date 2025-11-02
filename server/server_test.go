@@ -402,8 +402,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		uniqueNodes[nodeAddr] = true
 	}
 
-	t.Logf("Shard mapping initialized successfully with %d unique nodes, %d shards, version %d",
-		len(uniqueNodes), len(shardMapping.Shards), shardMapping.Version)
+	t.Logf("Shard mapping initialized successfully with %d unique nodes, %d shards",
+		len(uniqueNodes), len(shardMapping.Shards))
 
 	// Gracefully stop the server
 	server.cancel()
