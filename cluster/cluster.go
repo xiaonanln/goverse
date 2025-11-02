@@ -33,7 +33,6 @@ type Cluster struct {
 	thisNode            *node.Node
 	etcdManager         *etcdmanager.EtcdManager
 	consensusManager    *consensusmanager.ConsensusManager
-	shardMapper         *sharding.ShardMapper // Deprecated: kept for backward compatibility
 	nodeConnections     *NodeConnections
 	logger              *logger.Logger
 	shardMappingCtx     context.Context
@@ -74,7 +73,6 @@ func (c *Cluster) ResetForTesting() {
 	c.thisNode = nil
 	c.etcdManager = nil
 	c.consensusManager = nil
-	c.shardMapper = nil
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil
@@ -329,8 +327,6 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 // SetEtcdManager sets the etcd manager for the cluster
 func (c *Cluster) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
 	c.etcdManager = mgr
-	// Initialize shard mapper when etcd manager is set (for backward compatibility)
-	c.shardMapper = sharding.NewShardMapper(mgr)
 	// Initialize consensus manager
 	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
 }
@@ -517,7 +513,22 @@ func (c *Cluster) GetShardMapping(ctx context.Context) (*sharding.ShardMapping, 
 }
 
 // GetNodeForObject returns the node address that should handle the given object ID
+// If the object ID contains a "/" separator (e.g., "localhost:7001/object-123"),
+// the part before the first "/" is treated as a fixed node address and returned directly.
+// Otherwise, the object is assigned to a node based on shard mapping.
 func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string, error) {
+	// Check if object ID specifies a fixed node address
+	// Format: nodeAddress/actualObjectID (e.g., "localhost:7001/object-123")
+	// This doesn't require consensus manager
+	if strings.Contains(objectID, "/") {
+		parts := strings.SplitN(objectID, "/", 2)
+		if len(parts) >= 1 && parts[0] != "" {
+			// Fixed node address specified (first part before /)
+			return parts[0], nil
+		}
+	}
+	
+	// For standard shard-based routing, we need consensus manager
 	if c.consensusManager == nil {
 		return "", fmt.Errorf("consensus manager not initialized")
 	}

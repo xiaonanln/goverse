@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -375,7 +376,24 @@ func (cm *ConsensusManager) GetShardMapping() (*sharding.ShardMapping, error) {
 }
 
 // GetNodeForObject returns the node that should handle the given object ID
+// If the object ID contains a "/" separator (e.g., "localhost:7001/object-123"),
+// the part before the first "/" is treated as a fixed node address and returned directly.
+// This allows objects to be pinned to specific nodes, similar to client IDs.
+// Otherwise, the object is assigned to a node based on consistent hashing.
 func (cm *ConsensusManager) GetNodeForObject(objectID string) (string, error) {
+	// Check if object ID specifies a fixed node address
+	// Format: nodeAddress/actualObjectID (e.g., "localhost:7001/object-123")
+	if strings.Contains(objectID, "/") {
+		parts := strings.SplitN(objectID, "/", 2)
+		if len(parts) >= 1 && parts[0] != "" {
+			// Fixed node address specified (first part before /)
+			nodeAddr := parts[0]
+			cm.logger.Debugf("Object %s pinned to node %s", objectID, nodeAddr)
+			return nodeAddr, nil
+		}
+	}
+	
+	// Standard shard-based assignment requires shard mapping
 	mapping, err := cm.GetShardMapping()
 	if err != nil {
 		return "", err
@@ -562,4 +580,12 @@ func (cm *ConsensusManager) GetLastNodeChangeTime() time.Time {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return cm.lastNodeChange
+}
+
+// SetMappingForTesting sets the shard mapping for testing purposes
+// This should only be used in tests
+func (cm *ConsensusManager) SetMappingForTesting(mapping *sharding.ShardMapping) {
+	cm.mu.Lock()
+	cm.shardMapping = mapping
+	cm.mu.Unlock()
 }

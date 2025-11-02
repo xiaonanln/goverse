@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -16,8 +15,9 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 	testNode := node.NewNode("localhost:7000")
 	c.thisNode = testNode
 
-	// Initialize shard mapper (required for GetNodeForObject to work)
-	c.shardMapper = sharding.NewShardMapper(nil)
+	// Note: Fixed node addresses bypass consensus manager routing
+	// The object ID format "nodeAddress/objectID" causes GetNodeForObject
+	// to return the node address directly without consulting shard mapping
 
 	// Register a simple object type for testing
 	testNode.RegisterObjectType((*testObject)(nil))
@@ -60,8 +60,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 	testNode := node.NewNode("localhost:7000")
 	c.thisNode = testNode
 
-	// Initialize shard mapper (required for GetNodeForObject to work)
-	c.shardMapper = sharding.NewShardMapper(nil)
+	// Note: Fixed node addresses bypass consensus manager routing
 
 	// Register and create an echo object type for testing
 	testNode.RegisterObjectType((*echoObject)(nil))
@@ -136,8 +135,7 @@ func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
 	testNode := node.NewNode("localhost:7000")
 	c.thisNode = testNode
 
-	// Initialize shard mapper (required for GetNodeForObject to work)
-	c.shardMapper = sharding.NewShardMapper(nil)
+	// Note: Fixed node addresses bypass consensus manager routing
 
 	testNode.RegisterObjectType((*testObject)(nil))
 

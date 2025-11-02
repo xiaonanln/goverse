@@ -246,16 +246,23 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 	}
 	cluster.SetEtcdManager(mgr)
 
-	// Create a test mapping and set it
+	// With ConsensusManager, there's no manual cache invalidation
+	// The in-memory state is automatically updated via watch
+	// This test now verifies that InvalidateShardMappingCache is a no-op
+	
+	ctx := context.Background()
+	
+	// Set up a test mapping in ConsensusManager
 	testMapping := &sharding.ShardMapping{
 		Shards:  make(map[int]string),
 		Version: 1,
 	}
-	cluster.shardMapper.SetMappingForTesting(testMapping)
+	
+	// Use testing helper to set the mapping
+	cluster.consensusManager.SetMappingForTesting(testMapping)
 
-	// Verify mapping is cached
-	ctx := context.Background()
-	mapping, err := cluster.shardMapper.GetShardMapping(ctx)
+	// Verify mapping is available
+	mapping, err := cluster.GetShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get shard mapping: %v", err)
 	}
@@ -263,13 +270,15 @@ func TestCluster_ShardMappingCacheInvalidation(t *testing.T) {
 		t.Errorf("Expected version 1, got %d", mapping.Version)
 	}
 
-	// Invalidate cache
+	// Call InvalidateShardMappingCache (should be a no-op)
 	cluster.InvalidateShardMappingCache()
 
-	// After invalidation, GetShardMapping should try to fetch from etcd
-	// Since we don't have etcd running, this should fail
-	_, err = cluster.shardMapper.GetShardMapping(ctx)
-	if err == nil {
-		t.Error("Expected error when getting mapping from etcd (not running), got nil")
+	// Mapping should still be available (no-op means no change)
+	mapping, err = cluster.GetShardMapping(ctx)
+	if err != nil {
+		t.Fatalf("Mapping should still be available after InvalidateShardMappingCache: %v", err)
+	}
+	if mapping.Version != 1 {
+		t.Errorf("Expected version 1 after no-op invalidation, got %d", mapping.Version)
 	}
 }
