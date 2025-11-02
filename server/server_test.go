@@ -167,13 +167,20 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 		t.Error("NewServer should store the provided config")
 	}
 
-	// Verify that the cluster has an etcd manager set with the custom prefix
+	// With the new auto-creation pattern, the etcd manager is created when ConnectEtcd is called
 	clusterInstance := cluster.Get()
-	if clusterInstance.GetEtcdManager() == nil {
-		t.Error("NewServer should set the etcd manager on the cluster")
+	err = clusterInstance.ConnectEtcd(config.EtcdAddress, config.EtcdPrefix)
+	if err != nil {
+		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
 
+	// Verify that the cluster has an etcd manager with the custom prefix
 	etcdMgr := clusterInstance.GetEtcdManager()
+	if etcdMgr == nil {
+		t.Error("ConnectEtcd should create the etcd manager on the cluster")
+		return
+	}
+
 	if etcdMgr.GetPrefix() != customPrefix {
 		t.Errorf("EtcdManager prefix = %s, want %s", etcdMgr.GetPrefix(), customPrefix)
 	}
