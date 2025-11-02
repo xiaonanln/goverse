@@ -224,11 +224,13 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 	c.logger.Infof("Routing CreateObject for %s to node %s", objID, nodeAddr)
 
 	if c.nodeConnections == nil {
+		c.logger.Warnf("CreateObject failed: Node connections not initialized")
 		return "", fmt.Errorf("node connections not initialized")
 	}
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
+		c.logger.Warnf("CreateObject failed: %v", err)
 		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
@@ -237,6 +239,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 	if initData != nil {
 		initDataAny = &anypb.Any{}
 		if err := initDataAny.MarshalFrom(initData); err != nil {
+			c.logger.Warnf("CreateObject failed: %v", err)
 			return "", fmt.Errorf("failed to marshal init data: %w", err)
 		}
 	}
@@ -250,6 +253,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 
 	resp, err := client.CreateObject(ctx, req)
 	if err != nil {
+		c.logger.Warnf("CreateObject failed: %v", err)
 		return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
 	}
 
