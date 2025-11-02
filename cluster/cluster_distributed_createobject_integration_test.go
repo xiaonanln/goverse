@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -25,23 +24,18 @@ func TestDistributedCreateObject(t *testing.T) {
 
 	// Create cluster 1
 	cluster1 := newClusterForTesting("TestCluster1")
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 1: %v", err)
-	}
-	cluster1.SetEtcdManager(etcdMgr1)
 
 	node1 := node.NewNode("localhost:47001")
 	cluster1.SetThisNode(node1)
 	node1.RegisterObjectType((*TestDistributedObject)(nil))
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	err = cluster1.ConnectEtcd()
+	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -60,11 +54,6 @@ func TestDistributedCreateObject(t *testing.T) {
 
 	// Create cluster 2
 	cluster2 := newClusterForTesting("TestCluster2")
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 2: %v", err)
-	}
-	cluster2.SetEtcdManager(etcdMgr2)
 
 	node2 := node.NewNode("localhost:47002")
 	cluster2.SetThisNode(node2)
@@ -76,7 +65,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	err = cluster2.ConnectEtcd()
+	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -297,17 +286,12 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	// Set up all 3 nodes
 	for i := 0; i < 3; i++ {
 		clusters[i] = newClusterForTesting("TestCluster" + fmt.Sprintf("%d", i+1))
-		etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-		if err != nil {
-			t.Fatalf("Failed to create etcd manager %d: %v", i+1, err)
-		}
-		clusters[i].SetEtcdManager(etcdMgr)
 
 		nodes[i] = node.NewNode(nodeAddrs[i])
 		clusters[i].SetThisNode(nodes[i])
 		nodes[i].RegisterObjectType((*TestDistributedObject)(nil))
 
-		err = nodes[i].Start(ctx)
+		err := nodes[i].Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
@@ -315,7 +299,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		idx := i
 		t.Cleanup(func() { nodes[idx].Stop(ctx) })
 
-		err = clusters[i].ConnectEtcd()
+		err = clusters[i].ConnectEtcd("localhost:2379", testPrefix)
 		if err != nil {
 			t.Fatalf("Failed to connect etcd for cluster%d: %v", i+1, err)
 		}

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -21,26 +20,19 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	// Create cluster
 	cluster1 := newClusterForTesting("TestCluster1")
 
-	// Create etcd manager
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager: %v", err)
-	}
-	cluster1.SetEtcdManager(etcdMgr1)
-
 	// Create node
 	node1 := node.NewNode("localhost:47101")
 	cluster1.SetThisNode(node1)
 
 	// Start node
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
 
-	// Connect to etcd
-	err = cluster1.ConnectEtcd()
+	// Connect to etcd (auto-creates managers)
+	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd: %v", err)
 	}
@@ -127,22 +119,18 @@ func TestClusterReadyMultiNode(t *testing.T) {
 
 	// Create first cluster (will be leader)
 	cluster1 := newClusterForTesting("TestCluster1")
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 1: %v", err)
-	}
-	cluster1.SetEtcdManager(etcdMgr1)
 
 	node1 := node.NewNode("localhost:47111")
 	cluster1.SetThisNode(node1)
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd()
+	// Connect to etcd (auto-creates managers)
+	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -161,11 +149,6 @@ func TestClusterReadyMultiNode(t *testing.T) {
 
 	// Create second cluster (will be non-leader)
 	cluster2 := newClusterForTesting("TestCluster2")
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 2: %v", err)
-	}
-	cluster2.SetEtcdManager(etcdMgr2)
 
 	node2 := node.NewNode("localhost:47112")
 	cluster2.SetThisNode(node2)
@@ -176,7 +159,8 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd()
+	// Connect to etcd (auto-creates managers)
+	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}

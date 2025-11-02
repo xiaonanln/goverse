@@ -34,6 +34,8 @@ type Cluster struct {
 	consensusManager    *consensusmanager.ConsensusManager
 	nodeConnections     *NodeConnections
 	logger              *logger.Logger
+	etcdAddress         string // etcd server address (e.g., "localhost:2379")
+	etcdPrefix          string // etcd key prefix for this cluster
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
 	shardMappingRunning bool
@@ -348,30 +350,56 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	return nil
 }
 
-// SetEtcdManager sets the etcd manager for the cluster
-func (c *Cluster) SetEtcdManager(mgr *etcdmanager.EtcdManager) {
-	c.etcdManager = mgr
-	// Initialize consensus manager
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
-}
-
 // GetEtcdManager returns the cluster's etcd manager
 func (c *Cluster) GetEtcdManager() *etcdmanager.EtcdManager {
 	return c.etcdManager
 }
 
-// ConnectEtcd connects to etcd
-func (c *Cluster) ConnectEtcd() error {
-	if c.etcdManager == nil {
-		return fmt.Errorf("etcd manager not set")
+// ensureEtcdManager creates the etcd manager and consensus manager if they don't exist
+func (c *Cluster) ensureEtcdManager() error {
+	if c.etcdManager != nil {
+		return nil // Already initialized
 	}
+
+	if c.etcdAddress == "" {
+		return fmt.Errorf("etcd address not set")
+	}
+
+	// Create etcd manager
+	mgr, err := etcdmanager.NewEtcdManager(c.etcdAddress, c.etcdPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to create etcd manager: %w", err)
+	}
+
+	c.etcdManager = mgr
+	// Initialize consensus manager
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
+
+	return nil
+}
+
+// ConnectEtcd connects to etcd. If etcdAddress is provided, it will be used
+// to create the etcd manager if it doesn't exist. The prefix parameter is optional.
+// If both parameters are empty strings and the manager doesn't exist, an error is returned.
+func (c *Cluster) ConnectEtcd(etcdAddress string, prefix string) error {
+	// Store the etcd configuration if provided
+	if etcdAddress != "" {
+		c.etcdAddress = etcdAddress
+		c.etcdPrefix = prefix
+	}
+
+	// Ensure etcd manager exists (creates if needed)
+	if err := c.ensureEtcdManager(); err != nil {
+		return err
+	}
+
 	return c.etcdManager.Connect()
 }
 
 // RegisterNode registers this node with etcd
 func (c *Cluster) RegisterNode(ctx context.Context) error {
-	if c.etcdManager == nil {
-		return fmt.Errorf("etcd manager not set")
+	if err := c.ensureEtcdManager(); err != nil {
+		return err
 	}
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
@@ -402,8 +430,8 @@ func (c *Cluster) CloseEtcd() error {
 // StartWatching initializes and starts watching all cluster state changes in etcd
 // This includes node changes and shard mapping updates
 func (c *Cluster) StartWatching(ctx context.Context) error {
-	if c.consensusManager == nil {
-		return fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return err
 	}
 
 	// Initialize consensus manager state from etcd
@@ -423,6 +451,13 @@ func (c *Cluster) StartWatching(ctx context.Context) error {
 
 // GetNodes returns a list of all registered nodes
 func (c *Cluster) GetNodes() []string {
+	// Try to ensure etcd manager exists, but don't fail if it doesn't
+	// This allows GetNodes to return empty list gracefully when cluster is not fully initialized
+	// The error is intentionally ignored because GetNodes is often called for informational
+	// purposes (e.g., checking node count) before the cluster is fully configured
+	if c.consensusManager == nil {
+		_ = c.ensureEtcdManager()
+	}
 	if c.consensusManager == nil {
 		return []string{}
 	}
@@ -433,6 +468,13 @@ func (c *Cluster) GetNodes() []string {
 // The leader is the node with the smallest advertised address in lexicographic order.
 // Returns an empty string if there are no registered nodes or if consensus manager is not set.
 func (c *Cluster) GetLeaderNode() string {
+	// Try to ensure etcd manager exists, but don't fail if it doesn't
+	// This allows GetLeaderNode to return empty string gracefully when cluster is not fully initialized
+	// The error is intentionally ignored because GetLeaderNode is often called for informational
+	// purposes before the cluster is fully configured (e.g., in IsLeader checks)
+	if c.consensusManager == nil {
+		_ = c.ensureEtcdManager()
+	}
 	if c.consensusManager == nil {
 		return ""
 	}
@@ -455,8 +497,8 @@ func (c *Cluster) InitializeShardMapping(ctx context.Context) error {
 		return fmt.Errorf("only the leader can initialize shard mapping")
 	}
 
-	if c.consensusManager == nil {
-		return fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return err
 	}
 
 	nodes := c.GetNodes()
@@ -487,8 +529,8 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 		return fmt.Errorf("only the leader can update shard mapping")
 	}
 
-	if c.consensusManager == nil {
-		return fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return err
 	}
 
 	nodes := c.GetNodes()
@@ -521,8 +563,8 @@ func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
 
 // GetShardMapping retrieves the current shard mapping
 func (c *Cluster) GetShardMapping(ctx context.Context) (*consensusmanager.ShardMapping, error) {
-	if c.consensusManager == nil {
-		return nil, fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return nil, err
 	}
 
 	return c.consensusManager.GetShardMapping()
@@ -545,8 +587,8 @@ func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string
 	}
 
 	// For standard shard-based routing, we need consensus manager
-	if c.consensusManager == nil {
-		return "", fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return "", err
 	}
 
 	return c.consensusManager.GetNodeForObject(objectID)
@@ -554,8 +596,8 @@ func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string
 
 // GetNodeForShard returns the node address that owns the given shard
 func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, error) {
-	if c.consensusManager == nil {
-		return "", fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return "", err
 	}
 
 	return c.consensusManager.GetNodeForShard(shardID)
@@ -574,8 +616,8 @@ func (c *Cluster) InvalidateShardMappingCache() {
 // it will update/initialize the shard mapping.
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
 func (c *Cluster) StartShardMappingManagement(ctx context.Context) error {
-	if c.consensusManager == nil {
-		return fmt.Errorf("consensus manager not initialized")
+	if err := c.ensureEtcdManager(); err != nil {
+		return err
 	}
 	if c.shardMappingRunning {
 		c.logger.Warnf("Shard mapping management already running")

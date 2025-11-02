@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -21,22 +20,17 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	c := Get()
 	c.ResetForTesting()
 
-	etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager: %v", err)
-	}
-	c.SetEtcdManager(etcdMgr)
-
 	n := node.NewNode("localhost:47201")
 	c.SetThisNode(n)
 
-	err = n.Start(ctx)
+	err := n.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 	defer n.Stop(ctx)
 
-	err = c.ConnectEtcd()
+	// Connect to etcd (auto-creates managers)
+	err = c.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd: %v", err)
 	}

@@ -107,21 +107,19 @@ func TestNewServer_ValidConfig(t *testing.T) {
 		t.Error("NewServer should initialize a logger")
 	}
 
-	// Verify that the cluster has an etcd manager set
+	// Verify that the cluster has this node set
 	// Note: This test validates the integration with the global cluster singleton
 	// (cluster.Get()), which is the actual production behavior. We intentionally
 	// test the real NewServer() behavior with the global singleton rather than
 	// using an isolated test cluster instance. The test is designed to run first
 	// to avoid conflicts with the singleton's "ThisNode is already set" check.
 	clusterInstance := cluster.Get()
-	if clusterInstance.GetEtcdManager() == nil {
-		t.Error("NewServer should set the etcd manager on the cluster")
-	}
-
-	// Verify that the cluster has this node set
 	if clusterInstance.GetThisNode() == nil {
 		t.Error("NewServer should set the node on the cluster")
 	}
+
+	// Note: With the new auto-creation pattern, the etcd manager is only created
+	// when ConnectEtcd is called, not during NewServer
 
 	// Verify that the cluster's node matches the server's node
 	if clusterInstance.GetThisNode() != server.Node {
@@ -169,13 +167,20 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 		t.Error("NewServer should store the provided config")
 	}
 
-	// Verify that the cluster has an etcd manager set with the custom prefix
+	// With the new auto-creation pattern, the etcd manager is created when ConnectEtcd is called
 	clusterInstance := cluster.Get()
-	if clusterInstance.GetEtcdManager() == nil {
-		t.Error("NewServer should set the etcd manager on the cluster")
+	err = clusterInstance.ConnectEtcd(config.EtcdAddress, config.EtcdPrefix)
+	if err != nil {
+		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
 
+	// Verify that the cluster has an etcd manager with the custom prefix
 	etcdMgr := clusterInstance.GetEtcdManager()
+	if etcdMgr == nil {
+		t.Error("ConnectEtcd should create the etcd manager on the cluster")
+		return
+	}
+
 	if etcdMgr.GetPrefix() != customPrefix {
 		t.Errorf("EtcdManager prefix = %s, want %s", etcdMgr.GetPrefix(), customPrefix)
 	}
