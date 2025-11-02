@@ -130,9 +130,9 @@ func (server *Server) Run() error {
 		return fmt.Errorf("failed to register node with etcd: %w", err)
 	}
 
-	// Start watching for node changes through the cluster
-	if err := cluster.Get().WatchNodes(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start watching nodes: %v", err)
+	// Start watching for cluster state changes (nodes and shard mapping)
+	if err := cluster.Get().StartWatching(server.ctx); err != nil {
+		server.logger.Errorf("Failed to start watching cluster state: %v", err)
 		// Continue even if watching fails - it's not critical for basic operation
 	}
 
