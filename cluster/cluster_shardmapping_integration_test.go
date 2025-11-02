@@ -24,17 +24,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	cluster2 := newClusterForTesting("TestCluster2")
 
 	// Create etcd managers for both clusters with unique test prefix
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 1: %v", err)
-	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 2: %v", err)
-	}
 
-	cluster1.SetEtcdManager(etcdMgr1)
-	cluster2.SetEtcdManager(etcdMgr2)
 
 	// Create nodes - node1 will be leader (smaller address)
 	node1 := node.NewNode("localhost:50001")
@@ -50,7 +40,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd()
+	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -77,7 +67,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd()
+	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -256,17 +246,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	cluster1 := newClusterForTesting("TestCluster1")
 	cluster2 := newClusterForTesting("TestCluster2")
 
-	etcdMgr1, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 1: %v", err)
-	}
-	etcdMgr2, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 2: %v", err)
-	}
 
-	cluster1.SetEtcdManager(etcdMgr1)
-	cluster2.SetEtcdManager(etcdMgr2)
 
 	node1 := node.NewNode("localhost:51001")
 	node2 := node.NewNode("localhost:51002")
@@ -281,7 +261,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd()
+	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -306,7 +286,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd()
+	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -343,11 +323,6 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 
 	// Now add a third node
 	cluster3 := newClusterForTesting("TestCluster3")
-	etcdMgr3, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create etcd manager 3: %v", err)
-	}
-	cluster3.SetEtcdManager(etcdMgr3)
 
 	node3 := node.NewNode("localhost:51003")
 	cluster3.SetThisNode(node3)
@@ -358,7 +333,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	}
 	defer node3.Stop(ctx)
 
-	err = cluster3.ConnectEtcd()
+	err = cluster3.ConnectEtcd("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster3: %v", err)
 	}

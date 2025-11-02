@@ -10,7 +10,6 @@ import (
 
 	client_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
@@ -45,13 +44,8 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Create the etcdManager and set it on the cluster
-	// Use the configured EtcdPrefix, or empty string to use the default prefix
-	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, config.EtcdPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
-	}
-	cluster.Get().SetEtcdManager(etcdMgr)
+	// No need to manually create etcd manager - ConnectEtcd will do it automatically
+	// Just store the config for later use
 
 	server := &Server{
 		config: config,
@@ -120,7 +114,8 @@ func (server *Server) Run() error {
 	}
 
 	// Connect to etcd and register this node
-	if err := cluster.Get().ConnectEtcd(); err != nil {
+	// Pass etcd configuration - the cluster will auto-create managers
+	if err := cluster.Get().ConnectEtcd(server.config.EtcdAddress, server.config.EtcdPrefix); err != nil {
 		server.logger.Errorf("Failed to connect to etcd: %v", err)
 		return fmt.Errorf("failed to connect to etcd: %w", err)
 	}

@@ -165,10 +165,10 @@ func TestStartWatching_NoConsensusManager(t *testing.T) {
 	err := cluster.StartWatching(ctx)
 
 	if err == nil {
-		t.Error("StartWatching should return error when consensus manager is not set")
+		t.Error("StartWatching should return error when etcd is not configured")
 	}
 
-	expectedErr := "consensus manager not initialized"
+	expectedErr := "etcd address not set"
 	if err.Error() != expectedErr {
 		t.Errorf("StartWatching error = %v; want %v", err.Error(), expectedErr)
 	}
