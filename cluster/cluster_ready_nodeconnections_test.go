@@ -32,7 +32,7 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Connect to etcd (auto-creates managers)
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Connect to etcd (auto-creates managers)
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	defer node2.Stop(ctx)
 
 	// Connect to etcd (auto-creates managers)
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}

@@ -39,7 +39,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -273,7 +273,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 		}
 		defer nodes[i].Stop(ctx)
 
-		err = clusters[i].ConnectEtcd("localhost:2379", testPrefix)
+		err = clusters[i].initializeEtcdForTesting("localhost:2379", testPrefix)
 		if err != nil {
 			t.Skipf("Skipping test: etcd not available: %v", err)
 			return
@@ -431,7 +431,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 
 	var err error
 	for i, c := range []*Cluster{cluster1, cluster2} {
-		err = c.ConnectEtcd("localhost:2379", testPrefix)
+		err = c.initializeEtcdForTesting("localhost:2379", testPrefix)
 		if err != nil {
 			t.Skipf("Skipping test: etcd not available: %v", err)
 			return

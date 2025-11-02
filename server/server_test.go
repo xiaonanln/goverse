@@ -118,8 +118,8 @@ func TestNewServer_ValidConfig(t *testing.T) {
 		t.Error("NewServer should set the node on the cluster")
 	}
 
-	// Note: With the new auto-creation pattern, the etcd manager is only created
-	// when ConnectEtcd is called, not during NewServer
+	// Note: With the new pattern, NewServer automatically initializes the cluster
+	// by calling NewCluster which connects to etcd
 
 	// Verify that the cluster's node matches the server's node
 	if clusterInstance.GetThisNode() != server.Node {
@@ -155,8 +155,11 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	}
 
 	server, err := NewServer(config)
+	// NewServer may fail if etcd is not running, which is expected
 	if err != nil {
-		t.Fatalf("NewServer failed: %v", err)
+		t.Logf("NewServer failed (expected if etcd not running): %v", err)
+		// Don't continue the test if NewServer failed
+		return
 	}
 
 	if server == nil {
@@ -167,17 +170,13 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 		t.Error("NewServer should store the provided config")
 	}
 
-	// With the new auto-creation pattern, the etcd manager is created when ConnectEtcd is called
+	// With the new pattern, NewServer automatically initializes the cluster with etcd
 	clusterInstance := cluster.Get()
-	err = clusterInstance.ConnectEtcd(config.EtcdAddress, config.EtcdPrefix)
-	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
-	}
 
 	// Verify that the cluster has an etcd manager with the custom prefix
-	etcdMgr := clusterInstance.GetEtcdManager()
+	etcdMgr := clusterInstance.GetEtcdManagerForTesting()
 	if etcdMgr == nil {
-		t.Error("ConnectEtcd should create the etcd manager on the cluster")
+		t.Error("NewServer should create the etcd manager on the cluster")
 		return
 	}
 

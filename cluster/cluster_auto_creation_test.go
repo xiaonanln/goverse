@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestConnectEtcd_AutoCreatesManagers verifies that ConnectEtcd auto-creates
-// the etcd manager and consensus manager when they don't exist
-func TestConnectEtcd_AutoCreatesManagers(t *testing.T) {
+// TestInitializeEtcdForTesting_CreatesManagers verifies that initializeEtcdForTesting
+// creates the etcd manager and consensus manager
+func TestInitializeEtcdForTesting_CreatesManagers(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestAutoCreation")
+	cluster := newClusterForTesting("TestInitialization")
 
 	// Initially, managers should be nil
 	if cluster.etcdManager != nil {
@@ -19,10 +19,10 @@ func TestConnectEtcd_AutoCreatesManagers(t *testing.T) {
 		t.Error("consensusManager should be nil initially")
 	}
 
-	// Try to connect to etcd with address and prefix
+	// Try to initialize etcd with address and prefix
 	// This should fail to actually connect (no etcd running), but it should
 	// create the managers
-	err := cluster.ConnectEtcd("localhost:2379", "/test-prefix")
+	err := cluster.initializeEtcdForTesting("localhost:2379", "/test-prefix")
 
 	// We expect an error because etcd is not running
 	if err == nil {
@@ -31,10 +31,10 @@ func TestConnectEtcd_AutoCreatesManagers(t *testing.T) {
 
 	// But the managers should have been created
 	if cluster.etcdManager == nil {
-		t.Error("etcdManager should be created after ConnectEtcd call")
+		t.Error("etcdManager should be created after initializeEtcdForTesting call")
 	}
 	if cluster.consensusManager == nil {
-		t.Error("consensusManager should be created after ConnectEtcd call")
+		t.Error("consensusManager should be created after initializeEtcdForTesting call")
 	}
 
 	// Verify the addresses were stored
@@ -46,20 +46,20 @@ func TestConnectEtcd_AutoCreatesManagers(t *testing.T) {
 	}
 }
 
-// TestEnsureEtcdManager_WithoutAddress verifies that ensureEtcdManager
-// returns an error when no address is configured
-func TestEnsureEtcdManager_WithoutAddress(t *testing.T) {
+// TestEnsureEtcdManager_WithoutInitialization verifies that ensureEtcdManager
+// returns an error when cluster hasn't been initialized with NewCluster
+func TestEnsureEtcdManager_WithoutInitialization(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestEnsureNoAddress")
+	cluster := newClusterForTesting("TestEnsureNotInitialized")
 
-	// Try to ensure etcd manager without setting address
+	// Try to ensure etcd manager without initializing
 	err := cluster.ensureEtcdManager()
 
 	if err == nil {
-		t.Error("ensureEtcdManager should return error when etcd address is not set")
+		t.Error("ensureEtcdManager should return error when cluster is not initialized")
 	}
 
-	expectedErr := "etcd address not set"
+	expectedErr := "cluster not initialized - call NewCluster first"
 	if err.Error() != expectedErr {
 		t.Errorf("ensureEtcdManager error = %v; want %v", err.Error(), expectedErr)
 	}
@@ -84,31 +84,23 @@ func TestGetNodes_LazyInitialization(t *testing.T) {
 	}
 }
 
-// TestStartWatching_AutoCreatesManagers verifies that StartWatching
-// auto-creates managers when called with proper etcd configuration
-func TestStartWatching_AutoCreatesManagers(t *testing.T) {
+// TestStartWatching_RequiresInitialization verifies that StartWatching
+// requires cluster to be initialized first
+func TestStartWatching_RequiresInitialization(t *testing.T) {
 	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestStartWatchingAuto")
+	cluster := newClusterForTesting("TestStartWatchingInit")
 
 	ctx := context.Background()
 
-	// First, set the etcd address
-	cluster.etcdAddress = "localhost:2379"
-	cluster.etcdPrefix = "/test-watching"
-
-	// Try to start watching - this should fail (no etcd), but should create managers
+	// Try to start watching without initializing - should fail
 	err := cluster.StartWatching(ctx)
 
-	// We expect an error because etcd is not running
 	if err == nil {
-		t.Log("Warning: etcd appears to be running")
+		t.Error("StartWatching should return error when cluster is not initialized")
 	}
 
-	// But the managers should have been created
-	if cluster.etcdManager == nil {
-		t.Error("etcdManager should be created after StartWatching call")
-	}
-	if cluster.consensusManager == nil {
-		t.Error("consensusManager should be created after StartWatching call")
+	expectedErr := "cluster not initialized - call NewCluster first"
+	if err.Error() != expectedErr {
+		t.Errorf("StartWatching error = %v; want %v", err.Error(), expectedErr)
 	}
 }

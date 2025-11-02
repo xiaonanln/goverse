@@ -30,7 +30,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	defer n.Stop(ctx)
 
 	// Connect to etcd (auto-creates managers)
-	err = c.ConnectEtcd("localhost:2379", testPrefix)
+	err = c.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd: %v", err)
 	}

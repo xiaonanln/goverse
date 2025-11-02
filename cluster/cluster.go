@@ -52,12 +52,97 @@ func Get() *Cluster {
 	return &thisCluster
 }
 
+// NewCluster initializes the cluster singleton with the given etcd address and prefix.
+// It automatically connects to etcd and initializes the etcd manager and consensus manager.
+// This function should be called once during application initialization.
+// If the cluster is already initialized, this function will return an error.
+func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
+	if thisCluster.etcdManager != nil {
+		return nil, fmt.Errorf("cluster already initialized")
+	}
+
+	thisCluster.etcdAddress = etcdAddress
+	thisCluster.etcdPrefix = etcdPrefix
+
+	// Create etcd manager
+	mgr, err := etcdmanager.NewEtcdManager(etcdAddress, etcdPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
+	}
+
+	// Connect to etcd
+	if err := mgr.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+
+	thisCluster.etcdManager = mgr
+	// Initialize consensus manager
+	thisCluster.consensusManager = consensusmanager.NewConsensusManager(mgr)
+
+	return &thisCluster, nil
+}
+
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
 func newClusterForTesting(name string) *Cluster {
 	return &Cluster{
 		logger:           logger.NewLogger(name),
 		clusterReadyChan: make(chan bool),
 	}
+}
+
+// newClusterWithEtcdForTesting creates a new cluster instance for testing and initializes it with etcd
+func newClusterWithEtcdForTesting(name string, etcdAddress string, etcdPrefix string) (*Cluster, error) {
+	c := &Cluster{
+		logger:           logger.NewLogger(name),
+		clusterReadyChan: make(chan bool),
+		etcdAddress:      etcdAddress,
+		etcdPrefix:       etcdPrefix,
+	}
+
+	// Create etcd manager
+	mgr, err := etcdmanager.NewEtcdManager(etcdAddress, etcdPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
+	}
+
+	// Connect to etcd
+	if err := mgr.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+
+	c.etcdManager = mgr
+	// Initialize consensus manager
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
+
+	return c, nil
+}
+
+// initializeEtcdForTesting initializes the etcd manager for a test cluster instance
+// WARNING: This should only be used in tests
+func (c *Cluster) initializeEtcdForTesting(etcdAddress string, etcdPrefix string) error {
+	if c.etcdManager != nil {
+		return fmt.Errorf("etcd manager already initialized")
+	}
+
+	c.etcdAddress = etcdAddress
+	c.etcdPrefix = etcdPrefix
+
+	// Create etcd manager
+	mgr, err := etcdmanager.NewEtcdManager(etcdAddress, etcdPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to create etcd manager: %w", err)
+	}
+
+	// Connect to etcd
+	if err := mgr.Connect(); err != nil {
+		return fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+
+	c.etcdManager = mgr
+	// Initialize consensus manager
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
+
+	return nil
 }
 
 func (c *Cluster) SetThisNode(n *node.Node) {
@@ -350,50 +435,20 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	return nil
 }
 
-// GetEtcdManager returns the cluster's etcd manager
-func (c *Cluster) GetEtcdManager() *etcdmanager.EtcdManager {
+// GetEtcdManagerForTesting returns the cluster's etcd manager
+// WARNING: This should only be used in tests
+func (c *Cluster) GetEtcdManagerForTesting() *etcdmanager.EtcdManager {
 	return c.etcdManager
 }
 
-// ensureEtcdManager creates the etcd manager and consensus manager if they don't exist
+// ensureEtcdManager checks that the etcd manager has been initialized
+// It returns an error if the cluster has not been initialized with NewCluster
 func (c *Cluster) ensureEtcdManager() error {
 	if c.etcdManager != nil {
 		return nil // Already initialized
 	}
 
-	if c.etcdAddress == "" {
-		return fmt.Errorf("etcd address not set")
-	}
-
-	// Create etcd manager
-	mgr, err := etcdmanager.NewEtcdManager(c.etcdAddress, c.etcdPrefix)
-	if err != nil {
-		return fmt.Errorf("failed to create etcd manager: %w", err)
-	}
-
-	c.etcdManager = mgr
-	// Initialize consensus manager
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
-
-	return nil
-}
-
-// ConnectEtcd connects to etcd. If etcdAddress is provided, it will be used
-// to create the etcd manager if it doesn't exist. The prefix parameter is optional.
-// If both parameters are empty strings and the manager doesn't exist, an error is returned.
-func (c *Cluster) ConnectEtcd(etcdAddress string, prefix string) error {
-	// Store the etcd configuration if provided
-	if etcdAddress != "" {
-		c.etcdAddress = etcdAddress
-		c.etcdPrefix = prefix
-	}
-
-	// Ensure etcd manager exists (creates if needed)
-	if err := c.ensureEtcdManager(); err != nil {
-		return err
-	}
-
-	return c.etcdManager.Connect()
+	return fmt.Errorf("cluster not initialized - call NewCluster first")
 }
 
 // RegisterNode registers this node with etcd

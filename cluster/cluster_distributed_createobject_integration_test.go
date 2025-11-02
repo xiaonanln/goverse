@@ -35,7 +35,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		idx := i
 		t.Cleanup(func() { nodes[idx].Stop(ctx) })
 
-		err = clusters[i].ConnectEtcd("localhost:2379", testPrefix)
+		err = clusters[i].initializeEtcdForTesting("localhost:2379", testPrefix)
 		if err != nil {
 			t.Fatalf("Failed to connect etcd for cluster%d: %v", i+1, err)
 		}

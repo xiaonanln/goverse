@@ -34,7 +34,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	err = cluster1.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	err = cluster2.ConnectEtcd("localhost:2379", testPrefix)
+	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}

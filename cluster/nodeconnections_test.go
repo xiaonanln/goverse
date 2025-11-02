@@ -36,7 +36,7 @@ func TestNodeConnections_StartStop(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 	
 	// Connect to etcd (auto-creates managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
+	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
@@ -74,7 +74,7 @@ func TestNodeConnections_StartTwice(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 	
 	// Connect to etcd (auto-creates managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
+	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
@@ -140,7 +140,7 @@ func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 	
 	// Connect to etcd (auto-creates managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
+	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
@@ -166,7 +166,7 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 	
 	// Connect to etcd (auto-creates managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
+	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
@@ -200,7 +200,7 @@ func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 	
 	// Connect to etcd (auto-creates managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
+	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
 	}
@@ -242,7 +242,7 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 	
 	// Connect to etcd (auto-creates managers)
-	err := cluster.ConnectEtcd("localhost:2379", testPrefix)
+	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
