@@ -9,9 +9,12 @@ echo "Testing Script Reentrancy"
 echo "========================================"
 echo
 
+# Define scripts to test
+SCRIPTS=("start-etcd.sh" "start-postgres.sh" "stop-etcd.sh" "stop-postgres.sh")
+
 # Test 1: Verify scripts have proper shebang and permissions
 echo "Test 1: Checking script files exist and are executable..."
-for script in start-etcd.sh start-postgres.sh stop-etcd.sh stop-postgres.sh; do
+for script in "${SCRIPTS[@]}"; do
     if [ ! -f "script/docker/$script" ]; then
         echo "✗ FAIL: script/docker/$script does not exist"
         exit 1
@@ -72,7 +75,7 @@ echo
 
 # Test 4: Verify scripts use set -euo pipefail for safety
 echo "Test 4: Checking scripts use proper error handling..."
-for script in start-etcd.sh start-postgres.sh stop-etcd.sh stop-postgres.sh; do
+for script in "${SCRIPTS[@]}"; do
     if ! grep -q "set -euo pipefail" "script/docker/$script"; then
         echo "✗ FAIL: script/docker/$script does not use 'set -euo pipefail'"
         exit 1
@@ -84,7 +87,7 @@ echo
 
 # Test 5: Verify scripts have proper exit codes
 echo "Test 5: Checking scripts have exit statements..."
-for script in start-etcd.sh start-postgres.sh stop-etcd.sh stop-postgres.sh; do
+for script in "${SCRIPTS[@]}"; do
     if ! grep -q "exit 0" "script/docker/$script"; then
         echo "✗ FAIL: script/docker/$script does not have success exit"
         exit 1
@@ -97,7 +100,13 @@ echo
 # Test 6: Verify shellcheck passes on all scripts
 echo "Test 6: Running shellcheck on all scripts..."
 if command -v shellcheck > /dev/null 2>&1; then
-    if shellcheck script/docker/start-etcd.sh script/docker/start-postgres.sh script/docker/stop-etcd.sh script/docker/stop-postgres.sh; then
+    # Build script paths array
+    SCRIPT_PATHS=()
+    for script in "${SCRIPTS[@]}"; do
+        SCRIPT_PATHS+=("script/docker/$script")
+    done
+    
+    if shellcheck "${SCRIPT_PATHS[@]}"; then
         echo "✓ PASS: All scripts pass shellcheck"
     else
         echo "✗ FAIL: shellcheck found issues"
