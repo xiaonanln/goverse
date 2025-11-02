@@ -22,7 +22,7 @@ func TestStartShardMappingManagement_NoEtcdManager(t *testing.T) {
 		t.Error("StartShardMappingManagement should return error when etcd manager is not set")
 	}
 
-	expectedErr := "etcd manager not set"
+	expectedErr := "consensus manager not initialized"
 	if err.Error() != expectedErr {
 		t.Errorf("StartShardMappingManagement error = %v; want %v", err.Error(), expectedErr)
 	}
@@ -49,7 +49,7 @@ func TestStartShardMappingManagement_NoShardMapper(t *testing.T) {
 		t.Error("StartShardMappingManagement should return error when shard mapper is not initialized")
 	}
 
-	expectedErr := "shard mapper not initialized"
+	expectedErr := "consensus manager not initialized"
 	if err.Error() != expectedErr {
 		t.Errorf("StartShardMappingManagement error = %v; want %v", err.Error(), expectedErr)
 	}
