@@ -1,11 +1,10 @@
-package cluster_test
+package cluster
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -19,7 +18,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup cluster
-	c := cluster.Get()
+	c := Get()
 	c.ResetForTesting()
 
 	etcdMgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
@@ -90,7 +89,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 
 	// Now both conditions should be met after shard mapping is created
 	// Wait for cluster to be ready
-	timeout := cluster.NodeStabilityDuration + cluster.ShardMappingCheckInterval + 5*time.Second
+	timeout := NodeStabilityDuration + ShardMappingCheckInterval + 5*time.Second
 	select {
 	case <-c.ClusterReady():
 		t.Log("✓ Cluster correctly became ready after BOTH node connections AND shard mapping are available")
