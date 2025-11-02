@@ -131,6 +131,33 @@ func (c *Cluster) markClusterReady() {
 	})
 }
 
+// checkAndMarkReady checks if all conditions are met to mark the cluster as ready:
+// - Node connections are established (nodeConnections is not nil and running)
+// - Shard mapping is available
+// If both conditions are met, it marks the cluster as ready
+func (c *Cluster) checkAndMarkReady() {
+	// Check if node connections are established
+	if c.nodeConnections == nil {
+		c.logger.Debugf("Cannot mark cluster ready: node connections not established")
+		return
+	}
+
+	// Check if shard mapping is available
+	if c.consensusManager == nil {
+		c.logger.Debugf("Cannot mark cluster ready: consensus manager not initialized")
+		return
+	}
+
+	_, err := c.consensusManager.GetShardMapping()
+	if err != nil {
+		c.logger.Debugf("Cannot mark cluster ready: shard mapping not available (%v)", err)
+		return
+	}
+
+	// Both conditions met, mark cluster as ready
+	c.markClusterReady()
+}
+
 func (c *Cluster) CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
 	if c.thisNode == nil {
 		return nil, fmt.Errorf("ThisNode is not set")
@@ -658,8 +685,8 @@ func (c *Cluster) handleShardMappingCheck() {
 					c.logger.Errorf("Failed to initialize shard mapping: %v", err)
 				} else {
 					// Successfully initialized shard mapping
-					// markClusterReady will trigger OnShardMappingChanged
-					c.markClusterReady()
+					// Check if we can mark cluster as ready now
+					c.checkAndMarkReady()
 				}
 			} else {
 				// Existing mapping, update if needed
@@ -668,16 +695,17 @@ func (c *Cluster) handleShardMappingCheck() {
 					c.logger.Errorf("Failed to update shard mapping: %v", err)
 				} else {
 					// Successfully loaded/updated shard mapping
-					// markClusterReady will trigger OnShardMappingChanged on first ready
-					// UpdateShardMapping handles subsequent changes
-					c.markClusterReady()
+					// Check if we can mark cluster as ready now
+					c.checkAndMarkReady()
 				}
 			}
 		} else {
 			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
 		}
 	} else {
-		c.markClusterReady()
+		// Non-leader: check if we can mark cluster as ready
+		// (shard mapping should be loaded from etcd watch)
+		c.checkAndMarkReady()
 	}
 }
 
@@ -690,7 +718,14 @@ func (c *Cluster) StartNodeConnections(ctx context.Context) error {
 	}
 
 	c.nodeConnections = NewNodeConnections(c)
-	return c.nodeConnections.Start(ctx)
+	err := c.nodeConnections.Start(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Check if we can mark cluster as ready now that node connections are established
+	c.checkAndMarkReady()
+	return nil
 }
 
 // StopNodeConnections stops the node connections manager

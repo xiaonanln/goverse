@@ -129,6 +129,7 @@ Proto files to be aware of:
 - Use `gofmt` for code formatting
 - Keep functions focused and methods concise
 - Use meaningful variable names
+- **Always remove deprecated methods** - Do not leave deprecated methods for compatibility. When a method is deprecated, remove it entirely rather than keeping it with a deprecation notice
 
 ### Distributed Object Patterns
 
