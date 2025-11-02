@@ -311,19 +311,21 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
-		t.Cleanup(func() { nodes[i].Stop(ctx) })
+		// Capture loop variable for closure
+		idx := i
+		t.Cleanup(func() { nodes[idx].Stop(ctx) })
 
 		err = clusters[i].ConnectEtcd()
 		if err != nil {
 			t.Fatalf("Failed to connect etcd for cluster%d: %v", i+1, err)
 		}
-		t.Cleanup(func() { clusters[i].CloseEtcd() })
+		t.Cleanup(func() { clusters[idx].CloseEtcd() })
 
 		err = clusters[i].RegisterNode(ctx)
 		if err != nil {
 			t.Fatalf("Failed to register node%d: %v", i+1, err)
 		}
-		t.Cleanup(func() { clusters[i].UnregisterNode(ctx) })
+		t.Cleanup(func() { clusters[idx].UnregisterNode(ctx) })
 
 		err = clusters[i].WatchNodes(ctx)
 		if err != nil {
@@ -340,7 +342,9 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to start shard mapping management for cluster%d: %v", i+1, err)
 		}
-		t.Cleanup(func() { clusters[i].StopShardMappingManagement() })
+		// Capture loop variable for closure
+		idx := i
+		t.Cleanup(func() { clusters[idx].StopShardMappingManagement() })
 	}
 
 	// Wait for shard mapping to be initialized
