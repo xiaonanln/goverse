@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -30,7 +29,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	cluster1.SetThisNode(node1)
 	node1.RegisterObjectType((*TestDistributedObject)(nil))
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -292,7 +291,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		clusters[i].SetThisNode(nodes[i])
 		nodes[i].RegisterObjectType((*TestDistributedObject)(nil))
 
-		err = nodes[i].Start(ctx)
+		err := nodes[i].Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}

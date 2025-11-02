@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -29,7 +28,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	cluster1.SetThisNode(node1)
 	node1.RegisterClientType((*client.BaseClient)(nil))
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}

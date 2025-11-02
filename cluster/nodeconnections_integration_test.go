@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -28,7 +27,7 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	cluster1.SetThisNode(node1)
 
 	// Start node
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -134,7 +133,7 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	node1 := node.NewNode("localhost:47011")
 	cluster1.SetThisNode(node1)
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -219,7 +218,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	node1 := node.NewNode("localhost:47021")
 	cluster1.SetThisNode(node1)
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}

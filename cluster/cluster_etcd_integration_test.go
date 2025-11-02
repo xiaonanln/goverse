@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -34,7 +33,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	cluster2.SetThisNode(node2)
 
 	// Start and register node1
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -141,7 +140,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	node1 := node.NewNode("localhost:47003")
 	cluster1.SetThisNode(node1)
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -240,7 +239,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	node1 := node.NewNode("localhost:47005")
 	cluster1.SetThisNode(node1)
 
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -355,7 +354,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 		nodes[i] = node.NewNode(addresses[i])
 		clusters[i].SetThisNode(nodes[i])
 
-		err = nodes[i].Start(ctx)
+		err := nodes[i].Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
@@ -423,13 +422,14 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 
 	// Start and register both nodes
 	for i, n := range []*node.Node{node1, node2} {
-		err = n.Start(ctx)
+		err := n.Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
 		defer n.Stop(ctx)
 	}
 
+	var err error
 	for i, c := range []*Cluster{cluster1, cluster2} {
 		err = c.ConnectEtcd("localhost:2379", testPrefix)
 		if err != nil {

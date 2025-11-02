@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -34,7 +33,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	cluster2.SetThisNode(node2)
 
 	// Start and register node1
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -255,7 +254,7 @@ func TestClusterShardMappingUpdate(t *testing.T) {
 	cluster2.SetThisNode(node2)
 
 	// Start and register both nodes
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
