@@ -186,18 +186,6 @@ func TestPrepareEtcdPrefix_CleanBeforeTest(t *testing.T) {
 	}
 }
 
-// TestPrepareEtcdPrefix_EtcdUnavailable tests behavior when etcd is not available
-// This test verifies that PrepareEtcdPrefix gracefully handles connection failures
-// by skipping the test rather than failing it.
-func TestPrepareEtcdPrefix_EtcdUnavailable(t *testing.T) {
-	// Note: We can't easily test the skip behavior directly because t.SkipNow()
-	// calls runtime.Goexit() which terminates the goroutine. The Go testing
-	// framework handles this internally. We'll just document the expected behavior:
-	// When etcd is unavailable, PrepareEtcdPrefix should call t.Skipf() which
-	// skips the test rather than failing it.
-	t.Skip("Skipping meta-test for skip behavior - tested implicitly when etcd is unavailable")
-}
-
 // TestPrepareEtcdPrefix_MultipleKeys tests cleanup with multiple keys
 func TestPrepareEtcdPrefix_MultipleKeys(t *testing.T) {
 	var prefix string
