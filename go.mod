@@ -6,7 +6,7 @@ require (
 	github.com/lib/pq v1.10.9
 	go.etcd.io/etcd/client/v3 v3.6.5
 	google.golang.org/grpc v1.76.0
-	google.golang.org/protobuf v1.36.8
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
