@@ -45,9 +45,7 @@ func TestNode_OnShardMappingChanged(t *testing.T) {
 	// Create a test shard mapping
 	// Let's say obj1 and obj2 stay on this node, but obj3 should move to another node
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	// Calculate shard IDs
@@ -95,9 +93,7 @@ func TestNode_OnShardMappingChanged_AllObjectsStay(t *testing.T) {
 
 	// Create a test shard mapping where all objects stay
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001"},
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	// Assign all shards to this node
@@ -122,9 +118,7 @@ func TestNode_OnShardMappingChanged_EmptyNode(t *testing.T) {
 
 	// Create a test shard mapping
 	mapping := &sharding.ShardMapping{
-		Shards:  make(map[int]string),
-		Nodes:   []string{"localhost:47001", "localhost:47002"},
-		Version: 1,
+		Shards: make(map[int]string),
 	}
 
 	// Assign shards
