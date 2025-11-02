@@ -28,6 +28,8 @@ func (m *mockListener) OnShardMappingChanged(mapping *sharding.ShardMapping) {
 }
 
 func TestNewConsensusManager(t *testing.T) {
+	// Error is intentionally ignored as we're only testing ConsensusManager creation,
+	// not etcd manager functionality
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 	

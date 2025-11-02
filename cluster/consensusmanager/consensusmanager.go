@@ -231,7 +231,8 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		cm.logger.Infof("Node added: %s", nodeAddress)
 		cm.mu.Unlock()
 		
-		// Notify listeners after releasing lock
+		// Asynchronously notify listeners after releasing lock to prevent deadlocks
+		// Notifications may arrive out of order if rapid changes occur
 		go cm.notifyNodesChanged()
 		
 	case clientv3.EventTypeDelete:
@@ -243,7 +244,8 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		cm.logger.Infof("Node removed: %s", nodeAddress)
 		cm.mu.Unlock()
 		
-		// Notify listeners after releasing lock
+		// Asynchronously notify listeners after releasing lock to prevent deadlocks
+		// Notifications may arrive out of order if rapid changes occur
 		go cm.notifyNodesChanged()
 	default:
 		cm.mu.Unlock()
@@ -270,7 +272,8 @@ func (cm *ConsensusManager) handleShardMappingEvent(event *clientv3.Event) {
 		
 		if mapping.Version != oldVersion {
 			cm.logger.Infof("Shard mapping updated (version %d -> %d)", oldVersion, mapping.Version)
-			// Notify listeners
+			// Asynchronously notify listeners to prevent deadlocks
+			// Note: rapid mapping changes may result in out-of-order notifications
 			go cm.notifyShardMappingChanged(&mapping)
 		}
 	} else if event.Type == clientv3.EventTypeDelete {
