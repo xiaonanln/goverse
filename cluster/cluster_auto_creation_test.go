@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"context"
 	"testing"
 )
 
@@ -46,61 +45,3 @@ func TestInitializeEtcdForTesting_CreatesManagers(t *testing.T) {
 	}
 }
 
-// TestEnsureEtcdManager_WithoutInitialization verifies that ensureEtcdManager
-// returns an error when cluster hasn't been initialized with NewCluster
-func TestEnsureEtcdManager_WithoutInitialization(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestEnsureNotInitialized")
-
-	// Try to ensure etcd manager without initializing
-	err := cluster.ensureEtcdManager()
-
-	if err == nil {
-		t.Error("ensureEtcdManager should return error when cluster is not initialized")
-	}
-
-	expectedErr := "cluster not initialized - call NewCluster first"
-	if err.Error() != expectedErr {
-		t.Errorf("ensureEtcdManager error = %v; want %v", err.Error(), expectedErr)
-	}
-}
-
-// TestGetNodes_LazyInitialization verifies that GetNodes works even when
-// managers haven't been explicitly created
-func TestGetNodes_LazyInitialization(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestGetNodesLazy")
-
-	// GetNodes should work even without etcd manager being set
-	// It should return empty list gracefully
-	nodes := cluster.GetNodes()
-
-	if nodes == nil {
-		t.Error("GetNodes should not return nil")
-	}
-
-	if len(nodes) != 0 {
-		t.Errorf("GetNodes should return empty list when no nodes, got %d nodes", len(nodes))
-	}
-}
-
-// TestStartWatching_RequiresInitialization verifies that StartWatching
-// requires cluster to be initialized first
-func TestStartWatching_RequiresInitialization(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := newClusterForTesting("TestStartWatchingInit")
-
-	ctx := context.Background()
-
-	// Try to start watching without initializing - should fail
-	err := cluster.StartWatching(ctx)
-
-	if err == nil {
-		t.Error("StartWatching should return error when cluster is not initialized")
-	}
-
-	expectedErr := "cluster not initialized - call NewCluster first"
-	if err.Error() != expectedErr {
-		t.Errorf("StartWatching error = %v; want %v", err.Error(), expectedErr)
-	}
-}
