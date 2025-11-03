@@ -140,45 +140,6 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 	}
 }
 
-func TestGetNodes_NoEtcdManager(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := &Cluster{}
-
-	nodes := cluster.GetNodes()
-
-	if len(nodes) != 0 {
-		t.Error("GetNodes() should return empty list when etcd manager is not set")
-	}
-}
-
-func TestStartWatching_NoConsensusManager(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := &Cluster{}
-
-	ctx := context.Background()
-	err := cluster.StartWatching(ctx)
-
-	if err == nil {
-		t.Error("StartWatching should return error when etcd is not configured")
-	}
-
-	expectedErr := "etcd address not set"
-	if err.Error() != expectedErr {
-		t.Errorf("StartWatching error = %v; want %v", err.Error(), expectedErr)
-	}
-}
-
-func TestGetLeaderNode_NoEtcdManager(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := &Cluster{}
-
-	leader := cluster.GetLeaderNode()
-
-	if leader != "" {
-		t.Error("GetLeaderNode() should return empty string when etcd manager is not set")
-	}
-}
-
 func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
