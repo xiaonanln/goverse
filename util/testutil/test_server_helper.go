@@ -218,4 +218,3 @@ func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *govers
 
 	return &goverse_pb.PushMessageToClientResponse{}, nil
 }
-
