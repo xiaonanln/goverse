@@ -241,19 +241,25 @@ func TestEtcdManagerPutGet(t *testing.T) {
 				return
 			}
 
-			// Get value
-			got, err := mgr.Get(ctx, tt.key)
+			// Get value using client directly
+			client := mgr.GetClient()
+			resp, err := client.Get(ctx, tt.key)
 			if err != nil {
 				t.Fatalf("Get() error = %v", err)
 				return
 			}
 
+			if len(resp.Kvs) == 0 {
+				t.Fatalf("Get() returned no results")
+			}
+
+			got := string(resp.Kvs[0].Value)
 			if got != tt.value {
 				t.Fatalf("Get() = %v, want %v", got, tt.value)
 			}
 
 			// Cleanup individual key (though cleanupEtcd will handle it too)
-			mgr.Delete(ctx, tt.key)
+			client.Delete(ctx, tt.key)
 		})
 	}
 }
@@ -269,10 +275,14 @@ func TestEtcdManagerGetNonExistent(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Try to get non-existent key
-	_, err := mgr.Get(ctx, "non-existent-key-12345")
-	if err == nil {
-		t.Fatal("Get() should return error for non-existent key")
+	// Try to get non-existent key using client directly
+	client := mgr.GetClient()
+	resp, err := client.Get(ctx, "non-existent-key-12345")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if len(resp.Kvs) != 0 {
+		t.Fatal("Get() should return empty result for non-existent key")
 	}
 }
 
@@ -286,6 +296,7 @@ func TestEtcdManagerDelete(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	client := mgr.GetClient()
 
 	// Put a value
 	key := "test-delete-key"
@@ -296,21 +307,28 @@ func TestEtcdManagerDelete(t *testing.T) {
 	}
 
 	// Verify it exists
-	got, err := mgr.Get(ctx, key)
-	if err != nil || got != value {
+	resp, err := client.Get(ctx, key)
+	if err != nil || len(resp.Kvs) == 0 {
 		t.Fatalf("Get() after Put() failed")
 	}
+	got := string(resp.Kvs[0].Value)
+	if got != value {
+		t.Fatalf("Get() after Put() = %v, want %v", got, value)
+	}
 
-	// Delete the key
-	err = mgr.Delete(ctx, key)
+	// Delete the key using client directly
+	_, err = client.Delete(ctx, key)
 	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
 	// Verify it's gone
-	_, err = mgr.Get(ctx, key)
-	if err == nil {
-		t.Fatalf("Get() should fail after Delete()")
+	resp, err = client.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Get() after Delete() error = %v", err)
+	}
+	if len(resp.Kvs) != 0 {
+		t.Fatalf("Get() should return empty result after Delete()")
 	}
 }
 
@@ -329,8 +347,9 @@ func TestEtcdManagerWatch(t *testing.T) {
 	key := "test-watch-key"
 	value := "test-watch-value"
 
-	// Start watching
-	watchChan := mgr.Watch(ctx, key)
+	// Start watching using client directly
+	client := mgr.GetClient()
+	watchChan := client.Watch(ctx, key)
 	if watchChan == nil {
 		t.Fatal("Watch() returned nil channel")
 	}
@@ -378,21 +397,6 @@ func TestEtcdManagerOperationsWithoutConnect(t *testing.T) {
 	err = mgr.Put(ctx, "key", "value")
 	if err == nil {
 		t.Fatalf("Put() should fail when not connected")
-	}
-
-	_, err = mgr.Get(ctx, "key")
-	if err == nil {
-		t.Fatalf("Get() should fail when not connected")
-	}
-
-	err = mgr.Delete(ctx, "key")
-	if err == nil {
-		t.Fatalf("Delete() should fail when not connected")
-	}
-
-	watchChan := mgr.Watch(ctx, "key")
-	if watchChan != nil {
-		t.Fatalf("Watch() should return nil when not connected")
 	}
 }
 
