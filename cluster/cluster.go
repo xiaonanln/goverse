@@ -18,8 +18,7 @@ import (
 )
 
 var (
-	thisCluster      *Cluster
-	clusterInitMutex sync.Mutex
+	thisCluster *Cluster
 )
 
 const (
@@ -77,19 +76,12 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
 func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
-	clusterInitMutex.Lock()
-	defer clusterInitMutex.Unlock()
-
 	// Create a new cluster instance
 	c := &Cluster{
 		logger:           logger.NewLogger("Cluster"),
 		clusterReadyChan: make(chan bool),
 		etcdAddress:      etcdAddress,
 		etcdPrefix:       etcdPrefix,
-	}
-
-	if c.etcdManager != nil {
-		return nil, fmt.Errorf("cluster already initialized")
 	}
 
 	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
@@ -113,25 +105,15 @@ func newClusterForTesting(name string) *Cluster {
 
 // newClusterWithEtcdForTesting creates a new cluster instance for testing and initializes it with etcd
 func newClusterWithEtcdForTesting(name string, etcdAddress string, etcdPrefix string) (*Cluster, error) {
-	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
+	c, err := NewCluster(etcdAddress, etcdPrefix)
 	if err != nil {
-		// Return cluster instance even if connection fails, for testing
-		return &Cluster{
-			logger:           logger.NewLogger(name),
-			clusterReadyChan: make(chan bool),
-			etcdAddress:      etcdAddress,
-			etcdPrefix:       etcdPrefix,
-		}, err
+		return nil, err
 	}
 
-	return &Cluster{
-		logger:           logger.NewLogger(name),
-		clusterReadyChan: make(chan bool),
-		etcdAddress:      etcdAddress,
-		etcdPrefix:       etcdPrefix,
-		etcdManager:      mgr,
-		consensusManager: consensusmanager.NewConsensusManager(mgr),
-	}, nil
+	// Override logger with custom name for testing
+	c.logger = logger.NewLogger(name)
+
+	return c, nil
 }
 
 // initializeEtcdForTesting initializes the etcd manager for a test cluster instance
