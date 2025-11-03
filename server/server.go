@@ -45,11 +45,13 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Initialize cluster with etcd connection
-	_, err := cluster.NewCluster(config.EtcdAddress, config.EtcdPrefix)
+	c, err := cluster.NewCluster(config.EtcdAddress, config.EtcdPrefix)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)
 	}
+
+	cluster.SetThis(c)
 
 	server := &Server{
 		config: config,
@@ -60,7 +62,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 
 	// Set this node on the cluster
-	cluster.Get().SetThisNode(server.Node)
+	cluster.This().SetThisNode(server.Node)
 	return server, nil
 }
 
@@ -118,25 +120,25 @@ func (server *Server) Run() error {
 	}
 
 	// Register this node with etcd
-	if err := cluster.Get().RegisterNode(server.ctx); err != nil {
+	if err := cluster.This().RegisterNode(server.ctx); err != nil {
 		server.logger.Errorf("Failed to register node with etcd: %v", err)
 		return fmt.Errorf("failed to register node with etcd: %w", err)
 	}
 
 	// Start watching for cluster state changes (nodes and shard mapping)
-	if err := cluster.Get().StartWatching(server.ctx); err != nil {
+	if err := cluster.This().StartWatching(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start watching cluster state: %v", err)
 		// Continue even if watching fails - it's not critical for basic operation
 	}
 
 	// Start node connections manager
-	if err := cluster.Get().StartNodeConnections(server.ctx); err != nil {
+	if err := cluster.This().StartNodeConnections(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start node connections: %v", err)
 		// Continue even if node connections fail - it's not critical for basic operation
 	}
 
 	// Start shard mapping management
-	if err := cluster.Get().StartShardMappingManagement(server.ctx); err != nil {
+	if err := cluster.This().StartShardMappingManagement(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start shard mapping management: %v", err)
 		// Continue even if shard mapping management fails - it's not critical for basic operation
 	}
@@ -170,17 +172,17 @@ func (server *Server) Run() error {
 	}
 
 	// Stop shard mapping management
-	cluster.Get().StopShardMappingManagement()
+	cluster.This().StopShardMappingManagement()
 
 	// Stop node connections
-	cluster.Get().StopNodeConnections()
+	cluster.This().StopNodeConnections()
 
 	// Unregister from etcd and close connection
-	if err := cluster.Get().UnregisterNode(server.ctx); err != nil {
+	if err := cluster.This().UnregisterNode(server.ctx); err != nil {
 		server.logger.Errorf("Failed to unregister node from etcd: %v", err)
 	}
 
-	if err := cluster.Get().CloseEtcd(); err != nil {
+	if err := cluster.This().CloseEtcd(); err != nil {
 		server.logger.Errorf("Failed to close etcd connection: %v", err)
 	}
 
@@ -286,7 +288,7 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 	}
 
 	// Check with cluster that this ID is sharded to this node
-	clusterInstance := cluster.Get()
+	clusterInstance := cluster.This()
 	if clusterInstance != nil && clusterInstance.GetThisNode() != nil {
 		targetNode, err := clusterInstance.GetNodeForObject(ctx, req.GetId())
 		if err != nil {

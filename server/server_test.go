@@ -14,10 +14,13 @@ import (
 )
 
 // resetClusterForTesting resets the cluster singleton state between tests
-// This is necessary because cluster.Get() returns a singleton and tests may interfere with each other
+// This is necessary because cluster.This() returns a singleton and tests may interfere with each other
 func resetClusterForTesting(t *testing.T) {
-	clusterInstance := cluster.Get()
-	clusterInstance.ResetForTesting()
+	clusterInstance := cluster.This()
+	if clusterInstance != nil {
+		clusterInstance.ResetForTesting()
+	}
+	cluster.SetThis(nil)
 	t.Logf("Cluster state reset for testing")
 }
 
@@ -109,11 +112,11 @@ func TestNewServer_ValidConfig(t *testing.T) {
 
 	// Verify that the cluster has this node set
 	// Note: This test validates the integration with the global cluster singleton
-	// (cluster.Get()), which is the actual production behavior. We intentionally
+	// (cluster.This()), which is the actual production behavior. We intentionally
 	// test the real NewServer() behavior with the global singleton rather than
 	// using an isolated test cluster instance. The test is designed to run first
 	// to avoid conflicts with the singleton's "ThisNode is already set" check.
-	clusterInstance := cluster.Get()
+	clusterInstance := cluster.This()
 	if clusterInstance.GetThisNode() == nil {
 		t.Error("NewServer should set the node on the cluster")
 	}
@@ -171,7 +174,7 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	}
 
 	// With the new pattern, NewServer automatically initializes the cluster with etcd
-	clusterInstance := cluster.Get()
+	clusterInstance := cluster.This()
 
 	// Verify that the cluster has an etcd manager with the custom prefix
 	etcdMgr := clusterInstance.GetEtcdManagerForTesting()
@@ -331,7 +334,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Verify server is the leader
 	// Since it's the only node, it should be the leader
-	clusterInstance := cluster.Get()
+	clusterInstance := cluster.This()
 	if clusterInstance == nil {
 		t.Fatal("Cluster instance should not be nil")
 	}

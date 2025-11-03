@@ -79,9 +79,9 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 		// - "shard mapper not initialized"
 		// - "failed to determine target node"
 		// - "etcd client not connected"
-		if strings.Contains(err3.Error(), "shard mapper not initialized") || 
-		   strings.Contains(err3.Error(), "failed to determine target node") ||
-		   strings.Contains(err3.Error(), "etcd client not connected") {
+		if strings.Contains(err3.Error(), "shard mapper not initialized") ||
+			strings.Contains(err3.Error(), "failed to determine target node") ||
+			strings.Contains(err3.Error(), "etcd client not connected") {
 			t.Logf("Expected error due to shard mapping/etcd not being available: %v", err3)
 		} else {
 			// If we got a different error, it might be the "object ID must be specified" check passing
@@ -92,15 +92,4 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 			t.Logf("Got error (acceptable if not about ID validation): %v", err3)
 		}
 	}
-}
-
-// TestServerCreateObject_ValidatesShardMapping tests that Server.CreateObject validates shard ownership
-func TestServerCreateObject_ValidatesShardMapping(t *testing.T) {
-	t.Skip("Skipping test that requires full cluster setup - covered by integration tests")
-	// This test would require:
-	// 1. Starting a full server with etcd
-	// 2. Initializing shard mapping
-	// 3. Creating an object with an ID that doesn't belong to this node
-	// 4. Verifying the error message
-	// This is better tested in integration tests where the full cluster is running
 }

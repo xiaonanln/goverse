@@ -44,14 +44,11 @@ type Cluster struct {
 	clusterReadyOnce    sync.Once
 }
 
-func init() {
-	thisCluster = &Cluster{
-		logger:           logger.NewLogger("Cluster"),
-		clusterReadyChan: make(chan bool),
-	}
+func SetThis(c *Cluster) {
+	thisCluster = c
 }
 
-func Get() *Cluster {
+func This() *Cluster {
 	return thisCluster
 }
 
@@ -84,14 +81,14 @@ func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
 	defer clusterInitMutex.Unlock()
 
 	// Create a new cluster instance
-	newCluster := &Cluster{
+	c := &Cluster{
 		logger:           logger.NewLogger("Cluster"),
 		clusterReadyChan: make(chan bool),
 		etcdAddress:      etcdAddress,
 		etcdPrefix:       etcdPrefix,
 	}
 
-	if newCluster.etcdManager != nil {
+	if c.etcdManager != nil {
 		return nil, fmt.Errorf("cluster already initialized")
 	}
 
@@ -100,13 +97,10 @@ func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
 		return nil, err
 	}
 
-	newCluster.etcdManager = mgr
-	newCluster.consensusManager = consensusmanager.NewConsensusManager(mgr)
+	c.etcdManager = mgr
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
 
-	// Assign to singleton
-	thisCluster = newCluster
-
-	return newCluster, nil
+	return c, nil
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
@@ -189,7 +183,7 @@ func (c *Cluster) ResetForTesting() {
 	c.shardMappingRunning = false
 	c.clusterReadyChan = make(chan bool)
 	c.clusterReadyOnce = sync.Once{}
-	
+
 	// Reset the singleton to a fresh instance
 	if c == thisCluster {
 		thisCluster = &Cluster{
@@ -210,11 +204,11 @@ func (c *Cluster) GetThisNode() *node.Node {
 //
 // Usage:
 //
-//	<-cluster.Get().ClusterReady()  // blocks until cluster is ready
+//	<-cluster.This().ClusterReady()  // blocks until cluster is ready
 //
 //	// or with select:
 //	select {
-//	case <-cluster.Get().ClusterReady():
+//	case <-cluster.This().ClusterReady():
 //	    // cluster is ready
 //	case <-ctx.Done():
 //	    // timeout or cancel

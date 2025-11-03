@@ -26,19 +26,19 @@ func NewServer(config *ServerConfig) (*Server, error) {
 }
 
 func RegisterClientType(clientObj ClientObject) {
-	cluster.Get().GetThisNode().RegisterClientType(clientObj)
+	cluster.This().GetThisNode().RegisterClientType(clientObj)
 }
 
 func RegisterObjectType(obj Object) {
-	cluster.Get().GetThisNode().RegisterObjectType(obj)
+	cluster.This().GetThisNode().RegisterObjectType(obj)
 }
 
 func CreateObject(ctx context.Context, objType, objID string, initData proto.Message) (string, error) {
-	return cluster.Get().CreateObject(ctx, objType, objID, initData)
+	return cluster.This().CreateObject(ctx, objType, objID, initData)
 }
 
 func CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
-	return cluster.Get().CallObject(ctx, id, method, request)
+	return cluster.This().CallObject(ctx, id, method, request)
 }
 
 // PushMessageToClient sends a message to a client via their client object
@@ -46,7 +46,7 @@ func CallObject(ctx context.Context, id string, method string, request proto.Mes
 // The client ID has the format: nodeAddress/uniqueId (e.g., "localhost:7001/abc123")
 // This method automatically routes the message to the correct node in the cluster
 func PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
-	return cluster.Get().PushMessageToClient(ctx, clientID, message)
+	return cluster.This().PushMessageToClient(ctx, clientID, message)
 }
 
 // ClusterReady returns a channel that will be closed when the cluster is ready.
@@ -66,5 +66,5 @@ func PushMessageToClient(ctx context.Context, clientID string, message proto.Mes
 //	    // timeout or cancel
 //	}
 func ClusterReady() <-chan bool {
-	return cluster.Get().ClusterReady()
+	return cluster.This().ClusterReady()
 }
