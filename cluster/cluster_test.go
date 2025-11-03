@@ -15,7 +15,7 @@ func TestGet(t *testing.T) {
 	cluster2 := This()
 
 	if cluster1 != cluster2 {
-		t.Error("Get() should return the same cluster instance")
+		t.Error("This() should return the same cluster instance")
 	}
 }
 
