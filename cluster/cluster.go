@@ -83,7 +83,15 @@ func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
 	clusterInitMutex.Lock()
 	defer clusterInitMutex.Unlock()
 
-	if thisCluster.etcdManager != nil {
+	// Create a new cluster instance
+	newCluster := &Cluster{
+		logger:           logger.NewLogger("Cluster"),
+		clusterReadyChan: make(chan bool),
+		etcdAddress:      etcdAddress,
+		etcdPrefix:       etcdPrefix,
+	}
+
+	if newCluster.etcdManager != nil {
 		return nil, fmt.Errorf("cluster already initialized")
 	}
 
@@ -92,20 +100,13 @@ func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
 		return nil, err
 	}
 
-	// Create a new cluster instance
-	cluster := &Cluster{
-		logger:           logger.NewLogger("Cluster"),
-		clusterReadyChan: make(chan bool),
-		etcdAddress:      etcdAddress,
-		etcdPrefix:       etcdPrefix,
-		etcdManager:      mgr,
-		consensusManager: consensusmanager.NewConsensusManager(mgr),
-	}
+	newCluster.etcdManager = mgr
+	newCluster.consensusManager = consensusmanager.NewConsensusManager(mgr)
 
 	// Assign to singleton
-	thisCluster = cluster
+	thisCluster = newCluster
 
-	return cluster, nil
+	return newCluster, nil
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
