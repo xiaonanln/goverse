@@ -258,6 +258,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
+	defer cluster2.CloseEtcd()
 
 	node2 := node.NewNode("localhost:47006")
 	cluster2.SetThisNode(node2)
