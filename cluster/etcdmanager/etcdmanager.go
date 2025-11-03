@@ -24,8 +24,6 @@ type EtcdManager struct {
 	prefix           string // global prefix for all etcd keys
 	leaseID          clientv3.LeaseID
 	registeredNodeID string // the node ID that was registered
-	watchStarted     bool
-	lastNodeChange   time.Time // timestamp of last node list change
 	keepAliveCancel  context.CancelFunc
 	keepAliveMu      sync.Mutex
 	keepAliveCtx     context.Context
@@ -142,52 +140,6 @@ func (mgr *EtcdManager) Put(ctx context.Context, key, value string) error {
 
 	mgr.logger.Debugf("Put key=%s, value=%s", key, value)
 	return nil
-}
-
-// Get retrieves a value from etcd
-func (mgr *EtcdManager) Get(ctx context.Context, key string) (string, error) {
-	if mgr.client == nil {
-		return "", fmt.Errorf("etcd client not connected")
-	}
-
-	resp, err := mgr.client.Get(ctx, key)
-	if err != nil {
-		return "", fmt.Errorf("failed to get key %s: %w", key, err)
-	}
-
-	if len(resp.Kvs) == 0 {
-		return "", fmt.Errorf("key not found: %s", key)
-	}
-
-	value := string(resp.Kvs[0].Value)
-	mgr.logger.Debugf("Get key=%s, value=%s", key, value)
-	return value, nil
-}
-
-// Delete removes a key from etcd
-func (mgr *EtcdManager) Delete(ctx context.Context, key string) error {
-	if mgr.client == nil {
-		return fmt.Errorf("etcd client not connected")
-	}
-
-	_, err := mgr.client.Delete(ctx, key)
-	if err != nil {
-		return fmt.Errorf("failed to delete key %s: %w", key, err)
-	}
-
-	mgr.logger.Debugf("Delete key=%s", key)
-	return nil
-}
-
-// Watch watches for changes to a key
-func (mgr *EtcdManager) Watch(ctx context.Context, key string) clientv3.WatchChan {
-	if mgr.client == nil {
-		mgr.logger.Errorf("etcd client not connected")
-		return nil
-	}
-
-	mgr.logger.Infof("Watching key=%s", key)
-	return mgr.client.Watch(ctx, key)
 }
 
 // RegisterNode registers a node with etcd using a lease
