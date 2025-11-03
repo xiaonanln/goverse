@@ -86,18 +86,18 @@ func TestDistributedCreateObject(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Start mock gRPC servers for both nodes
-	mockServer1 := NewMockGoverseServer()
+	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1) // Assign the actual node to the mock server
-	testServer1 := NewTestServerHelper("localhost:47001", mockServer1)
+	testServer1 := testutil.NewTestServerHelper("localhost:47001", mockServer1)
 	err = testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
 	t.Cleanup(func() { testServer1.Stop() })
 
-	mockServer2 := NewMockGoverseServer()
+	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2) // Assign the actual node to the mock server
-	testServer2 := NewTestServerHelper("localhost:47002", mockServer2)
+	testServer2 := testutil.NewTestServerHelper("localhost:47002", mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
