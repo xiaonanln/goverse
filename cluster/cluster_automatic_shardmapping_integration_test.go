@@ -20,8 +20,17 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	defer cancel()
 
 	// Create two clusters
-	cluster1 := newClusterForTesting("TestCluster1")
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
+
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	defer cluster2.CloseEtcd()
 
 	// Create etcd managers for both clusters with unique test prefix
 
@@ -34,17 +43,11 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	cluster2.SetThisNode(node2)
 
 	// Start and register node1
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -73,12 +76,6 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
@@ -201,23 +198,21 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	defer cancel()
 
 	// Create first cluster and node
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
 
 	node1 := node.NewNode("localhost:50021")
 	cluster1.SetThisNode(node1)
 
 	// Start node1
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -247,7 +242,11 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Initial shard mapping created")
 
 	// Now add a second node
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	defer cluster2.CloseEtcd()
 
 	node2 := node.NewNode("localhost:50022")
 	cluster2.SetThisNode(node2)
@@ -257,12 +256,6 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {

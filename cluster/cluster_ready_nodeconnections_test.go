@@ -18,25 +18,22 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	ctx := context.Background()
 
 	// Create cluster
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
 
 	// Create node
 	node1 := node.NewNode("localhost:47101")
 	cluster1.SetThisNode(node1)
 
 	// Start node
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	// Connect to etcd (auto-creates managers)
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	// Register node
 	err = cluster1.RegisterNode(ctx)
@@ -118,23 +115,20 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create first cluster (will be leader)
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
 
 	node1 := node.NewNode("localhost:47111")
 	cluster1.SetThisNode(node1)
 
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	// Connect to etcd (auto-creates managers)
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -148,7 +142,11 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	}
 
 	// Create second cluster (will be non-leader)
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	defer cluster2.CloseEtcd()
 
 	node2 := node.NewNode("localhost:47112")
 	cluster2.SetThisNode(node2)
@@ -158,13 +156,6 @@ func TestClusterReadyMultiNode(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
-
-	// Connect to etcd (auto-creates managers)
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
