@@ -1,4 +1,4 @@
-package cluster
+package testutil
 
 import (
 	"context"
