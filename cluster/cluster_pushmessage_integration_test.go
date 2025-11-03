@@ -22,23 +22,21 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	ctx := context.Background()
 
 	// Create cluster 1
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	t.Cleanup(func() { cluster1.CloseEtcd() })
 
 	node1 := node.NewNode("localhost:47011")
 	cluster1.SetThisNode(node1)
 	node1.RegisterClientType((*client.BaseClient)(nil))
 
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.CloseEtcd() })
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -52,7 +50,11 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 
 	// Create cluster 2
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	t.Cleanup(func() { cluster2.CloseEtcd() })
 
 	node2 := node.NewNode("localhost:47012")
 	cluster2.SetThisNode(node2)
@@ -63,12 +65,6 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.CloseEtcd() })
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {

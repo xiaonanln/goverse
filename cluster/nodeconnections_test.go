@@ -33,12 +33,9 @@ func TestNewNodeConnections(t *testing.T) {
 func TestNodeConnections_StartStop(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Connect to etcd (auto-creates managers)
-	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
 	// Set this node
@@ -71,12 +68,9 @@ func TestNodeConnections_StartStop(t *testing.T) {
 func TestNodeConnections_StartTwice(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Connect to etcd (auto-creates managers)
-	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
 	thisNode := node.NewNode("localhost:50000")
@@ -137,12 +131,9 @@ func TestNodeConnections_GetAllConnections(t *testing.T) {
 func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Connect to etcd (auto-creates managers)
-	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
 	thisNode := node.NewNode("localhost:50000")
@@ -163,12 +154,9 @@ func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 func TestCluster_StartStopNodeConnections(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Connect to etcd (auto-creates managers)
-	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
 	thisNode := node.NewNode("localhost:50000")
@@ -197,12 +185,9 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Connect to etcd (auto-creates managers)
-	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
 	if err != nil {
-		t.Logf("ConnectEtcd failed (expected if etcd not running): %v", err)
+		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
 	thisNode := node.NewNode("localhost:50000")
@@ -239,10 +224,7 @@ func TestCluster_StopNodeConnections_NotStarted(t *testing.T) {
 func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Connect to etcd (auto-creates managers)
-	err := cluster.initializeEtcdForTesting("localhost:2379", testPrefix)
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return

@@ -19,8 +19,17 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two clusters
-	cluster1 := newClusterForTesting("TestCluster1")
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
+
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	defer cluster2.CloseEtcd()
 
 	// Create etcd managers for both clusters with same test prefix
 
@@ -33,17 +42,11 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	cluster2.SetThisNode(node2)
 
 	// Start and register node1
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -65,12 +68,6 @@ func TestClusterEtcdIntegration(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
@@ -135,22 +132,20 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and setup cluster1
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
 
 	node1 := node.NewNode("localhost:47003")
 	cluster1.SetThisNode(node1)
 
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -174,7 +169,11 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	}
 
 	// Create and setup cluster2
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	defer cluster2.CloseEtcd()
 
 	node2 := node.NewNode("localhost:47004")
 	cluster2.SetThisNode(node2)
@@ -184,12 +183,6 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	defer node2.Stop(ctx)
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
@@ -234,22 +227,20 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and setup cluster1
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer cluster1.CloseEtcd()
 
 	node1 := node.NewNode("localhost:47005")
 	cluster1.SetThisNode(node1)
 
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -263,7 +254,10 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	}
 
 	// Create and setup cluster2
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
 
 	node2 := node.NewNode("localhost:47006")
 	cluster2.SetThisNode(node2)
@@ -271,11 +265,6 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
-	}
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
 	}
 
 	err = cluster2.RegisterNode(ctx)
@@ -348,24 +337,23 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	addresses := []string{"localhost:47100", "localhost:47050", "localhost:47200"}
 
 	for i := 0; i < 3; i++ {
-		clusters[i] = newClusterForTesting(fmt.Sprintf("TestCluster%d", i+1))
-
-
-		nodes[i] = node.NewNode(addresses[i])
-		clusters[i].SetThisNode(nodes[i])
-
-		err := nodes[i].Start(ctx)
-		if err != nil {
-			t.Fatalf("Failed to start node%d: %v", i+1, err)
-		}
-		defer nodes[i].Stop(ctx)
-
-		err = clusters[i].initializeEtcdForTesting("localhost:2379", testPrefix)
+		var err error
+		clusters[i], err = newClusterWithEtcdForTesting(fmt.Sprintf("TestCluster%d", i+1), "localhost:2379", testPrefix)
 		if err != nil {
 			t.Skipf("Skipping test: etcd not available: %v", err)
 			return
 		}
 		defer clusters[i].CloseEtcd()
+
+
+		nodes[i] = node.NewNode(addresses[i])
+		clusters[i].SetThisNode(nodes[i])
+
+		err = nodes[i].Start(ctx)
+		if err != nil {
+			t.Fatalf("Failed to start node%d: %v", i+1, err)
+		}
+		defer nodes[i].Stop(ctx)
 
 		err = clusters[i].RegisterNode(ctx)
 		if err != nil {
@@ -410,12 +398,22 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two clusters - cluster2 has smaller address (will be initial leader)
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Skipf("Skipping test: etcd not available: %v", err)
+		return
+	}
+	defer cluster1.CloseEtcd()
 
 	node1 := node.NewNode("localhost:47300")
 	cluster1.SetThisNode(node1)
 
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Skipf("Skipping test: etcd not available: %v", err)
+		return
+	}
+	defer cluster2.CloseEtcd()
 
 	node2 := node.NewNode("localhost:47200") // Smaller address - will be leader
 	cluster2.SetThisNode(node2)
@@ -429,15 +427,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 		defer n.Stop(ctx)
 	}
 
-	var err error
 	for i, c := range []*Cluster{cluster1, cluster2} {
-		err = c.initializeEtcdForTesting("localhost:2379", testPrefix)
-		if err != nil {
-			t.Skipf("Skipping test: etcd not available: %v", err)
-			return
-		}
-		defer c.CloseEtcd()
-
 		err = c.RegisterNode(ctx)
 		if err != nil {
 			t.Fatalf("Failed to register node%d: %v", i+1, err)

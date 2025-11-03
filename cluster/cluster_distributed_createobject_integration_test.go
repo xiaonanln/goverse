@@ -23,23 +23,21 @@ func TestDistributedCreateObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create cluster 1
-	cluster1 := newClusterForTesting("TestCluster1")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	t.Cleanup(func() { cluster1.CloseEtcd() })
 
 	node1 := node.NewNode("localhost:47001")
 	cluster1.SetThisNode(node1)
 	node1.RegisterObjectType((*TestDistributedObject)(nil))
 
-	err := node1.Start(ctx)
+	err = node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
-
-	err = cluster1.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.CloseEtcd() })
 
 	err = cluster1.RegisterNode(ctx)
 	if err != nil {
@@ -53,7 +51,11 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 
 	// Create cluster 2
-	cluster2 := newClusterForTesting("TestCluster2")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	t.Cleanup(func() { cluster2.CloseEtcd() })
 
 	node2 := node.NewNode("localhost:47002")
 	cluster2.SetThisNode(node2)
@@ -64,12 +66,6 @@ func TestDistributedCreateObject(t *testing.T) {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
-
-	err = cluster2.initializeEtcdForTesting("localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to connect etcd for cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.CloseEtcd() })
 
 	err = cluster2.RegisterNode(ctx)
 	if err != nil {
@@ -285,25 +281,24 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 
 	// Set up all 3 nodes
 	for i := 0; i < 3; i++ {
-		clusters[i] = newClusterForTesting("TestCluster" + fmt.Sprintf("%d", i+1))
+		var err error
+		clusters[i], err = newClusterWithEtcdForTesting("TestCluster"+fmt.Sprintf("%d", i+1), "localhost:2379", testPrefix)
+		if err != nil {
+			t.Fatalf("Failed to create cluster%d: %v", i+1, err)
+		}
+		// Capture loop variable for closure
+		idx := i
+		t.Cleanup(func() { clusters[idx].CloseEtcd() })
 
 		nodes[i] = node.NewNode(nodeAddrs[i])
 		clusters[i].SetThisNode(nodes[i])
 		nodes[i].RegisterObjectType((*TestDistributedObject)(nil))
 
-		err := nodes[i].Start(ctx)
+		err = nodes[i].Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
-		// Capture loop variable for closure
-		idx := i
 		t.Cleanup(func() { nodes[idx].Stop(ctx) })
-
-		err = clusters[i].initializeEtcdForTesting("localhost:2379", testPrefix)
-		if err != nil {
-			t.Fatalf("Failed to connect etcd for cluster%d: %v", i+1, err)
-		}
-		t.Cleanup(func() { clusters[idx].CloseEtcd() })
 
 		err = clusters[i].RegisterNode(ctx)
 		if err != nil {
