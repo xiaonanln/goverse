@@ -17,7 +17,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup cluster
-	c := Get()
+	c := This()
 	c.ResetForTesting()
 
 	n := node.NewNode("localhost:47201")

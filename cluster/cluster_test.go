@@ -11,8 +11,8 @@ import (
 
 func TestGet(t *testing.T) {
 	// Test that Get returns a singleton
-	cluster1 := Get()
-	cluster2 := Get()
+	cluster1 := This()
+	cluster2 := This()
 
 	if cluster1 != cluster2 {
 		t.Error("Get() should return the same cluster instance")

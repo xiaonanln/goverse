@@ -77,7 +77,7 @@ func TestMarkClusterReadyIsIdempotent(t *testing.T) {
 }
 
 func TestResetForTestingCreatesNewChannel(t *testing.T) {
-	c := Get()
+	c := This()
 
 	// Get the initial channel
 	firstChan := c.ClusterReady()
