@@ -166,6 +166,9 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 // ResetForTesting resets the cluster state for testing purposes
 // WARNING: This should only be used in tests
 func (c *Cluster) ResetForTesting() {
+	if c == nil {
+		return
+	}
 	c.thisNode = nil
 	c.etcdManager = nil
 	c.consensusManager = nil
@@ -186,10 +189,7 @@ func (c *Cluster) ResetForTesting() {
 
 	// Reset the singleton to a fresh instance
 	if c == thisCluster {
-		thisCluster = &Cluster{
-			logger:           logger.NewLogger("Cluster"),
-			clusterReadyChan: make(chan bool),
-		}
+		thisCluster = nil
 	}
 }
 

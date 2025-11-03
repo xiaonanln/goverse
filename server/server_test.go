@@ -16,11 +16,7 @@ import (
 // resetClusterForTesting resets the cluster singleton state between tests
 // This is necessary because cluster.This() returns a singleton and tests may interfere with each other
 func resetClusterForTesting(t *testing.T) {
-	clusterInstance := cluster.This()
-	if clusterInstance != nil {
-		clusterInstance.ResetForTesting()
-	}
-	cluster.SetThis(nil)
+	cluster.This().ResetForTesting()
 	t.Logf("Cluster state reset for testing")
 }
 
