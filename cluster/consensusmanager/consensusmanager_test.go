@@ -404,6 +404,12 @@ func TestParseShardInfo(t *testing.T) {
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
 		},
+		{
+			name:        "Edge case - extra commas in current node",
+			value:       "localhost:47001,node2,extra",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "node2,extra",
+		},
 	}
 
 	for _, tt := range tests {
