@@ -16,11 +16,20 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// ShardInfo contains information about a shard's node assignment
+type ShardInfo struct {
+	// TargetNode is the node that should handle this shard
+	TargetNode string
+	// CurrentNode is the node currently handling this shard (empty if not yet assigned)
+	// This field will be implemented later
+	CurrentNode string
+}
+
 // ShardMapping represents the mapping of shards to nodes
 // Note: Nodes and Version fields have been moved to ClusterState in consensusmanager
 type ShardMapping struct {
-	// Map from shard ID to node address
-	Shards map[int]string `json:"shards"`
+	// Map from shard ID to shard info (target and current node)
+	Shards map[int]*ShardInfo `json:"shards"`
 }
 
 func (sm *ShardMapping) IsComplete() bool {
@@ -63,7 +72,7 @@ func (cs *ClusterState) Clone() *ClusterState {
 	cscp := &ClusterState{
 		Nodes: make(map[string]bool, len(cs.Nodes)),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]string),
+			Shards: make(map[int]*ShardInfo),
 		},
 		Revision:   cs.Revision,
 		LastChange: cs.LastChange,
@@ -76,8 +85,11 @@ func (cs *ClusterState) Clone() *ClusterState {
 
 	// Deep copy shard mapping if present
 	if cs.ShardMapping != nil {
-		for sid, addr := range cs.ShardMapping.Shards {
-			cscp.ShardMapping.Shards[sid] = addr
+		for sid, info := range cs.ShardMapping.Shards {
+			cscp.ShardMapping.Shards[sid] = &ShardInfo{
+				TargetNode:  info.TargetNode,
+				CurrentNode: info.CurrentNode,
+			}
 		}
 	}
 
@@ -343,9 +355,10 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	defer cm.mu.Unlock()
 
 	if event.Type == clientv3.EventTypePut {
-		nodeAddr := string(event.Kv.Value)
-		cm.state.ShardMapping.Shards[shardID] = nodeAddr
-		cm.logger.Debugf("Shard %d assigned to node %s", shardID, nodeAddr)
+		value := string(event.Kv.Value)
+		shardInfo := parseShardInfo(value)
+		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
@@ -356,6 +369,29 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	}
+}
+
+// parseShardInfo parses shard information from the etcd value
+// Format: "targetNode,currentNode" or just "targetNode" (for backward compatibility)
+func parseShardInfo(value string) *ShardInfo {
+	parts := strings.Split(value, ",")
+	if len(parts) == 2 {
+		return &ShardInfo{
+			TargetNode:  strings.TrimSpace(parts[0]),
+			CurrentNode: strings.TrimSpace(parts[1]),
+		}
+	}
+	// Backward compatibility: if only one part, it's the target node
+	return &ShardInfo{
+		TargetNode:  strings.TrimSpace(value),
+		CurrentNode: "",
+	}
+}
+
+// formatShardInfo formats shard information for etcd storage
+// Format: "targetNode,currentNode"
+func formatShardInfo(info *ShardInfo) string {
+	return info.TargetNode + "," + info.CurrentNode
 }
 
 // loadClusterStateFromEtcd loads all cluster data at once from etcd
@@ -376,7 +412,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	state := &ClusterState{
 		Nodes: make(map[string]bool),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]string),
+			Shards: make(map[int]*ShardInfo),
 		},
 		Revision:   resp.Header.Revision,
 		LastChange: time.Now(),
@@ -403,8 +439,8 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 				continue
 			}
 
-			nodeAddr := string(kv.Value)
-			state.ShardMapping.Shards[shardID] = nodeAddr
+			value := string(kv.Value)
+			state.ShardMapping.Shards[shardID] = parseShardInfo(value)
 		}
 	}
 
@@ -483,12 +519,12 @@ func (cm *ConsensusManager) GetNodeForObject(objectID string) (string, error) {
 
 	// Use the sharding logic to determine the node
 	shardID := sharding.GetShardID(objectID)
-	node, ok := mapping.Shards[shardID]
+	shardInfo, ok := mapping.Shards[shardID]
 	if !ok {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
 
-	return node, nil
+	return shardInfo.TargetNode, nil
 }
 
 // GetNodeForShard returns the node that owns the given shard
@@ -502,17 +538,17 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 		return "", err
 	}
 
-	node, ok := mapping.Shards[shardID]
+	shardInfo, ok := mapping.Shards[shardID]
 	if !ok {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
 
-	return node, nil
+	return shardInfo.TargetNode, nil
 }
 
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
-// Each shard is stored as an individual key: /goverse/shard/<shard-id> with value being the node address
-func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]string) error {
+// Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
+func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]*ShardInfo) error {
 	if cm.etcdManager == nil {
 		return fmt.Errorf("etcd manager not set")
 	}
@@ -544,9 +580,10 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 		ops := make([]clientv3.Op, 0, end-i)
 		for j := i; j < end; j++ {
 			shardID := shardIDs[j]
-			nodeAddr := updateShards[shardID]
+			shardInfo := updateShards[shardID]
 			key := fmt.Sprintf("%s%d", shardPrefix, shardID)
-			ops = append(ops, clientv3.OpPut(key, nodeAddr))
+			value := formatShardInfo(shardInfo)
+			ops = append(ops, clientv3.OpPut(key, value))
 		}
 
 		// Execute batch
@@ -579,25 +616,29 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	// Check if any changes are needed
-	newShards := make(map[int]string, sharding.NumShards)
-	updateShards := make(map[int]string)
+	newShards := make(map[int]*ShardInfo, sharding.NumShards)
+	updateShards := make(map[int]*ShardInfo)
 	currentMapping := clusterState.ShardMapping
 	if currentMapping == nil {
 		currentMapping = &ShardMapping{
-			Shards: make(map[int]string),
+			Shards: make(map[int]*ShardInfo),
 		}
 	}
 
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
-		currentNode, exists := currentMapping.Shards[shardID]
-		if exists && nodeSet[currentNode] {
-			// Keep the shard on the same node if it's still available
-			newShards[shardID] = currentNode
+		currentInfo, exists := currentMapping.Shards[shardID]
+		if exists && nodeSet[currentInfo.TargetNode] {
+			// Keep the shard on the same target node if it's still available
+			newShards[shardID] = currentInfo
 		} else {
 			// Assign to a new node using round-robin
 			nodeIdx := shardID % len(nodes)
-			newShards[shardID] = nodes[nodeIdx]
-			updateShards[shardID] = nodes[nodeIdx]
+			newInfo := &ShardInfo{
+				TargetNode:  nodes[nodeIdx],
+				CurrentNode: "", // CurrentNode will be set later when implemented
+			}
+			newShards[shardID] = newInfo
+			updateShards[shardID] = newInfo
 		}
 	}
 

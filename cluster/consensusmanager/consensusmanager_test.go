@@ -163,10 +163,13 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 
 	// Set initial mapping
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]string),
+		Shards: make(map[int]*ShardInfo),
 	}
 	for i := 0; i < sharding.NumShards/2; i++ {
-		cm.state.ShardMapping.Shards[i] = "localhost:47001"
+		cm.state.ShardMapping.Shards[i] = &ShardInfo{
+			TargetNode:  "localhost:47001",
+			CurrentNode: "",
+		}
 	}
 	cm.mu.Unlock()
 
@@ -200,12 +203,15 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 
 	// Set mapping with same nodes
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]string),
+		Shards: make(map[int]*ShardInfo),
 	}
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = nodes[nodeIdx]
+		cm.state.ShardMapping.Shards[i] = &ShardInfo{
+			TargetNode:  nodes[nodeIdx],
+			CurrentNode: "",
+		}
 	}
 	cm.mu.Unlock()
 
@@ -309,7 +315,10 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 	// Set a mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: map[int]string{0: "localhost:47001", 1: "localhost:47002"},
+		Shards: map[int]*ShardInfo{
+			0: &ShardInfo{TargetNode: "localhost:47001", CurrentNode: ""},
+			1: &ShardInfo{TargetNode: "localhost:47002", CurrentNode: ""},
+		},
 	}
 	cm.mu.Unlock()
 
@@ -340,12 +349,15 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	// Set a complete mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]string),
+		Shards: make(map[int]*ShardInfo),
 	}
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = nodes[nodeIdx]
+		cm.state.ShardMapping.Shards[i] = &ShardInfo{
+			TargetNode:  nodes[nodeIdx],
+			CurrentNode: "",
+		}
 	}
 	cm.mu.Unlock()
 
