@@ -108,19 +108,26 @@ Total: 8192 shards (2731 + 2731 + 2730)
 
 ## Storage Format
 
-Shard mappings are stored in etcd at `/goverse/shardmapping` as JSON:
+Shard mappings are stored in etcd as individual keys, one for each shard:
 
-```json
-{
-  "shards": {
-    "0": "node1",
-    "1": "node2",
-    "2": "node3",
-    ...
-  },
-  "version": 1
-}
+- **Key format**: `/goverse/shard/<shard-id>` (e.g., `/goverse/shard/0`, `/goverse/shard/1`, etc.)
+- **Value**: Node address as a string (e.g., `"localhost:47001"`)
+
+Each of the 8192 shards has its own key in etcd. This allows for:
+- More granular watching and updates
+- Better scalability for large clusters
+- Reduced network overhead when only specific shards change
+
+Example etcd keys:
 ```
+/goverse/shard/0 = "localhost:47001"
+/goverse/shard/1 = "localhost:47002"
+/goverse/shard/2 = "localhost:47001"
+...
+/goverse/shard/8191 = "localhost:47002"
+```
+
+**Note**: The ConsensusManager encapsulates all complexity of reading and writing individual shard keys. Users of the cluster package don't need to interact with these keys directly.
 
 ## Leader Responsibilities
 
