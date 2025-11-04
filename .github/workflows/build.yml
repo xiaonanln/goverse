@@ -43,6 +43,24 @@ jobs:
       - name: Tidy Go modules
         run: go mod tidy
       
+      - name: Build all packages
+        run: |
+          echo "Building all packages..."
+          go build ./...
+          echo "✅ All packages built successfully"
+      
+      - name: Compile all tests
+        run: |
+          echo "Compiling all tests..."
+          go test -c ./...
+          echo "✅ All tests compile successfully"
+      
+      - name: Run go vet
+        run: |
+          echo "Running go vet..."
+          go vet ./...
+          echo "✅ Go vet passed"
+      
       - name: Build inspector
         run: |
           echo "Building inspector..."
