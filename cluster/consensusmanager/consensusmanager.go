@@ -20,8 +20,9 @@ import (
 type ShardInfo struct {
 	// TargetNode is the node that should handle this shard
 	TargetNode string
-	// CurrentNode is the node currently handling this shard (empty if not yet assigned)
-	// This field will be implemented later
+	// CurrentNode is the node currently handling this shard
+	// Empty initially - will be populated when shard migration/handoff logic is implemented
+	// to enable tracking of active shard transfers during cluster rebalancing
 	CurrentNode string
 }
 
