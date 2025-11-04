@@ -3,19 +3,17 @@ package consensusmanager
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
-
-const testPrefixTimeFormat = "20060102-150405"
 
 // TestStorageFormat verifies that shards are stored in individual keys
 func TestStorageFormat(t *testing.T) {
 	// Create etcd manager
-	prefix := "/test-storage-format-" + time.Now().Format(testPrefixTimeFormat)
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
@@ -28,15 +26,6 @@ func TestStorageFormat(t *testing.T) {
 		return
 	}
 	defer mgr.Close()
-
-	// Clean up at the end
-	defer func() {
-		ctx := context.Background()
-		client := mgr.GetClient()
-		if client != nil {
-			client.Delete(ctx, prefix, clientv3.WithPrefix())
-		}
-	}()
 
 	// Create consensus manager
 	cm := NewConsensusManager(mgr)
@@ -123,7 +112,7 @@ func TestStorageFormat(t *testing.T) {
 // TestStorageFormatFullMapping verifies storage works with all 8192 shards
 func TestStorageFormatFullMapping(t *testing.T) {
 	// Create etcd manager
-	prefix := "/test-storage-full-" + time.Now().Format(testPrefixTimeFormat)
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
@@ -136,15 +125,6 @@ func TestStorageFormatFullMapping(t *testing.T) {
 		return
 	}
 	defer mgr.Close()
-
-	// Clean up at the end
-	defer func() {
-		ctx := context.Background()
-		client := mgr.GetClient()
-		if client != nil {
-			client.Delete(ctx, prefix, clientv3.WithPrefix())
-		}
-	}()
 
 	// Create consensus manager
 	cm := NewConsensusManager(mgr)
