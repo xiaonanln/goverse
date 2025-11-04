@@ -244,6 +244,11 @@ func (c *Cluster) checkAndMarkReady() {
 		return
 	}
 
+	if !c.consensusManager.IsStateStable(5 * time.Second) {
+		c.logger.Debugf("Cannot mark cluster ready: cluster state not stable yet, will check again later")
+		return
+	}
+
 	// Both conditions met, mark cluster as ready
 	c.logger.Infof("All conditions met, marking cluster as READY for the first time!")
 	c.markClusterReady()
