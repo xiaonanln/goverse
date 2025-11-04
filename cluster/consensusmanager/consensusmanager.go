@@ -374,7 +374,8 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 // parseShardInfo parses shard information from the etcd value
 // Format: "targetNode,currentNode" or just "targetNode" (for backward compatibility)
 func parseShardInfo(value string) *ShardInfo {
-	parts := strings.Split(value, ",")
+	// Split into exactly 2 parts max
+	parts := strings.SplitN(value, ",", 2)
 	if len(parts) == 2 {
 		return &ShardInfo{
 			TargetNode:  strings.TrimSpace(parts[0]),
