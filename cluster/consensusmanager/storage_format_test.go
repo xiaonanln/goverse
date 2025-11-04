@@ -49,13 +49,19 @@ func TestStorageFormat(t *testing.T) {
 
 	// Create a small shard mapping for testing (not all 8192)
 	mapping := &ShardMapping{
-		Shards: make(map[int]string),
+		Shards: make(map[int]*ShardInfo),
 	}
 	for i := 0; i < 10; i++ {
 		if i%2 == 0 {
-			mapping.Shards[i] = "node1"
+			mapping.Shards[i] = &ShardInfo{
+				TargetNode:  "node1",
+				CurrentNode: "",
+			}
 		} else {
-			mapping.Shards[i] = "node2"
+			mapping.Shards[i] = &ShardInfo{
+				TargetNode:  "node2",
+				CurrentNode: "",
+			}
 		}
 	}
 
@@ -88,9 +94,10 @@ func TestStorageFormat(t *testing.T) {
 			t.Errorf("Unexpected key format: %s", key)
 		}
 
-		// Check value is a node address
-		if value != "node1" && value != "node2" {
-			t.Errorf("Unexpected value: %s", value)
+		// Check value has the format "targetNode,currentNode"
+		// For now, currentNode is empty, so it should be "node1," or "node2,"
+		if value != "node1," && value != "node2," {
+			t.Errorf("Unexpected value format: %s (expected 'node1,' or 'node2,')", value)
 		}
 	}
 
@@ -110,10 +117,14 @@ func TestStorageFormat(t *testing.T) {
 
 	// Verify all shards match
 	for shardID := 0; shardID < 10; shardID++ {
-		expectedNode := mapping.Shards[shardID]
-		actualNode := state.ShardMapping.Shards[shardID]
-		if actualNode != expectedNode {
-			t.Errorf("Shard %d: expected %s, got %s", shardID, expectedNode, actualNode)
+		expectedInfo := mapping.Shards[shardID]
+		actualInfo := state.ShardMapping.Shards[shardID]
+		if actualInfo.TargetNode != expectedInfo.TargetNode {
+			t.Errorf("Shard %d: expected target node %s, got %s", shardID, expectedInfo.TargetNode, actualInfo.TargetNode)
+		}
+		if actualInfo.CurrentNode != expectedInfo.CurrentNode {
+			t.Errorf("Shard %d: expected current node %s, got %s", shardID, expectedInfo.CurrentNode, actualInfo.CurrentNode)
+		}
 		}
 	}
 
