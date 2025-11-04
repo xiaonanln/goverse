@@ -22,6 +22,10 @@ type ShardMapping struct {
 	Shards map[int]string `json:"shards"`
 }
 
+func (sm *ShardMapping) IsComplete() bool {
+	return len(sm.Shards) == sharding.NumShards
+}
+
 // ClusterState represents the current state of the cluster
 type ClusterState struct {
 	Nodes        map[string]bool
@@ -87,6 +91,35 @@ func (cm *ConsensusManager) RemoveListener(listener StateChangeListener) {
 			break
 		}
 	}
+}
+
+func (cm *ConsensusManager) IsReady() bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if cm.etcdManager == nil {
+		cm.logger.Warnf("ConsensusManager not ready: Etcd manager not set")
+		return false
+	}
+
+	// Consider ready if we have loaded initial state
+	if cm.state.Revision == 0 {
+		cm.logger.Warnf("ConsensusManager not ready: Initial state not loaded")
+		return false
+	}
+
+	if len(cm.state.Nodes) == 0 {
+		cm.logger.Warnf("ConsensusManager not ready: No nodes available")
+		return false
+	}
+
+	if cm.state.ShardMapping == nil || !cm.state.ShardMapping.IsComplete() {
+		cm.logger.Warnf("ConsensusManager not ready: Shard mapping incomplete")
+		return false
+	}
+
+	cm.logger.Infof("ConsensusManager is ready!")
+	return true
 }
 
 // notifyStateChanged notifies all listeners about cluster state changes
@@ -532,8 +565,8 @@ func nodesEqual(a, b []string) bool {
 	return true
 }
 
-// IsNodeListStable returns true if the node list has not changed for the specified duration
-func (cm *ConsensusManager) IsNodeListStable(duration time.Duration) bool {
+// IsStateStable returns true if the node list has not changed for the specified duration
+func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
