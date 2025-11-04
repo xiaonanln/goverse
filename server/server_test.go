@@ -367,11 +367,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	t.Logf("Server successfully started and registered as sole node/leader: %s", leaderNode)
 
-	// Initialize shard mapping (leader responsibility)
-	err = clusterInstance.InitializeShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to initialize shard mapping: %v", err)
-	}
+	// Give some time for shard mapping to initialize
+	time.Sleep(20 * time.Second)
 
 	// Verify shard mapping was created and stored
 	shardMapping, err := clusterInstance.GetShardMapping(ctx)
@@ -383,8 +380,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		t.Fatal("Shard mapping should not be nil after initialization")
 	}
 
-	if len(shardMapping.Shards) == 0 {
-		t.Fatal("Shard mapping should contain at least one shard")
+	if len(shardMapping.Shards) != 8192 {
+		t.Fatal("Shard mapping should contain 8192 shards")
 	}
 
 	// Verify the leader node is in the shard mapping
