@@ -342,13 +342,6 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	// Initialize shard mapping if needed
-	if cm.state.ShardMapping == nil {
-		cm.state.ShardMapping = &ShardMapping{
-			Shards: make(map[int]string),
-		}
-	}
-
 	if event.Type == clientv3.EventTypePut {
 		nodeAddr := string(event.Kv.Value)
 		cm.state.ShardMapping.Shards[shardID] = nodeAddr
