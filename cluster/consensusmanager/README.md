@@ -87,7 +87,7 @@ All queries are served from in-memory state (no etcd round-trip):
 The leader can modify cluster state:
 - `CreateShardMapping()` - Generate initial mapping
 - `UpdateShardMapping()` - Update mapping when nodes change
-- `StoreShardMapping(ctx, mapping)` - Persist to etcd
+- `storeShardMapping(ctx, mapping)` - Persist to etcd
 
 ## Usage Example
 
@@ -117,7 +117,7 @@ leader := cm.GetLeaderNode()
 // Leader manages shard mapping
 if leader == myNodeAddress {
     mapping, _ := cm.CreateShardMapping()
-    cm.StoreShardMapping(ctx, mapping)
+    cm.storeShardMapping(ctx, mapping)
 }
 
 // Find which node handles an object

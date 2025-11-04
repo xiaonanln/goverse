@@ -61,7 +61,7 @@ func TestStorageFormat(t *testing.T) {
 
 	// Store the mapping
 	ctx := context.Background()
-	err = cm.StoreShardMapping(ctx, mapping)
+	err = cm.storeShardMapping(ctx, mapping.Shards)
 	if err != nil {
 		t.Fatalf("Failed to store shard mapping: %v", err)
 	}
@@ -156,16 +156,10 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Create full shard mapping
-	mapping, err := cm.CreateShardMapping()
+	ctx := context.Background()
+	err = cm.UpdateShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to create shard mapping: %v", err)
-	}
-
-	// Store the mapping
-	ctx := context.Background()
-	err = cm.StoreShardMapping(ctx, mapping)
-	if err != nil {
-		t.Fatalf("Failed to store shard mapping: %v", err)
 	}
 
 	// Verify that 8192 shard keys exist

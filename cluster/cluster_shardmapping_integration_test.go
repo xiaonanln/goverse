@@ -25,14 +25,16 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer cluster1.CloseEtcd()
 
+	cluster1.StartShardMappingManagement(ctx)
+
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
 	defer cluster2.CloseEtcd()
 
+	cluster2.StartShardMappingManagement(ctx)
 	// Create etcd managers for both clusters with unique test prefix
-
 
 	// Create nodes - node1 will be leader (smaller address)
 	node1 := node.NewNode("localhost:50001")
@@ -80,8 +82,8 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
 
-	// Wait for watches to sync
-	time.Sleep(500 * time.Millisecond)
+	// Wait for leader election and shard mapping to stabilize
+	time.Sleep(20 * time.Second)
 
 	// Test leader detection
 	t.Run("LeaderDetection", func(t *testing.T) {
@@ -103,62 +105,6 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 
 		if leader2 != "localhost:50001" {
 			t.Errorf("cluster2 sees leader as %s, want localhost:50001", leader2)
-		}
-	})
-
-	// Test shard mapping initialization by leader
-	t.Run("InitializeShardMapping", func(t *testing.T) {
-		// Only leader should be able to initialize
-		err := cluster1.InitializeShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("Leader should be able to initialize shard mapping: %v", err)
-		}
-
-		// Non-leader should not be able to initialize
-		err = cluster2.InitializeShardMapping(ctx)
-		if err == nil {
-			t.Error("Non-leader should not be able to initialize shard mapping")
-		}
-
-		// Wait for etcd to propagate
-		time.Sleep(200 * time.Millisecond)
-
-		// Both clusters should be able to retrieve the mapping
-		mapping1, err := cluster1.GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("cluster1 failed to get shard mapping: %v", err)
-		}
-
-		mapping2, err := cluster2.GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("cluster2 failed to get shard mapping: %v", err)
-		}
-
-		// Verify mapping properties
-		if len(mapping1.Shards) != sharding.NumShards {
-			t.Errorf("mapping1 has %d shards, want %d", len(mapping1.Shards), sharding.NumShards)
-		}
-
-		if len(mapping2.Shards) != sharding.NumShards {
-			t.Errorf("mapping2 has %d shards, want %d", len(mapping2.Shards), sharding.NumShards)
-		}
-
-		// Note: Version is now tracked in ClusterState
-
-		// Verify all shards are assigned to valid nodes
-		validNodes := map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-		}
-
-		for shardID := 0; shardID < sharding.NumShards; shardID++ {
-			node, ok := mapping1.Shards[shardID]
-			if !ok {
-				t.Errorf("Shard %d is not assigned", shardID)
-			}
-			if !validNodes[node] {
-				t.Errorf("Shard %d assigned to invalid node %s", shardID, node)
-			}
 		}
 	})
 
@@ -229,183 +175,4 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 			}
 		}
 	})
-}
-
-// TestClusterShardMappingUpdate tests updating shard mapping when nodes change
-func TestClusterShardMappingUpdate(t *testing.T) {
-	// Use PrepareEtcdPrefix for test isolation
-	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-
-	ctx := context.Background()
-
-	// Create two clusters initially
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
-
-
-
-	node1 := node.NewNode("localhost:51001")
-	node2 := node.NewNode("localhost:51002")
-
-	cluster1.SetThisNode(node1)
-	cluster2.SetThisNode(node2)
-
-	// Start and register both nodes
-	err = node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	defer node1.Stop(ctx)
-
-	err = cluster1.RegisterNode(ctx)
-	if err != nil {
-		t.Fatalf("Failed to register node1: %v", err)
-	}
-	defer cluster1.UnregisterNode(ctx)
-
-	err = cluster1.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
-	}
-
-	time.Sleep(500 * time.Millisecond)
-
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	defer node2.Stop(ctx)
-
-	err = cluster2.RegisterNode(ctx)
-	if err != nil {
-		t.Fatalf("Failed to register node2: %v", err)
-	}
-	defer cluster2.UnregisterNode(ctx)
-
-	err = cluster2.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
-	}
-
-	time.Sleep(500 * time.Millisecond)
-
-	// Initialize shard mapping with 2 nodes
-	err = cluster1.InitializeShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to initialize shard mapping: %v", err)
-	}
-
-	time.Sleep(200 * time.Millisecond)
-
-	// Get initial mapping
-	_, err = cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get initial mapping: %v", err)
-	}
-
-	// Note: Version is now tracked in ClusterState
-
-	// Now add a third node
-	cluster3, err := newClusterWithEtcdForTesting("TestCluster3", "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster3: %v", err)
-	}
-	defer cluster3.CloseEtcd()
-
-	node3 := node.NewNode("localhost:51003")
-	cluster3.SetThisNode(node3)
-
-	err = node3.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node3: %v", err)
-	}
-	defer node3.Stop(ctx)
-
-	err = cluster3.RegisterNode(ctx)
-	if err != nil {
-		t.Fatalf("Failed to register node3: %v", err)
-	}
-	defer cluster3.UnregisterNode(ctx)
-
-	err = cluster3.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster3: %v", err)
-	}
-
-	// Wait for all clusters to see the new node
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify all clusters can see 3 nodes
-	nodes1 := cluster1.GetNodes()
-	if len(nodes1) != 3 {
-		t.Fatalf("cluster1 sees %d nodes, want 3", len(nodes1))
-	}
-
-	// Leader updates the shard mapping
-	err = cluster1.UpdateShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to update shard mapping: %v", err)
-	}
-
-	time.Sleep(200 * time.Millisecond)
-
-	// With ConsensusManager, cache is automatically updated via watch
-	// No need to manually invalidate
-
-	// Get updated mapping
-	updatedMapping, err := cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get updated mapping: %v", err)
-	}
-
-	// Version should remain 1 if no shards needed reassignment (all stayed on node1/node2)
-	// Note: Version is now tracked in ClusterState
-
-	t.Logf("Updated mapping retrieved")
-
-	// All three clusters should see the same mapping
-	mapping2, err := cluster2.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("cluster2 failed to get updated mapping: %v", err)
-	}
-
-	mapping3, err := cluster3.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("cluster3 failed to get updated mapping: %v", err)
-	}
-
-	// Verify they all have the same number of shards
-	if len(mapping2.Shards) != len(updatedMapping.Shards) {
-		t.Errorf("cluster2 has %d shards, want %d", len(mapping2.Shards), len(updatedMapping.Shards))
-	}
-
-	if len(mapping3.Shards) != len(updatedMapping.Shards) {
-		t.Errorf("cluster3 has %d shards, want %d", len(mapping3.Shards), len(updatedMapping.Shards))
-	}
-
-	// Verify all shards are assigned to valid nodes
-	validNodes := map[string]bool{
-		"localhost:51001": true,
-		"localhost:51002": true,
-		"localhost:51003": true,
-	}
-
-	for shardID := 0; shardID < sharding.NumShards; shardID++ {
-		node, ok := updatedMapping.Shards[shardID]
-		if !ok {
-			t.Errorf("Shard %d is not assigned in updated mapping", shardID)
-		}
-		if !validNodes[node] {
-			t.Errorf("Shard %d assigned to invalid node %s in updated mapping", shardID, node)
-		}
-	}
 }

@@ -33,7 +33,7 @@ if err != nil {
 }
 
 // Store mapping in etcd
-err = mapper.StoreShardMapping(ctx, mapping)
+err = mapper.storeShardMapping(ctx, mapping)
 if err != nil {
     log.Fatal(err)
 }
