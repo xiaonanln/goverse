@@ -8,6 +8,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 )
 
 // mockListener implements StateChangeListener for testing
@@ -163,10 +164,10 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 
 	// Set initial mapping
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]*ShardInfo),
+		Shards: make(map[int]ShardInfo),
 	}
 	for i := 0; i < sharding.NumShards/2; i++ {
-		cm.state.ShardMapping.Shards[i] = &ShardInfo{
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  "localhost:47001",
 			CurrentNode: "",
 		}
@@ -203,12 +204,12 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 
 	// Set mapping with same nodes
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]*ShardInfo),
+		Shards: make(map[int]ShardInfo),
 	}
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = &ShardInfo{
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  nodes[nodeIdx],
 			CurrentNode: "",
 		}
@@ -315,9 +316,9 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 	// Set a mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: map[int]*ShardInfo{
-			0: &ShardInfo{TargetNode: "localhost:47001", CurrentNode: ""},
-			1: &ShardInfo{TargetNode: "localhost:47002", CurrentNode: ""},
+		Shards: map[int]ShardInfo{
+			0: {TargetNode: "localhost:47001", CurrentNode: ""},
+			1: {TargetNode: "localhost:47002", CurrentNode: ""},
 		},
 	}
 	cm.mu.Unlock()
@@ -349,12 +350,12 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	// Set a complete mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]*ShardInfo),
+		Shards: make(map[int]ShardInfo),
 	}
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = &ShardInfo{
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  nodes[nodeIdx],
 			CurrentNode: "",
 		}
@@ -414,7 +415,9 @@ func TestParseShardInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := parseShardInfo(tt.value)
+			info := parseShardInfo(&mvccpb.KeyValue{
+				Value: []byte(tt.value),
+			})
 			if info.TargetNode != tt.wantTarget {
 				t.Errorf("parseShardInfo(%q).TargetNode = %q, want %q", tt.value, info.TargetNode, tt.wantTarget)
 			}
@@ -428,12 +431,12 @@ func TestParseShardInfo(t *testing.T) {
 func TestFormatShardInfo(t *testing.T) {
 	tests := []struct {
 		name string
-		info *ShardInfo
+		info ShardInfo
 		want string
 	}{
 		{
 			name: "Both nodes present",
-			info: &ShardInfo{
+			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
 			},
@@ -441,7 +444,7 @@ func TestFormatShardInfo(t *testing.T) {
 		},
 		{
 			name: "Empty current node",
-			info: &ShardInfo{
+			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "",
 			},
