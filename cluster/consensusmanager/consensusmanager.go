@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -277,8 +278,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	key := string(event.Kv.Key)
 	shardIDStr := key[len(shardPrefix):]
 	
-	var shardID int
-	_, err := fmt.Sscanf(shardIDStr, "%d", &shardID)
+	shardID, err := strconv.Atoi(shardIDStr)
 	if err != nil {
 		cm.logger.Errorf("Failed to parse shard ID from key %s: %v", key, err)
 		return
@@ -350,8 +350,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 		} else if strings.HasPrefix(key, shardPrefix) {
 			// Parse shard ID from key
 			shardIDStr := key[len(shardPrefix):]
-			var shardID int
-			_, err := fmt.Sscanf(shardIDStr, "%d", &shardID)
+			shardID, err := strconv.Atoi(shardIDStr)
 			if err != nil {
 				cm.logger.Warnf("Failed to parse shard ID from key %s: %v", key, err)
 				continue

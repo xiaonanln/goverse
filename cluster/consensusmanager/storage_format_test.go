@@ -10,10 +10,12 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+const testPrefixTimeFormat = "20060102-150405"
+
 // TestStorageFormat verifies that shards are stored in individual keys
 func TestStorageFormat(t *testing.T) {
 	// Create etcd manager
-	prefix := "/test-storage-format-" + time.Now().Format("20060102-150405")
+	prefix := "/test-storage-format-" + time.Now().Format(testPrefixTimeFormat)
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
@@ -121,7 +123,7 @@ func TestStorageFormat(t *testing.T) {
 // TestStorageFormatFullMapping verifies storage works with all 8192 shards
 func TestStorageFormatFullMapping(t *testing.T) {
 	// Create etcd manager
-	prefix := "/test-storage-full-" + time.Now().Format("20060102-150405")
+	prefix := "/test-storage-full-" + time.Now().Format(testPrefixTimeFormat)
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
