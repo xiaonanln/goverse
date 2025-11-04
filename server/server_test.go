@@ -386,8 +386,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Verify the leader node is in the shard mapping
 	foundInMapping := false
-	for _, nodeAddr := range shardMapping.Shards {
-		if nodeAddr == config.AdvertiseAddress {
+	for _, shard := range shardMapping.Shards {
+		if shard.TargetNode == config.AdvertiseAddress {
 			foundInMapping = true
 			break
 		}
@@ -398,8 +398,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Get unique nodes from shard mapping
 	uniqueNodes := make(map[string]bool)
-	for _, nodeAddr := range shardMapping.Shards {
-		uniqueNodes[nodeAddr] = true
+	for _, shard := range shardMapping.Shards {
+		uniqueNodes[shard.TargetNode] = true
 	}
 
 	t.Logf("Shard mapping initialized successfully with %d unique nodes, %d shards",

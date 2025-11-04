@@ -49,17 +49,29 @@ jobs:
           go build ./...
           echo "✅ All packages built successfully"
       
-      - name: Compile all tests
-        run: |
-          echo "Compiling all tests..."
-          go test -c ./...
-          echo "✅ All tests compile successfully"
-      
       - name: Run go vet
         run: |
           echo "Running go vet..."
           go vet ./...
           echo "✅ Go vet passed"
+      
+      - name: Compile all tests (per-package)
+        run: |
+          echo "Compiling all tests per package..."
+          set -euo pipefail
+          failed=0
+          while IFS= read -r pkg; do
+            dir=$(go list -f '{{.Dir}}' "$pkg")
+            if ! (cd "$dir" && go test -c -o "$(basename "$dir").test"); then
+              echo "❌ Test compile failed in package $pkg ($dir)"
+              failed=1
+            fi
+          done < <(go list ./...)
+          if [ "$failed" -ne 0 ]; then
+            echo "❌ One or more test packages failed to compile"
+            exit 1
+          fi
+          echo "✅ Test compilation finished"
       
       - name: Build inspector
         run: |

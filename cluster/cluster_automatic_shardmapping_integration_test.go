@@ -34,7 +34,6 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 
 	// Create etcd managers for both clusters with unique test prefix
 
-
 	// Create nodes - node1 will be leader (smaller address)
 	node1 := node.NewNode("localhost:50011")
 	node2 := node.NewNode("localhost:50012")
@@ -151,7 +150,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	for _, node := range nodes {
 		count := 0
 		for _, assignedNode := range mapping1.Shards {
-			if assignedNode == node {
+			if assignedNode.TargetNode == node {
 				count++
 			}
 		}
@@ -281,7 +280,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	// Verify mapping still only contains the original node (second node should not be included)
 	nodeSet := make(map[string]bool)
 	for _, assignedNode := range updatedMapping.Shards {
-		nodeSet[assignedNode] = true
+		nodeSet[assignedNode.TargetNode] = true
 	}
 
 	expectedNode := "localhost:50021"
