@@ -226,7 +226,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 			for _, event := range watchResp.Events {
 				key := string(event.Kv.Key)
 
-				cm.logger.Infof("Received watch event: %s %s=%dB", event.Type.String(), key, len(event.Kv.Value))
+				// cm.logger.Infof("Received watch event: %s %s=%s", event.Type.String(), key, event.Kv.Value)
 				// Handle node changes
 				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
 					cm.handleNodeEvent(event, nodesPrefix)
@@ -277,7 +277,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	// Extract shard ID from key
 	key := string(event.Kv.Key)
 	shardIDStr := key[len(shardPrefix):]
-	
+
 	shardID, err := strconv.Atoi(shardIDStr)
 	if err != nil {
 		cm.logger.Errorf("Failed to parse shard ID from key %s: %v", key, err)
@@ -303,13 +303,13 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		nodeAddr := string(event.Kv.Value)
 		cm.state.ShardMapping.Shards[shardID] = nodeAddr
 		cm.logger.Debugf("Shard %d assigned to node %s", shardID, nodeAddr)
-		
+
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
-		
+
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	}
@@ -497,20 +497,20 @@ func (cm *ConsensusManager) StoreShardMapping(ctx context.Context, mapping *Shar
 	// etcd has a limit on transaction size (typically 128 operations)
 	// So we batch the operations
 	const batchSize = 100
-	
+
 	// Collect all shard IDs to process
 	shardIDs := make([]int, 0, len(mapping.Shards))
 	for shardID := range mapping.Shards {
 		shardIDs = append(shardIDs, shardID)
 	}
-	
+
 	// Process in batches
 	for i := 0; i < len(shardIDs); i += batchSize {
 		end := i + batchSize
 		if end > len(shardIDs) {
 			end = len(shardIDs)
 		}
-		
+
 		ops := make([]clientv3.Op, 0, end-i)
 		for j := i; j < end; j++ {
 			shardID := shardIDs[j]
@@ -518,7 +518,7 @@ func (cm *ConsensusManager) StoreShardMapping(ctx context.Context, mapping *Shar
 			key := fmt.Sprintf("%s%d", shardPrefix, shardID)
 			ops = append(ops, clientv3.OpPut(key, nodeAddr))
 		}
-		
+
 		// Execute batch
 		_, err := client.Txn(ctx).Then(ops...).Commit()
 		if err != nil {
