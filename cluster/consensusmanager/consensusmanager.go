@@ -2,7 +2,6 @@ package consensusmanager
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -202,7 +201,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	cm.mu.RUnlock()
 
 	nodesPrefix := cm.etcdManager.GetNodesPrefix()
-	shardMappingKey := prefix + "/shardmapping"
+	shardPrefix := prefix + "/shard/"
 
 	// Watch from the next revision after our load to prevent missing events
 	watchChan := client.Watch(cm.watchCtx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
@@ -230,9 +229,9 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 				// Handle node changes
 				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
 					cm.handleNodeEvent(event, nodesPrefix)
-				} else if key == shardMappingKey {
-					// Handle shard mapping changes
-					cm.handleShardMappingEvent(event)
+				} else if len(key) > len(shardPrefix) && key[:len(shardPrefix)] == shardPrefix {
+					// Handle individual shard changes
+					cm.handleShardEvent(event, shardPrefix)
 				}
 			}
 		}
@@ -272,30 +271,46 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 	}
 }
 
-// handleShardMappingEvent processes shard mapping changes
-func (cm *ConsensusManager) handleShardMappingEvent(event *clientv3.Event) {
-	if event.Type == clientv3.EventTypePut {
-		var mapping ShardMapping
-		err := json.Unmarshal(event.Kv.Value, &mapping)
-		if err != nil {
-			cm.logger.Errorf("Failed to unmarshal shard mapping: %v", err)
-			return
+// handleShardEvent processes individual shard changes
+func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix string) {
+	// Extract shard ID from key
+	key := string(event.Kv.Key)
+	shardIDStr := key[len(shardPrefix):]
+	
+	var shardID int
+	_, err := fmt.Sscanf(shardIDStr, "%d", &shardID)
+	if err != nil {
+		cm.logger.Errorf("Failed to parse shard ID from key %s: %v", key, err)
+		return
+	}
+
+	if shardID < 0 || shardID >= sharding.NumShards {
+		cm.logger.Errorf("Invalid shard ID %d from key %s", shardID, key)
+		return
+	}
+
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	// Initialize shard mapping if needed
+	if cm.state.ShardMapping == nil {
+		cm.state.ShardMapping = &ShardMapping{
+			Shards: make(map[int]string),
 		}
+	}
 
-		cm.mu.Lock()
-		cm.state.ShardMapping = &mapping
-		cm.mu.Unlock()
-
-		cm.logger.Infof("Shard mapping updated")
+	if event.Type == clientv3.EventTypePut {
+		nodeAddr := string(event.Kv.Value)
+		cm.state.ShardMapping.Shards[shardID] = nodeAddr
+		cm.logger.Debugf("Shard %d assigned to node %s", shardID, nodeAddr)
+		
 		// Asynchronously notify listeners to prevent deadlocks
-		// Note: rapid mapping changes may result in out-of-order notifications
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
-		cm.mu.Lock()
-		cm.state.ShardMapping = nil
-		cm.mu.Unlock()
-		cm.logger.Infof("Shard mapping deleted")
-		// Notify listeners about the deletion
+		delete(cm.state.ShardMapping.Shards, shardID)
+		cm.logger.Debugf("Shard %d mapping deleted", shardID)
+		
+		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	}
 }
@@ -323,18 +338,45 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	}
 
 	nodesPrefix := cm.etcdManager.GetNodesPrefix()
-	shardMappingKey := prefix + "/shardmapping"
+	shardPrefix := prefix + "/shard/"
+
+	// Track if we found any shards
+	foundShards := false
 
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		if strings.HasPrefix(key, nodesPrefix) {
 			state.Nodes[string(kv.Value)] = true
-		} else if key == shardMappingKey {
-			var mapping ShardMapping
-			if err := json.Unmarshal(kv.Value, &mapping); err == nil {
-				state.ShardMapping = &mapping
+		} else if strings.HasPrefix(key, shardPrefix) {
+			// Parse shard ID from key
+			shardIDStr := key[len(shardPrefix):]
+			var shardID int
+			_, err := fmt.Sscanf(shardIDStr, "%d", &shardID)
+			if err != nil {
+				cm.logger.Warnf("Failed to parse shard ID from key %s: %v", key, err)
+				continue
 			}
+
+			if shardID < 0 || shardID >= sharding.NumShards {
+				cm.logger.Warnf("Invalid shard ID %d from key %s", shardID, key)
+				continue
+			}
+
+			// Initialize shard mapping if first shard
+			if !foundShards {
+				state.ShardMapping = &ShardMapping{
+					Shards: make(map[int]string),
+				}
+				foundShards = true
+			}
+
+			nodeAddr := string(kv.Value)
+			state.ShardMapping.Shards[shardID] = nodeAddr
 		}
+	}
+
+	if foundShards {
+		cm.logger.Infof("Loaded %d shards from etcd", len(state.ShardMapping.Shards))
 	}
 
 	return state, nil
@@ -438,22 +480,51 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 }
 
 // StoreShardMapping stores a new shard mapping in etcd and updates the in-memory state
+// Each shard is stored as an individual key: /goverse/shard/<shard-id> with value being the node address
 func (cm *ConsensusManager) StoreShardMapping(ctx context.Context, mapping *ShardMapping) error {
 	if cm.etcdManager == nil {
 		return fmt.Errorf("etcd manager not set")
 	}
 
-	// Serialize the mapping
-	data, err := json.Marshal(mapping)
-	if err != nil {
-		return fmt.Errorf("failed to marshal shard mapping: %w", err)
+	client := cm.etcdManager.GetClient()
+	if client == nil {
+		return fmt.Errorf("etcd client not connected")
 	}
 
-	// Store in etcd
-	key := cm.etcdManager.GetPrefix() + "/shardmapping"
-	err = cm.etcdManager.Put(ctx, key, string(data))
-	if err != nil {
-		return fmt.Errorf("failed to store shard mapping: %w", err)
+	prefix := cm.etcdManager.GetPrefix()
+	shardPrefix := prefix + "/shard/"
+
+	// Store each shard as a separate key
+	// etcd has a limit on transaction size (typically 128 operations)
+	// So we batch the operations
+	const batchSize = 100
+	
+	// Collect all shard IDs to process
+	shardIDs := make([]int, 0, len(mapping.Shards))
+	for shardID := range mapping.Shards {
+		shardIDs = append(shardIDs, shardID)
+	}
+	
+	// Process in batches
+	for i := 0; i < len(shardIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(shardIDs) {
+			end = len(shardIDs)
+		}
+		
+		ops := make([]clientv3.Op, 0, end-i)
+		for j := i; j < end; j++ {
+			shardID := shardIDs[j]
+			nodeAddr := mapping.Shards[shardID]
+			key := fmt.Sprintf("%s%d", shardPrefix, shardID)
+			ops = append(ops, clientv3.OpPut(key, nodeAddr))
+		}
+		
+		// Execute batch
+		_, err := client.Txn(ctx).Then(ops...).Commit()
+		if err != nil {
+			return fmt.Errorf("failed to store shard mapping batch %d-%d: %w", i, end-1, err)
+		}
 	}
 
 	// Update in-memory state
@@ -461,7 +532,7 @@ func (cm *ConsensusManager) StoreShardMapping(ctx context.Context, mapping *Shar
 	cm.state.ShardMapping = mapping
 	cm.mu.Unlock()
 
-	cm.logger.Infof("Stored shard mapping in etcd")
+	cm.logger.Infof("Stored %d shards in etcd", len(mapping.Shards))
 
 	return nil
 }
