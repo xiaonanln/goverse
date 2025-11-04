@@ -223,6 +223,10 @@ func (c *Cluster) markClusterReady() {
 // - Shard mapping is available
 // If both conditions are met, it marks the cluster as ready
 func (c *Cluster) checkAndMarkReady() {
+	if c.IsReady() {
+		return
+	}
+
 	// Check if node connections are established
 	if c.nodeConnections == nil {
 		c.logger.Debugf("Cannot mark cluster ready: node connections not established")
@@ -235,13 +239,13 @@ func (c *Cluster) checkAndMarkReady() {
 		return
 	}
 
-	_, err := c.consensusManager.GetShardMapping()
-	if err != nil {
-		c.logger.Debugf("Cannot mark cluster ready: shard mapping not available (%v)", err)
+	if !c.consensusManager.IsReady() {
+		c.logger.Debugf("Cannot mark cluster ready: consensus manager not ready")
 		return
 	}
 
 	// Both conditions met, mark cluster as ready
+	c.logger.Infof("All conditions met, marking cluster as READY for the first time!")
 	c.markClusterReady()
 }
 
@@ -663,7 +667,7 @@ func (c *Cluster) handleShardMappingCheck() {
 
 	if c.IsLeader() {
 		// Leader: manage shard mapping if nodes are stable
-		if c.consensusManager.IsNodeListStable(NodeStabilityDuration) {
+		if c.consensusManager.IsStateStable(NodeStabilityDuration) {
 			nodes := c.GetNodes()
 			if len(nodes) == 0 {
 				c.logger.Debugf("No nodes available, skipping shard mapping update")

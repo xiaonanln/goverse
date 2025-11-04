@@ -242,12 +242,12 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	}
 }
 
-func TestIsNodeListStable(t *testing.T) {
+func TestIsStateStable(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
 	// Not stable when lastNodeChange is zero
-	if cm.IsNodeListStable(time.Second) {
+	if cm.IsStateStable(time.Second) {
 		t.Error("Should not be stable when lastNodeChange is zero")
 	}
 
@@ -257,7 +257,7 @@ func TestIsNodeListStable(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Should not be stable for longer duration
-	if cm.IsNodeListStable(10 * time.Second) {
+	if cm.IsStateStable(10 * time.Second) {
 		t.Error("Should not be stable for 10 seconds")
 	}
 
@@ -267,7 +267,7 @@ func TestIsNodeListStable(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Should be stable now
-	if !cm.IsNodeListStable(10 * time.Second) {
+	if !cm.IsStateStable(10 * time.Second) {
 		t.Error("Should be stable after 10 seconds")
 	}
 }
