@@ -125,7 +125,6 @@ func TestStorageFormat(t *testing.T) {
 		if actualInfo.CurrentNode != expectedInfo.CurrentNode {
 			t.Errorf("Shard %d: expected current node %s, got %s", shardID, expectedInfo.CurrentNode, actualInfo.CurrentNode)
 		}
-		}
 	}
 
 	t.Log("Storage format test passed - shards are stored as individual keys")
