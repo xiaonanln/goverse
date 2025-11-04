@@ -210,25 +210,50 @@ The project aims for high test coverage across all packages:
 
 ### etcd Integration Test Isolation
 
-**CRITICAL**: All tests using etcd must be properly isolated to prevent interference:
+**CRITICAL**: All tests using etcd must be properly isolated to prevent interference.
+
+#### Using PrepareEtcdPrefix (Recommended)
+
+For tests that actually connect to etcd, **always use `PrepareEtcdPrefix`** to ensure proper test isolation:
 
 ```go
 import "github.com/xiaonanln/goverse/util/testutil"
 
 func TestWithEtcd(t *testing.T) {
-    // Serialize etcd tests to prevent interference
-    testutil.EtcdTestMutex.Lock()
-    defer testutil.EtcdTestMutex.Unlock()
-
-    // Clean up etcd before test
-    cleanupEtcd(t)
-    t.Cleanup(func() {
-        cleanupEtcd(t)
-    })
-
-    // Your test code here
+    // PrepareEtcdPrefix provides automatic test isolation
+    // - Generates unique prefix based on test name: /goverse-test/TestWithEtcd
+    // - Cleans up prefix before test starts
+    // - Registers automatic cleanup via t.Cleanup after test ends
+    prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+    
+    // Use the prefix when creating etcd managers
+    mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
+    if err != nil {
+        t.Skipf("Skipping test - etcd not available: %v", err)
+        return
+    }
+    
+    err = mgr.Connect()
+    if err != nil {
+        t.Skipf("Skipping test - etcd connection failed: %v", err)
+        return
+    }
+    defer mgr.Close()
+    
+    // Your test code here - no manual cleanup needed
 }
 ```
+
+**Benefits of PrepareEtcdPrefix:**
+- **Automatic Isolation**: Each test gets a unique prefix (e.g., `/goverse-test/TestName`)
+- **Automatic Cleanup**: Cleans up before and after test via `t.Cleanup`
+- **Consistent Pattern**: Same approach used across all integration tests
+- **Parallel Test Safe**: Prevents interference between concurrent tests
+
+**When NOT to use PrepareEtcdPrefix:**
+- Unit tests that only create etcd manager objects without connecting
+- Tests that don't actually interact with etcd
+- Use hardcoded prefixes like `"/test"` for pure unit tests
 
 ### Cluster Singleton Reset Pattern
 
