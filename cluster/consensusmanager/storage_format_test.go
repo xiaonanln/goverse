@@ -49,16 +49,16 @@ func TestStorageFormat(t *testing.T) {
 
 	// Create a small shard mapping for testing (not all 8192)
 	mapping := &ShardMapping{
-		Shards: make(map[int]*ShardInfo),
+		Shards: make(map[int]ShardInfo),
 	}
 	for i := 0; i < 10; i++ {
 		if i%2 == 0 {
-			mapping.Shards[i] = &ShardInfo{
+			mapping.Shards[i] = ShardInfo{
 				TargetNode:  "node1",
 				CurrentNode: "",
 			}
 		} else {
-			mapping.Shards[i] = &ShardInfo{
+			mapping.Shards[i] = ShardInfo{
 				TargetNode:  "node2",
 				CurrentNode: "",
 			}

@@ -13,6 +13,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/logger"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -24,13 +25,16 @@ type ShardInfo struct {
 	// Empty initially - will be populated when shard migration/handoff logic is implemented
 	// to enable tracking of active shard transfers during cluster rebalancing
 	CurrentNode string
+
+	// modRevision is the etcd revision when this shard info was last modified
+	ModRevision int64
 }
 
 // ShardMapping represents the mapping of shards to nodes
 // Note: Nodes and Version fields have been moved to ClusterState in consensusmanager
 type ShardMapping struct {
 	// Map from shard ID to shard info (target and current node)
-	Shards map[int]*ShardInfo `json:"shards"`
+	Shards map[int]ShardInfo `json:"shards"`
 }
 
 func (sm *ShardMapping) IsComplete() bool {
@@ -73,7 +77,7 @@ func (cs *ClusterState) Clone() *ClusterState {
 	cscp := &ClusterState{
 		Nodes: make(map[string]bool, len(cs.Nodes)),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]*ShardInfo),
+			Shards: make(map[int]ShardInfo),
 		},
 		Revision:   cs.Revision,
 		LastChange: cs.LastChange,
@@ -87,10 +91,7 @@ func (cs *ClusterState) Clone() *ClusterState {
 	// Deep copy shard mapping if present
 	if cs.ShardMapping != nil {
 		for sid, info := range cs.ShardMapping.Shards {
-			cscp.ShardMapping.Shards[sid] = &ShardInfo{
-				TargetNode:  info.TargetNode,
-				CurrentNode: info.CurrentNode,
-			}
+			cscp.ShardMapping.Shards[sid] = info
 		}
 	}
 
@@ -356,8 +357,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	defer cm.mu.Unlock()
 
 	if event.Type == clientv3.EventTypePut {
-		value := string(event.Kv.Value)
-		shardInfo := parseShardInfo(value)
+		shardInfo := parseShardInfo(event.Kv)
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 
@@ -374,25 +374,28 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 
 // parseShardInfo parses shard information from the etcd value
 // Format: "targetNode,currentNode" or just "targetNode" (for backward compatibility)
-func parseShardInfo(value string) *ShardInfo {
+func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 	// Split into exactly 2 parts max
+	value := string(kv.Value)
 	parts := strings.SplitN(value, ",", 2)
 	if len(parts) == 2 {
-		return &ShardInfo{
+		return ShardInfo{
 			TargetNode:  strings.TrimSpace(parts[0]),
 			CurrentNode: strings.TrimSpace(parts[1]),
+			ModRevision: kv.ModRevision,
 		}
 	}
 	// Backward compatibility: if only one part, it's the target node
-	return &ShardInfo{
+	return ShardInfo{
 		TargetNode:  strings.TrimSpace(value),
 		CurrentNode: "",
+		ModRevision: kv.ModRevision,
 	}
 }
 
 // formatShardInfo formats shard information for etcd storage
 // Format: "targetNode,currentNode"
-func formatShardInfo(info *ShardInfo) string {
+func formatShardInfo(info ShardInfo) string {
 	return info.TargetNode + "," + info.CurrentNode
 }
 
@@ -414,7 +417,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	state := &ClusterState{
 		Nodes: make(map[string]bool),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]*ShardInfo),
+			Shards: make(map[int]ShardInfo),
 		},
 		Revision:   resp.Header.Revision,
 		LastChange: time.Now(),
@@ -441,8 +444,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 				continue
 			}
 
-			value := string(kv.Value)
-			state.ShardMapping.Shards[shardID] = parseShardInfo(value)
+			state.ShardMapping.Shards[shardID] = parseShardInfo(kv)
 		}
 	}
 
@@ -550,7 +552,7 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
 // Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
-func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]*ShardInfo) error {
+func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) error {
 	if cm.etcdManager == nil {
 		return fmt.Errorf("etcd manager not set")
 	}
@@ -618,12 +620,12 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	// Check if any changes are needed
-	newShards := make(map[int]*ShardInfo, sharding.NumShards)
-	updateShards := make(map[int]*ShardInfo)
+	newShards := make(map[int]ShardInfo, sharding.NumShards)
+	updateShards := make(map[int]ShardInfo)
 	currentMapping := clusterState.ShardMapping
 	if currentMapping == nil {
 		currentMapping = &ShardMapping{
-			Shards: make(map[int]*ShardInfo),
+			Shards: make(map[int]ShardInfo),
 		}
 	}
 
@@ -635,7 +637,7 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 		} else {
 			// Assign to a new node using round-robin
 			nodeIdx := shardID % len(nodes)
-			newInfo := &ShardInfo{
+			newInfo := ShardInfo{
 				TargetNode:  nodes[nodeIdx],
 				CurrentNode: "", // CurrentNode will be set later when implemented
 			}
