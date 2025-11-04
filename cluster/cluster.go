@@ -519,69 +519,6 @@ func (c *Cluster) IsLeader() bool {
 	return leaderNode != "" && leaderNode == c.thisNode.GetAdvertiseAddress()
 }
 
-// InitializeShardMapping creates and stores the initial shard mapping in etcd
-// This should only be called by the leader node
-func (c *Cluster) InitializeShardMapping(ctx context.Context) error {
-	if !c.IsLeader() {
-		return fmt.Errorf("only the leader can initialize shard mapping")
-	}
-
-	nodes := c.GetNodes()
-	if len(nodes) == 0 {
-		return fmt.Errorf("no nodes available to initialize shard mapping")
-	}
-
-	c.logger.Infof("Initializing shard mapping with %d nodes", len(nodes))
-
-	mapping, err := c.consensusManager.CreateShardMapping()
-	if err != nil {
-		return fmt.Errorf("failed to create shard mapping: %w", err)
-	}
-
-	err = c.consensusManager.StoreShardMapping(ctx, mapping)
-	if err != nil {
-		return fmt.Errorf("failed to store shard mapping: %w", err)
-	}
-
-	c.logger.Infof("Successfully initialized shard mapping")
-	return nil
-}
-
-// UpdateShardMapping updates the shard mapping when nodes are added or removed
-// This should only be called by the leader node
-func (c *Cluster) UpdateShardMapping(ctx context.Context) error {
-	if !c.IsLeader() {
-		return fmt.Errorf("only the leader can update shard mapping")
-	}
-
-	nodes := c.GetNodes()
-	if len(nodes) == 0 {
-		return fmt.Errorf("no nodes available to update shard mapping")
-	}
-
-	c.logger.Infof("Updating shard mapping with %d nodes", len(nodes))
-
-	mapping, err := c.consensusManager.UpdateShardMapping()
-	if err != nil {
-		return fmt.Errorf("failed to update shard mapping: %w", err)
-	}
-
-	// Check if mapping actually changed by comparing pointers
-	// If UpdateShardMapping returned the same mapping, no update is needed
-	currentMapping, _ := c.consensusManager.GetShardMapping()
-	if mapping != currentMapping {
-		err = c.consensusManager.StoreShardMapping(ctx, mapping)
-		if err != nil {
-			return fmt.Errorf("failed to store shard mapping: %w", err)
-		}
-		c.logger.Infof("Successfully updated shard mapping")
-	} else {
-		c.logger.Debugf("Shard mapping unchanged")
-	}
-
-	return nil
-}
-
 // GetShardMapping retrieves the current shard mapping
 func (c *Cluster) GetShardMapping(ctx context.Context) (*consensusmanager.ShardMapping, error) {
 	return c.consensusManager.GetShardMapping()
@@ -669,49 +606,45 @@ func (c *Cluster) shardMappingManagementLoop() {
 // handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
 func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
+	c.leaderShardMappingManagement(ctx)
+	c.checkAndMarkReady()
+}
 
-	if c.IsLeader() {
-		// Leader: manage shard mapping if nodes are stable
-		if c.consensusManager.IsStateStable(NodeStabilityDuration) {
-			nodes := c.GetNodes()
-			if len(nodes) == 0 {
-				c.logger.Debugf("No nodes available, skipping shard mapping update")
-				return
-			}
+func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
+	if !c.IsLeader() {
+		return
+	}
 
-			c.logger.Debugf("Node list stable, managing shard mapping as leader")
+	clusterState := c.consensusManager.GetClusterState()
+	c.logger.Infof("Acting as leader: %s; nodes: %d, sharding map: %d, revision: %d",
+		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), len(clusterState.ShardMapping.Shards), clusterState.Revision)
 
-			// Try to get existing mapping first
-			_, err := c.consensusManager.GetShardMapping()
-			if err != nil {
-				// No existing mapping, initialize
-				c.logger.Infof("No existing shard mapping, initializing")
-				err = c.InitializeShardMapping(ctx)
-				if err != nil {
-					c.logger.Errorf("Failed to initialize shard mapping: %v", err)
-				} else {
-					// Successfully initialized shard mapping
-					// Check if we can mark cluster as ready now
-					c.checkAndMarkReady()
-				}
-			} else {
-				// Existing mapping, update if needed
-				err = c.UpdateShardMapping(ctx)
-				if err != nil {
-					c.logger.Errorf("Failed to update shard mapping: %v", err)
-				} else {
-					// Successfully loaded/updated shard mapping
-					// Check if we can mark cluster as ready now
-					c.checkAndMarkReady()
-				}
-			}
-		} else {
-			c.logger.Debugf("Node list not yet stable, waiting before updating shard mapping")
-		}
+	if !clusterState.IsStable(NodeStabilityDuration) {
+		c.logger.Warnf("Cluster state not yet stable, waiting before updating shard mapping")
+		return
+	}
+
+	if len(clusterState.Nodes) == 0 {
+		c.logger.Warnf("No nodes available, skipping shard mapping update")
+		return
+	}
+
+	if c.thisNode == nil {
+		c.logger.Warnf("ThisNode not set; leader cannot ensure self registration")
+		return
+	}
+
+	localAddr := c.thisNode.GetAdvertiseAddress()
+	if !clusterState.HasNode(localAddr) {
+		c.logger.Infof("This node %s not present in cluster state", localAddr)
+		return
+	}
+
+	err := c.consensusManager.UpdateShardMapping(ctx)
+	if err != nil {
+		c.logger.Errorf("Failed to update shard mapping: %v", err)
 	} else {
-		// Non-leader: check if we can mark cluster as ready
-		// (shard mapping should be loaded from etcd watch)
-		c.checkAndMarkReady()
+		c.logger.Infof("Shard mapping updated successfully")
 	}
 }
 
