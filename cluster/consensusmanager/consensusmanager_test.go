@@ -373,6 +373,86 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	}
 }
 
+func TestParseShardInfo(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		wantTarget  string
+		wantCurrent string
+	}{
+		{
+			name:        "Full format with both nodes",
+			value:       "localhost:47001,localhost:47002",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+		},
+		{
+			name:        "Full format with empty current node",
+			value:       "localhost:47001,",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "",
+		},
+		{
+			name:        "Backward compatibility - only target node",
+			value:       "localhost:47001",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "",
+		},
+		{
+			name:        "With whitespace",
+			value:       " localhost:47001 , localhost:47002 ",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := parseShardInfo(tt.value)
+			if info.TargetNode != tt.wantTarget {
+				t.Errorf("parseShardInfo(%q).TargetNode = %q, want %q", tt.value, info.TargetNode, tt.wantTarget)
+			}
+			if info.CurrentNode != tt.wantCurrent {
+				t.Errorf("parseShardInfo(%q).CurrentNode = %q, want %q", tt.value, info.CurrentNode, tt.wantCurrent)
+			}
+		})
+	}
+}
+
+func TestFormatShardInfo(t *testing.T) {
+	tests := []struct {
+		name string
+		info *ShardInfo
+		want string
+	}{
+		{
+			name: "Both nodes present",
+			info: &ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+			},
+			want: "localhost:47001,localhost:47002",
+		},
+		{
+			name: "Empty current node",
+			info: &ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "",
+			},
+			want: "localhost:47001,",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatShardInfo(tt.info)
+			if got != tt.want {
+				t.Errorf("formatShardInfo() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStopWatch_NotStarted(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
