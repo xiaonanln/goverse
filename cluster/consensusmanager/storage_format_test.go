@@ -57,7 +57,7 @@ func TestStorageFormat(t *testing.T) {
 
 	// Store the mapping
 	ctx := context.Background()
-	err = cm.storeShardMapping(ctx, mapping.Shards)
+	_, err = cm.storeShardMapping(ctx, mapping.Shards)
 	if err != nil {
 		t.Fatalf("Failed to store shard mapping: %v", err)
 	}
@@ -205,9 +205,13 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 			1: {TargetNode: "node2", CurrentNode: "", ModRevision: 0},
 		}
 
-		err := cm.storeShardMapping(ctx, newShards)
+		count, err := cm.storeShardMapping(ctx, newShards)
 		if err != nil {
 			t.Fatalf("Failed to store new shards: %v", err)
+		}
+
+		if count != len(newShards) {
+			t.Errorf("Expected to store %d shards, got %d", len(newShards), count)
 		}
 
 		// Verify shards were created
@@ -230,9 +234,12 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 			0: {TargetNode: "node3", CurrentNode: "", ModRevision: 0},
 		}
 
-		err := cm.storeShardMapping(ctx, duplicateShards)
+		count, err := cm.storeShardMapping(ctx, duplicateShards)
 		if err == nil {
 			t.Error("Expected error when trying to overwrite with ModRevision=0, got nil")
+		}
+		if count != 0 {
+			t.Errorf("Expected 0 successful writes, got %d", count)
 		}
 	})
 
@@ -255,9 +262,12 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 			0: {TargetNode: "node4", CurrentNode: "", ModRevision: shard0.ModRevision},
 		}
 
-		err = cm.storeShardMapping(ctx, updateShards)
+		count, err := cm.storeShardMapping(ctx, updateShards)
 		if err != nil {
 			t.Fatalf("Failed to update shard with correct ModRevision: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("Expected 1 successful write, got %d", count)
 		}
 
 		// Verify the update
@@ -282,9 +292,12 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 			0: {TargetNode: "node5", CurrentNode: "", ModRevision: 999},
 		}
 
-		err := cm.storeShardMapping(ctx, wrongRevisionShards)
+		count, err := cm.storeShardMapping(ctx, wrongRevisionShards)
 		if err == nil {
 			t.Error("Expected error when updating with incorrect ModRevision, got nil")
+		}
+		if count != 0 {
+			t.Errorf("Expected 0 successful writes, got %d", count)
 		}
 
 		// Verify the shard was not updated
