@@ -251,14 +251,24 @@ func TestIsStateStable(t *testing.T) {
 		t.Error("Should not be stable for 10 seconds")
 	}
 
-	// Set lastNodeChange to past
+	// Set lastNodeChange to past but nodes list is empty
 	cm.mu.Lock()
 	cm.state.LastChange = time.Now().Add(-20 * time.Second)
 	cm.mu.Unlock()
 
-	// Should be stable now
+	// Should NOT be stable when nodes list is empty
+	if cm.IsStateStable(10 * time.Second) {
+		t.Error("Should not be stable when nodes list is empty")
+	}
+
+	// Add nodes to the state
+	cm.mu.Lock()
+	cm.state.Nodes["localhost:47001"] = true
+	cm.mu.Unlock()
+
+	// Should be stable now with nodes and old lastNodeChange
 	if !cm.IsStateStable(10 * time.Second) {
-		t.Error("Should be stable after 10 seconds")
+		t.Error("Should be stable after 10 seconds with nodes present")
 	}
 }
 

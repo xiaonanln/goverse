@@ -73,6 +73,9 @@ func (cs *ClusterState) IsStable(duration time.Duration) bool {
 	if cs.LastChange.IsZero() {
 		return false
 	}
+	if len(cs.Nodes) == 0 {
+		return false
+	}
 	return time.Since(cs.LastChange) >= duration
 }
 
