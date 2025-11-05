@@ -91,9 +91,19 @@ func (wp *WorkerPool) Submit(task Task) <-chan error {
 	case <-wp.ctx.Done():
 		result <- wp.ctx.Err()
 		return result
-	case wp.tasks <- tw:
-		return result
+	default:
 	}
+	
+	// Try to send, but handle closed channel
+	defer func() {
+		if r := recover(); r != nil {
+			// Channel was closed, pool is stopped
+			result <- context.Canceled
+		}
+	}()
+	
+	wp.tasks <- tw
+	return result
 }
 
 // SubmitAndWait submits multiple tasks and waits for all to complete
