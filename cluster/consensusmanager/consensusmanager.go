@@ -600,7 +600,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 		successCount++
 	}
 
-	cm.logger.Infof("Stored %d shards in etcd in %d ms", 
+	cm.logger.Infof("Stored %d shards in etcd in %d ms",
 		successCount, time.Since(startTime).Milliseconds())
 
 	return successCount, nil
@@ -624,7 +624,6 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	// Check if any changes are needed
-	newShards := make(map[int]ShardInfo, sharding.NumShards)
 	updateShards := make(map[int]ShardInfo)
 	currentMapping := clusterState.ShardMapping
 	if currentMapping == nil {
@@ -634,18 +633,15 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
-		currentInfo, exists := currentMapping.Shards[shardID]
-		if exists && nodeSet[currentInfo.TargetNode] {
-			// Keep the shard on the same target node if it's still available
-			newShards[shardID] = currentInfo
-		} else {
+		currentInfo := currentMapping.Shards[shardID]
+		if !nodeSet[currentInfo.TargetNode] {
 			// Assign to a new node using round-robin
 			nodeIdx := shardID % len(nodes)
 			newInfo := ShardInfo{
 				TargetNode:  nodes[nodeIdx],
-				CurrentNode: "", // CurrentNode will be set later when implemented
+				CurrentNode: currentInfo.CurrentNode,
+				ModRevision: currentInfo.ModRevision,
 			}
-			newShards[shardID] = newInfo
 			updateShards[shardID] = newInfo
 		}
 	}
@@ -656,7 +652,8 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	cm.logger.Infof("Updating shard mapping for %d shards", len(updateShards))
-	_, err := cm.storeShardMapping(ctx, updateShards)
+	n, err := cm.storeShardMapping(ctx, updateShards)
+	cm.logger.Infof("Successfully updated shard mapping for %d shards - error %v", n, err)
 	return err
 }
 

@@ -8,6 +8,10 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+const (
+	WaitForShardMappingTimeout = 30 * time.Second
+)
+
 // PrepareEtcdPrefix prepares a unique etcd prefix for testing purposes.
 // This function:
 // 1. Generates a unique prefix based on the test name

@@ -133,7 +133,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	t.Cleanup(func() { cluster2.StopShardMappingManagement() })
 
 	// Wait for shard mapping to be initialized (longer wait needed)
-	time.Sleep(15 * time.Second)
+	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify shard mapping is ready
 	_, err = cluster1.GetShardMapping(ctx)
