@@ -27,7 +27,7 @@ RUN pip3 install --break-system-packages grpcio grpcio-tools
 # Install protoc-gen-go and protoc-gen-go-grpc
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
     && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-it sta
+    
 # Make sure /go/bin is on PATH
 ENV PATH="/go/bin:${PATH}"
 
