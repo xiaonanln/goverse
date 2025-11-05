@@ -2,6 +2,7 @@ package consensusmanager
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
@@ -174,4 +175,127 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	}
 
 	t.Logf("Successfully stored and loaded all %d shards as individual keys", sharding.NumShards)
+}
+
+// TestConditionalPutWithModRevision verifies that shards are stored conditionally based on ModRevision
+func TestConditionalPutWithModRevision(t *testing.T) {
+	// Create etcd manager
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
+	if err != nil {
+		t.Skipf("Skipping test - etcd not available: %v", err)
+		return
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("Skipping test - etcd connection failed: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	// Create consensus manager
+	cm := NewConsensusManager(mgr)
+	ctx := context.Background()
+
+	// Test 1: Store new shards with ModRevision=0 (should succeed)
+	t.Run("NewShardsWithRevisionZero", func(t *testing.T) {
+		newShards := map[int]ShardInfo{
+			0: {TargetNode: "node1", CurrentNode: "", ModRevision: 0},
+			1: {TargetNode: "node2", CurrentNode: "", ModRevision: 0},
+		}
+
+		err := cm.storeShardMapping(ctx, newShards)
+		if err != nil {
+			t.Fatalf("Failed to store new shards: %v", err)
+		}
+
+		// Verify shards were created
+		client := mgr.GetClient()
+		for shardID := range newShards {
+			key := fmt.Sprintf("%s/shard/%d", prefix, shardID)
+			resp, err := client.Get(ctx, key)
+			if err != nil {
+				t.Fatalf("Failed to read shard %d: %v", shardID, err)
+			}
+			if len(resp.Kvs) == 0 {
+				t.Errorf("Shard %d was not created", shardID)
+			}
+		}
+	})
+
+	// Test 2: Try to overwrite with ModRevision=0 (should fail)
+	t.Run("OverwriteWithRevisionZeroFails", func(t *testing.T) {
+		duplicateShards := map[int]ShardInfo{
+			0: {TargetNode: "node3", CurrentNode: "", ModRevision: 0},
+		}
+
+		err := cm.storeShardMapping(ctx, duplicateShards)
+		if err == nil {
+			t.Error("Expected error when trying to overwrite with ModRevision=0, got nil")
+		}
+	})
+
+	// Test 3: Update with correct ModRevision (should succeed)
+	t.Run("UpdateWithCorrectRevision", func(t *testing.T) {
+		// First, load the current state to get the actual ModRevision
+		state, err := cm.loadClusterStateFromEtcd(ctx)
+		if err != nil {
+			t.Fatalf("Failed to load state: %v", err)
+		}
+
+		// Get the current shard info with its ModRevision
+		shard0 := state.ShardMapping.Shards[0]
+		if shard0.ModRevision == 0 {
+			t.Fatal("Shard 0 should have a non-zero ModRevision after being created")
+		}
+
+		// Update with the correct ModRevision
+		updateShards := map[int]ShardInfo{
+			0: {TargetNode: "node4", CurrentNode: "", ModRevision: shard0.ModRevision},
+		}
+
+		err = cm.storeShardMapping(ctx, updateShards)
+		if err != nil {
+			t.Fatalf("Failed to update shard with correct ModRevision: %v", err)
+		}
+
+		// Verify the update
+		client := mgr.GetClient()
+		resp, err := client.Get(ctx, fmt.Sprintf("%s/shard/0", prefix))
+		if err != nil {
+			t.Fatalf("Failed to read updated shard: %v", err)
+		}
+		if len(resp.Kvs) == 0 {
+			t.Fatal("Shard 0 should exist")
+		}
+		value := string(resp.Kvs[0].Value)
+		if value != "node4," {
+			t.Errorf("Expected value 'node4,', got '%s'", value)
+		}
+	})
+
+	// Test 4: Update with incorrect ModRevision (should fail)
+	t.Run("UpdateWithIncorrectRevisionFails", func(t *testing.T) {
+		// Try to update with an old/incorrect ModRevision
+		wrongRevisionShards := map[int]ShardInfo{
+			0: {TargetNode: "node5", CurrentNode: "", ModRevision: 999},
+		}
+
+		err := cm.storeShardMapping(ctx, wrongRevisionShards)
+		if err == nil {
+			t.Error("Expected error when updating with incorrect ModRevision, got nil")
+		}
+
+		// Verify the shard was not updated
+		client := mgr.GetClient()
+		resp, err := client.Get(ctx, fmt.Sprintf("%s/shard/0", prefix))
+		if err != nil {
+			t.Fatalf("Failed to read shard: %v", err)
+		}
+		value := string(resp.Kvs[0].Value)
+		if value == "node5," {
+			t.Error("Shard should not have been updated with incorrect ModRevision")
+		}
+	})
 }
