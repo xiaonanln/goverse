@@ -80,11 +80,19 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	// Set minimum nodes to 3
 	c1.SetMinQuorum(3)
 
+	err = c1.StartWatching(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watching cluster state: %v", err)
+	}
+
 	// Register first node
 	err = c1.RegisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node 1: %v", err)
 	}
+
+	// Wait briefly for the etcd registration to be written by the keep-alive goroutine
+	time.Sleep(500 * time.Millisecond)
 
 	// Initialize consensus manager
 	err = c1.consensusManager.Initialize(ctx)
@@ -92,10 +100,14 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 		t.Fatalf("Failed to initialize consensus manager: %v", err)
 	}
 
+	time.Sleep(1 * time.Second) // Wait a bit for initialization
+
 	// Create shard mapping with only 1 node (should not be ready due to minQuorum)
 	err = c1.consensusManager.UpdateShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
+	} else {
+		t.Logf("Shard mapping with 1 node created")
 	}
 
 	// Consensus manager should NOT be ready with only 1 node (minQuorum=3)
