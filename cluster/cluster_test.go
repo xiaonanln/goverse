@@ -32,25 +32,6 @@ func TestSetThisNode(t *testing.T) {
 	}
 }
 
-func TestSetThisNode_PropagateToConsensusManager(t *testing.T) {
-	// Create a new cluster with consensus manager
-	cluster := newClusterForTesting("TestCluster")
-	
-	// Initialize a mock consensus manager (without etcd)
-	cluster.consensusManager = newConsensusManagerForTesting()
-	
-	n := node.NewNode("test-address-propagate")
-	cluster.SetThisNode(n)
-	
-	// Verify that the node address was propagated to consensus manager
-	thisNodeAddr := cluster.consensusManager.GetThisNodeForTesting()
-	
-	expectedAddr := "test-address-propagate"
-	if thisNodeAddr != expectedAddr {
-		t.Errorf("ConsensusManager.thisNodeAddr = %s; want %s", thisNodeAddr, expectedAddr)
-	}
-}
-
 func TestSetThisNode_Panic(t *testing.T) {
 	// Create a new cluster for testing
 	cluster := newClusterForTesting("TestCluster")
@@ -179,10 +160,5 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	if leader != "" {
 		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
 	}
-}
-
-// Helper function to create a consensus manager for testing without etcd
-func newConsensusManagerForTesting() *consensusmanager.ConsensusManager {
-	return consensusmanager.NewConsensusManager(nil)
 }
 

@@ -500,9 +500,8 @@ func TestClaimShardOwnership(t *testing.T) {
 	cm := NewConsensusManager(mgr)
 	ctx := context.Background()
 
-	// Set this node's address
+	// Define this node's address
 	thisNodeAddr := "localhost:47001"
-	cm.SetThisNode(thisNodeAddr)
 
 	// Add nodes to state
 	cm.mu.Lock()

@@ -122,9 +122,6 @@ type ConsensusManager struct {
 	mu    sync.RWMutex
 	state *ClusterState
 
-	// This node's address
-	thisNodeAddr string
-
 	// Watch management
 	watchCtx     context.Context
 	watchCancel  context.CancelFunc
@@ -146,15 +143,6 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager) *ConsensusManager {
 		},
 		listeners: make([]StateChangeListener, 0),
 	}
-}
-
-// SetThisNode sets the address of this node
-// This is used to determine which shards this node should claim ownership of
-func (cm *ConsensusManager) SetThisNode(nodeAddr string) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-	cm.thisNodeAddr = nodeAddr
-	cm.logger.Infof("This node address set to: %s", nodeAddr)
 }
 
 // AddListener adds a state change listener
@@ -665,18 +653,19 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 		return fmt.Errorf("localNode cannot be empty")
 	}
 
+	// Clone the cluster state to avoid race conditions
 	cm.mu.RLock()
-	shardMapping := cm.state.ShardMapping
+	clusterState := cm.state.Clone()
 	cm.mu.RUnlock()
 
-	if shardMapping == nil || len(shardMapping.Shards) == 0 {
+	if clusterState == nil || clusterState.ShardMapping == nil || len(clusterState.ShardMapping.Shards) == 0 {
 		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
 		return nil
 	}
 
 	// Collect shards that need to be claimed
 	shardsToUpdate := make(map[int]ShardInfo)
-	for shardID, shardInfo := range shardMapping.Shards {
+	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
 		if shardInfo.TargetNode == localNode && shardInfo.CurrentNode == "" {
 			// This shard should be on this node and CurrentNode is empty - claim it!
 			shardsToUpdate[shardID] = ShardInfo{
@@ -790,14 +779,6 @@ func (cm *ConsensusManager) SetMappingForTesting(mapping *ShardMapping) {
 	cm.mu.Lock()
 	cm.state.ShardMapping = mapping
 	cm.mu.Unlock()
-}
-
-// GetThisNodeForTesting returns the thisNodeAddr for testing purposes
-// This should only be used in tests
-func (cm *ConsensusManager) GetThisNodeForTesting() string {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.thisNodeAddr
 }
 
 func (cm *ConsensusManager) GetClusterState() *ClusterState {

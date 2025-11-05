@@ -143,11 +143,6 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 	}
 	c.thisNode = n
 	c.logger.Infof("This Node is %s", n)
-	
-	// Set this node's address in the consensus manager so it can claim shard ownership
-	if c.consensusManager != nil {
-		c.consensusManager.SetThisNode(n.GetAdvertiseAddress())
-	}
 }
 
 // ResetForTesting resets the cluster state for testing purposes
