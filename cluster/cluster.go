@@ -36,7 +36,7 @@ type Cluster struct {
 	logger              *logger.Logger
 	etcdAddress         string // etcd server address (e.g., "localhost:2379")
 	etcdPrefix          string // etcd key prefix for this cluster
-	minNodes            int    // minimal number of nodes required for cluster to be considered stable
+	minQuorum           int    // minimal number of nodes required for cluster to be considered stable
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
 	shardMappingRunning bool
@@ -135,9 +135,9 @@ func (c *Cluster) initializeEtcdForTesting(etcdAddress string, etcdPrefix string
 	c.etcdManager = mgr
 	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
 	
-	// Propagate minNodes to consensus manager if already set
-	if c.minNodes > 0 {
-		c.consensusManager.SetMinNodes(c.minNodes)
+	// Propagate minQuorum to consensus manager if already set
+	if c.minQuorum > 0 {
+		c.consensusManager.SetMinQuorum(c.minQuorum)
 	}
 
 	return nil
@@ -151,28 +151,28 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 	c.logger.Infof("This Node is %s", n)
 }
 
-// SetMinNodes sets the minimal number of nodes required for cluster stability
-func (c *Cluster) SetMinNodes(minNodes int) {
-	c.minNodes = minNodes
-	c.logger.Infof("Cluster minimum nodes set to %d", minNodes)
+// SetMinQuorum sets the minimal number of nodes required for cluster stability
+func (c *Cluster) SetMinQuorum(minQuorum int) {
+	c.minQuorum = minQuorum
+	c.logger.Infof("Cluster minimum quorum set to %d", minQuorum)
 	// Also update the consensus manager if it exists
 	if c.consensusManager != nil {
-		c.consensusManager.SetMinNodes(minNodes)
+		c.consensusManager.SetMinQuorum(minQuorum)
 	}
 }
 
-// GetMinNodes returns the minimal number of nodes required for cluster stability
+// GetMinQuorum returns the minimal number of nodes required for cluster stability
 // If not set, returns 1 as the default
-func (c *Cluster) GetMinNodes() int {
-	return c.getEffectiveMinNodes()
+func (c *Cluster) GetMinQuorum() int {
+	return c.getEffectiveMinQuorum()
 }
 
-// getEffectiveMinNodes returns the effective minimum nodes value (with default of 1)
-func (c *Cluster) getEffectiveMinNodes() int {
-	if c.minNodes <= 0 {
+// getEffectiveMinQuorum returns the effective minimum quorum value (with default of 1)
+func (c *Cluster) getEffectiveMinQuorum() int {
+	if c.minQuorum <= 0 {
 		return 1
 	}
-	return c.minNodes
+	return c.minQuorum
 }
 
 // ResetForTesting resets the cluster state for testing purposes
@@ -186,7 +186,7 @@ func (c *Cluster) ResetForTesting() {
 	c.consensusManager = nil
 	c.etcdAddress = ""
 	c.etcdPrefix = ""
-	c.minNodes = 0
+	c.minQuorum = 0
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil
@@ -647,10 +647,10 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	}
 
 	clusterState := c.consensusManager.GetClusterState()
-	minNodes := c.getEffectiveMinNodes()
+	minQuorum := c.getEffectiveMinQuorum()
 	
-	c.logger.Infof("Acting as leader: %s; nodes: %d (min: %d), sharding map: %d, revision: %d",
-		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minNodes, len(clusterState.ShardMapping.Shards), clusterState.Revision)
+	c.logger.Infof("Acting as leader: %s; nodes: %d (min quorum: %d), sharding map: %d, revision: %d",
+		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minQuorum, len(clusterState.ShardMapping.Shards), clusterState.Revision)
 
 	if !clusterState.IsStable(NodeStabilityDuration) {
 		c.logger.Warnf("Cluster state not yet stable, waiting before updating shard mapping")
@@ -663,8 +663,8 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	}
 
 	// Check if we have the minimum required nodes
-	if len(clusterState.Nodes) < minNodes {
-		c.logger.Warnf("Cluster has %d nodes but requires minimum of %d nodes - waiting for more nodes to join", len(clusterState.Nodes), minNodes)
+	if len(clusterState.Nodes) < minQuorum {
+		c.logger.Warnf("Cluster has %d nodes but requires minimum quorum of %d nodes - waiting for more nodes to join", len(clusterState.Nodes), minQuorum)
 		return
 	}
 

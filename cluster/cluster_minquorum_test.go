@@ -11,58 +11,58 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
-func TestClusterSetMinNodes(t *testing.T) {
-	c := newClusterForTesting("TestClusterSetMinNodes")
+func TestClusterSetMinQuorum(t *testing.T) {
+	c := newClusterForTesting("TestClusterSetMinQuorum")
 
 	// Test default value
-	if c.GetMinNodes() != 1 {
-		t.Errorf("Expected default minNodes to be 1, got %d", c.GetMinNodes())
+	if c.GetMinQuorum() != 1 {
+		t.Errorf("Expected default minQuorum to be 1, got %d", c.GetMinQuorum())
 	}
 
-	// Set minNodes
-	c.SetMinNodes(3)
-	if c.GetMinNodes() != 3 {
-		t.Errorf("Expected minNodes to be 3, got %d", c.GetMinNodes())
+	// Set minQuorum
+	c.SetMinQuorum(3)
+	if c.GetMinQuorum() != 3 {
+		t.Errorf("Expected minQuorum to be 3, got %d", c.GetMinQuorum())
 	}
 }
 
-func TestConsensusManagerMinNodes(t *testing.T) {
+func TestConsensusManagerMinQuorum(t *testing.T) {
 	// Create a mock etcd manager
 	mgr := &etcdmanager.EtcdManager{}
 	cm := consensusmanager.NewConsensusManager(mgr)
 
 	// Test default value
-	if cm.GetMinNodes() != 1 {
-		t.Errorf("Expected default minNodes to be 1, got %d", cm.GetMinNodes())
+	if cm.GetMinQuorum() != 1 {
+		t.Errorf("Expected default minQuorum to be 1, got %d", cm.GetMinQuorum())
 	}
 
-	// Set minNodes
-	cm.SetMinNodes(3)
-	if cm.GetMinNodes() != 3 {
-		t.Errorf("Expected minNodes to be 3, got %d", cm.GetMinNodes())
+	// Set minQuorum
+	cm.SetMinQuorum(3)
+	if cm.GetMinQuorum() != 3 {
+		t.Errorf("Expected minQuorum to be 3, got %d", cm.GetMinQuorum())
 	}
 }
 
-func TestClusterMinNodesPropagation(t *testing.T) {
+func TestClusterMinQuorumPropagation(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	c, err := newClusterWithEtcdForTesting("TestClusterMinNodesPropagation", "localhost:2379", testPrefix)
+	c, err := newClusterWithEtcdForTesting("TestClusterMinQuorumPropagation", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
 		return
 	}
 	defer c.CloseEtcd()
 
-	// Set minNodes on cluster
-	c.SetMinNodes(3)
+	// Set minQuorum on cluster
+	c.SetMinQuorum(3)
 
 	// Verify it propagated to consensus manager
-	if c.consensusManager.GetMinNodes() != 3 {
-		t.Errorf("Expected consensus manager minNodes to be 3, got %d", c.consensusManager.GetMinNodes())
+	if c.consensusManager.GetMinQuorum() != 3 {
+		t.Errorf("Expected consensus manager minQuorum to be 3, got %d", c.consensusManager.GetMinQuorum())
 	}
 }
 
-func TestConsensusManagerIsReadyWithMinNodes(t *testing.T) {
+func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -78,7 +78,7 @@ func TestConsensusManagerIsReadyWithMinNodes(t *testing.T) {
 	c1.SetThisNode(n1)
 
 	// Set minimum nodes to 3
-	c1.SetMinNodes(3)
+	c1.SetMinQuorum(3)
 
 	// Register first node
 	err = c1.RegisterNode(ctx)
@@ -92,15 +92,15 @@ func TestConsensusManagerIsReadyWithMinNodes(t *testing.T) {
 		t.Fatalf("Failed to initialize consensus manager: %v", err)
 	}
 
-	// Create shard mapping with only 1 node (should not be ready due to minNodes)
+	// Create shard mapping with only 1 node (should not be ready due to minQuorum)
 	err = c1.consensusManager.UpdateShardMapping(ctx)
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
 
-	// Consensus manager should NOT be ready with only 1 node (minNodes=3)
+	// Consensus manager should NOT be ready with only 1 node (minQuorum=3)
 	if c1.consensusManager.IsReady() {
-		t.Error("ConsensusManager should not be ready with only 1 node when minNodes=3")
+		t.Error("ConsensusManager should not be ready with only 1 node when minQuorum=3")
 	}
 
 	// Register more nodes
@@ -112,7 +112,7 @@ func TestConsensusManagerIsReadyWithMinNodes(t *testing.T) {
 
 	n2 := node.NewNode("localhost:47002")
 	c2.SetThisNode(n2)
-	c2.SetMinNodes(3)
+	c2.SetMinQuorum(3)
 
 	err = c2.RegisterNode(ctx)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestConsensusManagerIsReadyWithMinNodes(t *testing.T) {
 
 	n3 := node.NewNode("localhost:47003")
 	c3.SetThisNode(n3)
-	c3.SetMinNodes(3)
+	c3.SetMinQuorum(3)
 
 	err = c3.RegisterNode(ctx)
 	if err != nil {
@@ -151,11 +151,11 @@ func TestConsensusManagerIsReadyWithMinNodes(t *testing.T) {
 
 	// Now consensus manager should be ready
 	if !c1.consensusManager.IsReady() {
-		t.Error("ConsensusManager should be ready with 3 nodes when minNodes=3")
+		t.Error("ConsensusManager should be ready with 3 nodes when minQuorum=3")
 	}
 }
 
-func TestConsensusManagerIsStateStableWithMinNodes(t *testing.T) {
+func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -171,7 +171,7 @@ func TestConsensusManagerIsStateStableWithMinNodes(t *testing.T) {
 	c1.SetThisNode(n1)
 
 	// Set minimum nodes to 2
-	c1.SetMinNodes(2)
+	c1.SetMinQuorum(2)
 
 	// Register first node
 	err = c1.RegisterNode(ctx)
@@ -188,9 +188,9 @@ func TestConsensusManagerIsStateStableWithMinNodes(t *testing.T) {
 	// Wait for state to be stable (in terms of time)
 	time.Sleep(200 * time.Millisecond)
 
-	// State should NOT be stable with only 1 node (minNodes=2)
+	// State should NOT be stable with only 1 node (minQuorum=2)
 	if c1.consensusManager.IsStateStable(100 * time.Millisecond) {
-		t.Error("Cluster state should not be stable with only 1 node when minNodes=2")
+		t.Error("Cluster state should not be stable with only 1 node when minQuorum=2")
 	}
 
 	// Register second node
@@ -220,8 +220,8 @@ func TestConsensusManagerIsStateStableWithMinNodes(t *testing.T) {
 	// Wait again for stability
 	time.Sleep(200 * time.Millisecond)
 
-	// State should now be stable with 2 nodes (minNodes=2)
+	// State should now be stable with 2 nodes (minQuorum=2)
 	if !c1.consensusManager.IsStateStable(100 * time.Millisecond) {
-		t.Error("Cluster state should be stable with 2 nodes when minNodes=2")
+		t.Error("Cluster state should be stable with 2 nodes when minQuorum=2")
 	}
 }
