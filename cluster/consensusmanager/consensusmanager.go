@@ -404,6 +404,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 
 	if event.Type == clientv3.EventTypePut {
 		shardInfo := parseShardInfo(event.Kv)
+		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 
@@ -681,6 +682,54 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	}
 
 	return successCount, nil
+}
+
+// ClaimShardsForNode checks all shards and claims ownership for shards
+// where the given localNode is the target and CurrentNode is empty
+func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode string) error {
+	if localNode == "" {
+		return fmt.Errorf("localNode cannot be empty")
+	}
+
+	// Clone the cluster state to avoid race conditions
+	cm.mu.RLock()
+	clusterState := cm.state.Clone()
+	cm.mu.RUnlock()
+
+	if clusterState == nil || clusterState.ShardMapping == nil || len(clusterState.ShardMapping.Shards) == 0 {
+		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
+		return nil
+	}
+
+	// Collect shards that need to be claimed
+	shardsToUpdate := make(map[int]ShardInfo)
+	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
+		if shardInfo.TargetNode == localNode && shardInfo.CurrentNode == "" {
+			// This shard should be on this node and CurrentNode is empty - claim it!
+			shardsToUpdate[shardID] = ShardInfo{
+				TargetNode:  shardInfo.TargetNode,
+				CurrentNode: localNode,
+				ModRevision: shardInfo.ModRevision,
+			}
+		}
+	}
+
+	if len(shardsToUpdate) == 0 {
+		cm.logger.Debugf("No shards to claim for node %s", localNode)
+		return nil
+	}
+
+	cm.logger.Infof("Claiming ownership of %d shards for node %s", len(shardsToUpdate), localNode)
+
+	// Store all updated shards at once
+	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
+	if err != nil {
+		cm.logger.Warnf("Failed to claim some shards: claimed %d/%d, error: %v", successCount, len(shardsToUpdate), err)
+		return err
+	}
+	
+	cm.logger.Infof("Successfully claimed ownership of %d shards", successCount)
+	return nil
 }
 
 // UpdateShardMapping updates the shard mapping based on the current node list

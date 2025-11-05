@@ -489,3 +489,143 @@ func TestStartWatch_NoEtcdManager(t *testing.T) {
 		t.Error("Expected error when etcd manager not set")
 	}
 }
+
+// TestClaimShardOwnership tests that a node claims ownership of shards
+// where it is the target node and CurrentNode is empty
+func TestClaimShardOwnership(t *testing.T) {
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
+	if err != nil {
+		t.Skipf("Skipping test - etcd not available: %v", err)
+		return
+	}
+	
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("Skipping test - etcd connection failed: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	cm := NewConsensusManager(mgr)
+	ctx := context.Background()
+
+	// Define this node's address
+	thisNodeAddr := "localhost:47001"
+
+	// Add nodes to state
+	cm.mu.Lock()
+	cm.state.Nodes[thisNodeAddr] = true
+	cm.state.Nodes["localhost:47002"] = true
+	
+	// Initialize shard mapping with some shards for this node
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	
+	// Add a few test shards
+	// Shard 0: target is this node, current is empty (should be claimed)
+	cm.state.ShardMapping.Shards[0] = ShardInfo{
+		TargetNode:  thisNodeAddr,
+		CurrentNode: "",
+		ModRevision: 0,
+	}
+	
+	// Shard 1: target is another node, current is empty (should NOT be claimed)
+	cm.state.ShardMapping.Shards[1] = ShardInfo{
+		TargetNode:  "localhost:47002",
+		CurrentNode: "",
+		ModRevision: 0,
+	}
+	
+	// Shard 2: target is this node, current is already set (should NOT be claimed)
+	cm.state.ShardMapping.Shards[2] = ShardInfo{
+		TargetNode:  thisNodeAddr,
+		CurrentNode: thisNodeAddr,
+		ModRevision: 0,
+	}
+	cm.mu.Unlock()
+
+	// Call ClaimShardsForNode with the node address
+	err = cm.ClaimShardsForNode(ctx, thisNodeAddr)
+	if err != nil {
+		t.Fatalf("ClaimShardsForNode failed: %v", err)
+	}
+
+	// Wait a bit for the async update to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Reload the state from etcd to verify
+	client := mgr.GetClient()
+	key0 := prefix + "/shard/0"
+	resp0, err := client.Get(ctx, key0)
+	if err != nil {
+		t.Fatalf("Failed to get shard 0 from etcd: %v", err)
+	}
+	
+	if len(resp0.Kvs) == 0 {
+		t.Error("Shard 0 should exist in etcd after claiming")
+	} else {
+		shardInfo0 := parseShardInfo(resp0.Kvs[0])
+		if shardInfo0.CurrentNode != thisNodeAddr {
+			t.Errorf("Shard 0 CurrentNode should be %s, got %s", thisNodeAddr, shardInfo0.CurrentNode)
+		}
+		if shardInfo0.TargetNode != thisNodeAddr {
+			t.Errorf("Shard 0 TargetNode should be %s, got %s", thisNodeAddr, shardInfo0.TargetNode)
+		}
+	}
+
+	// Verify shard 1 was not claimed (it's for another node)
+	key1 := prefix + "/shard/1"
+	resp1, err := client.Get(ctx, key1)
+	if err != nil {
+		t.Fatalf("Failed to get shard 1 from etcd: %v", err)
+	}
+	
+	// Shard 1 should not have been updated (we didn't write it to etcd initially)
+	if len(resp1.Kvs) > 0 {
+		shardInfo1 := parseShardInfo(resp1.Kvs[0])
+		// If it exists, CurrentNode should still be empty
+		if shardInfo1.CurrentNode != "" && shardInfo1.CurrentNode != "localhost:47002" {
+			t.Errorf("Shard 1 should not be claimed by this node, CurrentNode: %s", shardInfo1.CurrentNode)
+		}
+	}
+}
+
+// TestClaimShardOwnership_NoThisNode tests that claiming doesn't happen
+// when this node address is not set
+func TestClaimShardOwnership_NoThisNode(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+	ctx := context.Background()
+
+	// Don't set this node's address
+	
+	// Add a shard
+	cm.mu.Lock()
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	cm.state.ShardMapping.Shards[0] = ShardInfo{
+		TargetNode:  "localhost:47001",
+		CurrentNode: "",
+		ModRevision: 0,
+	}
+	cm.mu.Unlock()
+
+	// Call ClaimShardsForNode with empty string - should return error
+	err := cm.ClaimShardsForNode(ctx, "")
+	if err == nil {
+		t.Error("ClaimShardsForNode should return error when localNode is empty")
+	}
+
+	// Verify the shard wasn't modified
+	cm.mu.RLock()
+	shard0 := cm.state.ShardMapping.Shards[0]
+	cm.mu.RUnlock()
+	
+	if shard0.CurrentNode != "" {
+		t.Errorf("Shard should not be claimed when localNode is empty, CurrentNode: %s", shard0.CurrentNode)
+	}
+}
+

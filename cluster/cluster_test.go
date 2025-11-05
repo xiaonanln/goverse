@@ -160,3 +160,4 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
 	}
 }
+
