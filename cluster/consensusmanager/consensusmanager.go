@@ -380,10 +380,12 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	
 	if event.Type == clientv3.EventTypePut {
 		shardInfo := parseShardInfo(event.Kv)
+		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 		
-		// Need to release lock before claiming ownership since it calls storeShardMapping
+		// Release lock before async operations that don't require it
+		// State update is complete; claiming ownership and notifications are independent
 		cm.mu.Unlock()
 
 		// Asynchronously notify listeners to prevent deadlocks

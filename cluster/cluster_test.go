@@ -183,7 +183,6 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 
 // Helper function to create a consensus manager for testing without etcd
 func newConsensusManagerForTesting() *consensusmanager.ConsensusManager {
-	// Import is needed
 	return consensusmanager.NewConsensusManager(nil)
 }
 
