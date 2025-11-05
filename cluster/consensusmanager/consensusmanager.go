@@ -584,7 +584,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 		// Build conditional transaction based on ModRevision
 		txn := client.Txn(ctx)
-		
+
 		if shardInfo.ModRevision == 0 {
 			// For new shards, only create if the key doesn't exist (ModRevision == 0)
 			txn = txn.If(clientv3.Compare(clientv3.ModRevision(key), "=", 0))
@@ -596,11 +596,11 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 		// Execute the conditional put
 		txn = txn.Then(clientv3.OpPut(key, value))
 		resp, err := txn.Commit()
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to store shard %d: %w", shardID, err)
 		}
-		
+
 		if !resp.Succeeded {
 			// The condition failed - the shard was modified by another process
 			failureCount++
