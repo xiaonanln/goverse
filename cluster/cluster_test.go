@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/types/known/emptypb"
