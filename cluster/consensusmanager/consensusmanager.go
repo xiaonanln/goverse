@@ -18,6 +18,13 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+const (
+	// shardStorageWorkers defines the number of concurrent workers for storing shards in etcd.
+	// This value balances parallelism with avoiding overwhelming etcd.
+	// With 8192 shards and 20 workers, each worker handles ~410 shards sequentially.
+	shardStorageWorkers = 20
+)
+
 // ShardInfo contains information about a shard's node assignment
 type ShardInfo struct {
 	// TargetNode is the node that should handle this shard
@@ -573,9 +580,8 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	shardIDs := slices.Collect(maps.Keys(updateShards))
 	startTime := time.Now()
 
-	// Create and start a fixed worker pool with 20 workers
-	const numWorkers = 20
-	pool := workerpool.New(numWorkers)
+	// Create and start a fixed worker pool
+	pool := workerpool.New(shardStorageWorkers)
 	pool.Start()
 	defer pool.Stop()
 
