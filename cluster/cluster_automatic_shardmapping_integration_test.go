@@ -110,7 +110,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	// Test 1: Wait for node list to become stable (10 seconds) plus check interval (5 seconds)
 	// Add some buffer for processing
 	t.Logf("Waiting for node list to stabilize (%v) and shard mapping to be created...", NodeStabilityDuration)
-	time.Sleep(NodeStabilityDuration + ShardMappingCheckInterval + 2*time.Second)
+	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// After stability period, leader should have initialized shard mapping
 	mapping1, err := cluster1.GetShardMapping(ctx)
