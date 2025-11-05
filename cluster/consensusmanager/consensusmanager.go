@@ -553,6 +553,7 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
 // Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
 // The function uses conditional puts based on ModRevision to ensure consistency.
+// Uses concurrent goroutines to write multiple shards in parallel for better performance.
 // Returns the number of successfully written shards, or an error if any write fails.
 func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) (int, error) {
 	if cm.etcdManager == nil {
@@ -571,37 +572,78 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	shardIDs := slices.Collect(maps.Keys(updateShards))
 	startTime := time.Now()
 
-	// Store each shard with a conditional put based on ModRevision
+	// Use a semaphore to limit concurrent writes (avoid overwhelming etcd)
+	const maxConcurrent = 20
+	semaphore := make(chan struct{}, maxConcurrent)
+
+	// Result tracking
+	type result struct {
+		shardID int
+		err     error
+	}
+	results := make(chan result, len(shardIDs))
+
+	// Store each shard concurrently with a conditional put based on ModRevision
 	// This ensures we only update if the shard hasn't been modified by another process
-	successCount := 0
+	var wg sync.WaitGroup
 
 	for _, shardID := range shardIDs {
-		shardInfo := updateShards[shardID]
-		key := fmt.Sprintf("%s%d", shardPrefix, shardID)
-		value := formatShardInfo(shardInfo)
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
 
-		// Build conditional transaction based on ModRevision
-		// Always check that ModRevision matches expected value (0 for new shards)
-		txn := client.Txn(ctx).
-			If(clientv3.Compare(clientv3.ModRevision(key), "=", shardInfo.ModRevision)).
-			Then(clientv3.OpPut(key, value))
+			// Acquire semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-		resp, err := txn.Commit()
+			shardInfo := updateShards[id]
+			key := fmt.Sprintf("%s%d", shardPrefix, id)
+			value := formatShardInfo(shardInfo)
 
-		if err != nil {
-			return successCount, fmt.Errorf("failed to store shard %d: %w", shardID, err)
-		}
+			// Build conditional transaction based on ModRevision
+			// Always check that ModRevision matches expected value (0 for new shards)
+			txn := client.Txn(ctx).
+				If(clientv3.Compare(clientv3.ModRevision(key), "=", shardInfo.ModRevision)).
+				Then(clientv3.OpPut(key, value))
 
-		if !resp.Succeeded {
-			// The condition failed - the shard was modified by another process
-			return successCount, fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d)", shardID, shardInfo.ModRevision)
-		}
+			resp, err := txn.Commit()
 
-		successCount++
+			if err != nil {
+				results <- result{shardID: id, err: fmt.Errorf("failed to store shard %d: %w", id, err)}
+				return
+			}
+
+			if !resp.Succeeded {
+				// The condition failed - the shard was modified by another process
+				results <- result{shardID: id, err: fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d)", id, shardInfo.ModRevision)}
+				return
+			}
+
+			results <- result{shardID: id, err: nil}
+		}(shardID)
 	}
 
-	cm.logger.Infof("Stored %d shards in etcd in %d ms",
-		successCount, time.Since(startTime).Milliseconds())
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(results)
+
+	// Collect results
+	successCount := 0
+	var firstError error
+	for res := range results {
+		if res.err != nil && firstError == nil {
+			firstError = res.err
+		} else if res.err == nil {
+			successCount++
+		}
+	}
+
+	cm.logger.Infof("Stored %d/%d shards in etcd in %d ms",
+		successCount, len(shardIDs), time.Since(startTime).Milliseconds())
+
+	if firstError != nil {
+		return successCount, firstError
+	}
 
 	return successCount, nil
 }
