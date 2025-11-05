@@ -83,7 +83,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 
 	// Wait for leader election and shard mapping to stabilize
-	time.Sleep(20 * time.Second)
+	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Test leader detection
 	t.Run("LeaderDetection", func(t *testing.T) {

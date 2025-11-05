@@ -368,7 +368,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	t.Logf("Server successfully started and registered as sole node/leader: %s", leaderNode)
 
 	// Give some time for shard mapping to initialize
-	time.Sleep(20 * time.Second)
+	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify shard mapping was created and stored
 	shardMapping, err := clusterInstance.GetShardMapping(ctx)
