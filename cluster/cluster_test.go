@@ -24,10 +24,10 @@ func TestSetThisNode(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	n := node.NewNode("test-address")
-	cluster.SetThisNode(n)
+	cluster.setThisNode(n)
 
 	if cluster.GetThisNode() != n {
-		t.Error("GetThisNode() should return the node set by SetThisNode()")
+		t.Error("GetThisNode() should return the node set by setThisNode()")
 	}
 }
 
@@ -36,17 +36,17 @@ func TestSetThisNode_Panic(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	n1 := node.NewNode("test-address-1")
-	cluster.SetThisNode(n1)
+	cluster.setThisNode(n1)
 
 	// Setting the node again should panic
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("SetThisNode should panic when called twice")
+			t.Error("setThisNode should panic when called twice")
 		}
 	}()
 
 	n2 := node.NewNode("test-address-2")
-	cluster.SetThisNode(n2)
+	cluster.setThisNode(n2)
 }
 
 func TestGetThisNode_NotSet(t *testing.T) {
@@ -108,7 +108,7 @@ func TestNewCluster_WithNode(t *testing.T) {
 
 	// Set a node
 	n := node.NewNode("test-address")
-	cluster.SetThisNode(n)
+	cluster.setThisNode(n)
 
 	// Cluster should have the manager
 	if cluster.GetEtcdManagerForTesting() == nil {
@@ -132,7 +132,7 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 
 	// Then set the node
 	n := node.NewNode("test-address")
-	cluster.SetThisNode(n)
+	cluster.setThisNode(n)
 
 	// Cluster should have the manager
 	if cluster.GetEtcdManagerForTesting() == nil {
@@ -160,4 +160,3 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
 	}
 }
-

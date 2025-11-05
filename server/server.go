@@ -32,11 +32,12 @@ type ServerConfig struct {
 type Server struct {
 	goverse_pb.UnimplementedGoverseServer
 	client_pb.UnimplementedClientServiceServer
-	config *ServerConfig
-	Node   *node.Node
-	ctx    context.Context
-	cancel context.CancelFunc
-	logger *logger.Logger
+	config  *ServerConfig
+	Node    *node.Node
+	ctx     context.Context
+	cancel  context.CancelFunc
+	logger  *logger.Logger
+	cluster *cluster.Cluster
 }
 
 func NewServer(config *ServerConfig) (*Server, error) {
@@ -45,6 +46,8 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
+	node := node.NewNode(config.AdvertiseAddress)
+
 	// Initialize cluster with etcd connection
 	c, err := cluster.NewCluster(config.EtcdAddress, config.EtcdPrefix)
 	if err != nil {
@@ -52,23 +55,22 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)
 	}
 
+	cluster.SetThis(c)
+
 	// Set minimum quorum configuration
 	if config.MinQuorum > 0 {
 		c.SetMinQuorum(config.MinQuorum)
 	}
 
-	cluster.SetThis(c)
-
 	server := &Server{
-		config: config,
-		Node:   node.NewNode(config.AdvertiseAddress),
-		ctx:    ctx,
-		cancel: cancel,
-		logger: logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
+		config:  config,
+		Node:    node,
+		ctx:     ctx,
+		cancel:  cancel,
+		logger:  logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
+		cluster: c,
 	}
 
-	// Set this node on the cluster
-	cluster.This().SetThisNode(server.Node)
 	return server, nil
 }
 
@@ -125,29 +127,8 @@ func (server *Server) Run() error {
 		return err
 	}
 
-	// Register this node with etcd
-	if err := cluster.This().RegisterNode(server.ctx); err != nil {
-		server.logger.Errorf("Failed to register node with etcd: %v", err)
-		return fmt.Errorf("failed to register node with etcd: %w", err)
-	}
-
-	// Start watching for cluster state changes (nodes and shard mapping)
-	if err := cluster.This().StartWatching(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start watching cluster state: %v", err)
-		// Continue even if watching fails - it's not critical for basic operation
-	}
-
-	// Start node connections manager
-	if err := cluster.This().StartNodeConnections(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start node connections: %v", err)
-		// Continue even if node connections fail - it's not critical for basic operation
-	}
-
-	// Start shard mapping management
-	if err := cluster.This().StartShardMappingManagement(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start shard mapping management: %v", err)
-		// Continue even if shard mapping management fails - it's not critical for basic operation
-	}
+	// Set this node on the cluster, and start cluster services
+	server.cluster.Start(server.ctx, server.Node)
 
 	// Handle both signals and context cancellation for graceful shutdown
 	clientGrpcServer := grpc.NewServer()
@@ -177,19 +158,9 @@ func (server *Server) Run() error {
 		server.logger.Errorf("gRPC server error: %v", err)
 	}
 
-	// Stop shard mapping management
-	cluster.This().StopShardMappingManagement()
-
-	// Stop node connections
-	cluster.This().StopNodeConnections()
-
-	// Unregister from etcd and close connection
-	if err := cluster.This().UnregisterNode(server.ctx); err != nil {
-		server.logger.Errorf("Failed to unregister node from etcd: %v", err)
-	}
-
-	if err := cluster.This().CloseEtcd(); err != nil {
-		server.logger.Errorf("Failed to close etcd connection: %v", err)
+	err = server.cluster.Stop(server.ctx)
+	if err != nil {
+		server.logger.Errorf("Failed to stop cluster: %v", err)
 	}
 
 	err = node.Stop(server.ctx)
@@ -198,7 +169,7 @@ func (server *Server) Run() error {
 	}
 
 	server.logger.Infof("gRPC server stopped")
-	return err
+	return nil
 }
 
 func (server *Server) logRPC(method string, req proto.Message) {

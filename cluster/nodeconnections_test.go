@@ -40,7 +40,7 @@ func TestNodeConnections_StartStop(t *testing.T) {
 
 	// Set this node
 	thisNode := node.NewNode("localhost:50000")
-	cluster.SetThisNode(thisNode)
+	cluster.setThisNode(thisNode)
 
 	// Create NodeConnections
 	nc := NewNodeConnections(cluster)
@@ -74,7 +74,7 @@ func TestNodeConnections_StartTwice(t *testing.T) {
 	}
 
 	thisNode := node.NewNode("localhost:50000")
-	cluster.SetThisNode(thisNode)
+	cluster.setThisNode(thisNode)
 
 	nc := NewNodeConnections(cluster)
 	ctx := context.Background()
@@ -137,7 +137,7 @@ func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 	}
 
 	thisNode := node.NewNode("localhost:50000")
-	cluster.SetThisNode(thisNode)
+	cluster.setThisNode(thisNode)
 
 	nc := NewNodeConnections(cluster)
 
@@ -160,12 +160,12 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 	}
 
 	thisNode := node.NewNode("localhost:50000")
-	cluster.SetThisNode(thisNode)
+	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
 
 	// Start node connections
-	err = cluster.StartNodeConnections(ctx)
+	err = cluster.startNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 	}
 
 	// Stop node connections
-	cluster.StopNodeConnections()
+	cluster.stopNodeConnections()
 
 	if cluster.GetNodeConnections() != nil {
 		t.Error("NodeConnections should be nil after StopNodeConnections()")
@@ -191,30 +191,30 @@ func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
 	}
 
 	thisNode := node.NewNode("localhost:50000")
-	cluster.SetThisNode(thisNode)
+	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
 
 	// Start first time
-	err = cluster.StartNodeConnections(ctx)
+	err = cluster.startNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
 
 	// Start second time - should not error
-	err = cluster.StartNodeConnections(ctx)
+	err = cluster.startNodeConnections(ctx)
 	if err != nil {
 		t.Errorf("Starting node connections twice should not error: %v", err)
 	}
 
-	cluster.StopNodeConnections()
+	cluster.stopNodeConnections()
 }
 
 func TestCluster_StopNodeConnections_NotStarted(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Stop without starting - should not panic
-	cluster.StopNodeConnections()
+	cluster.stopNodeConnections()
 
 	if cluster.GetNodeConnections() != nil {
 		t.Error("NodeConnections should remain nil after stopping when not started")
@@ -230,24 +230,24 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 		return
 	}
 	t.Cleanup(func() {
-		cluster.CloseEtcd()
+		cluster.closeEtcd()
 	})
 
 	thisNode := node.NewNode("localhost:50000")
-	cluster.SetThisNode(thisNode)
+	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
 
 	// Register this node
-	if err := cluster.RegisterNode(ctx); err != nil {
+	if err := cluster.registerNode(ctx); err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
 	t.Cleanup(func() {
-		cluster.UnregisterNode(ctx)
+		cluster.unregisterNode(ctx)
 	})
 
 	// Start watching cluster state
-	if err := cluster.StartWatching(ctx); err != nil {
+	if err := cluster.startWatching(ctx); err != nil {
 		t.Fatalf("Failed to start watching: %v", err)
 	}
 
