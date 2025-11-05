@@ -760,14 +760,24 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
 		currentInfo := currentMapping.Shards[shardID]
+		needsUpdate := false
+		newInfo := currentInfo
+		
+		// Check if TargetNode needs to be updated (node was removed)
 		if !nodeSet[currentInfo.TargetNode] {
 			// Assign to a new node using round-robin
 			nodeIdx := shardID % len(nodes)
-			newInfo := ShardInfo{
-				TargetNode:  nodes[nodeIdx],
-				CurrentNode: currentInfo.CurrentNode,
-				ModRevision: currentInfo.ModRevision,
-			}
+			newInfo.TargetNode = nodes[nodeIdx]
+			needsUpdate = true
+		}
+		
+		// Check if CurrentNode needs to be cleared (node was removed)
+		if currentInfo.CurrentNode != "" && !nodeSet[currentInfo.CurrentNode] {
+			newInfo.CurrentNode = ""
+			needsUpdate = true
+		}
+		
+		if needsUpdate {
 			updateShards[shardID] = newInfo
 		}
 	}
