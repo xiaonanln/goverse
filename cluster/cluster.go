@@ -134,6 +134,11 @@ func (c *Cluster) initializeEtcdForTesting(etcdAddress string, etcdPrefix string
 
 	c.etcdManager = mgr
 	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
+	
+	// Propagate minNodes to consensus manager if already set
+	if c.minNodes > 0 {
+		c.consensusManager.SetMinNodes(c.minNodes)
+	}
 
 	return nil
 }
