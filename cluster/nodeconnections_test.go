@@ -10,7 +10,9 @@ import (
 )
 
 func TestNewNodeConnections(t *testing.T) {
-	cluster := newClusterForTesting("TestCluster")
+	// Create cluster with node
+	thisNode := node.NewNode("localhost:50000")
+	cluster := newClusterForTesting(thisNode, "TestCluster")
 	nc := NewNodeConnections(cluster)
 
 	if nc == nil {
@@ -31,16 +33,13 @@ func TestNewNodeConnections(t *testing.T) {
 }
 
 func TestNodeConnections_StartStop(t *testing.T) {
-	// Setup test cluster
+	// Setup test cluster with node
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	thisNode := node.NewNode("localhost:50000")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
-
-	// Set this node
-	cluster.setThisNode(thisNode)
 
 	// Create NodeConnections
 	nc := NewNodeConnections(cluster)
@@ -66,15 +65,13 @@ func TestNodeConnections_StartStop(t *testing.T) {
 }
 
 func TestNodeConnections_StartTwice(t *testing.T) {
-	// Setup test cluster
+	// Setup test cluster with node
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	thisNode := node.NewNode("localhost:50000")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
-
-	cluster.setThisNode(thisNode)
 
 	nc := NewNodeConnections(cluster)
 	ctx := context.Background()
@@ -95,7 +92,9 @@ func TestNodeConnections_StartTwice(t *testing.T) {
 }
 
 func TestNodeConnections_NumConnections(t *testing.T) {
-	cluster := newClusterForTesting("TestCluster")
+	// Create cluster with node
+	thisNode := node.NewNode("localhost:50000")
+	cluster := newClusterForTesting(thisNode, "TestCluster")
 	nc := NewNodeConnections(cluster)
 
 	// Initially should have 0 connections
@@ -105,7 +104,9 @@ func TestNodeConnections_NumConnections(t *testing.T) {
 }
 
 func TestNodeConnections_GetConnection_NotExists(t *testing.T) {
-	cluster := newClusterForTesting("TestCluster")
+	// Create cluster with node
+	thisNode := node.NewNode("localhost:50000")
+	cluster := newClusterForTesting(thisNode, "TestCluster")
 	nc := NewNodeConnections(cluster)
 
 	_, err := nc.GetConnection("localhost:50000")
@@ -115,7 +116,9 @@ func TestNodeConnections_GetConnection_NotExists(t *testing.T) {
 }
 
 func TestNodeConnections_GetAllConnections(t *testing.T) {
-	cluster := newClusterForTesting("TestCluster")
+	// Create cluster with node
+	thisNode := node.NewNode("localhost:50000")
+	cluster := newClusterForTesting(thisNode, "TestCluster")
 	nc := NewNodeConnections(cluster)
 
 	connections := nc.GetAllConnections()
@@ -129,15 +132,13 @@ func TestNodeConnections_GetAllConnections(t *testing.T) {
 }
 
 func TestNodeConnections_ConnectDisconnect(t *testing.T) {
-	// Setup test cluster
+	// Setup test cluster with node
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	thisNode := node.NewNode("localhost:50000")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
-
-	cluster.setThisNode(thisNode)
 
 	nc := NewNodeConnections(cluster)
 
@@ -152,15 +153,13 @@ func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 }
 
 func TestCluster_StartStopNodeConnections(t *testing.T) {
-	// Setup test cluster
+	// Setup test cluster with node
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	thisNode := node.NewNode("localhost:50000")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
-
-	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
 
@@ -183,15 +182,13 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 }
 
 func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
-	// Setup test cluster
+	// Setup test cluster with node
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	thisNode := node.NewNode("localhost:50000")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
-
-	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
 
@@ -211,7 +208,8 @@ func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
 }
 
 func TestCluster_StopNodeConnections_NotStarted(t *testing.T) {
-	cluster := newClusterForTesting("TestCluster")
+	thisNode := node.NewNode("localhost:50000")
+	cluster := newClusterForTesting(thisNode, "TestCluster")
 
 	// Stop without starting - should not panic
 	cluster.stopNodeConnections()
@@ -222,7 +220,7 @@ func TestCluster_StopNodeConnections_NotStarted(t *testing.T) {
 }
 
 func TestNodeConnections_HandleNodeChanges(t *testing.T) {
-	// Setup test cluster
+	// Setup test cluster with node
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	thisNode := node.NewNode("localhost:50000")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
@@ -233,8 +231,6 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 	t.Cleanup(func() {
 		cluster.closeEtcd()
 	})
-
-	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
 

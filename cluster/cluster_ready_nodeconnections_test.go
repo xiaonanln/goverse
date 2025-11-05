@@ -25,9 +25,6 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	}
 	defer cluster1.closeEtcd()
 
-	// Create node
-	cluster1.setThisNode(node1)
-
 	// Start node
 	err = node1.Start(ctx)
 	if err != nil {

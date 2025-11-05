@@ -12,7 +12,8 @@ import (
 )
 
 func TestClusterSetMinQuorum(t *testing.T) {
-	c := newClusterForTesting("TestClusterSetMinQuorum")
+	testNode := node.NewNode("localhost:47000")
+	c := newClusterForTesting(testNode, "TestClusterSetMinQuorum")
 
 	// Test default value
 	if c.GetMinQuorum() != 1 {
@@ -74,8 +75,6 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	}
 	defer c1.closeEtcd()
 
-	c1.setThisNode(n1)
-
 	// Set minimum nodes to 3
 	c1.SetMinQuorum(3)
 
@@ -122,7 +121,6 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	}
 	defer c2.closeEtcd()
 
-	c2.setThisNode(n2)
 	c2.SetMinQuorum(3)
 
 	err = c2.registerNode(ctx)
@@ -137,7 +135,6 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	}
 	defer c3.closeEtcd()
 
-	c3.setThisNode(n3)
 	c3.SetMinQuorum(3)
 
 	err = c3.registerNode(ctx)
@@ -179,8 +176,6 @@ func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 	}
 	defer c1.closeEtcd()
 
-	c1.setThisNode(n1)
-
 	// Set minimum nodes to 2
 	c1.SetMinQuorum(2)
 
@@ -211,8 +206,6 @@ func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 		t.Fatalf("Failed to create cluster 2: %v", err)
 	}
 	defer c2.closeEtcd()
-
-	c2.setThisNode(n2)
 
 	err = c2.registerNode(ctx)
 	if err != nil {

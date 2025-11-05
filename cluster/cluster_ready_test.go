@@ -3,10 +3,13 @@ package cluster
 import (
 	"testing"
 	"time"
+
+	"github.com/xiaonanln/goverse/node"
 )
 
 func TestClusterReadyChannel(t *testing.T) {
-	c := newClusterForTesting("TestClusterReady")
+	testNode := node.NewNode("localhost:47000")
+	c := newClusterForTesting(testNode, "TestClusterReady")
 
 	// Test 1: Channel should block before cluster is ready
 	select {
@@ -29,7 +32,8 @@ func TestClusterReadyChannel(t *testing.T) {
 }
 
 func TestMultipleGoroutinesWaitingOnClusterReady(t *testing.T) {
-	c := newClusterForTesting("TestMultipleGoroutines")
+	testNode := node.NewNode("localhost:47000")
+	c := newClusterForTesting(testNode, "TestMultipleGoroutines")
 
 	done := make(chan bool, 5)
 
@@ -60,7 +64,8 @@ func TestMultipleGoroutinesWaitingOnClusterReady(t *testing.T) {
 }
 
 func TestMarkClusterReadyIsIdempotent(t *testing.T) {
-	c := newClusterForTesting("TestIdempotent")
+	testNode := node.NewNode("localhost:47000")
+	c := newClusterForTesting(testNode, "TestIdempotent")
 
 	// Mark cluster as ready multiple times
 	c.markClusterReady()
@@ -77,7 +82,8 @@ func TestMarkClusterReadyIsIdempotent(t *testing.T) {
 }
 
 func TestResetForTestingCreatesNewChannel(t *testing.T) {
-	c := newClusterForTesting("TestResetForTestingCreatesNewChannel")
+	testNode := node.NewNode("localhost:47000")
+	c := newClusterForTesting(testNode, "TestResetForTestingCreatesNewChannel")
 
 	// Get the initial channel
 	firstChan := c.ClusterReady()

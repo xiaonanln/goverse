@@ -17,16 +17,13 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create cluster
+	// Create cluster with node1
 	node1 := node.NewNode("localhost:47001")
 	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
 	defer cluster1.closeEtcd()
-
-	// Create node
-	cluster1.setThisNode(node1)
 
 	// Start node
 	err = node1.Start(ctx)
@@ -77,8 +74,6 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	}
 	defer cluster2.closeEtcd()
 
-	cluster2.setThisNode(node2)
-
 	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
@@ -120,15 +115,13 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Setup cluster1
+	// Setup cluster1 with node1
 	node1 := node.NewNode("localhost:47011")
 	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
 	defer cluster1.closeEtcd()
-
-	cluster1.setThisNode(node1)
 
 	err = node1.Start(ctx)
 	if err != nil {
@@ -160,15 +153,13 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	initialCount := nc1.NumConnections()
 	t.Logf("Initial connection count: %d", initialCount)
 
-	// Setup cluster2 AFTER NodeConnections is already running
+	// Setup cluster2 AFTER NodeConnections is already running with node2
 	node2 := node.NewNode("localhost:47012")
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
 	defer cluster2.closeEtcd()
-
-	cluster2.setThisNode(node2)
 
 	err = node2.Start(ctx)
 	if err != nil {
@@ -201,15 +192,13 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Setup cluster1
+	// Setup cluster1 with node1
 	node1 := node.NewNode("localhost:47021")
 	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
 	defer cluster1.closeEtcd()
-
-	cluster1.setThisNode(node1)
 
 	err = node1.Start(ctx)
 	if err != nil {
@@ -241,15 +230,13 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	initialCount := nc1.NumConnections()
 	t.Logf("Initial connection count: %d", initialCount)
 
-	// Setup cluster2
+	// Setup cluster2 with node2
 	node2 := node.NewNode("localhost:47022")
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
 	defer cluster2.closeEtcd()
-
-	cluster2.setThisNode(node2)
 
 	err = node2.Start(ctx)
 	if err != nil {

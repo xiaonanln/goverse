@@ -11,9 +11,8 @@ import (
 
 // TestCreateObject_FixedNodeAddress tests creating objects with fixed node addresses
 func TestCreateObject_FixedNodeAddress(t *testing.T) {
-	c := newClusterForTesting("TestCreateObject_FixedNodeAddress")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
 	// The object ID format "nodeAddress/objectID" causes GetNodeForObject
@@ -54,11 +53,17 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 	}
 }
 
+// Mock object type for testing
+type testObject struct {
+	object.BaseObject
+}
+
+func (o *testObject) OnCreated() {}
+
 // TestCallObject_FixedNodeAddress tests calling object methods with fixed node addresses
 func TestCallObject_FixedNodeAddress(t *testing.T) {
-	c := newClusterForTesting("TestCallObject_FixedNodeAddress")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
 
@@ -89,9 +94,8 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 // TestCreateObject_FixedNodeAddress_WrongNode tests that objects with fixed addresses
 // are not created on the wrong node
 func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
-	c := newClusterForTesting("TestCreateObject_FixedNodeAddress_WrongNode")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_WrongNode")
 
 	// Register object type
 	testNode.RegisterObjectType((*testObject)(nil))
@@ -115,9 +119,8 @@ func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 // TestCallObject_FixedNodeAddress_WrongNode tests that calls with fixed addresses
 // fail appropriately when routing to a different node without connections
 func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
-	c := newClusterForTesting("TestCallObject_FixedNodeAddress_WrongNode")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress_WrongNode")
 
 	ctx := context.Background()
 
@@ -131,9 +134,8 @@ func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 
 // TestCreateObject_FixedNodeAddress_Format tests various fixed node address formats
 func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
-	c := newClusterForTesting("TestCreateObject_FixedNodeAddress_Format")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_Format")
 
 	// Note: Fixed node addresses bypass consensus manager routing
 

@@ -11,7 +11,8 @@ import (
 
 // TestPushMessageToClient_NoNode tests that PushMessageToClient fails when thisNode is not set
 func TestPushMessageToClient_NoNode(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_NoNode")
+	testNode := node.NewNode("localhost:7000")
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_NoNode")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -29,8 +30,8 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 
 // TestPushMessageToClient_InvalidClientID tests that PushMessageToClient fails with invalid client ID format
 func TestPushMessageToClient_InvalidClientID(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_InvalidClientID")
-	c.thisNode = node.NewNode("localhost:7000")
+	testNode := node.NewNode("localhost:7000")
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_InvalidClientID")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -65,9 +66,8 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 
 // TestPushMessageToClient_LocalClient tests pushing to a client on the same node
 func TestPushMessageToClient_LocalClient(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_LocalClient")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_LocalClient")
 
 	// Register client type
 	testNode.RegisterClientType((*client.BaseClient)(nil))
@@ -116,9 +116,8 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 
 // TestPushMessageToClient_ClientNotFound tests pushing to a non-existent client
 func TestPushMessageToClient_ClientNotFound(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_ClientNotFound")
 	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_ClientNotFound")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{

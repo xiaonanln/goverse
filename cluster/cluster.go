@@ -98,8 +98,9 @@ func NewCluster(node *node.Node, etcdAddress string, etcdPrefix string) (*Cluste
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
-func newClusterForTesting(name string) *Cluster {
+func newClusterForTesting(node *node.Node, name string) *Cluster {
 	return &Cluster{
+		thisNode:         node,
 		logger:           logger.NewLogger(name),
 		clusterReadyChan: make(chan bool),
 	}
@@ -129,8 +130,6 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
-	c.setThisNode(n)
-
 	// Register this node with etcd
 	if err := c.registerNode(ctx); err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
@@ -184,14 +183,6 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	c.logger.Infof("Cluster stopped")
 	return nil
-}
-
-func (c *Cluster) setThisNode(n *node.Node) {
-	if c.thisNode != nil {
-		panic("ThisNode is already set")
-	}
-	c.thisNode = n
-	c.logger.Infof("This Node is %s", n)
 }
 
 // SetMinQuorum sets the minimal number of nodes required for cluster stability

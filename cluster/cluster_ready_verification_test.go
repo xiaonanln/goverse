@@ -23,8 +23,6 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 		t.Fatalf("Failed to create cluster: %v", err)
 	}
 
-	c.setThisNode(n)
-
 	err = n.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
