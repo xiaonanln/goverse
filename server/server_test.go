@@ -106,23 +106,11 @@ func TestNewServer_ValidConfig(t *testing.T) {
 		t.Error("NewServer should initialize a logger")
 	}
 
-	// Verify that the cluster has this node set
-	// Note: This test validates the integration with the global cluster singleton
-	// (cluster.This()), which is the actual production behavior. We intentionally
-	// test the real NewServer() behavior with the global singleton rather than
-	// using an isolated test cluster instance. The test is designed to run first
-	// to avoid conflicts with the singleton's "ThisNode is already set" check.
+	// Verify that the cluster does NOT have this node set yet
+	// Note: With the new pattern, the node is set when Start() is called, not in NewServer()
 	clusterInstance := cluster.This()
-	if clusterInstance.GetThisNode() == nil {
-		t.Error("NewServer should set the node on the cluster")
-	}
-
-	// Note: With the new pattern, NewServer automatically initializes the cluster
-	// by calling NewCluster which connects to etcd
-
-	// Verify that the cluster's node matches the server's node
-	if clusterInstance.GetThisNode() != server.Node {
-		t.Error("Cluster's node should match the server's node")
+	if clusterInstance.GetThisNode() != nil {
+		t.Error("NewServer should NOT set the node on the cluster (that happens in Start)")
 	}
 
 	// Test ListObjects on this server
