@@ -49,7 +49,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	node := node.NewNode(config.AdvertiseAddress)
 
 	// Initialize cluster with etcd connection
-	c, err := cluster.NewCluster(config.EtcdAddress, config.EtcdPrefix)
+	c, err := cluster.NewCluster(node, config.EtcdAddress, config.EtcdPrefix)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)

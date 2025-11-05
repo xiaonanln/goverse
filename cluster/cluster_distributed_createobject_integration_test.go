@@ -31,7 +31,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		idx := i
 		t.Cleanup(func() { nodes[idx].Stop(ctx) })
 
-		clusters[i], err = newClusterWithEtcdForTesting("TestCluster"+fmt.Sprintf("%d", i+1), "localhost:2379", testPrefix)
+		clusters[i], err = newClusterWithEtcdForTesting("TestCluster"+fmt.Sprintf("%d", i+1), nodes[i], "localhost:2379", testPrefix)
 		if err != nil {
 			t.Fatalf("Failed to create cluster%d: %v", i+1, err)
 		}

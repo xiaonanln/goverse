@@ -33,13 +33,13 @@ func TestNewNodeConnections(t *testing.T) {
 func TestNodeConnections_StartStop(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	thisNode := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
 	// Set this node
-	thisNode := node.NewNode("localhost:50000")
 	cluster.setThisNode(thisNode)
 
 	// Create NodeConnections
@@ -68,12 +68,12 @@ func TestNodeConnections_StartStop(t *testing.T) {
 func TestNodeConnections_StartTwice(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	thisNode := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
-	thisNode := node.NewNode("localhost:50000")
 	cluster.setThisNode(thisNode)
 
 	nc := NewNodeConnections(cluster)
@@ -131,12 +131,12 @@ func TestNodeConnections_GetAllConnections(t *testing.T) {
 func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	thisNode := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
-	thisNode := node.NewNode("localhost:50000")
 	cluster.setThisNode(thisNode)
 
 	nc := NewNodeConnections(cluster)
@@ -154,12 +154,12 @@ func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 func TestCluster_StartStopNodeConnections(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	thisNode := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
-	thisNode := node.NewNode("localhost:50000")
 	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
@@ -185,12 +185,12 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	thisNode := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
 	}
 
-	thisNode := node.NewNode("localhost:50000")
 	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
@@ -224,7 +224,8 @@ func TestCluster_StopNodeConnections_NotStarted(t *testing.T) {
 func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 	// Setup test cluster
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	thisNode := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", thisNode, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -233,7 +234,6 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 		cluster.closeEtcd()
 	})
 
-	thisNode := node.NewNode("localhost:50000")
 	cluster.setThisNode(thisNode)
 
 	ctx := context.Background()
@@ -270,7 +270,7 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 	// Test that handleNodeChanges processes changes correctly
 	previousNodes := make(map[string]bool)
 	previousNodes["localhost:50000"] = true // our node
-	
+
 	// Simulate calling handleNodeChanges
 	nc.handleNodeChanges(previousNodes)
 

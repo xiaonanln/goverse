@@ -17,12 +17,12 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup cluster
-	c, err := newClusterWithEtcdForTesting("TestClusterReadyRequiresBothConnectionsAndShardMapping", "localhost:2379", testPrefix)
+	n := node.NewNode("localhost:47201")
+	c, err := newClusterWithEtcdForTesting("TestClusterReadyRequiresBothConnectionsAndShardMapping", n, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster: %v", err)
 	}
 
-	n := node.NewNode("localhost:47201")
 	c.setThisNode(n)
 
 	err = n.Start(ctx)

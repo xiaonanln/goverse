@@ -18,14 +18,14 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	ctx := context.Background()
 
 	// Create cluster
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	node1 := node.NewNode("localhost:47101")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
 	defer cluster1.closeEtcd()
 
 	// Create node
-	node1 := node.NewNode("localhost:47101")
 	cluster1.setThisNode(node1)
 
 	// Start node
@@ -122,7 +122,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}

@@ -80,7 +80,8 @@ func TestNewCluster(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a new cluster instance (not the singleton) for testing
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	n := node.NewNode("localhost:50000")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running, but cluster and managers should be created
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
@@ -97,7 +98,8 @@ func TestNewCluster(t *testing.T) {
 
 func TestNewCluster_WithNode(t *testing.T) {
 	// Create a new cluster for testing
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testutil.PrepareEtcdPrefix(t, "localhost:2379"))
+	n := node.NewNode("test-address")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testutil.PrepareEtcdPrefix(t, "localhost:2379"))
 	// Connection may fail if etcd is not running
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
@@ -107,7 +109,6 @@ func TestNewCluster_WithNode(t *testing.T) {
 	}
 
 	// Set a node
-	n := node.NewNode("test-address")
 	cluster.setThisNode(n)
 
 	// Cluster should have the manager
@@ -121,7 +122,8 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create cluster with etcd
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	n := node.NewNode("test-address")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
@@ -131,7 +133,6 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 	}
 
 	// Then set the node
-	n := node.NewNode("test-address")
 	cluster.setThisNode(n)
 
 	// Cluster should have the manager
@@ -145,7 +146,8 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a new cluster with etcd initialized
-	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	n := node.NewNode("localhost:50001")
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running
 	if err != nil {
 		t.Logf("newClusterWithEtcdForTesting failed (expected if etcd not running): %v", err)
