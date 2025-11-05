@@ -239,9 +239,6 @@ func (cm *ConsensusManager) Initialize(ctx context.Context) error {
 	cm.logger.Infof("Loaded cluster state: %d nodes, revision %d",
 		len(state.Nodes), state.Revision)
 
-	// Claim ownership of shards where this node is the target and CurrentNode is empty
-	cm.claimShardsForThisNode(ctx)
-
 	return nil
 }
 
@@ -377,26 +374,19 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	}
 
 	cm.mu.Lock()
-	
+	defer cm.mu.Unlock()
+
 	if event.Type == clientv3.EventTypePut {
 		shardInfo := parseShardInfo(event.Kv)
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
-		
-		// Release lock before async operations that don't require it
-		// State update is complete; claiming ownership and notifications are independent
-		cm.mu.Unlock()
 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
-		
-		// Check if we should claim ownership of this shard (async to avoid blocking watch)
-		go cm.claimShardOwnership(context.Background(), shardID, shardInfo)
 	} else if event.Type == clientv3.EventTypeDelete {
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
-		cm.mu.Unlock()
 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
@@ -668,101 +658,51 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	return successCount, nil
 }
 
-// claimShardOwnership checks if this node is the target for a shard and claims ownership
-// by setting CurrentNode to this node's address if it's currently empty.
-// This is called after loading shards or receiving shard updates.
-func (cm *ConsensusManager) claimShardOwnership(ctx context.Context, shardID int, shardInfo ShardInfo) {
-	// Check if we have this node's address set
+// ClaimShardsForNode checks all shards and claims ownership for shards
+// where the given localNode is the target and CurrentNode is empty
+func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode string) error {
+	if localNode == "" {
+		return fmt.Errorf("localNode cannot be empty")
+	}
+
 	cm.mu.RLock()
-	thisNodeAddr := cm.thisNodeAddr
-	cm.mu.RUnlock()
-
-	if thisNodeAddr == "" {
-		// This node address not set yet, can't claim ownership
-		return
-	}
-
-	// Check if this shard's target node matches this node
-	if shardInfo.TargetNode != thisNodeAddr {
-		// Not this node's shard
-		return
-	}
-
-	// Check if CurrentNode is already set
-	if shardInfo.CurrentNode != "" {
-		// Already claimed by someone (possibly this node)
-		return
-	}
-
-	// This shard should be on this node and CurrentNode is empty - claim it!
-	cm.logger.Infof("Claiming ownership of shard %d (target: %s)", shardID, thisNodeAddr)
-
-	// Update the shard info to set CurrentNode
-	updatedInfo := ShardInfo{
-		TargetNode:  shardInfo.TargetNode,
-		CurrentNode: thisNodeAddr,
-		ModRevision: shardInfo.ModRevision,
-	}
-
-	// Store the updated shard info in etcd
-	updateShards := map[int]ShardInfo{
-		shardID: updatedInfo,
-	}
-
-	_, err := cm.storeShardMapping(ctx, updateShards)
-	if err != nil {
-		cm.logger.Warnf("Failed to claim ownership of shard %d: %v", shardID, err)
-	} else {
-		cm.logger.Infof("Successfully claimed ownership of shard %d", shardID)
-	}
-}
-
-// claimShardsForThisNode checks all shards and claims ownership for shards
-// where this node is the target and CurrentNode is empty
-func (cm *ConsensusManager) claimShardsForThisNode(ctx context.Context) {
-	cm.mu.RLock()
-	thisNodeAddr := cm.thisNodeAddr
 	shardMapping := cm.state.ShardMapping
 	cm.mu.RUnlock()
 
-	if thisNodeAddr == "" {
-		// This node address not set yet, can't claim ownership
-		cm.logger.Debugf("This node address not set, skipping shard claiming")
-		return
-	}
-
 	if shardMapping == nil || len(shardMapping.Shards) == 0 {
 		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
-		return
+		return nil
 	}
 
 	// Collect shards that need to be claimed
 	shardsToUpdate := make(map[int]ShardInfo)
 	for shardID, shardInfo := range shardMapping.Shards {
-		if shardInfo.TargetNode == thisNodeAddr && shardInfo.CurrentNode == "" {
+		if shardInfo.TargetNode == localNode && shardInfo.CurrentNode == "" {
 			// This shard should be on this node and CurrentNode is empty - claim it!
 			shardsToUpdate[shardID] = ShardInfo{
 				TargetNode:  shardInfo.TargetNode,
-				CurrentNode: thisNodeAddr,
+				CurrentNode: localNode,
 				ModRevision: shardInfo.ModRevision,
 			}
 		}
 	}
 
 	if len(shardsToUpdate) == 0 {
-		cm.logger.Debugf("No shards to claim for this node")
-		return
+		cm.logger.Debugf("No shards to claim for node %s", localNode)
+		return nil
 	}
 
-	cm.logger.Infof("Claiming ownership of %d shards for this node (%s)", len(shardsToUpdate), thisNodeAddr)
+	cm.logger.Infof("Claiming ownership of %d shards for node %s", len(shardsToUpdate), localNode)
 
 	// Store all updated shards at once
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
 	if err != nil {
 		cm.logger.Warnf("Failed to claim some shards: claimed %d/%d, error: %v", successCount, len(shardsToUpdate), err)
-	} else {
-		cm.logger.Infof("Successfully claimed ownership of %d shards", successCount)
+		return err
 	}
+	
+	cm.logger.Infof("Successfully claimed ownership of %d shards", successCount)
+	return nil
 }
 
 // UpdateShardMapping updates the shard mapping based on the current node list

@@ -612,7 +612,34 @@ func (c *Cluster) shardMappingManagementLoop() {
 func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
 	c.leaderShardMappingManagement(ctx)
+	c.claimShardOwnership(ctx)
 	c.checkAndMarkReady()
+}
+
+// claimShardOwnership claims ownership of shards when cluster state is stable
+func (c *Cluster) claimShardOwnership(ctx context.Context) {
+	if c.thisNode == nil {
+		return
+	}
+
+	clusterState := c.consensusManager.GetClusterState()
+	
+	// Only claim shards when cluster state is stable
+	if !clusterState.IsStable(NodeStabilityDuration) {
+		return
+	}
+
+	localAddr := c.thisNode.GetAdvertiseAddress()
+	if !clusterState.HasNode(localAddr) {
+		// This node is not yet in the cluster state
+		return
+	}
+
+	// Claim ownership of shards where this node is the target
+	err := c.consensusManager.ClaimShardsForNode(ctx, localAddr)
+	if err != nil {
+		c.logger.Warnf("Failed to claim shard ownership: %v", err)
+	}
 }
 
 func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {

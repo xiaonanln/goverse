@@ -537,8 +537,11 @@ func TestClaimShardOwnership(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Call claimShardsForThisNode
-	cm.claimShardsForThisNode(ctx)
+	// Call ClaimShardsForNode with the node address
+	err = cm.ClaimShardsForNode(ctx, thisNodeAddr)
+	if err != nil {
+		t.Fatalf("ClaimShardsForNode failed: %v", err)
+	}
 
 	// Wait a bit for the async update to complete
 	time.Sleep(100 * time.Millisecond)
@@ -601,8 +604,11 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Call claimShardsForThisNode - should do nothing
-	cm.claimShardsForThisNode(ctx)
+	// Call ClaimShardsForNode with empty string - should return error
+	err := cm.ClaimShardsForNode(ctx, "")
+	if err == nil {
+		t.Error("ClaimShardsForNode should return error when localNode is empty")
+	}
 
 	// Verify the shard wasn't modified
 	cm.mu.RLock()
@@ -610,7 +616,7 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	cm.mu.RUnlock()
 	
 	if shard0.CurrentNode != "" {
-		t.Errorf("Shard should not be claimed when this node is not set, CurrentNode: %s", shard0.CurrentNode)
+		t.Errorf("Shard should not be claimed when localNode is empty, CurrentNode: %s", shard0.CurrentNode)
 	}
 }
 
