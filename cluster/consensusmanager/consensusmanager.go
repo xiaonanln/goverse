@@ -125,6 +125,9 @@ type ConsensusManager struct {
 	mu    sync.RWMutex
 	state *ClusterState
 
+	// Configuration
+	minNodes int // minimal number of nodes required for cluster to be considered stable
+
 	// Watch management
 	watchCtx     context.Context
 	watchCancel  context.CancelFunc
@@ -188,6 +191,16 @@ func (cm *ConsensusManager) IsReady() bool {
 		return false
 	}
 
+	// Check if we have the minimum required nodes
+	minNodes := cm.minNodes
+	if minNodes <= 0 {
+		minNodes = 1
+	}
+	if len(cm.state.Nodes) < minNodes {
+		cm.logger.Warnf("ConsensusManager not ready: Only %d nodes available, minimum required is %d", len(cm.state.Nodes), minNodes)
+		return false
+	}
+
 	if cm.state.ShardMapping == nil || !cm.state.ShardMapping.IsComplete() {
 		cm.logger.Warnf("ConsensusManager not ready: Shard mapping incomplete")
 		return false
@@ -195,6 +208,25 @@ func (cm *ConsensusManager) IsReady() bool {
 
 	cm.logger.Infof("ConsensusManager is ready!")
 	return true
+}
+
+// SetMinNodes sets the minimal number of nodes required for cluster stability
+func (cm *ConsensusManager) SetMinNodes(minNodes int) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.minNodes = minNodes
+	cm.logger.Infof("ConsensusManager minimum nodes set to %d", minNodes)
+}
+
+// GetMinNodes returns the minimal number of nodes required for cluster stability
+// If not set, returns 1 as the default
+func (cm *ConsensusManager) GetMinNodes() int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	if cm.minNodes <= 0 {
+		return 1
+	}
+	return cm.minNodes
 }
 
 // notifyStateChanged notifies all listeners about cluster state changes
@@ -713,11 +745,26 @@ func nodesEqual(a, b []string) bool {
 }
 
 // IsStateStable returns true if the node list has not changed for the specified duration
+// and has at least the minimum required number of nodes
 func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	return cm.state.IsStable(duration)
+	if !cm.state.IsStable(duration) {
+		return false
+	}
+
+	// Check if we have the minimum required nodes
+	minNodes := cm.minNodes
+	if minNodes <= 0 {
+		minNodes = 1
+	}
+	if len(cm.state.Nodes) < minNodes {
+		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum required is %d", len(cm.state.Nodes), minNodes)
+		return false
+	}
+
+	return true
 }
 
 // GetLastNodeChangeTime returns the timestamp of the last node list change

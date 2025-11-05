@@ -36,6 +36,7 @@ type Cluster struct {
 	logger              *logger.Logger
 	etcdAddress         string // etcd server address (e.g., "localhost:2379")
 	etcdPrefix          string // etcd key prefix for this cluster
+	minNodes            int    // minimal number of nodes required for cluster to be considered stable
 	shardMappingCtx     context.Context
 	shardMappingCancel  context.CancelFunc
 	shardMappingRunning bool
@@ -145,6 +146,25 @@ func (c *Cluster) SetThisNode(n *node.Node) {
 	c.logger.Infof("This Node is %s", n)
 }
 
+// SetMinNodes sets the minimal number of nodes required for cluster stability
+func (c *Cluster) SetMinNodes(minNodes int) {
+	c.minNodes = minNodes
+	c.logger.Infof("Cluster minimum nodes set to %d", minNodes)
+	// Also update the consensus manager if it exists
+	if c.consensusManager != nil {
+		c.consensusManager.SetMinNodes(minNodes)
+	}
+}
+
+// GetMinNodes returns the minimal number of nodes required for cluster stability
+// If not set, returns 1 as the default
+func (c *Cluster) GetMinNodes() int {
+	if c.minNodes <= 0 {
+		return 1
+	}
+	return c.minNodes
+}
+
 // ResetForTesting resets the cluster state for testing purposes
 // WARNING: This should only be used in tests
 func (c *Cluster) ResetForTesting() {
@@ -156,6 +176,7 @@ func (c *Cluster) ResetForTesting() {
 	c.consensusManager = nil
 	c.etcdAddress = ""
 	c.etcdPrefix = ""
+	c.minNodes = 0
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil
@@ -616,8 +637,10 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	}
 
 	clusterState := c.consensusManager.GetClusterState()
-	c.logger.Infof("Acting as leader: %s; nodes: %d, sharding map: %d, revision: %d",
-		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), len(clusterState.ShardMapping.Shards), clusterState.Revision)
+	minNodes := c.GetMinNodes()
+	
+	c.logger.Infof("Acting as leader: %s; nodes: %d (min: %d), sharding map: %d, revision: %d",
+		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minNodes, len(clusterState.ShardMapping.Shards), clusterState.Revision)
 
 	if !clusterState.IsStable(NodeStabilityDuration) {
 		c.logger.Warnf("Cluster state not yet stable, waiting before updating shard mapping")
@@ -626,6 +649,12 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 
 	if len(clusterState.Nodes) == 0 {
 		c.logger.Warnf("No nodes available, skipping shard mapping update")
+		return
+	}
+
+	// Check if we have the minimum required nodes
+	if len(clusterState.Nodes) < minNodes {
+		c.logger.Warnf("Cluster has %d nodes but requires minimum of %d nodes - waiting for more nodes to join", len(clusterState.Nodes), minNodes)
 		return
 	}
 

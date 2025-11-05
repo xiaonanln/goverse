@@ -26,6 +26,7 @@ type ServerConfig struct {
 	ClientListenAddress string
 	EtcdAddress         string
 	EtcdPrefix          string // Optional: etcd key prefix for this cluster (default: "/goverse")
+	MinNodes            int    // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
 }
 
 type Server struct {
@@ -49,6 +50,11 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)
+	}
+
+	// Set minimum nodes configuration
+	if config.MinNodes > 0 {
+		c.SetMinNodes(config.MinNodes)
 	}
 
 	cluster.SetThis(c)
