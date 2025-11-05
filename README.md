@@ -43,7 +43,7 @@ It lets you build systems around **stateful entities with identity and methods**
   - `client/client.go` – Interactive chat client application.
   - `proto/chat.proto` – Chat protocol definitions.
 - `examples/persistence/` – Example of using PostgreSQL persistence.
-- `examples/minnodes/` – Example demonstrating cluster quorum configuration.
+- `examples/minquorum/` – Example demonstrating cluster quorum configuration.
 - `proto/` – GoVerse protocol definitions.
 - `util/` – Logging and utility helpers.
 
@@ -128,27 +128,27 @@ config := &goverseapi.ServerConfig{
     ClientListenAddress: "localhost:8001",
     EtcdAddress:         "localhost:2379",
     EtcdPrefix:          "/goverse",
-    MinNodes:            3, // Require at least 3 nodes before cluster is ready
+    MinQuorum:            3, // Require at least 3 nodes before cluster is ready
 }
 
 server, err := goverseapi.NewServer(config)
 ```
 
 **Key Points:**
-- **Default**: If not set, `MinNodes` defaults to 1
+- **Default**: If not set, `MinQuorum` defaults to 1
 - **Cluster Ready**: The cluster is marked as ready only when:
-  - Number of registered nodes >= `MinNodes`
+  - Number of registered nodes >= `MinQuorum`
   - Node list has been stable for the configured duration (10 seconds)
   - Shard mapping has been successfully created
-- **Leader Behavior**: The leader node will wait for `MinNodes` before creating shard mapping
-- **Scaling**: When the cluster has fewer nodes than `MinNodes`, it waits for more nodes to join
+- **Leader Behavior**: The leader node will wait for `MinQuorum` before creating shard mapping
+- **Scaling**: When the cluster has fewer nodes than `MinQuorum`, it waits for more nodes to join
 
 **Example Use Cases:**
-- **Production Deployments**: Set `MinNodes=3` for a 3-node cluster to ensure redundancy
+- **Production Deployments**: Set `MinQuorum=3` for a 3-node cluster to ensure redundancy
 - **High Availability**: Prevent operations until sufficient nodes are available
 - **Rolling Updates**: Coordinate cluster startup during deployments
 
-See the [minnodes example](examples/minnodes/) for a complete demonstration.
+See the [minnodes example](examples/minquorum/) for a complete demonstration.
 
 ---
 

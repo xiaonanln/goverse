@@ -126,7 +126,7 @@ type ConsensusManager struct {
 	state *ClusterState
 
 	// Configuration
-	minNodes int // minimal number of nodes required for cluster to be considered stable
+	minQuorum int // minimal number of nodes required for cluster to be considered stable
 
 	// Watch management
 	watchCtx     context.Context
@@ -192,9 +192,9 @@ func (cm *ConsensusManager) IsReady() bool {
 	}
 
 	// Check if we have the minimum required nodes
-	minNodes := cm.getEffectiveMinNodes()
-	if len(cm.state.Nodes) < minNodes {
-		cm.logger.Warnf("ConsensusManager not ready: Only %d nodes available, minimum required is %d", len(cm.state.Nodes), minNodes)
+	minQuorum := cm.getEffectiveMinQuorum()
+	if len(cm.state.Nodes) < minQuorum {
+		cm.logger.Warnf("ConsensusManager not ready: Only %d nodes available, minimum quorum required is %d", len(cm.state.Nodes), minQuorum)
 		return false
 	}
 
@@ -207,29 +207,29 @@ func (cm *ConsensusManager) IsReady() bool {
 	return true
 }
 
-// SetMinNodes sets the minimal number of nodes required for cluster stability
-func (cm *ConsensusManager) SetMinNodes(minNodes int) {
+// SetMinQuorum sets the minimal number of nodes required for cluster stability
+func (cm *ConsensusManager) SetMinQuorum(minQuorum int) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	cm.minNodes = minNodes
-	cm.logger.Infof("ConsensusManager minimum nodes set to %d", minNodes)
+	cm.minQuorum = minQuorum
+	cm.logger.Infof("ConsensusManager minimum quorum set to %d", minQuorum)
 }
 
-// GetMinNodes returns the minimal number of nodes required for cluster stability
+// GetMinQuorum returns the minimal number of nodes required for cluster stability
 // If not set, returns 1 as the default
-func (cm *ConsensusManager) GetMinNodes() int {
+func (cm *ConsensusManager) GetMinQuorum() int {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	return cm.getEffectiveMinNodes()
+	return cm.getEffectiveMinQuorum()
 }
 
-// getEffectiveMinNodes returns the effective minimum nodes value (with default of 1)
+// getEffectiveMinQuorum returns the effective minimum quorum value (with default of 1)
 // This method must be called with the read lock held
-func (cm *ConsensusManager) getEffectiveMinNodes() int {
-	if cm.minNodes <= 0 {
+func (cm *ConsensusManager) getEffectiveMinQuorum() int {
+	if cm.minQuorum <= 0 {
 		return 1
 	}
-	return cm.minNodes
+	return cm.minQuorum
 }
 
 // notifyStateChanged notifies all listeners about cluster state changes
@@ -758,9 +758,9 @@ func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
 	}
 
 	// Check if we have the minimum required nodes
-	minNodes := cm.getEffectiveMinNodes()
-	if len(cm.state.Nodes) < minNodes {
-		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum required is %d", len(cm.state.Nodes), minNodes)
+	minQuorum := cm.getEffectiveMinQuorum()
+	if len(cm.state.Nodes) < minQuorum {
+		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum quorum required is %d", len(cm.state.Nodes), minQuorum)
 		return false
 	}
 
