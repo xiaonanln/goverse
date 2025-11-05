@@ -78,7 +78,7 @@ func TestUpdateShardMapping_NodeRemoval(t *testing.T) {
 	// Fill remaining shards with round-robin assignment
 	nodes := []string{node1, node2, node3}
 	for i := 4; i < sharding.NumShards; i++ {
-		nodeIdx := i % 3
+		nodeIdx := i % len(nodes)
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  nodes[nodeIdx],
 			CurrentNode: "",
