@@ -552,17 +552,16 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
 // Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
-// The function uses conditional puts based on ModRevision to ensure consistency:
-// - For new shards (ModRevision == 0), the key must not exist
-// - For existing shards (ModRevision > 0), the ModRevision must match the expected value
-func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) error {
+// The function uses conditional puts based on ModRevision to ensure consistency.
+// Returns the number of successfully written shards, or an error if any write fails.
+func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) (int, error) {
 	if cm.etcdManager == nil {
-		return fmt.Errorf("etcd manager not set")
+		return 0, fmt.Errorf("etcd manager not set")
 	}
 
 	client := cm.etcdManager.GetClient()
 	if client == nil {
-		return fmt.Errorf("etcd client not connected")
+		return 0, fmt.Errorf("etcd client not connected")
 	}
 
 	prefix := cm.etcdManager.GetPrefix()
@@ -575,7 +574,6 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	// Store each shard with a conditional put based on ModRevision
 	// This ensures we only update if the shard hasn't been modified by another process
 	successCount := 0
-	failureCount := 0
 
 	for _, shardID := range shardIDs {
 		shardInfo := updateShards[shardID]
@@ -583,41 +581,29 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 		value := formatShardInfo(shardInfo)
 
 		// Build conditional transaction based on ModRevision
-		txn := client.Txn(ctx)
+		// Always check that ModRevision matches expected value (0 for new shards)
+		txn := client.Txn(ctx).
+			If(clientv3.Compare(clientv3.ModRevision(key), "=", shardInfo.ModRevision)).
+			Then(clientv3.OpPut(key, value))
 
-		if shardInfo.ModRevision == 0 {
-			// For new shards, only create if the key doesn't exist (ModRevision == 0)
-			txn = txn.If(clientv3.Compare(clientv3.ModRevision(key), "=", 0))
-		} else {
-			// For existing shards, only update if ModRevision matches
-			txn = txn.If(clientv3.Compare(clientv3.ModRevision(key), "=", shardInfo.ModRevision))
-		}
-
-		// Execute the conditional put
-		txn = txn.Then(clientv3.OpPut(key, value))
 		resp, err := txn.Commit()
 
 		if err != nil {
-			return fmt.Errorf("failed to store shard %d: %w", shardID, err)
+			return successCount, fmt.Errorf("failed to store shard %d: %w", shardID, err)
 		}
 
 		if !resp.Succeeded {
 			// The condition failed - the shard was modified by another process
-			failureCount++
-			cm.logger.Warnf("Failed to store shard %d: ModRevision mismatch (expected %d)", shardID, shardInfo.ModRevision)
-		} else {
-			successCount++
+			return successCount, fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d)", shardID, shardInfo.ModRevision)
 		}
+
+		successCount++
 	}
 
-	cm.logger.Infof("Stored %d/%d shards in etcd in %d ms (%d failed due to revision mismatch)", 
-		successCount, len(updateShards), time.Since(startTime).Milliseconds(), failureCount)
+	cm.logger.Infof("Stored %d shards in etcd in %d ms", 
+		successCount, time.Since(startTime).Milliseconds())
 
-	if failureCount > 0 {
-		return fmt.Errorf("failed to store %d shards due to revision mismatch", failureCount)
-	}
-
-	return nil
+	return successCount, nil
 }
 
 // UpdateShardMapping updates the shard mapping based on the current node list
@@ -670,7 +656,8 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	cm.logger.Infof("Updating shard mapping for %d shards", len(updateShards))
-	return cm.storeShardMapping(ctx, updateShards)
+	_, err := cm.storeShardMapping(ctx, updateShards)
+	return err
 }
 
 // nodesEqual checks if two sorted node lists are equal
