@@ -17,6 +17,7 @@ It lets you build systems around **stateful entities with identity and methods**
 - **Object Persistence:** Optional PostgreSQL persistence with JSONB storage for durable state.
 - **Client Service:** Client connection management and method routing through server-side client objects.
 - **Sharding & Rebalancing:** Fixed shard model with automatic remapping via etcd.
+- **Cluster Quorum:** Configure minimum node requirements to ensure cluster stability before accepting traffic.
 - **Fault-Tolerance:** Lease + epoch fencing prevent split-brain; safe recovery after node failures.
 - **Call Semantics:** At-least-once delivery with idempotency hooks; optional at-most-once.
 - **Concurrency Modes:** Sequential, concurrent, or read-only execution strategies.
@@ -42,6 +43,7 @@ It lets you build systems around **stateful entities with identity and methods**
   - `client/client.go` – Interactive chat client application.
   - `proto/chat.proto` – Chat protocol definitions.
 - `examples/persistence/` – Example of using PostgreSQL persistence.
+- `examples/minnodes/` – Example demonstrating cluster quorum configuration.
 - `proto/` – GoVerse protocol definitions.
 - `util/` – Logging and utility helpers.
 
@@ -110,6 +112,43 @@ resp, _ := client.Call(ctx, &client_pb.CallRequest{
 ```
 
 This architecture provides a clean separation between client connections and distributed object operations.
+
+---
+
+## ⚙️ Cluster Configuration
+
+### Minimum Node Requirement (Quorum)
+
+GoVerse allows you to configure a minimum number of nodes required for the cluster to be considered stable and ready. This is useful for ensuring high availability and preventing operations on incomplete clusters.
+
+```go
+config := &goverseapi.ServerConfig{
+    ListenAddress:       "localhost:7001",
+    AdvertiseAddress:    "localhost:7001",
+    ClientListenAddress: "localhost:8001",
+    EtcdAddress:         "localhost:2379",
+    EtcdPrefix:          "/goverse",
+    MinNodes:            3, // Require at least 3 nodes before cluster is ready
+}
+
+server, err := goverseapi.NewServer(config)
+```
+
+**Key Points:**
+- **Default**: If not set, `MinNodes` defaults to 1
+- **Cluster Ready**: The cluster is marked as ready only when:
+  - Number of registered nodes >= `MinNodes`
+  - Node list has been stable for the configured duration (10 seconds)
+  - Shard mapping has been successfully created
+- **Leader Behavior**: The leader node will wait for `MinNodes` before creating shard mapping
+- **Scaling**: When the cluster has fewer nodes than `MinNodes`, it waits for more nodes to join
+
+**Example Use Cases:**
+- **Production Deployments**: Set `MinNodes=3` for a 3-node cluster to ensure redundancy
+- **High Availability**: Prevent operations until sufficient nodes are available
+- **Rolling Updates**: Coordinate cluster startup during deployments
+
+See the [minnodes example](examples/minnodes/) for a complete demonstration.
 
 ---
 
