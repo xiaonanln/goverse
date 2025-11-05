@@ -25,7 +25,7 @@ func TestGoroutineCount(t *testing.T) {
 				runtime.GC()
 				before := runtime.NumGoroutine()
 
-				pool := New(20)
+				pool := New(context.Background(), 20)
 				pool.Start()
 				
 				during := runtime.NumGoroutine()
@@ -96,7 +96,7 @@ func TestMemoryEfficiency(t *testing.T) {
 		var m1 runtime.MemStats
 		runtime.ReadMemStats(&m1)
 
-		pool := New(20)
+		pool := New(context.Background(), 20)
 		pool.Start()
 
 		ctx := context.Background()

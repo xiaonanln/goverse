@@ -581,7 +581,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	startTime := time.Now()
 
 	// Create and start a fixed worker pool
-	pool := workerpool.New(shardStorageWorkers)
+	pool := workerpool.New(ctx, shardStorageWorkers)
 	pool.Start()
 	defer pool.Stop()
 
