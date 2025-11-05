@@ -25,7 +25,8 @@ import (
 
 func main() {
     // Create a pool with 10 workers
-    pool := workerpool.New(10)
+    ctx := context.Background()
+    pool := workerpool.New(ctx, 10)
     pool.Start()
     defer pool.Stop()
 
@@ -107,10 +108,10 @@ The worker pool is ideal for:
 ### Creating a Pool
 
 ```go
-pool := workerpool.New(numWorkers)
+pool := workerpool.New(ctx, numWorkers)
 ```
 
-Creates a new worker pool. If `numWorkers <= 0`, defaults to 1.
+Creates a new worker pool with the provided context as the base context. If `numWorkers <= 0`, defaults to 1.
 
 ### Starting the Pool
 

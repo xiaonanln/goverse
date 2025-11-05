@@ -32,7 +32,7 @@ func BenchmarkWorkerPool(b *testing.B) {
 
 func benchmarkWorkerPool(b *testing.B, ctx context.Context, numTasks int) {
 	for i := 0; i < b.N; i++ {
-		pool := New(20)
+		pool := New(context.Background(), 20)
 		pool.Start()
 
 		tasks := make([]Task, numTasks)

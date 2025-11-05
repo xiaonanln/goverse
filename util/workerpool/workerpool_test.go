@@ -22,7 +22,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wp := New(tt.numWorkers)
+			wp := New(context.Background(), tt.numWorkers)
 			if wp.numWorkers != tt.want {
 				t.Errorf("New(%d).numWorkers = %d, want %d", tt.numWorkers, wp.numWorkers, tt.want)
 			}
@@ -32,7 +32,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestWorkerPool_BasicExecution(t *testing.T) {
-	wp := New(3)
+	wp := New(context.Background(), 3)
 	wp.Start()
 	defer wp.Stop()
 
@@ -61,7 +61,7 @@ func TestWorkerPool_BasicExecution(t *testing.T) {
 }
 
 func TestWorkerPool_ErrorHandling(t *testing.T) {
-	wp := New(2)
+	wp := New(context.Background(), 2)
 	wp.Start()
 	defer wp.Stop()
 
@@ -87,7 +87,7 @@ func TestWorkerPool_ErrorHandling(t *testing.T) {
 }
 
 func TestWorkerPool_SubmitAndWait(t *testing.T) {
-	wp := New(5)
+	wp := New(context.Background(), 5)
 	wp.Start()
 	defer wp.Stop()
 
@@ -123,7 +123,7 @@ func TestWorkerPool_SubmitAndWait(t *testing.T) {
 }
 
 func TestWorkerPool_SubmitAndWaitWithErrors(t *testing.T) {
-	wp := New(3)
+	wp := New(context.Background(), 3)
 	wp.Start()
 	defer wp.Stop()
 
@@ -168,7 +168,7 @@ func TestWorkerPool_SubmitAndWaitWithErrors(t *testing.T) {
 }
 
 func TestWorkerPool_ContextCancellation(t *testing.T) {
-	wp := New(2)
+	wp := New(context.Background(), 2)
 	wp.Start()
 	defer wp.Stop()
 
@@ -224,7 +224,7 @@ func TestWorkerPool_ContextCancellation(t *testing.T) {
 }
 
 func TestWorkerPool_Stop(t *testing.T) {
-	wp := New(3)
+	wp := New(context.Background(), 3)
 	wp.Start()
 
 	// Submit a task
@@ -259,7 +259,7 @@ func TestWorkerPool_Stop(t *testing.T) {
 }
 
 func TestWorkerPool_StopNow(t *testing.T) {
-	wp := New(2)
+	wp := New(context.Background(), 2)
 	wp.Start()
 
 	var started int32
@@ -303,7 +303,7 @@ func TestWorkerPool_StopNow(t *testing.T) {
 
 func TestWorkerPool_Concurrency(t *testing.T) {
 	numWorkers := 5
-	wp := New(numWorkers)
+	wp := New(context.Background(), numWorkers)
 	wp.Start()
 	defer wp.Stop()
 
@@ -351,7 +351,7 @@ func TestWorkerPool_Concurrency(t *testing.T) {
 }
 
 func TestWorkerPool_EmptyTaskList(t *testing.T) {
-	wp := New(3)
+	wp := New(context.Background(), 3)
 	wp.Start()
 	defer wp.Stop()
 
@@ -369,7 +369,7 @@ func TestWorkerPool_EmptyTaskList(t *testing.T) {
 }
 
 func BenchmarkWorkerPool_SubmitAndWait(b *testing.B) {
-	wp := New(10)
+	wp := New(context.Background(), 10)
 	wp.Start()
 	defer wp.Stop()
 
@@ -389,7 +389,7 @@ func BenchmarkWorkerPool_SubmitAndWait(b *testing.B) {
 }
 
 func BenchmarkWorkerPool_Submit(b *testing.B) {
-	wp := New(10)
+	wp := New(context.Background(), 10)
 	wp.Start()
 	defer wp.Stop()
 

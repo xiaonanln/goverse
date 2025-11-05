@@ -29,12 +29,13 @@ type taskWrapper struct {
 }
 
 // New creates a new worker pool with the specified number of workers
-func New(numWorkers int) *WorkerPool {
+// The provided context will be used as the base context for the pool
+func New(ctx context.Context, numWorkers int) *WorkerPool {
 	if numWorkers <= 0 {
 		numWorkers = 1
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	// Buffer size of numWorkers*2 allows for some queuing of tasks
 	// while workers are busy, reducing submission blocking
