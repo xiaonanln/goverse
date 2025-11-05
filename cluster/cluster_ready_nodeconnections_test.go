@@ -22,7 +22,7 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	defer cluster1.CloseEtcdForTesting()
 
 	// Create node
 	node1 := node.NewNode("localhost:47101")
@@ -36,14 +36,14 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Register node
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.UnregisterNodeForTesting(ctx)
 
 	// Start watching nodes
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes: %v", err)
 	}
@@ -57,11 +57,11 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	}
 
 	// Start NodeConnections
-	err = cluster1.StartNodeConnections(ctx)
+	err = cluster1.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	defer cluster1.StopNodeConnectionsForTesting()
 
 	// At this point, cluster still might not be ready (no shard mapping yet)
 	// But let's check the state
@@ -72,11 +72,11 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	}
 
 	// Start shard mapping management
-	err = cluster1.StartShardMappingManagement(ctx)
+	err = cluster1.StartShardMappingManagementForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start shard mapping management: %v", err)
 	}
-	defer cluster1.StopShardMappingManagement()
+	defer cluster1.StopShardMappingManagementForTesting()
 
 	// Wait for shard mapping to be created and cluster to be marked ready
 	// This should happen within NodeStabilityDuration + ShardMappingCheckInterval + some buffer
@@ -119,7 +119,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	defer cluster1.CloseEtcdForTesting()
 
 	node1 := node.NewNode("localhost:47111")
 	cluster1.SetThisNode(node1)
@@ -130,13 +130,13 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.UnregisterNodeForTesting(ctx)
 
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching for cluster1: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	defer cluster2.CloseEtcdForTesting()
 
 	node2 := node.NewNode("localhost:47112")
 	cluster2.SetThisNode(node2)
@@ -157,42 +157,42 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	defer cluster2.UnregisterNodeForTesting(ctx)
 
-	err = cluster2.StartWatching(ctx)
+	err = cluster2.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching for cluster2: %v", err)
 	}
 
 	// Start node connections on both clusters
-	err = cluster1.StartNodeConnections(ctx)
+	err = cluster1.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster1: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	defer cluster1.StopNodeConnectionsForTesting()
 
-	err = cluster2.StartNodeConnections(ctx)
+	err = cluster2.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster2: %v", err)
 	}
-	defer cluster2.StopNodeConnections()
+	defer cluster2.StopNodeConnectionsForTesting()
 
 	// Start shard mapping management on both clusters
-	err = cluster1.StartShardMappingManagement(ctx)
+	err = cluster1.StartShardMappingManagementForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start shard mapping management for cluster1: %v", err)
 	}
-	defer cluster1.StopShardMappingManagement()
+	defer cluster1.StopShardMappingManagementForTesting()
 
-	err = cluster2.StartShardMappingManagement(ctx)
+	err = cluster2.StartShardMappingManagementForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start shard mapping management for cluster2: %v", err)
 	}
-	defer cluster2.StopShardMappingManagement()
+	defer cluster2.StopShardMappingManagementForTesting()
 
 	// Wait for both clusters to be ready
 	timeout := NodeStabilityDuration + ShardMappingCheckInterval*2 + 5*time.Second

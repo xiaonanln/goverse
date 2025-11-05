@@ -161,3 +161,88 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	}
 }
 
+func TestClusterStart(t *testing.T) {
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	// Create a cluster
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Skipf("Skipping test - etcd not available: %v", err)
+		return
+	}
+
+	// Create a node
+	n := node.NewNode("localhost:50001")
+
+	// Start the node
+	err = n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+	defer n.Stop(ctx)
+
+	// Start the cluster
+	err = cluster.Start(ctx, n)
+	if err != nil {
+		t.Fatalf("Failed to start cluster: %v", err)
+	}
+	defer cluster.Stop(ctx)
+
+	// Verify node is set
+	if cluster.GetThisNode() != n {
+		t.Error("GetThisNode() should return the node set by Start()")
+	}
+
+	// Verify node is registered
+	nodes := cluster.GetNodes()
+	found := false
+	for _, nodeAddr := range nodes {
+		if nodeAddr == n.GetAdvertiseAddress() {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Node should be registered after Start()")
+	}
+}
+
+func TestClusterStop(t *testing.T) {
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	// Create a cluster
+	cluster, err := newClusterWithEtcdForTesting("TestCluster", "localhost:2379", testPrefix)
+	if err != nil {
+		t.Skipf("Skipping test - etcd not available: %v", err)
+		return
+	}
+
+	// Create a node
+	n := node.NewNode("localhost:50002")
+
+	// Start the node
+	err = n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+	defer n.Stop(ctx)
+
+	// Start the cluster
+	err = cluster.Start(ctx, n)
+	if err != nil {
+		t.Fatalf("Failed to start cluster: %v", err)
+	}
+
+	// Stop the cluster
+	err = cluster.Stop(ctx)
+	if err != nil {
+		t.Errorf("Failed to stop cluster: %v", err)
+	}
+
+	// Verify the cluster is stopped (node connections should be nil)
+	if cluster.GetNodeConnections() != nil {
+		t.Error("Node connections should be nil after Stop()")
+	}
+}

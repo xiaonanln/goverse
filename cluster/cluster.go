@@ -552,6 +552,54 @@ func (c *Cluster) GetEtcdManagerForTesting() *etcdmanager.EtcdManager {
 	return c.etcdManager
 }
 
+// RegisterNodeForTesting registers this node with etcd
+// WARNING: This should only be used in tests - use Start() in production code
+func (c *Cluster) RegisterNodeForTesting(ctx context.Context) error {
+	return c.registerNode(ctx)
+}
+
+// UnregisterNodeForTesting unregisters this node from etcd
+// WARNING: This should only be used in tests - use Stop() in production code
+func (c *Cluster) UnregisterNodeForTesting(ctx context.Context) error {
+	return c.unregisterNode(ctx)
+}
+
+// CloseEtcdForTesting closes the etcd connection
+// WARNING: This should only be used in tests - use Stop() in production code
+func (c *Cluster) CloseEtcdForTesting() error {
+	return c.closeEtcd()
+}
+
+// StartWatchingForTesting starts watching cluster state changes
+// WARNING: This should only be used in tests - use Start() in production code
+func (c *Cluster) StartWatchingForTesting(ctx context.Context) error {
+	return c.startWatching(ctx)
+}
+
+// StartNodeConnectionsForTesting starts the node connections manager
+// WARNING: This should only be used in tests - use Start() in production code
+func (c *Cluster) StartNodeConnectionsForTesting(ctx context.Context) error {
+	return c.startNodeConnections(ctx)
+}
+
+// StopNodeConnectionsForTesting stops the node connections manager
+// WARNING: This should only be used in tests - use Stop() in production code
+func (c *Cluster) StopNodeConnectionsForTesting() {
+	c.stopNodeConnections()
+}
+
+// StartShardMappingManagementForTesting starts shard mapping management
+// WARNING: This should only be used in tests - use Start() in production code
+func (c *Cluster) StartShardMappingManagementForTesting(ctx context.Context) error {
+	return c.startShardMappingManagement(ctx)
+}
+
+// StopShardMappingManagementForTesting stops shard mapping management
+// WARNING: This should only be used in tests - use Stop() in production code
+func (c *Cluster) StopShardMappingManagementForTesting() {
+	c.stopShardMappingManagement()
+}
+
 // registerNode registers this node with etcd (private, used by Start)
 func (c *Cluster) registerNode(ctx context.Context) error {
 	if c.thisNode == nil {

@@ -26,7 +26,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	t.Cleanup(func() { cluster1.CloseEtcd() })
+	t.Cleanup(func() { cluster1.CloseEtcdForTesting() })
 
 	node1 := node.NewNode("localhost:47011")
 	cluster1.SetThisNode(node1)
@@ -38,13 +38,13 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	t.Cleanup(func() { cluster1.UnregisterNode(ctx) })
+	t.Cleanup(func() { cluster1.UnregisterNodeForTesting(ctx) })
 
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	t.Cleanup(func() { cluster2.CloseEtcd() })
+	t.Cleanup(func() { cluster2.CloseEtcdForTesting() })
 
 	node2 := node.NewNode("localhost:47012")
 	cluster2.SetThisNode(node2)
@@ -66,13 +66,13 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	t.Cleanup(func() { cluster2.UnregisterNode(ctx) })
+	t.Cleanup(func() { cluster2.UnregisterNodeForTesting(ctx) })
 
-	err = cluster2.StartWatching(ctx)
+	err = cluster2.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
@@ -103,17 +103,17 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Start NodeConnections for both clusters (needed for routing)
-	err = cluster1.StartNodeConnections(ctx)
+	err = cluster1.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster1: %v", err)
 	}
-	t.Cleanup(func() { cluster1.StopNodeConnections() })
+	t.Cleanup(func() { cluster1.StopNodeConnectionsForTesting() })
 
-	err = cluster2.StartNodeConnections(ctx)
+	err = cluster2.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections for cluster2: %v", err)
 	}
-	t.Cleanup(func() { cluster2.StopNodeConnections() })
+	t.Cleanup(func() { cluster2.StopNodeConnectionsForTesting() })
 
 	// Wait for connections to be established
 	time.Sleep(1 * time.Second)

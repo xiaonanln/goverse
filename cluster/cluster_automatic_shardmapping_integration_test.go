@@ -24,13 +24,13 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	defer cluster1.CloseEtcdForTesting()
 
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	defer cluster2.CloseEtcdForTesting()
 
 	// Create etcd managers for both clusters with unique test prefix
 

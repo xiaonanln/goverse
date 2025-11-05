@@ -165,7 +165,7 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 	ctx := context.Background()
 
 	// Start node connections
-	err = cluster.StartNodeConnections(ctx)
+	err = cluster.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestCluster_StartStopNodeConnections(t *testing.T) {
 	}
 
 	// Stop node connections
-	cluster.StopNodeConnections()
+	cluster.StopNodeConnectionsForTesting()
 
 	if cluster.GetNodeConnections() != nil {
 		t.Error("NodeConnections should be nil after StopNodeConnections()")
@@ -196,25 +196,25 @@ func TestCluster_StartNodeConnectionsTwice(t *testing.T) {
 	ctx := context.Background()
 
 	// Start first time
-	err = cluster.StartNodeConnections(ctx)
+	err = cluster.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
 
 	// Start second time - should not error
-	err = cluster.StartNodeConnections(ctx)
+	err = cluster.StartNodeConnectionsForTesting(ctx)
 	if err != nil {
 		t.Errorf("Starting node connections twice should not error: %v", err)
 	}
 
-	cluster.StopNodeConnections()
+	cluster.StopNodeConnectionsForTesting()
 }
 
 func TestCluster_StopNodeConnections_NotStarted(t *testing.T) {
 	cluster := newClusterForTesting("TestCluster")
 
 	// Stop without starting - should not panic
-	cluster.StopNodeConnections()
+	cluster.StopNodeConnectionsForTesting()
 
 	if cluster.GetNodeConnections() != nil {
 		t.Error("NodeConnections should remain nil after stopping when not started")
@@ -230,7 +230,7 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 		return
 	}
 	t.Cleanup(func() {
-		cluster.CloseEtcd()
+		cluster.CloseEtcdForTesting()
 	})
 
 	thisNode := node.NewNode("localhost:50000")
@@ -239,15 +239,15 @@ func TestNodeConnections_HandleNodeChanges(t *testing.T) {
 	ctx := context.Background()
 
 	// Register this node
-	if err := cluster.RegisterNode(ctx); err != nil {
+	if err := cluster.RegisterNodeForTesting(ctx); err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
 	t.Cleanup(func() {
-		cluster.UnregisterNode(ctx)
+		cluster.UnregisterNodeForTesting(ctx)
 	})
 
 	// Start watching cluster state
-	if err := cluster.StartWatching(ctx); err != nil {
+	if err := cluster.StartWatchingForTesting(ctx); err != nil {
 		t.Fatalf("Failed to start watching: %v", err)
 	}
 

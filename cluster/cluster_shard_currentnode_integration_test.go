@@ -23,13 +23,13 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	defer cluster1.CloseEtcdForTesting()
 
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	defer cluster2.CloseEtcdForTesting()
 
 	// Create nodes - node1 will be leader (smaller address)
 	node1 := node.NewNode("localhost:51001")
@@ -45,13 +45,13 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.UnregisterNodeForTesting(ctx)
 
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -66,23 +66,23 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	defer cluster2.UnregisterNodeForTesting(ctx)
 
-	err = cluster2.StartWatching(ctx)
+	err = cluster2.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
 
 	// Start shard mapping management on both nodes
-	cluster1.StartShardMappingManagement(ctx)
-	defer cluster1.StopShardMappingManagement()
+	cluster1.StartShardMappingManagementForTesting(ctx)
+	defer cluster1.StopShardMappingManagementForTesting()
 
-	cluster2.StartShardMappingManagement(ctx)
-	defer cluster2.StopShardMappingManagement()
+	cluster2.StartShardMappingManagementForTesting(ctx)
+	defer cluster2.StopShardMappingManagementForTesting()
 
 	// Wait for leader election and shard mapping to stabilize
 	time.Sleep(testutil.WaitForShardMappingTimeout)

@@ -23,17 +23,17 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	defer cluster1.CloseEtcdForTesting()
 
-	cluster1.StartShardMappingManagement(ctx)
+	cluster1.StartShardMappingManagementForTesting(ctx)
 
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	defer cluster2.CloseEtcdForTesting()
 
-	cluster2.StartShardMappingManagement(ctx)
+	cluster2.StartShardMappingManagementForTesting(ctx)
 	// Create etcd managers for both clusters with unique test prefix
 
 	// Create nodes - node1 will be leader (smaller address)
@@ -50,13 +50,13 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.UnregisterNodeForTesting(ctx)
 
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
@@ -71,13 +71,13 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.RegisterNodeForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	defer cluster2.UnregisterNodeForTesting(ctx)
 
-	err = cluster2.StartWatching(ctx)
+	err = cluster2.StartWatchingForTesting(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
 	}
