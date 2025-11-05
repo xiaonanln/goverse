@@ -850,6 +850,14 @@ func (cm *ConsensusManager) SetMappingForTesting(mapping *ShardMapping) {
 	cm.mu.Unlock()
 }
 
+// GetThisNodeForTesting returns the thisNodeAddr for testing purposes
+// This should only be used in tests
+func (cm *ConsensusManager) GetThisNodeForTesting() string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.thisNodeAddr
+}
+
 func (cm *ConsensusManager) GetClusterState() *ClusterState {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()

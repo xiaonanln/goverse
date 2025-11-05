@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -28,6 +29,25 @@ func TestSetThisNode(t *testing.T) {
 
 	if cluster.GetThisNode() != n {
 		t.Error("GetThisNode() should return the node set by SetThisNode()")
+	}
+}
+
+func TestSetThisNode_PropagateToConsensusManager(t *testing.T) {
+	// Create a new cluster with consensus manager
+	cluster := newClusterForTesting("TestCluster")
+	
+	// Initialize a mock consensus manager (without etcd)
+	cluster.consensusManager = newConsensusManagerForTesting()
+	
+	n := node.NewNode("test-address-propagate")
+	cluster.SetThisNode(n)
+	
+	// Verify that the node address was propagated to consensus manager
+	thisNodeAddr := cluster.consensusManager.GetThisNodeForTesting()
+	
+	expectedAddr := "test-address-propagate"
+	if thisNodeAddr != expectedAddr {
+		t.Errorf("ConsensusManager.thisNodeAddr = %s; want %s", thisNodeAddr, expectedAddr)
 	}
 }
 
@@ -160,3 +180,10 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
 	}
 }
+
+// Helper function to create a consensus manager for testing without etcd
+func newConsensusManagerForTesting() *consensusmanager.ConsensusManager {
+	// Import is needed
+	return consensusmanager.NewConsensusManager(nil)
+}
+
