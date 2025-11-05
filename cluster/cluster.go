@@ -134,7 +134,7 @@ func (c *Cluster) initializeEtcdForTesting(etcdAddress string, etcdPrefix string
 
 	c.etcdManager = mgr
 	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
-	
+
 	// Propagate minQuorum to consensus manager if already set
 	if c.minQuorum > 0 {
 		c.consensusManager.SetMinQuorum(c.minQuorum)
@@ -648,7 +648,7 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 
 	clusterState := c.consensusManager.GetClusterState()
 	minQuorum := c.getEffectiveMinQuorum()
-	
+
 	c.logger.Infof("Acting as leader: %s; nodes: %d (min quorum: %d), sharding map: %d, revision: %d",
 		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minQuorum, len(clusterState.ShardMapping.Shards), clusterState.Revision)
 
