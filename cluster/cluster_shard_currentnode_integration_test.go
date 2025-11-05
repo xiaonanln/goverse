@@ -87,9 +87,6 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	// Wait for leader election and shard mapping to stabilize
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
-	// Additional wait for shard claiming to complete
-	time.Sleep(2 * time.Second)
-
 	// Test that shards have been claimed by the appropriate nodes
 	t.Run("ShardOwnershipClaiming", func(t *testing.T) {
 		// Get the shard mapping from both clusters
@@ -105,7 +102,7 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 
 		// Verify that both clusters see the same shard mapping
 		if len(mapping1.Shards) != len(mapping2.Shards) {
-			t.Errorf("Clusters have different number of shards: %d vs %d", 
+			t.Errorf("Clusters have different number of shards: %d vs %d",
 				len(mapping1.Shards), len(mapping2.Shards))
 		}
 
@@ -118,7 +115,7 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 			// Verify that CurrentNode matches TargetNode (ownership has been claimed)
 			if shardInfo.CurrentNode == "" {
 				unclaimedCount++
-				t.Logf("Shard %d is unclaimed (target: %s, current: %s)", 
+				t.Logf("Shard %d is unclaimed (target: %s, current: %s)",
 					shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 			} else if shardInfo.CurrentNode == shardInfo.TargetNode {
 				// Good - node claimed ownership
@@ -129,7 +126,7 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 				}
 			} else {
 				// CurrentNode doesn't match TargetNode - this shouldn't happen
-				t.Errorf("Shard %d: CurrentNode (%s) doesn't match TargetNode (%s)", 
+				t.Errorf("Shard %d: CurrentNode (%s) doesn't match TargetNode (%s)",
 					shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
 			}
 		}
