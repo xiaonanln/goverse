@@ -67,8 +67,6 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		logger: logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
 	}
 
-	// Set this node on the cluster
-	cluster.This().SetThisNode(server.Node)
 	return server, nil
 }
 
@@ -125,28 +123,10 @@ func (server *Server) Run() error {
 		return err
 	}
 
-	// Register this node with etcd
-	if err := cluster.This().RegisterNode(server.ctx); err != nil {
-		server.logger.Errorf("Failed to register node with etcd: %v", err)
-		return fmt.Errorf("failed to register node with etcd: %w", err)
-	}
-
-	// Start watching for cluster state changes (nodes and shard mapping)
-	if err := cluster.This().StartWatching(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start watching cluster state: %v", err)
-		// Continue even if watching fails - it's not critical for basic operation
-	}
-
-	// Start node connections manager
-	if err := cluster.This().StartNodeConnections(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start node connections: %v", err)
-		// Continue even if node connections fail - it's not critical for basic operation
-	}
-
-	// Start shard mapping management
-	if err := cluster.This().StartShardMappingManagement(server.ctx); err != nil {
-		server.logger.Errorf("Failed to start shard mapping management: %v", err)
-		// Continue even if shard mapping management fails - it's not critical for basic operation
+	// Start cluster with this node
+	if err := cluster.This().Start(server.ctx, server.Node); err != nil {
+		server.logger.Errorf("Failed to start cluster: %v", err)
+		return fmt.Errorf("failed to start cluster: %w", err)
 	}
 
 	// Handle both signals and context cancellation for graceful shutdown
@@ -177,19 +157,9 @@ func (server *Server) Run() error {
 		server.logger.Errorf("gRPC server error: %v", err)
 	}
 
-	// Stop shard mapping management
-	cluster.This().StopShardMappingManagement()
-
-	// Stop node connections
-	cluster.This().StopNodeConnections()
-
-	// Unregister from etcd and close connection
-	if err := cluster.This().UnregisterNode(server.ctx); err != nil {
-		server.logger.Errorf("Failed to unregister node from etcd: %v", err)
-	}
-
-	if err := cluster.This().CloseEtcd(); err != nil {
-		server.logger.Errorf("Failed to close etcd connection: %v", err)
+	// Stop cluster
+	if err := cluster.This().Stop(server.ctx); err != nil {
+		server.logger.Errorf("Failed to stop cluster: %v", err)
 	}
 
 	err = node.Stop(server.ctx)

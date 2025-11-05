@@ -27,10 +27,9 @@ func TestDistributedCreateObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	t.Cleanup(func() { cluster1.CloseEtcd() })
+	t.Cleanup(func() { cluster1.Stop(ctx) })
 
 	node1 := node.NewNode("localhost:47001")
-	cluster1.SetThisNode(node1)
 	node1.RegisterObjectType((*TestDistributedObject)(nil))
 
 	err = node1.Start(ctx)
@@ -39,26 +38,14 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	err = cluster1.RegisterNode(ctx)
-	if err != nil {
-		t.Fatalf("Failed to register node1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.UnregisterNode(ctx) })
-
-	err = cluster1.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
-	}
-
 	// Create cluster 2
 	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	t.Cleanup(func() { cluster2.CloseEtcd() })
+	t.Cleanup(func() { cluster2.Stop(ctx) })
 
 	node2 := node.NewNode("localhost:47002")
-	cluster2.SetThisNode(node2)
 	node2.RegisterObjectType((*TestDistributedObject)(nil))
 
 	err = node2.Start(ctx)
@@ -67,15 +54,15 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	err = cluster2.RegisterNode(ctx)
+	// Start clusters (this will register nodes, start watching, node connections, and shard mapping)
+	err = cluster1.Start(ctx, node1)
 	if err != nil {
-		t.Fatalf("Failed to register node2: %v", err)
+		t.Fatalf("Failed to start cluster1: %v", err)
 	}
-	t.Cleanup(func() { cluster2.UnregisterNode(ctx) })
 
-	err = cluster2.StartWatching(ctx)
+	err = cluster2.Start(ctx, node2)
 	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
+		t.Fatalf("Failed to start cluster2: %v", err)
 	}
 
 	// Wait for nodes to discover each other
@@ -100,39 +87,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	}
 	t.Cleanup(func() { testServer2.Stop() })
 
-	// Wait for servers to be ready
-	time.Sleep(500 * time.Millisecond)
-
-	// Start NodeConnections for both clusters (needed for routing)
-	err = cluster1.StartNodeConnections(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node connections for cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.StopNodeConnections() })
-
-	err = cluster2.StartNodeConnections(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node connections for cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.StopNodeConnections() })
-
-	// Wait for connections to be established
-	time.Sleep(500 * time.Millisecond)
-
-	// Start shard mapping management (we don't need mock servers for this test)
-	err = cluster1.StartShardMappingManagement(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start shard mapping management for cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.StopShardMappingManagement() })
-
-	err = cluster2.StartShardMappingManagement(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start shard mapping management for cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.StopShardMappingManagement() })
-
-	// Wait for shard mapping to be initialized (longer wait needed)
+	// Wait for servers to be ready and shard mapping to be initialized
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify shard mapping is ready
@@ -288,10 +243,9 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		}
 		// Capture loop variable for closure
 		idx := i
-		t.Cleanup(func() { clusters[idx].CloseEtcd() })
+		t.Cleanup(func() { clusters[idx].Stop(ctx) })
 
 		nodes[i] = node.NewNode(nodeAddrs[i])
-		clusters[i].SetThisNode(nodes[i])
 		nodes[i].RegisterObjectType((*TestDistributedObject)(nil))
 
 		err = nodes[i].Start(ctx)
@@ -300,33 +254,13 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		}
 		t.Cleanup(func() { nodes[idx].Stop(ctx) })
 
-		err = clusters[i].RegisterNode(ctx)
+		err = clusters[i].Start(ctx, nodes[i])
 		if err != nil {
-			t.Fatalf("Failed to register node%d: %v", i+1, err)
-		}
-		t.Cleanup(func() { clusters[idx].UnregisterNode(ctx) })
-
-		err = clusters[i].StartWatching(ctx)
-		if err != nil {
-			t.Fatalf("Failed to start watching nodes for cluster%d: %v", i+1, err)
+			t.Fatalf("Failed to start cluster%d: %v", i+1, err)
 		}
 	}
 
-	// Wait for nodes to discover each other
-	time.Sleep(2 * time.Second)
-
-	// Start shard mapping management for all clusters
-	for i := 0; i < 3; i++ {
-		err := clusters[i].StartShardMappingManagement(ctx)
-		if err != nil {
-			t.Fatalf("Failed to start shard mapping management for cluster%d: %v", i+1, err)
-		}
-		// Capture loop variable for closure
-		clusterIdx := i
-		t.Cleanup(func() { clusters[clusterIdx].StopShardMappingManagement() })
-	}
-
-	// Wait for shard mapping to be initialized
+	// Wait for nodes to discover each other and shard mapping to be initialized
 	time.Sleep(12 * time.Second)
 
 	// Test shard distribution by getting target nodes for 100 object IDs

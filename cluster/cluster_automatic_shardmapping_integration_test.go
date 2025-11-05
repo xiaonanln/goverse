@@ -38,9 +38,6 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	node1 := node.NewNode("localhost:50011")
 	node2 := node.NewNode("localhost:50012")
 
-	cluster1.SetThisNode(node1)
-	cluster2.SetThisNode(node2)
-
 	// Start and register node1
 	err = node1.Start(ctx)
 	if err != nil {
@@ -48,23 +45,11 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.Start(ctx, node1)
 	if err != nil {
-		t.Fatalf("Failed to register node1: %v", err)
+		t.Fatalf("Failed to start cluster1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
-
-	err = cluster1.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
-	}
-
-	// Start shard mapping management on cluster1
-	err = cluster1.StartShardMappingManagement(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start shard mapping management for cluster1: %v", err)
-	}
-	defer cluster1.StopShardMappingManagement()
+	defer cluster1.Stop(ctx)
 
 	// Wait for node registration to complete
 	time.Sleep(500 * time.Millisecond)
@@ -76,23 +61,11 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.Start(ctx, node2)
 	if err != nil {
-		t.Fatalf("Failed to register node2: %v", err)
+		t.Fatalf("Failed to start cluster2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
-
-	err = cluster2.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
-	}
-
-	// Start shard mapping management on cluster2
-	err = cluster2.StartShardMappingManagement(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start shard mapping management for cluster2: %v", err)
-	}
-	defer cluster2.StopShardMappingManagement()
+	defer cluster2.Stop(ctx)
 
 	// Wait for watches to sync
 	time.Sleep(500 * time.Millisecond)
@@ -201,10 +174,9 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
+	defer cluster1.Stop(ctx)
 
 	node1 := node.NewNode("localhost:50021")
-	cluster1.SetThisNode(node1)
 
 	// Start node1
 	err = node1.Start(ctx)
@@ -213,22 +185,10 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.Start(ctx, node1)
 	if err != nil {
-		t.Fatalf("Failed to register node1: %v", err)
+		t.Fatalf("Failed to start cluster1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
-
-	err = cluster1.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
-	}
-
-	err = cluster1.StartShardMappingManagement(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start shard mapping management for cluster1: %v", err)
-	}
-	defer cluster1.StopShardMappingManagement()
 
 	// Wait for stability and initial mapping
 	t.Logf("Waiting for initial shard mapping...")
@@ -245,10 +205,9 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
+	defer cluster2.Stop(ctx)
 
 	node2 := node.NewNode("localhost:50022")
-	cluster2.SetThisNode(node2)
 
 	err = node2.Start(ctx)
 	if err != nil {
@@ -256,11 +215,10 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.Start(ctx, node2)
 	if err != nil {
-		t.Fatalf("Failed to register node2: %v", err)
+		t.Fatalf("Failed to start cluster2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
 
 	t.Logf("Added second node, waiting for stability and shard mapping update...")
 
