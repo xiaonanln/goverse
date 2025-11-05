@@ -13,6 +13,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/workerpool"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -553,7 +554,7 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
 // Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
 // The function uses conditional puts based on ModRevision to ensure consistency.
-// Uses concurrent goroutines to write multiple shards in parallel for better performance.
+// Uses a fixed worker pool to write multiple shards in parallel for better performance.
 // Returns the number of successfully written shards, or an error if any write fails.
 func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) (int, error) {
 	if cm.etcdManager == nil {
@@ -572,30 +573,23 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	shardIDs := slices.Collect(maps.Keys(updateShards))
 	startTime := time.Now()
 
-	// Use a semaphore to limit concurrent writes (avoid overwhelming etcd)
-	const maxConcurrent = 20
-	semaphore := make(chan struct{}, maxConcurrent)
+	// Create and start a fixed worker pool with 20 workers
+	const numWorkers = 20
+	pool := workerpool.New(numWorkers)
+	pool.Start()
+	defer pool.Stop()
 
 	// Result tracking
 	type result struct {
 		shardID int
 		err     error
 	}
-	results := make(chan result, len(shardIDs))
-
-	// Store each shard concurrently with a conditional put based on ModRevision
-	// This ensures we only update if the shard hasn't been modified by another process
-	var wg sync.WaitGroup
-
-	for _, shardID := range shardIDs {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-
-			// Acquire semaphore
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
+	
+	// Create tasks for each shard
+	tasks := make([]workerpool.Task, len(shardIDs))
+	for i, shardID := range shardIDs {
+		id := shardID
+		tasks[i] = func(ctx context.Context) error {
 			shardInfo := updateShards[id]
 			key := fmt.Sprintf("%s%d", shardPrefix, id)
 			value := formatShardInfo(shardInfo)
@@ -609,31 +603,28 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 			resp, err := txn.Commit()
 
 			if err != nil {
-				results <- result{shardID: id, err: fmt.Errorf("failed to store shard %d: %w", id, err)}
-				return
+				return fmt.Errorf("failed to store shard %d: %w", id, err)
 			}
 
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
-				results <- result{shardID: id, err: fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d)", id, shardInfo.ModRevision)}
-				return
+				return fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d)", id, shardInfo.ModRevision)
 			}
 
-			results <- result{shardID: id, err: nil}
-		}(shardID)
+			return nil
+		}
 	}
 
-	// Wait for all goroutines to complete
-	wg.Wait()
-	close(results)
+	// Execute all tasks using the worker pool
+	results := pool.SubmitAndWait(ctx, tasks)
 
 	// Collect results
 	successCount := 0
 	var firstError error
-	for res := range results {
-		if res.err != nil && firstError == nil {
-			firstError = res.err
-		} else if res.err == nil {
+	for _, res := range results {
+		if res.Err != nil && firstError == nil {
+			firstError = res.Err
+		} else if res.Err == nil {
 			successCount++
 		}
 	}
