@@ -159,6 +159,11 @@ func (c *Cluster) SetMinNodes(minNodes int) {
 // GetMinNodes returns the minimal number of nodes required for cluster stability
 // If not set, returns 1 as the default
 func (c *Cluster) GetMinNodes() int {
+	return c.getEffectiveMinNodes()
+}
+
+// getEffectiveMinNodes returns the effective minimum nodes value (with default of 1)
+func (c *Cluster) getEffectiveMinNodes() int {
 	if c.minNodes <= 0 {
 		return 1
 	}
@@ -637,7 +642,7 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	}
 
 	clusterState := c.consensusManager.GetClusterState()
-	minNodes := c.GetMinNodes()
+	minNodes := c.getEffectiveMinNodes()
 	
 	c.logger.Infof("Acting as leader: %s; nodes: %d (min: %d), sharding map: %d, revision: %d",
 		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minNodes, len(clusterState.ShardMapping.Shards), clusterState.Revision)

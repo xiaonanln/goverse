@@ -192,10 +192,7 @@ func (cm *ConsensusManager) IsReady() bool {
 	}
 
 	// Check if we have the minimum required nodes
-	minNodes := cm.minNodes
-	if minNodes <= 0 {
-		minNodes = 1
-	}
+	minNodes := cm.getEffectiveMinNodes()
 	if len(cm.state.Nodes) < minNodes {
 		cm.logger.Warnf("ConsensusManager not ready: Only %d nodes available, minimum required is %d", len(cm.state.Nodes), minNodes)
 		return false
@@ -223,6 +220,12 @@ func (cm *ConsensusManager) SetMinNodes(minNodes int) {
 func (cm *ConsensusManager) GetMinNodes() int {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
+	return cm.getEffectiveMinNodes()
+}
+
+// getEffectiveMinNodes returns the effective minimum nodes value (with default of 1)
+// This method must be called with the read lock held
+func (cm *ConsensusManager) getEffectiveMinNodes() int {
 	if cm.minNodes <= 0 {
 		return 1
 	}
@@ -755,10 +758,7 @@ func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
 	}
 
 	// Check if we have the minimum required nodes
-	minNodes := cm.minNodes
-	if minNodes <= 0 {
-		minNodes = 1
-	}
+	minNodes := cm.getEffectiveMinNodes()
 	if len(cm.state.Nodes) < minNodes {
 		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum required is %d", len(cm.state.Nodes), minNodes)
 		return false
