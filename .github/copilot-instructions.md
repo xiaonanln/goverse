@@ -84,6 +84,9 @@ go mod tidy
 
 # Step 3: Build the project
 go build ./...
+
+# Step 4: Run go vet to check for common mistakes
+go vet ./...
 ```
 
 ### Running Tests
@@ -127,6 +130,7 @@ Proto files to be aware of:
 
 - Follow standard Go conventions and idiomatic patterns
 - Use `gofmt` for code formatting
+- **Always run `go build ./...` and `go vet ./...`** before submitting PRs to catch common mistakes and ensure the code compiles
 - Keep functions focused and methods concise
 - Use meaningful variable names
 - **Always remove deprecated methods** - Do not leave deprecated methods for compatibility. When a method is deprecated, remove it entirely rather than keeping it with a deprecation notice
