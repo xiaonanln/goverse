@@ -36,9 +36,13 @@ func New(numWorkers int) *WorkerPool {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Buffer size of numWorkers*2 allows for some queuing of tasks
+	// while workers are busy, reducing submission blocking
+	taskBufferSize := numWorkers * 2
+
 	wp := &WorkerPool{
 		numWorkers: numWorkers,
-		tasks:      make(chan taskWrapper, numWorkers*2),
+		tasks:      make(chan taskWrapper, taskBufferSize),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
@@ -79,14 +83,11 @@ func (wp *WorkerPool) worker() {
 
 // Submit adds a task to the worker pool for execution
 // Returns a channel that will receive the result
+// If the pool has been stopped, the result channel will contain context.Canceled
 func (wp *WorkerPool) Submit(task Task) <-chan error {
 	result := make(chan error, 1)
 	
-	tw := taskWrapper{
-		task:   task,
-		result: result,
-	}
-	
+	// Check if pool is stopped first
 	select {
 	case <-wp.ctx.Done():
 		result <- wp.ctx.Err()
@@ -94,15 +95,29 @@ func (wp *WorkerPool) Submit(task Task) <-chan error {
 	default:
 	}
 	
-	// Try to send, but handle closed channel
-	defer func() {
-		if r := recover(); r != nil {
-			// Channel was closed, pool is stopped
-			result <- context.Canceled
-		}
-	}()
+	tw := taskWrapper{
+		task:   task,
+		result: result,
+	}
 	
-	wp.tasks <- tw
+	// Try to send task, handling the case where channel might be closed
+	// We use select with default to avoid blocking if the channel is closed
+	select {
+	case <-wp.ctx.Done():
+		result <- wp.ctx.Err()
+	case wp.tasks <- tw:
+		// Successfully submitted
+	default:
+		// Channel is likely full or closed, fall back to blocking send with recovery
+		defer func() {
+			if r := recover(); r != nil {
+				// Channel was closed, pool is stopped
+				result <- context.Canceled
+			}
+		}()
+		wp.tasks <- tw
+	}
+	
 	return result
 }
 
@@ -145,9 +160,9 @@ func (wp *WorkerPool) SubmitAndWait(ctx context.Context, tasks []Task) []Result 
 // Stop gracefully shuts down the worker pool
 // It closes the task channel and waits for all workers to finish
 func (wp *WorkerPool) Stop() {
+	wp.cancel() // Cancel context first to signal workers
 	close(wp.tasks)
 	wp.wg.Wait()
-	wp.cancel()
 }
 
 // StopNow forcefully stops the worker pool without waiting for tasks to complete
