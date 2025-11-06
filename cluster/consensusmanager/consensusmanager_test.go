@@ -122,9 +122,9 @@ func TestCreateShardMapping_NoNodes(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	err := cm.UpdateShardMapping(context.Background())
-	if err == nil {
-		t.Error("Expected error when creating shard mapping with no nodes")
+	err := cm.ReassignShardTargetNodes(context.Background())
+	if err != nil {
+		t.Errorf("Should not error when no nodes available, got: %v", err)
 	}
 }
 
@@ -141,13 +141,13 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 	cm.state.Nodes["localhost:47002"] = true
 	cm.mu.Unlock()
 
-	err := cm.UpdateShardMapping(context.Background())
+	err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to create shard mapping: %v", err)
 	}
 
 	if cm.state.ShardMapping != nil {
-		t.Fatal("Mapping should be nil because UpdateShardMapping does not set it directly")
+		t.Fatal("Mapping should be nil because ReassignShardTargetNodes does not set it directly")
 	}
 }
 
@@ -181,7 +181,7 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Update should create a new mapping (old shard assignments may change)
-	err := cm.UpdateShardMapping(context.Background())
+	err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Update with same nodes should return same mapping
-	err := cm.UpdateShardMapping(context.Background())
+	err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestClaimShardOwnership(t *testing.T) {
 		t.Skipf("Skipping test - etcd not available: %v", err)
 		return
 	}
-	
+
 	err = mgr.Connect()
 	if err != nil {
 		t.Skipf("Skipping test - etcd connection failed: %v", err)
@@ -701,12 +701,12 @@ func TestClaimShardOwnership(t *testing.T) {
 	cm.mu.Lock()
 	cm.state.Nodes[thisNodeAddr] = true
 	cm.state.Nodes["localhost:47002"] = true
-	
+
 	// Initialize shard mapping with some shards for this node
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
-	
+
 	// Add a few test shards
 	// Shard 0: target is this node, current is empty (should be claimed)
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
@@ -714,14 +714,14 @@ func TestClaimShardOwnership(t *testing.T) {
 		CurrentNode: "",
 		ModRevision: 0,
 	}
-	
+
 	// Shard 1: target is another node, current is empty (should NOT be claimed)
 	cm.state.ShardMapping.Shards[1] = ShardInfo{
 		TargetNode:  "localhost:47002",
 		CurrentNode: "",
 		ModRevision: 0,
 	}
-	
+
 	// Shard 2: target is this node, current is already set (should NOT be claimed)
 	cm.state.ShardMapping.Shards[2] = ShardInfo{
 		TargetNode:  thisNodeAddr,
@@ -746,7 +746,7 @@ func TestClaimShardOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get shard 0 from etcd: %v", err)
 	}
-	
+
 	if len(resp0.Kvs) == 0 {
 		t.Error("Shard 0 should exist in etcd after claiming")
 	} else {
@@ -765,7 +765,7 @@ func TestClaimShardOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get shard 1 from etcd: %v", err)
 	}
-	
+
 	// Shard 1 should not have been updated (we didn't write it to etcd initially)
 	if len(resp1.Kvs) > 0 {
 		shardInfo1 := parseShardInfo(resp1.Kvs[0])
@@ -784,7 +784,7 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	ctx := context.Background()
 
 	// Don't set this node's address
-	
+
 	// Add a shard
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
@@ -807,9 +807,8 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	cm.mu.RLock()
 	shard0 := cm.state.ShardMapping.Shards[0]
 	cm.mu.RUnlock()
-	
+
 	if shard0.CurrentNode != "" {
 		t.Errorf("Shard should not be claimed when localNode is empty, CurrentNode: %s", shard0.CurrentNode)
 	}
 }
-
