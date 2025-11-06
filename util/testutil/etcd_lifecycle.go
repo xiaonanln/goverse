@@ -116,11 +116,11 @@ func WaitForEtcd(endpoint string, timeout time.Duration) error {
 			if err == nil {
 				// Try to get a key to verify connection
 				ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
-				_, err2 := cli.Get(ctx2, "/health-check")
+				_, healthCheckErr := cli.Get(ctx2, "/health-check")
 				cancel2()
 				cli.Close()
 				
-				if err2 == nil {
+				if healthCheckErr == nil {
 					// Successfully connected
 					return nil
 				}
