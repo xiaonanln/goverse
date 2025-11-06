@@ -2,6 +2,7 @@ package consensusmanager
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -349,6 +350,9 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 
 	// Set a mapping where CurrentNode differs from TargetNode
 	cm.mu.Lock()
+	// Add nodes to the state so CurrentNode validation passes
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes["localhost:47002"] = true
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: map[int]ShardInfo{
 			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47002"},
@@ -425,6 +429,9 @@ func TestGetNodeForObject_PrefersCurrentNode(t *testing.T) {
 
 	// Set a complete mapping where some shards have CurrentNode set
 	cm.mu.Lock()
+	// Add nodes to the state so CurrentNode validation passes
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes["localhost:47002"] = true
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
@@ -456,6 +463,65 @@ func TestGetNodeForObject_PrefersCurrentNode(t *testing.T) {
 
 	if node2 != "localhost:47002" {
 		t.Errorf("Expected CurrentNode localhost:47002 for second object, got %s", node2)
+	}
+}
+
+func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set a mapping where CurrentNode is not in the node list
+	cm.mu.Lock()
+	// Only add one node to the state
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: map[int]ShardInfo{
+			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47002"}, // CurrentNode not in node list
+		},
+	}
+	cm.mu.Unlock()
+
+	// Should fail because CurrentNode is not in the active node list
+	_, err := cm.GetNodeForShard(0)
+	if err == nil {
+		t.Error("Expected error when CurrentNode is not in active node list")
+	}
+
+	expectedErrMsg := "current node localhost:47002 for shard 0 is not in active node list"
+	if err.Error() != expectedErrMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+	}
+}
+
+func TestGetNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set a mapping where CurrentNode is not in the node list
+	cm.mu.Lock()
+	// Only add one node to the state
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	// For all shards, set CurrentNode to a node not in the list
+	for i := 0; i < sharding.NumShards; i++ {
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
+			TargetNode:  "localhost:47001",
+			CurrentNode: "localhost:47002", // Not in node list
+		}
+	}
+	cm.mu.Unlock()
+
+	// Should fail because CurrentNode is not in the active node list
+	_, err := cm.GetNodeForObject("test-object-123")
+	if err == nil {
+		t.Error("Expected error when CurrentNode is not in active node list")
+	}
+
+	// Error message should mention that current node is not in active node list
+	if err != nil && !strings.Contains(err.Error(), "not in active node list") {
+		t.Errorf("Expected error message to contain 'not in active node list', got '%s'", err.Error())
 	}
 }
 
