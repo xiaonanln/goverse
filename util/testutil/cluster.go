@@ -12,6 +12,9 @@ import (
 // It uses localhost:2379 for etcd by default.
 // The test will fail with t.Fatalf() if etcd is not available or connection fails.
 //
+// NOTE: This helper should NOT be used in the cluster package's own tests to avoid import cycles.
+// For cluster package tests, use newClusterWithEtcdForTesting instead.
+//
 // Parameters:
 //   - ctx: context for operations
 //   - t: testing.T instance
