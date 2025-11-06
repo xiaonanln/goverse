@@ -134,13 +134,13 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	// Wait for cleanup
 	time.Sleep(500 * time.Millisecond)
 
-	// Verify the keep-alive loop has stopped
-	mgr.keepAliveMu.Lock()
-	stopped := mgr.keepAliveStopped
-	mgr.keepAliveMu.Unlock()
+	// Verify the shared lease loop has stopped (since we unregistered the only key)
+	mgr.sharedKeysMu.Lock()
+	running := mgr.sharedLeaseRunning
+	mgr.sharedKeysMu.Unlock()
 
-	if !stopped {
-		t.Fatalf("Keep-alive loop should be stopped after unregister")
+	if running {
+		t.Fatalf("Shared lease loop should be stopped after unregister")
 	}
 }
 
@@ -216,18 +216,18 @@ func TestCloseStopsKeepAlive(t *testing.T) {
 	// Wait for registration
 	time.Sleep(500 * time.Millisecond)
 
-	// Close should stop the keep-alive loop
+	// Close should stop the shared lease loop
 	err = mgr.Close()
 	if err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	// Verify the keep-alive loop has stopped
-	mgr.keepAliveMu.Lock()
-	stopped := mgr.keepAliveStopped
-	mgr.keepAliveMu.Unlock()
+	// Verify the shared lease loop has stopped
+	mgr.sharedKeysMu.Lock()
+	running := mgr.sharedLeaseRunning
+	mgr.sharedKeysMu.Unlock()
 
-	if !stopped {
-		t.Fatalf("Keep-alive loop should be stopped after Close()")
+	if running {
+		t.Fatalf("Shared lease loop should be stopped after Close()")
 	}
 }

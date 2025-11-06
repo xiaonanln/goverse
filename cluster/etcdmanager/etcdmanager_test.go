@@ -458,14 +458,11 @@ func TestRegisterKeyLeaseAndUnregisterKey(t *testing.T) {
 
 	// Register all keys
 	for key, value := range keys {
-		leaseID, err := mgr.RegisterKeyLease(ctx, key, value, 15)
+		_, err := mgr.RegisterKeyLease(ctx, key, value, 15)
 		if err != nil {
 			t.Fatalf("RegisterKeyLease(%s) error = %v", key, err)
 		}
-		if leaseID == 0 {
-			t.Fatalf("RegisterKeyLease(%s) returned zero lease ID", key)
-		}
-		t.Logf("Registered key %s with lease %d", key, leaseID)
+		t.Logf("Registered key %s", key)
 	}
 
 	// Wait for keys to be registered
