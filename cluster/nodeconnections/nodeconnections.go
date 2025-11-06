@@ -1,10 +1,9 @@
-package cluster
+package nodeconnections
 
 import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -27,20 +26,17 @@ type NodeConnections struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	running       bool
-	cluster       *Cluster
 }
 
-// NewNodeConnections creates a new NodeConnections manager
-func NewNodeConnections(cluster *Cluster) *NodeConnections {
+// New creates a new NodeConnections manager
+func New() *NodeConnections {
 	return &NodeConnections{
 		connections: make(map[string]*NodeConnection),
 		logger:      logger.NewLogger("NodeConnections"),
-		cluster:     cluster,
 	}
 }
 
 // Start begins managing connections to cluster nodes
-// It watches for node changes and maintains connections accordingly
 func (nc *NodeConnections) Start(ctx context.Context) error {
 	if nc.running {
 		nc.logger.Warnf("NodeConnections already running")
@@ -50,22 +46,7 @@ func (nc *NodeConnections) Start(ctx context.Context) error {
 	nc.ctx, nc.cancel = context.WithCancel(ctx)
 	nc.running = true
 
-	// Connect to all existing nodes
-	nodes := nc.cluster.GetNodes()
-	for _, nodeAddr := range nodes {
-		// Don't connect to ourselves
-		if nc.cluster.thisNode != nil && nodeAddr == nc.cluster.thisNode.GetAdvertiseAddress() {
-			continue
-		}
-		if err := nc.connectToNode(nodeAddr); err != nil {
-			nc.logger.Errorf("Failed to connect to node %s: %v", nodeAddr, err)
-		}
-	}
-
-	// Start watching for node changes
-	go nc.watchNodeChanges()
-	nc.logger.Infof("Started NodeConnections manager with %d initial connections", len(nc.connections))
-
+	nc.logger.Infof("Started NodeConnections manager")
 	return nil
 }
 
@@ -183,71 +164,46 @@ func (nc *NodeConnections) GetAllConnections() map[string]goverse_pb.GoverseClie
 	return result
 }
 
-// watchNodeChanges watches for changes in the cluster nodes and updates connections
-func (nc *NodeConnections) watchNodeChanges() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	previousNodes := make(map[string]bool)
-	// Initialize with current nodes
-	for _, nodeAddr := range nc.cluster.GetNodes() {
-		previousNodes[nodeAddr] = true
+// SetNodes updates the list of nodes to maintain connections to
+// It will connect to new nodes and disconnect from removed nodes
+// The caller should exclude this node's address from the list
+func (nc *NodeConnections) SetNodes(nodes []string) {
+	if !nc.running {
+		nc.logger.Warnf("SetNodes called but NodeConnections not running")
+		return
 	}
 
-	for {
-		select {
-		case <-nc.ctx.Done():
-			nc.logger.Debugf("Node watch loop stopped")
-			return
-		case <-ticker.C:
-			nc.handleNodeChanges(previousNodes)
-		}
+	// Build a map of desired nodes
+	desiredNodes := make(map[string]bool)
+	for _, nodeAddr := range nodes {
+		desiredNodes[nodeAddr] = true
 	}
-}
 
-// handleNodeChanges processes node additions and removals
-// Updates previousNodes map in-place to reflect the current node list
-func (nc *NodeConnections) handleNodeChanges(previousNodes map[string]bool) {
-	currentNodes := nc.cluster.GetNodes()
-	currentNodesMap := make(map[string]bool)
+	nc.connectionsMu.Lock()
+	currentNodes := make(map[string]bool)
+	for addr := range nc.connections {
+		currentNodes[addr] = true
+	}
+	nc.connectionsMu.Unlock()
 
-	for _, nodeAddr := range currentNodes {
-		currentNodesMap[nodeAddr] = true
-
-		// Skip our own node
-		if nc.cluster.thisNode != nil && nodeAddr == nc.cluster.thisNode.GetAdvertiseAddress() {
-			continue
-		}
-
-		// New node detected - connect to it
-		if !previousNodes[nodeAddr] {
-			nc.logger.Infof("New node detected: %s", nodeAddr)
+	// Connect to new nodes
+	for nodeAddr := range desiredNodes {
+		if !currentNodes[nodeAddr] {
+			nc.logger.Infof("Connecting to new node: %s", nodeAddr)
 			if err := nc.connectToNode(nodeAddr); err != nil {
-				nc.logger.Errorf("Failed to connect to new node %s: %v", nodeAddr, err)
+				nc.logger.Errorf("Failed to connect to node %s: %v", nodeAddr, err)
 			}
 		}
 	}
 
-	// Check for removed nodes
-	for nodeAddr := range previousNodes {
-		if !currentNodesMap[nodeAddr] {
-			nc.logger.Infof("Node removed: %s", nodeAddr)
+	// Disconnect from removed nodes
+	for nodeAddr := range currentNodes {
+		if !desiredNodes[nodeAddr] {
+			nc.logger.Infof("Disconnecting from removed node: %s", nodeAddr)
 			if err := nc.disconnectFromNode(nodeAddr); err != nil {
-				nc.logger.Errorf("Failed to disconnect from removed node %s: %v", nodeAddr, err)
+				nc.logger.Errorf("Failed to disconnect from node %s: %v", nodeAddr, err)
 			}
 		}
-	}
-
-	// Update previousNodes in-place for next iteration
-	// First, clear entries not in current nodes
-	for nodeAddr := range previousNodes {
-		if !currentNodesMap[nodeAddr] {
-			delete(previousNodes, nodeAddr)
-		}
-	}
-	// Then, add new entries from current nodes
-	for nodeAddr := range currentNodesMap {
-		previousNodes[nodeAddr] = true
 	}
 }
 

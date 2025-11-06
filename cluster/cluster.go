@@ -9,6 +9,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/nodeconnections"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -32,7 +33,7 @@ type Cluster struct {
 	thisNode            *node.Node
 	etcdManager         *etcdmanager.EtcdManager
 	consensusManager    *consensusmanager.ConsensusManager
-	nodeConnections     *NodeConnections
+	nodeConnections     *nodeconnections.NodeConnections
 	logger              *logger.Logger
 	etcdAddress         string // etcd server address (e.g., "localhost:2379")
 	etcdPrefix          string // etcd key prefix for this cluster
@@ -522,16 +523,16 @@ func (c *Cluster) registerNode(ctx context.Context) error {
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
 	}
-	
+
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
 	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
 	value := c.thisNode.GetAdvertiseAddress()
-	
+
 	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -544,7 +545,7 @@ func (c *Cluster) unregisterNode(ctx context.Context) error {
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
 	}
-	
+
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
 	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
@@ -686,6 +687,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
 	c.leaderShardMappingManagement(ctx)
 	c.claimShardOwnership(ctx)
+	c.updateNodeConnections()
 	c.checkAndMarkReady()
 }
 
@@ -769,11 +771,14 @@ func (c *Cluster) startNodeConnections(ctx context.Context) error {
 		return nil
 	}
 
-	c.nodeConnections = NewNodeConnections(c)
+	c.nodeConnections = nodeconnections.New()
 	err := c.nodeConnections.Start(ctx)
 	if err != nil {
 		return err
 	}
+
+	// Set initial nodes
+	c.updateNodeConnections()
 
 	// Check if we can mark cluster as ready now that node connections are established
 	c.checkAndMarkReady()
@@ -788,7 +793,28 @@ func (c *Cluster) stopNodeConnections() {
 	}
 }
 
+// updateNodeConnections updates the NodeConnections with the current list of cluster nodes
+func (c *Cluster) updateNodeConnections() {
+	if c.nodeConnections == nil || c.thisNode == nil {
+		c.logger.Warnf("updateNodeConnections: NodeConnections or thisNode is not initialized")
+		return
+	}
+
+	allNodes := c.GetNodes()
+	thisNodeAddr := c.thisNode.GetAdvertiseAddress()
+
+	// Filter out this node's address
+	otherNodes := make([]string, 0, len(allNodes))
+	for _, nodeAddr := range allNodes {
+		if nodeAddr != thisNodeAddr {
+			otherNodes = append(otherNodes, nodeAddr)
+		}
+	}
+
+	c.nodeConnections.SetNodes(otherNodes)
+}
+
 // GetNodeConnections returns the node connections manager
-func (c *Cluster) GetNodeConnections() *NodeConnections {
+func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 	return c.nodeConnections
 }
