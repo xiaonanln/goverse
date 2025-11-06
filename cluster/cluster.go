@@ -518,6 +518,12 @@ func (c *Cluster) GetEtcdManagerForTesting() *etcdmanager.EtcdManager {
 	return c.etcdManager
 }
 
+// GetConsensusManagerForTesting returns the cluster's consensus manager
+// WARNING: This should only be used in tests
+func (c *Cluster) GetConsensusManagerForTesting() *consensusmanager.ConsensusManager {
+	return c.consensusManager
+}
+
 // registerNode registers this node with etcd using the shared lease API
 func (c *Cluster) registerNode(ctx context.Context) error {
 	if c.thisNode == nil {

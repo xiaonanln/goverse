@@ -92,7 +92,7 @@ func TestDistributedCreateObject(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetNodeForObject failed for %s: %v", objID, err)
 			}
-			t.Logf("Creating object %s from %s, expect target node %s", objID, creatorCluster.thisNode.GetAdvertiseAddress(), targetNode)
+			t.Logf("Creating object %s from %s, expect target node %s", objID, creatorCluster.GetThisNode().GetAdvertiseAddress(), targetNode)
 
 			// Create the object - it will be routed if needed
 			createdID, err := creatorCluster.CreateObject(ctx, "TestDistributedObject", objID, nil)

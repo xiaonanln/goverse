@@ -58,8 +58,8 @@ func TestClusterMinQuorumPropagation(t *testing.T) {
 	c.SetMinQuorum(3)
 
 	// Verify it propagated to consensus manager
-	if c.consensusManager.GetMinQuorum() != 3 {
-		t.Errorf("Expected consensus manager minQuorum to be 3, got %d", c.consensusManager.GetMinQuorum())
+	if c.GetConsensusManagerForTesting().GetMinQuorum() != 3 {
+		t.Errorf("Expected consensus manager minQuorum to be 3, got %d", c.GetConsensusManagerForTesting().GetMinQuorum())
 	}
 }
 
@@ -77,7 +77,7 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Consensus manager should NOT be ready with only 1 node (minQuorum=3)
-	if c1.consensusManager.IsReady() {
+	if c1.GetConsensusManagerForTesting().IsReady() {
 		t.Error("ConsensusManager should not be ready with only 1 node when minQuorum=3")
 	}
 
@@ -94,7 +94,7 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	time.Sleep(timeout)
 
 	// Now consensus manager should be ready
-	if !c1.consensusManager.IsReady() {
+	if !c1.GetConsensusManagerForTesting().IsReady() {
 		t.Error("ConsensusManager should be ready with 3 nodes when minQuorum=3")
 	}
 }
@@ -113,7 +113,7 @@ func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// State should NOT be stable with only 1 node (minQuorum=2)
-	if c1.consensusManager.IsStateStable(100 * time.Millisecond) {
+	if c1.GetConsensusManagerForTesting().IsStateStable(100 * time.Millisecond) {
 		t.Error("Cluster state should not be stable with only 1 node when minQuorum=2")
 	}
 
@@ -125,7 +125,7 @@ func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 	time.Sleep(ShardMappingCheckInterval + 2*time.Second)
 
 	// State should now be stable with 2 nodes (minQuorum=2)
-	if !c1.consensusManager.IsStateStable(100 * time.Millisecond) {
+	if !c1.GetConsensusManagerForTesting().IsStateStable(100 * time.Millisecond) {
 		t.Error("Cluster state should be stable with 2 nodes when minQuorum=2")
 	}
 }
