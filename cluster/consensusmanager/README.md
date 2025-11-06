@@ -79,8 +79,8 @@ All queries are served from in-memory state (no etcd round-trip):
 - `GetNodes()` - List of registered nodes
 - `GetLeaderNode()` - Current leader (lexicographically smallest node)
 - `GetShardMapping()` - Current shard assignments
-- `GetNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode if set and alive, otherwise TargetNode)
-- `GetNodeForShard(shardID)` - Which node currently owns this shard (uses CurrentNode if set and alive, otherwise TargetNode)
+- `GetNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode only; fails if not set or not alive)
+- `GetNodeForShard(shardID)` - Which node currently owns this shard (uses CurrentNode only; fails if not set or not alive)
 
 ### State Modifications (Leader only)
 
@@ -93,32 +93,40 @@ The leader can modify cluster state:
 
 Each shard has two node references:
 
-- **TargetNode**: The node that should handle this shard (desired state)
-- **CurrentNode**: The node that currently handles this shard (actual state)
+- **TargetNode**: The node that should handle this shard (desired state) - used for planning/migration only
+- **CurrentNode**: The node that currently handles this shard (actual state) - used for object routing
 
-When locating objects, `GetNodeForObject` and `GetNodeForShard` prefer `CurrentNode` over `TargetNode`. This ensures:
+**Important**: `GetNodeForObject` and `GetNodeForShard` use **only** `CurrentNode` for routing. They never fall back to `TargetNode`. This ensures:
 
-1. **Correct routing during migration**: Objects are routed to where they actually exist, not where they should eventually be
-2. **Shard claiming**: Nodes claim shards by setting `CurrentNode = TargetNode` when stable
-3. **Migration tracking**: During rebalancing, `CurrentNode` and `TargetNode` may differ temporarily
-4. **Node liveness check**: If `CurrentNode` is set but not in the active node list, the lookup fails with an error
+1. **Correct routing**: Objects are always routed to where they actually exist
+2. **Fail-fast on unclaimed shards**: If `CurrentNode` is not set, the lookup fails immediately
+3. **Fail-fast on node failure**: If `CurrentNode` is not in the active node list, the lookup fails immediately
+4. **Clear separation**: `TargetNode` is for planning/migration; `CurrentNode` is for routing
 
 Example lifecycle:
 ```go
-// Initial state: Node claims shard
-ShardInfo{TargetNode: "node1", CurrentNode: ""}       // Not yet claimed
-ShardInfo{TargetNode: "node1", CurrentNode: "node1"}  // Node1 claimed it
+// Initial state: Shard not yet claimed
+ShardInfo{TargetNode: "node1", CurrentNode: ""}
+GetNodeForShard(shardID) // Error: "shard X has no current node (not yet claimed)"
+
+// Node claims shard
+ShardInfo{TargetNode: "node1", CurrentNode: "node1"}
+GetNodeForShard(shardID) // Returns: "node1"
 
 // During migration: Leader updates TargetNode
-ShardInfo{TargetNode: "node2", CurrentNode: "node1"}  // Migration in progress
-ShardInfo{TargetNode: "node2", CurrentNode: "node2"}  // Migration complete
+ShardInfo{TargetNode: "node2", CurrentNode: "node1"}
+GetNodeForShard(shardID) // Returns: "node1" (still at old location)
 
-// Node failure: CurrentNode no longer in active node list
-ShardInfo{TargetNode: "node2", CurrentNode: "node1"}  // Node1 is dead
-GetNodeForShard(shardID) // Returns error: "current node node1 for shard X is not in active node list"
+// Migration complete: Node2 claims ownership
+ShardInfo{TargetNode: "node2", CurrentNode: "node2"}
+GetNodeForShard(shardID) // Returns: "node2"
+
+// Node failure: Node2 leaves cluster
+ShardInfo{TargetNode: "node2", CurrentNode: "node2"}  // Node2 removed from active nodes
+GetNodeForShard(shardID) // Error: "current node node2 for shard X is not in active node list"
 ```
 
-Queries always route to `CurrentNode` when set **and the node is alive** (in the active node list), ensuring objects are found at their actual location. If the `CurrentNode` is not alive, the query fails to prevent routing to a dead node.
+Queries **always require CurrentNode to be set and alive**. There is no fallback to `TargetNode` - this ensures objects are never routed incorrectly.
 
 ## Usage Example
 
