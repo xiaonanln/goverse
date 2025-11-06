@@ -46,7 +46,9 @@ func TestWatchReconnection(t *testing.T) {
 	defer cm.StopWatch()
 
 	// Register a node before stopping etcd
-	err = mgr.RegisterNode(ctx, "localhost:47001")
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + "localhost:47001"
+	_, err = mgr.RegisterKeyLease(ctx, key, "localhost:47001", etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
@@ -111,7 +113,9 @@ func TestWatchReconnection(t *testing.T) {
 	}
 	defer mgr2.Close()
 
-	err = mgr2.RegisterNode(ctx, "localhost:47002")
+	nodesPrefix2 := mgr2.GetPrefix() + "/nodes/"
+	key2 := nodesPrefix2 + "localhost:47002"
+	_, err = mgr2.RegisterKeyLease(ctx, key2, "localhost:47002", etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register second node: %v", err)
 	}
@@ -126,4 +130,3 @@ func TestWatchReconnection(t *testing.T) {
 		t.Errorf("Expected 2 nodes after reconnection, got %d: %v", len(nodes), nodes)
 	}
 }
-
