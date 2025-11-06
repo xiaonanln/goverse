@@ -22,45 +22,15 @@ func TestDistributedCreateObject(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create node1 and cluster1
-	node1 := node.NewNode("localhost:47001")
+	// Create clusters using mustNewCluster
+	cluster1 := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, "localhost:47002", testPrefix)
+
+	// Register object types on the nodes (can be done after node start)
+	node1 := cluster1.GetThisNode()
+	node2 := cluster2.GetThisNode()
 	node1.RegisterObjectType((*TestDistributedObject)(nil))
-	err := node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	t.Cleanup(func() { node1.Stop(ctx) })
-
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-
-	err = cluster1.Start(ctx, node1)
-	if err != nil {
-		t.Fatalf("Failed to start cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.Stop(ctx) })
-
-	// Create node2 and cluster2
-	node2 := node.NewNode("localhost:47002")
 	node2.RegisterObjectType((*TestDistributedObject)(nil))
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	t.Cleanup(func() { node2.Stop(ctx) })
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-
-	err = cluster2.Start(ctx, node2)
-	if err != nil {
-		t.Fatalf("Failed to start cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.Stop(ctx) })
 
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
@@ -69,7 +39,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1) // Assign the actual node to the mock server
 	testServer1 := testutil.NewTestServerHelper("localhost:47001", mockServer1)
-	err = testServer1.Start(ctx)
+	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
@@ -229,33 +199,12 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create 3 clusters
-	clusters := make([]*Cluster, 3)
-	nodes := make([]*node.Node, 3)
-	nodeAddrs := []string{"localhost:47011", "localhost:47012", "localhost:47013"}
-
-	// Set up all 3 nodes
-	for i := 0; i < 3; i++ {
-		nodes[i] = node.NewNode(nodeAddrs[i])
-
-		err := nodes[i].Start(ctx)
-		if err != nil {
-			t.Fatalf("Failed to start node%d: %v", i+1, err)
-		}
-		// Capture loop variable for closure
-		idx := i
-		t.Cleanup(func() { nodes[idx].Stop(ctx) })
-
-		clusters[i], err = newClusterWithEtcdForTesting("TestCluster"+fmt.Sprintf("%d", i+1), nodes[i], "localhost:2379", testPrefix)
-		if err != nil {
-			t.Fatalf("Failed to create cluster%d: %v", i+1, err)
-		}
-
-		err = clusters[i].Start(ctx, nodes[i])
-		if err != nil {
-			t.Fatalf("Failed to start cluster%d: %v", i+1, err)
-		}
-		t.Cleanup(func() { clusters[idx].Stop(ctx) })
+	// Create 3 clusters using mustNewCluster
+	// Note: No object registration needed since this test only calls GetNodeForObject
+	clusters := []*Cluster{
+		mustNewCluster(ctx, t, "localhost:47011", testPrefix),
+		mustNewCluster(ctx, t, "localhost:47012", testPrefix),
+		mustNewCluster(ctx, t, "localhost:47013", testPrefix),
 	}
 
 	// Wait for nodes to discover each other and shard mapping to initialize

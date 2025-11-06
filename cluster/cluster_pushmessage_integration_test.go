@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
-	"github.com/xiaonanln/goverse/node"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -21,45 +20,15 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create node1 and cluster1
-	node1 := node.NewNode("localhost:47011")
+	// Create clusters using mustNewCluster
+	cluster1 := mustNewCluster(ctx, t, "localhost:47011", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, "localhost:47012", testPrefix)
+
+	// Register client types on the nodes (can be done after node start)
+	node1 := cluster1.GetThisNode()
+	node2 := cluster2.GetThisNode()
 	node1.RegisterClientType((*client.BaseClient)(nil))
-	err := node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	t.Cleanup(func() { node1.Stop(ctx) })
-
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-
-	err = cluster1.Start(ctx, node1)
-	if err != nil {
-		t.Fatalf("Failed to start cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.Stop(ctx) })
-
-	// Create node2 and cluster2
-	node2 := node.NewNode("localhost:47012")
 	node2.RegisterClientType((*client.BaseClient)(nil))
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	t.Cleanup(func() { node2.Stop(ctx) })
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-
-	err = cluster2.Start(ctx, node2)
-	if err != nil {
-		t.Fatalf("Failed to start cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.Stop(ctx) })
 
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
@@ -68,7 +37,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
 	testServer1 := testutil.NewTestServerHelper("localhost:47011", mockServer1)
-	err = testServer1.Start(ctx)
+	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
