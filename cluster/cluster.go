@@ -523,7 +523,8 @@ func (c *Cluster) registerNode(ctx context.Context) error {
 		return fmt.Errorf("thisNode not set")
 	}
 	
-	key := c.etcdManager.GetNodesPrefix() + c.thisNode.GetAdvertiseAddress()
+	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
+	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
 	value := c.thisNode.GetAdvertiseAddress()
 	
 	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
@@ -544,7 +545,8 @@ func (c *Cluster) unregisterNode(ctx context.Context) error {
 		return fmt.Errorf("thisNode not set")
 	}
 	
-	key := c.etcdManager.GetNodesPrefix() + c.thisNode.GetAdvertiseAddress()
+	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
+	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
 }
 

@@ -119,12 +119,6 @@ func (mgr *EtcdManager) GetClient() *clientv3.Client {
 	return mgr.client
 }
 
-// GetNodesPrefix returns the nodes prefix based on the global prefix.
-// For example, if the global prefix is "/goverse", this returns "/goverse/nodes/".
-func (mgr *EtcdManager) GetNodesPrefix() string {
-	return mgr.prefix + "/nodes/"
-}
-
 // GetPrefix returns the global prefix used for all etcd keys.
 func (mgr *EtcdManager) GetPrefix() string {
 	return mgr.prefix
@@ -389,7 +383,8 @@ func (mgr *EtcdManager) getAllNodesForTesting(ctx context.Context) ([]string, in
 		return nil, 0, fmt.Errorf("etcd client not connected")
 	}
 
-	resp, err := mgr.client.Get(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
+	nodesPrefix := mgr.prefix + "/nodes/"
+	resp, err := mgr.client.Get(ctx, nodesPrefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get nodes: %w", err)
 	}

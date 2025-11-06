@@ -149,12 +149,6 @@ func TestNewEtcdManagerWithPrefix(t *testing.T) {
 			if mgr.GetPrefix() != tt.wantPrefix {
 				t.Fatalf("GetPrefix() = %s, want %s", mgr.GetPrefix(), tt.wantPrefix)
 			}
-
-			// Verify nodes prefix is derived correctly
-			expectedNodesPrefix := tt.wantPrefix + "/nodes/"
-			if mgr.GetNodesPrefix() != expectedNodesPrefix {
-				t.Fatalf("GetNodesPrefix() = %s, want %s", mgr.GetNodesPrefix(), expectedNodesPrefix)
-			}
 		})
 	}
 }
@@ -415,7 +409,8 @@ func TestRegisterKeyLeaseWithoutConnect(t *testing.T) {
 	ctx := context.Background()
 
 	// Try to register without connecting
-	key := mgr.GetNodesPrefix() + "localhost:47009"
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + "localhost:47009"
 	_, err = mgr.RegisterKeyLease(ctx, key, "localhost:47009", NodeLeaseTTL)
 	if err == nil {
 		t.Fatal("RegisterKeyLease() should fail when not connected")

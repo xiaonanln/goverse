@@ -53,7 +53,8 @@ func main() {
 	nodeAddress := "localhost:50000"
 
 	// Register node using the shared lease API - this starts the automatic keep-alive retry loop
-	key := mgr.GetNodesPrefix() + nodeAddress
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + nodeAddress
 	_, err = mgr.RegisterKeyLease(ctx, key, nodeAddress, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		fmt.Printf("Failed to register node: %v\n", err)
@@ -77,7 +78,7 @@ func main() {
 		select {
 		case <-ticker.C:
 			// Try to get all nodes from etcd (this might fail if etcd is down)
-			nodesPrefix := mgr.GetNodesPrefix()
+			nodesPrefix := mgr.GetPrefix() + "/nodes/"
 			client := mgr.GetClient()
 			if client != nil {
 				ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -97,7 +98,8 @@ func main() {
 			fmt.Println("\nReceived interrupt, cleaning up...")
 
 			// Unregister node using the shared lease API
-			key := mgr.GetNodesPrefix() + nodeAddress
+			nodesPrefix := mgr.GetPrefix() + "/nodes/"
+			key := nodesPrefix + nodeAddress
 			err = mgr.UnregisterKeyLease(ctx, key)
 			if err != nil {
 				fmt.Printf("Failed to unregister node: %v\n", err)

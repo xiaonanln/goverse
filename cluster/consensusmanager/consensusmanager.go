@@ -311,7 +311,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	revision := cm.state.Revision
 	cm.mu.RUnlock()
 
-	nodesPrefix := cm.etcdManager.GetNodesPrefix()
+	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
 	shardPrefix := prefix + "/shard/"
 
 	// Watch from the next revision after our load to prevent missing events
@@ -470,7 +470,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 		LastChange: time.Now(),
 	}
 
-	nodesPrefix := cm.etcdManager.GetNodesPrefix()
+	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
 	shardPrefix := prefix + "/shard/"
 
 	for _, kv := range resp.Kvs {
