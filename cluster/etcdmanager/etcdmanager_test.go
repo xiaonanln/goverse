@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/util/testutil"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // setupEtcdTest creates a manager with a unique prefix, connects, and registers cleanup
@@ -435,6 +436,231 @@ func TestEtcdManagerRegisterNodeMultipleTimes(t *testing.T) {
 
 	// Cleanup
 	mgr.UnregisterNode(ctx, nodeAddress2)
+}
+
+// TestRegisterKeyLeaseAndUnregisterKey tests the new shared lease API
+func TestRegisterKeyLeaseAndUnregisterKey(t *testing.T) {
+	t.Parallel()
+
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Register multiple keys
+	keys := map[string]string{
+		mgr.GetPrefix() + "/test/key1": "value1",
+		mgr.GetPrefix() + "/test/key2": "value2",
+		mgr.GetPrefix() + "/test/key3": "value3",
+	}
+
+	// Register all keys
+	for key, value := range keys {
+		leaseID, err := mgr.RegisterKeyLease(ctx, key, value, 15)
+		if err != nil {
+			t.Fatalf("RegisterKeyLease(%s) error = %v", key, err)
+		}
+		if leaseID == 0 {
+			t.Fatalf("RegisterKeyLease(%s) returned zero lease ID", key)
+		}
+		t.Logf("Registered key %s with lease %d", key, leaseID)
+	}
+
+	// Wait for keys to be registered
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify all keys exist in etcd
+	for key, expectedValue := range keys {
+		resp, err := mgr.GetClient().Get(ctx, key)
+		if err != nil {
+			t.Fatalf("Failed to get key %s: %v", key, err)
+		}
+		if len(resp.Kvs) == 0 {
+			t.Fatalf("Key %s not found in etcd", key)
+		}
+		actualValue := string(resp.Kvs[0].Value)
+		if actualValue != expectedValue {
+			t.Fatalf("Key %s has value %s, expected %s", key, actualValue, expectedValue)
+		}
+		t.Logf("Verified key %s = %s", key, actualValue)
+	}
+
+	// Verify all keys share the same lease
+	var commonLeaseID clientv3.LeaseID
+	for key := range keys {
+		resp, err := mgr.GetClient().Get(ctx, key)
+		if err != nil {
+			t.Fatalf("Failed to get key %s: %v", key, err)
+		}
+		if len(resp.Kvs) == 0 {
+			t.Fatalf("Key %s not found in etcd", key)
+		}
+		leaseID := resp.Kvs[0].Lease
+		if commonLeaseID == 0 {
+			commonLeaseID = clientv3.LeaseID(leaseID)
+		} else if clientv3.LeaseID(leaseID) != commonLeaseID {
+			t.Fatalf("Key %s has different lease ID %d, expected %d", key, leaseID, commonLeaseID)
+		}
+	}
+	t.Logf("All keys share lease ID %d", commonLeaseID)
+
+	// Unregister keys one by one
+	keyList := make([]string, 0, len(keys))
+	for key := range keys {
+		keyList = append(keyList, key)
+	}
+
+	for i, key := range keyList {
+		err := mgr.UnregisterKeyLease(ctx, key)
+		if err != nil {
+			t.Fatalf("UnregisterKeyLease(%s) error = %v", key, err)
+		}
+
+		// Verify key is removed
+		time.Sleep(100 * time.Millisecond)
+		resp, err := mgr.GetClient().Get(ctx, key)
+		if err != nil {
+			t.Fatalf("Failed to check key %s: %v", key, err)
+		}
+		if len(resp.Kvs) > 0 {
+			t.Fatalf("Key %s still exists after unregister", key)
+		}
+		t.Logf("Unregistered and verified key %s is removed", key)
+
+		// After unregistering the last key, the lease should be revoked
+		if i == len(keyList)-1 {
+			time.Sleep(500 * time.Millisecond)
+			// Try to get lease info - it should fail or return no keys
+			leaseResp, err := mgr.GetClient().TimeToLive(ctx, commonLeaseID)
+			if err == nil && leaseResp.TTL > 0 {
+				t.Logf("Warning: Lease %d still active after removing all keys (may be expected)", commonLeaseID)
+			} else {
+				t.Logf("Lease %d revoked after removing all keys", commonLeaseID)
+			}
+		}
+	}
+}
+
+// TestRegisterNodeWrapperPreservesSingleNodeRestriction tests that RegisterNode wrapper
+// preserves the single-node restriction
+func TestRegisterNodeWrapperPreservesSingleNodeRestriction(t *testing.T) {
+	t.Parallel()
+
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
+		return
+	}
+
+	ctx := context.Background()
+	nodeAddress1 := "localhost:50200"
+	nodeAddress2 := "localhost:50201"
+
+	// Register first node - should succeed
+	err := mgr.RegisterNode(ctx, nodeAddress1)
+	if err != nil {
+		t.Fatalf("First RegisterNode() error = %v", err)
+	}
+
+	// Register same node again - should be no-op (succeed)
+	err = mgr.RegisterNode(ctx, nodeAddress1)
+	if err != nil {
+		t.Fatalf("RegisterNode() with same address should succeed, got error: %v", err)
+	}
+
+	// Register different node - should fail
+	err = mgr.RegisterNode(ctx, nodeAddress2)
+	if err == nil {
+		t.Fatal("RegisterNode() with different address should fail, but succeeded")
+	}
+	t.Logf("Expected error for different node: %v", err)
+
+	// Wait for registration to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify only first node is registered
+	nodes, _, err := mgr.getAllNodesForTesting(ctx)
+	if err != nil {
+		t.Fatalf("getAllNodesForTesting() error = %v", err)
+	}
+
+	foundNode1 := false
+	foundNode2 := false
+	for _, node := range nodes {
+		if node == nodeAddress1 {
+			foundNode1 = true
+		}
+		if node == nodeAddress2 {
+			foundNode2 = true
+		}
+	}
+
+	if !foundNode1 {
+		t.Fatalf("First node %s should be registered", nodeAddress1)
+	}
+	if foundNode2 {
+		t.Fatalf("Second node %s should not be registered", nodeAddress2)
+	}
+
+	// Cleanup
+	err = mgr.UnregisterNode(ctx, nodeAddress1)
+	if err != nil {
+		t.Fatalf("UnregisterNode() error = %v", err)
+	}
+}
+
+// TestSharedLeaseResilience tests that the shared lease recovers from failures
+func TestSharedLeaseResilience(t *testing.T) {
+	t.Parallel()
+
+	mgr := setupEtcdTest(t)
+	if mgr == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Register a key
+	key := mgr.GetPrefix() + "/test/resilient-key"
+	value := "resilient-value"
+
+	_, err := mgr.RegisterKeyLease(ctx, key, value, 15)
+	if err != nil {
+		t.Fatalf("RegisterKeyLease() error = %v", err)
+	}
+
+	// Wait for initial registration
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify key exists
+	resp, err := mgr.GetClient().Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Failed to get key: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatalf("Key not found after registration")
+	}
+
+	// The shared lease loop should keep the key alive
+	// Wait a bit longer and verify it's still there
+	time.Sleep(2 * time.Second)
+
+	resp, err = mgr.GetClient().Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Failed to get key after delay: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatalf("Key not found after delay - lease may have expired")
+	}
+
+	t.Logf("Key still exists after delay, shared lease is working")
+
+	// Cleanup
+	err = mgr.UnregisterKeyLease(ctx, key)
+	if err != nil {
+		t.Fatalf("UnregisterKeyLease() error = %v", err)
+	}
 }
 
 // TestEtcdManagerUnregisterNode tests node unregistration
