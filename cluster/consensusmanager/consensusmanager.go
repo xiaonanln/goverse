@@ -575,6 +575,11 @@ func (cm *ConsensusManager) GetNodeForObject(objectID string) (string, error) {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
 
+	// Use CurrentNode if set, otherwise fall back to TargetNode
+	// This ensures we route to where the shard actually is, not where it should eventually be
+	if shardInfo.CurrentNode != "" {
+		return shardInfo.CurrentNode, nil
+	}
 	return shardInfo.TargetNode, nil
 }
 
@@ -594,6 +599,11 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
 
+	// Use CurrentNode if set, otherwise fall back to TargetNode
+	// This ensures we route to where the shard actually is, not where it should eventually be
+	if shardInfo.CurrentNode != "" {
+		return shardInfo.CurrentNode, nil
+	}
 	return shardInfo.TargetNode, nil
 }
 

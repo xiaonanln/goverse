@@ -343,6 +343,41 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 	}
 }
 
+func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set a mapping where CurrentNode differs from TargetNode
+	cm.mu.Lock()
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: map[int]ShardInfo{
+			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47002"},
+			1: {TargetNode: "localhost:47002", CurrentNode: ""},
+		},
+	}
+	cm.mu.Unlock()
+
+	// Should return CurrentNode when set
+	node, err := cm.GetNodeForShard(0)
+	if err != nil {
+		t.Fatalf("Failed to get node for shard: %v", err)
+	}
+
+	if node != "localhost:47002" {
+		t.Errorf("Expected CurrentNode localhost:47002, got %s", node)
+	}
+
+	// Should return TargetNode when CurrentNode is empty
+	node, err = cm.GetNodeForShard(1)
+	if err != nil {
+		t.Fatalf("Failed to get node for shard: %v", err)
+	}
+
+	if node != "localhost:47002" {
+		t.Errorf("Expected TargetNode localhost:47002, got %s", node)
+	}
+}
+
 func TestGetNodeForObject_NoMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
@@ -381,6 +416,46 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	// Should be one of the nodes
 	if node != "localhost:47001" && node != "localhost:47002" {
 		t.Errorf("Unexpected node: %s", node)
+	}
+}
+
+func TestGetNodeForObject_PrefersCurrentNode(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set a complete mapping where some shards have CurrentNode set
+	cm.mu.Lock()
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	// For all shards, set TargetNode to localhost:47001 but CurrentNode to localhost:47002
+	for i := 0; i < sharding.NumShards; i++ {
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
+			TargetNode:  "localhost:47001",
+			CurrentNode: "localhost:47002",
+		}
+	}
+	cm.mu.Unlock()
+
+	// Get node for an object - should return CurrentNode
+	node, err := cm.GetNodeForObject("test-object-123")
+	if err != nil {
+		t.Fatalf("Failed to get node for object: %v", err)
+	}
+
+	// Should return CurrentNode (localhost:47002) not TargetNode (localhost:47001)
+	if node != "localhost:47002" {
+		t.Errorf("Expected CurrentNode localhost:47002, got %s", node)
+	}
+
+	// Test with a different object to ensure it works for different shards
+	node2, err := cm.GetNodeForObject("another-object-456")
+	if err != nil {
+		t.Fatalf("Failed to get node for object: %v", err)
+	}
+
+	if node2 != "localhost:47002" {
+		t.Errorf("Expected CurrentNode localhost:47002 for second object, got %s", node2)
 	}
 }
 
