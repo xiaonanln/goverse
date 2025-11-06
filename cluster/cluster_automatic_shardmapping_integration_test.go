@@ -19,39 +19,9 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create nodes - node1 will be leader (smaller address)
-	node1 := node.NewNode("localhost:50011")
-	node2 := node.NewNode("localhost:50012")
-
-	var err error
-	// Start and register node1
-	err = node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	defer node1.Stop(ctx)
-
-	// Start and register node2
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	defer node2.Stop(ctx)
-
-	// Create two clusters
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-	cluster1.Start(ctx, node1)
-	defer cluster1.Stop(ctx)
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-	cluster2.Start(ctx, node2)
-	defer cluster2.Stop(ctx)
+	// Create and start both clusters - node1 will be leader (smaller address)
+	cluster1 := mustNewCluster(ctx, t, "localhost:50011", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, "localhost:50012", testPrefix)
 
 	// Wait for watches to sync
 	time.Sleep(1000 * time.Millisecond)

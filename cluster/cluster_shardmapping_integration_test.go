@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
-	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
@@ -18,46 +17,9 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create nodes - node1 will be leader (smaller address)
-	node1 := node.NewNode("localhost:50001")
-	node2 := node.NewNode("localhost:50002")
-
-	// Start and register node1
-	err := node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	defer node1.Stop(ctx)
-
-	// Start and register node2
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	defer node2.Stop(ctx)
-
-	// Create two clusters to test leader election and shard mapping
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-
-	err = cluster1.Start(ctx, node1)
-	if err != nil {
-		t.Fatalf("Failed to start cluster1: %v", err)
-	}
-	defer cluster1.Stop(ctx)
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-
-	err = cluster2.Start(ctx, node2)
-	if err != nil {
-		t.Fatalf("Failed to start cluster2: %v", err)
-	}
-	defer cluster2.Stop(ctx)
+	// Create and start both clusters - node1 will be leader (smaller address)
+	cluster1 := mustNewCluster(ctx, t, "localhost:50001", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, "localhost:50002", testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
 	time.Sleep(testutil.WaitForShardMappingTimeout)

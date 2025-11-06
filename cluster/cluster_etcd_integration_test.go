@@ -18,46 +18,9 @@ func TestClusterEtcdIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create nodes for both clusters
-	node1 := node.NewNode("localhost:47001")
-	node2 := node.NewNode("localhost:47002")
-
-	// Start node1
-	err := node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	defer node1.Stop(ctx)
-
-	// Start node2
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	defer node2.Stop(ctx)
-
-	// Create two clusters
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-
-	err = cluster1.Start(ctx, node1)
-	if err != nil {
-		t.Fatalf("Failed to start cluster1: %v", err)
-	}
-	defer cluster1.Stop(ctx)
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-
-	err = cluster2.Start(ctx, node2)
-	if err != nil {
-		t.Fatalf("Failed to start cluster2: %v", err)
-	}
-	defer cluster2.Stop(ctx)
+	// Create and start both clusters
+	cluster1 := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, "localhost:47002", testPrefix)
 
 	// Wait for watches to sync
 	time.Sleep(500 * time.Millisecond)
@@ -110,24 +73,8 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create and setup cluster1
-	node1 := node.NewNode("localhost:47003")
-	err := node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	defer node1.Stop(ctx)
-
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-
-	err = cluster1.Start(ctx, node1)
-	if err != nil {
-		t.Fatalf("Failed to start cluster1: %v", err)
-	}
-	defer cluster1.Stop(ctx)
+	// Create and start cluster1
+	cluster1 := mustNewCluster(ctx, t, "localhost:47003", testPrefix)
 
 	// Wait for registration
 	time.Sleep(500 * time.Millisecond)
@@ -139,26 +86,10 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 		t.Fatalf("Cluster1 should initially see only itself ('localhost:47003'), got %d nodes: %v", len(initialNodes), initialNodes)
 	}
 
-	// Create and setup cluster2
-	node2 := node.NewNode("localhost:47004")
-	err = node2.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node2: %v", err)
-	}
-	defer node2.Stop(ctx)
+	// Create and start cluster2 (dynamic discovery)
+	_ = mustNewCluster(ctx, t, "localhost:47004", testPrefix)
 
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-
-	err = cluster2.Start(ctx, node2)
-	if err != nil {
-		t.Fatalf("Failed to start cluster2: %v", err)
-	}
-	defer cluster2.Stop(ctx)
-
-	// Wait for watch to detect the new node
+	// Wait for cluster1 to discover cluster2
 	time.Sleep(1 * time.Second)
 
 	// Cluster1 should now see node2
@@ -189,28 +120,13 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create and setup cluster1
-	node1 := node.NewNode("localhost:47005")
-	err := node1.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node1: %v", err)
-	}
-	defer node1.Stop(ctx)
+	// Create and start cluster1
+	cluster1 := mustNewCluster(ctx, t, "localhost:47005", testPrefix)
 
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-
-	err = cluster1.Start(ctx, node1)
-	if err != nil {
-		t.Fatalf("Failed to start cluster1: %v", err)
-	}
-	defer cluster1.Stop(ctx)
-
-	// Create and setup cluster2
+	// Create cluster2 (we'll stop it manually later to test leave detection)
+	// For this test, we need manual control over cluster2's lifecycle
 	node2 := node.NewNode("localhost:47006")
-	err = node2.Start(ctx)
+	err := node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}

@@ -9,6 +9,42 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Helper function to create and start a cluster with etcd for testing
+func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPrefix string) *Cluster {
+	t.Helper()
+
+	// Create a node
+	n := node.NewNode(nodeAddr)
+
+	// Start the node
+	err := n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+
+	// Create cluster with etcd
+	c, err := NewCluster(n, "localhost:2379", etcdPrefix)
+	if err != nil {
+		n.Stop(ctx) // Clean up node if cluster creation fails
+		t.Fatalf("Failed to create cluster: %v", err)
+	}
+
+	// Start the cluster (register node, start watching, etc.)
+	err = c.Start(ctx, n)
+	if err != nil {
+		n.Stop(ctx) // Clean up node if cluster start fails
+		t.Fatalf("Failed to start cluster: %v", err)
+	}
+
+	// Register cleanup
+	t.Cleanup(func() {
+		c.Stop(ctx)
+		n.Stop(ctx)
+	})
+
+	return c
+}
+
 func TestGet(t *testing.T) {
 	// Test that Get returns a singleton
 	cluster1 := This()
