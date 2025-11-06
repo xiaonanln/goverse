@@ -3,7 +3,6 @@ package testutil
 import (
 	"context"
 	"testing"
-	"time"
 )
 
 // TestMustNewCluster tests that MustNewCluster creates and starts a cluster properly
@@ -28,9 +27,6 @@ func TestMustNewCluster(t *testing.T) {
 		t.Errorf("Expected node address localhost:60001, got %s", c.GetThisNode().GetAdvertiseAddress())
 	}
 
-	// Give the cluster a moment to settle
-	time.Sleep(100 * time.Millisecond)
-
 	// Cleanup is handled automatically by t.Cleanup registered in MustNewCluster
 }
 
@@ -54,9 +50,6 @@ func TestMustNewCluster_MultipleInstances(t *testing.T) {
 		if c1.GetThisNode().GetAdvertiseAddress() != "localhost:60002" {
 			t.Errorf("Expected node address localhost:60002, got %s", c1.GetThisNode().GetAdvertiseAddress())
 		}
-
-		// Give the cluster a moment to settle
-		time.Sleep(100 * time.Millisecond)
 	})
 
 	// Create second cluster in a separate subtest
@@ -75,8 +68,5 @@ func TestMustNewCluster_MultipleInstances(t *testing.T) {
 		if c2.GetThisNode().GetAdvertiseAddress() != "localhost:60003" {
 			t.Errorf("Expected node address localhost:60003, got %s", c2.GetThisNode().GetAdvertiseAddress())
 		}
-
-		// Give the cluster a moment to settle
-		time.Sleep(100 * time.Millisecond)
 	})
 }
