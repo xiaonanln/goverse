@@ -18,17 +18,10 @@ const (
 
 // EtcdManager manages the connection to etcd
 type EtcdManager struct {
-	client           *clientv3.Client
-	endpoints        []string
-	logger           *logger.Logger
-	prefix           string // global prefix for all etcd keys
-	leaseID          clientv3.LeaseID
-	registeredNodeID string // the node ID that was registered
-	keepAliveCancel  context.CancelFunc
-	keepAliveMu      sync.Mutex
-	keepAliveCtx     context.Context
-	keepAliveStopped bool
-	keepAliveWg      sync.WaitGroup
+	client    *clientv3.Client
+	endpoints []string
+	logger    *logger.Logger
+	prefix    string // global prefix for all etcd keys
 
 	// Shared lease fields for generic key-value registration
 	sharedLeaseID      clientv3.LeaseID
@@ -100,18 +93,6 @@ func (mgr *EtcdManager) Connect() error {
 
 // Close closes the etcd connection
 func (mgr *EtcdManager) Close() error {
-	// Stop the keep-alive loop
-	mgr.keepAliveMu.Lock()
-	if mgr.keepAliveCancel != nil {
-		mgr.keepAliveCancel()
-		mgr.keepAliveCancel = nil
-	}
-	mgr.keepAliveStopped = true
-	mgr.keepAliveMu.Unlock()
-
-	// Wait for the keep-alive loop to stop
-	mgr.keepAliveWg.Wait()
-
 	// Stop the shared lease loop
 	mgr.sharedKeysMu.Lock()
 	if mgr.sharedLeaseCancel != nil {
@@ -161,201 +142,6 @@ func (mgr *EtcdManager) Put(ctx context.Context, key, value string) error {
 	}
 
 	mgr.logger.Debugf("Put key=%s, value=%s", key, value)
-	return nil
-}
-
-// RegisterNode registers a node with etcd using a lease
-func (mgr *EtcdManager) RegisterNode(ctx context.Context, nodeAddress string) error {
-	if mgr.client == nil {
-		return fmt.Errorf("etcd client not connected")
-	}
-
-	// Check if a node has already been registered
-	if mgr.registeredNodeID != "" {
-		if mgr.registeredNodeID != nodeAddress {
-			return fmt.Errorf("node already registered with ID %s, cannot register different node ID %s", mgr.registeredNodeID, nodeAddress)
-		}
-		// Same node ID - this is a no-op
-		mgr.logger.Debugf("Node %s already registered, skipping", nodeAddress)
-		return nil
-	}
-
-	// Mark this node as registered
-	mgr.registeredNodeID = nodeAddress
-
-	// Use the new RegisterKeyLease method
-	key := mgr.GetNodesPrefix() + nodeAddress
-	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
-	if err != nil {
-		// Clear the registered node ID on failure
-		mgr.registeredNodeID = ""
-		return fmt.Errorf("failed to register node: %w", err)
-	}
-
-	mgr.logger.Infof("Registered node %s using shared lease", nodeAddress)
-	return nil
-}
-
-// keepAliveLoop maintains the lease and registration for a node with automatic retry
-func (mgr *EtcdManager) keepAliveLoop(nodeAddress string) {
-	defer mgr.keepAliveWg.Done()
-
-	retryDelay := 1 * time.Second
-	maxRetryDelay := 4 * time.Second
-
-	for {
-		// Check if we should stop
-		mgr.keepAliveMu.Lock()
-		if mgr.keepAliveStopped {
-			mgr.keepAliveMu.Unlock()
-			mgr.logger.Infof("Keep-alive loop stopped for node %s", nodeAddress)
-			return
-		}
-		ctx := mgr.keepAliveCtx
-		mgr.keepAliveMu.Unlock()
-
-		if ctx.Err() != nil {
-			mgr.logger.Infof("Keep-alive context cancelled for node %s", nodeAddress)
-			return
-		}
-
-		// Try to establish lease and keep-alive
-		err := mgr.maintainLease(ctx, nodeAddress)
-
-		if ctx.Err() != nil {
-			// Context was cancelled, exit cleanly
-			mgr.logger.Infof("Keep-alive context cancelled for node %s", nodeAddress)
-			return
-		}
-
-		if err != nil {
-			mgr.logger.Warnf("Failed to maintain lease for node %s: %v, retrying in %v", nodeAddress, err, retryDelay)
-
-			// Wait before retrying with exponential backoff
-			select {
-			case <-time.After(retryDelay):
-				// Exponential backoff
-				retryDelay = retryDelay * 2
-				if retryDelay > maxRetryDelay {
-					retryDelay = maxRetryDelay
-				}
-			case <-ctx.Done():
-				mgr.logger.Infof("Keep-alive context cancelled during retry wait for node %s", nodeAddress)
-				return
-			}
-		} else {
-			// Successfully maintained lease, reset retry delay
-			retryDelay = 1 * time.Second
-		}
-	}
-}
-
-// maintainLease creates a lease and maintains it with keep-alive
-// This function is responsible for the complete lifecycle of a lease:
-// - Revoking any previous lease
-// - Creating a new lease
-// - Maintaining the lease with keep-alive
-// - Revoking the lease when done (on context cancellation or error)
-// Returns when keep-alive channel closes or context is cancelled
-func (mgr *EtcdManager) maintainLease(ctx context.Context, nodeAddress string) error {
-	if mgr.client == nil {
-		return fmt.Errorf("etcd client not connected")
-	}
-
-	// Get and revoke any previous lease before creating a new one
-	// This prevents lease leaks when retrying after keep-alive failures
-	mgr.keepAliveMu.Lock()
-	oldLeaseID := mgr.leaseID
-	mgr.keepAliveMu.Unlock()
-
-	if oldLeaseID != 0 {
-		// Best effort revoke - don't fail if it doesn't work
-		// The lease will expire naturally if revoke fails
-		mgr.logger.Infof("Revoking stale lease %d before creating new lease", oldLeaseID)
-		_, err := mgr.client.Revoke(ctx, oldLeaseID)
-		if err != nil {
-			mgr.logger.Debugf("Failed to revoke old lease %d: %v (will create new lease anyway)", oldLeaseID, err)
-		}
-	}
-
-	// Create a lease
-	lease, err := mgr.client.Grant(ctx, NodeLeaseTTL)
-	if err != nil {
-		return fmt.Errorf("failed to grant lease: %w", err)
-	}
-
-	// Store the lease ID (protected by mutex)
-	mgr.keepAliveMu.Lock()
-	mgr.leaseID = lease.ID
-	mgr.keepAliveMu.Unlock()
-
-	// Ensure the lease is always revoked when this function exits
-	defer func() {
-		// Revoke the lease using a background context since the original context may be cancelled
-		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, err := mgr.client.Revoke(revokeCtx, lease.ID)
-		if err != nil {
-			mgr.logger.Debugf("Failed to revoke lease %d on cleanup: %v", lease.ID, err)
-		} else {
-			mgr.logger.Debugf("Revoked lease %d on cleanup", lease.ID)
-		}
-
-		// Clear the lease ID
-		mgr.keepAliveMu.Lock()
-		if mgr.leaseID == lease.ID {
-			mgr.leaseID = 0
-		}
-		mgr.keepAliveMu.Unlock()
-	}()
-
-	// Register the node with the lease
-	key := mgr.GetNodesPrefix() + nodeAddress
-	_, err = mgr.client.Put(ctx, key, nodeAddress, clientv3.WithLease(lease.ID))
-	if err != nil {
-		return fmt.Errorf("failed to register node: %w", err)
-	}
-
-	mgr.logger.Infof("Registered node %s with lease ID %d", nodeAddress, lease.ID)
-
-	// Keep the lease alive
-	keepAliveCh, err := mgr.client.KeepAlive(ctx, lease.ID)
-	if err != nil {
-		return fmt.Errorf("failed to keep alive lease: %w", err)
-	}
-
-	// Process keep-alive responses until channel closes or context is cancelled
-	for {
-		select {
-		case ka, ok := <-keepAliveCh:
-			if !ok {
-				mgr.logger.Warnf("Keep-alive channel closed for lease %d, will retry", lease.ID)
-				return fmt.Errorf("keep-alive channel closed")
-			}
-			if ka != nil {
-				mgr.logger.Debugf("Keep-alive response for lease %d, TTL: %d", ka.ID, ka.TTL)
-			}
-		case <-ctx.Done():
-			mgr.logger.Infof("Context cancelled, stopping keep-alive for lease %d", lease.ID)
-			return nil
-		}
-	}
-}
-
-// UnregisterNode removes a node from etcd
-func (mgr *EtcdManager) UnregisterNode(ctx context.Context, nodeAddress string) error {
-	// Use the new UnregisterKeyLease method
-	key := mgr.GetNodesPrefix() + nodeAddress
-	err := mgr.UnregisterKeyLease(ctx, key)
-	if err != nil {
-		return fmt.Errorf("failed to unregister node: %w", err)
-	}
-
-	// Clear the registered node ID
-	mgr.registeredNodeID = ""
-
-	mgr.logger.Infof("Unregistered node %s", nodeAddress)
 	return nil
 }
 

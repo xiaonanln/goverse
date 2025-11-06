@@ -18,10 +18,11 @@ func TestKeepAliveRetry(t *testing.T) {
 	ctx := context.Background()
 	nodeAddress := "localhost:50100"
 
-	// Register node - this will start the keep-alive loop
-	err := mgr.RegisterNode(ctx, nodeAddress)
+	// Register node using shared lease - this will start the keep-alive loop
+	key := mgr.GetNodesPrefix() + nodeAddress
+	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
+		t.Fatalf("RegisterKeyLease() error = %v", err)
 	}
 
 	// Verify the node is registered by checking it exists in etcd
@@ -67,9 +68,9 @@ func TestKeepAliveRetry(t *testing.T) {
 	}
 
 	// Cleanup
-	err = mgr.UnregisterNode(ctx, nodeAddress)
+	err = mgr.UnregisterKeyLease(ctx, key)
 	if err != nil {
-		t.Fatalf("UnregisterNode() error = %v", err)
+		t.Fatalf("UnregisterKeyLease() error = %v", err)
 	}
 
 	// Verify node is unregistered
@@ -98,10 +99,11 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	ctx := context.Background()
 	nodeAddress := "localhost:50101"
 
-	// Register node
-	err := mgr.RegisterNode(ctx, nodeAddress)
+	// Register node using shared lease
+	key := mgr.GetNodesPrefix() + nodeAddress
+	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
+		t.Fatalf("RegisterKeyLease() error = %v", err)
 	}
 
 	// Wait for registration
@@ -126,9 +128,9 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	}
 
 	// Unregister should stop the keep-alive loop
-	err = mgr.UnregisterNode(ctx, nodeAddress)
+	err = mgr.UnregisterKeyLease(ctx, key)
 	if err != nil {
-		t.Fatalf("UnregisterNode() error = %v", err)
+		t.Fatalf("UnregisterKeyLease() error = %v", err)
 	}
 
 	// Wait for cleanup
@@ -144,8 +146,8 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	}
 }
 
-// TestRegisterNodeIdempotent tests that registering the same node multiple times is idempotent
-func TestRegisterNodeIdempotent(t *testing.T) {
+// TestRegisterKeyLeaseIdempotent tests that registering the same key multiple times overwrites the value
+func TestRegisterKeyLeaseIdempotent(t *testing.T) {
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -157,46 +159,45 @@ func TestRegisterNodeIdempotent(t *testing.T) {
 	nodeAddress := "localhost:50102"
 
 	// Register node first time
-	err := mgr.RegisterNode(ctx, nodeAddress)
+	key := mgr.GetNodesPrefix() + nodeAddress
+	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
-		t.Fatalf("First RegisterNode() error = %v", err)
+		t.Fatalf("First RegisterKeyLease() error = %v", err)
 	}
 
 	// Wait for registration
 	time.Sleep(500 * time.Millisecond)
 
-	// Register same node again - should be idempotent (no error)
-	err = mgr.RegisterNode(ctx, nodeAddress)
+	// Register same key again with different value - should overwrite
+	_, err = mgr.RegisterKeyLease(ctx, key, nodeAddress+"-updated", NodeLeaseTTL)
 	if err != nil {
-		t.Fatalf("Second RegisterNode() should be idempotent, got error: %v", err)
+		t.Fatalf("Second RegisterKeyLease() error: %v", err)
 	}
 
-	// Verify only one instance of the node exists
-	nodes, _, err := mgr.getAllNodesForTesting(ctx)
+	// Wait for update
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the value is updated
+	resp, err := mgr.GetClient().Get(ctx, key)
 	if err != nil {
-		t.Fatalf("getAllNodesForTesting() error = %v", err)
+		t.Fatalf("Failed to get key: %v", err)
 	}
-
-	count := 0
-	for _, node := range nodes {
-		if node == nodeAddress {
-			count++
-		}
+	if len(resp.Kvs) == 0 {
+		t.Fatalf("Key not found after update")
 	}
-
-	if count != 1 {
-		t.Fatalf("Expected 1 instance of node %s, found %d", nodeAddress, count)
+	if string(resp.Kvs[0].Value) != nodeAddress+"-updated" {
+		t.Fatalf("Expected value %s, got %s", nodeAddress+"-updated", string(resp.Kvs[0].Value))
 	}
 
 	// Cleanup
-	err = mgr.UnregisterNode(ctx, nodeAddress)
+	err = mgr.UnregisterKeyLease(ctx, key)
 	if err != nil {
-		t.Fatalf("UnregisterNode() error = %v", err)
+		t.Fatalf("UnregisterKeyLease() error = %v", err)
 	}
 }
 
-// TestCloseStopsKeepAlive tests that Close() stops the keep-alive loop
-func TestCloseStopsKeepAlive(t *testing.T) {
+// TestCloseStopsSharedLease tests that Close() stops the shared lease loop
+func TestCloseStopsSharedLease(t *testing.T) {
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -207,10 +208,11 @@ func TestCloseStopsKeepAlive(t *testing.T) {
 	ctx := context.Background()
 	nodeAddress := "localhost:50103"
 
-	// Register node
-	err := mgr.RegisterNode(ctx, nodeAddress)
+	// Register node using shared lease
+	key := mgr.GetNodesPrefix() + nodeAddress
+	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
-		t.Fatalf("RegisterNode() error = %v", err)
+		t.Fatalf("RegisterKeyLease() error = %v", err)
 	}
 
 	// Wait for registration

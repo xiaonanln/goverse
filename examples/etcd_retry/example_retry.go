@@ -52,8 +52,9 @@ func main() {
 	ctx := context.Background()
 	nodeAddress := "localhost:50000"
 
-	// Register node - this starts the automatic keep-alive retry loop
-	err = mgr.RegisterNode(ctx, nodeAddress)
+	// Register node using the shared lease API - this starts the automatic keep-alive retry loop
+	key := mgr.GetNodesPrefix() + nodeAddress
+	_, err = mgr.RegisterKeyLease(ctx, key, nodeAddress, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		fmt.Printf("Failed to register node: %v\n", err)
 		os.Exit(1)
@@ -95,8 +96,9 @@ func main() {
 		case <-sigChan:
 			fmt.Println("\nReceived interrupt, cleaning up...")
 
-			// Unregister node
-			err = mgr.UnregisterNode(ctx, nodeAddress)
+			// Unregister node using the shared lease API
+			key := mgr.GetNodesPrefix() + nodeAddress
+			err = mgr.UnregisterKeyLease(ctx, key)
 			if err != nil {
 				fmt.Printf("Failed to unregister node: %v\n", err)
 			} else {

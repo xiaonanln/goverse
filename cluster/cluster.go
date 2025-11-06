@@ -517,15 +517,24 @@ func (c *Cluster) GetEtcdManagerForTesting() *etcdmanager.EtcdManager {
 	return c.etcdManager
 }
 
-// RegisterNode registers this node with etcd
+// registerNode registers this node with etcd using the shared lease API
 func (c *Cluster) registerNode(ctx context.Context) error {
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
 	}
-	return c.etcdManager.RegisterNode(ctx, c.thisNode.GetAdvertiseAddress())
+	
+	key := c.etcdManager.GetNodesPrefix() + c.thisNode.GetAdvertiseAddress()
+	value := c.thisNode.GetAdvertiseAddress()
+	
+	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
+	if err != nil {
+		return fmt.Errorf("failed to register node: %w", err)
+	}
+	
+	return nil
 }
 
-// unregisterNode unregisters this node from etcd
+// unregisterNode unregisters this node from etcd using the shared lease API
 func (c *Cluster) unregisterNode(ctx context.Context) error {
 	if c.etcdManager == nil {
 		// No-op if etcd manager is not set
@@ -534,7 +543,9 @@ func (c *Cluster) unregisterNode(ctx context.Context) error {
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
 	}
-	return c.etcdManager.UnregisterNode(ctx, c.thisNode.GetAdvertiseAddress())
+	
+	key := c.etcdManager.GetNodesPrefix() + c.thisNode.GetAdvertiseAddress()
+	return c.etcdManager.UnregisterKeyLease(ctx, key)
 }
 
 // closeEtcd closes the etcd connection
