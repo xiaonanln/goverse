@@ -19,7 +19,8 @@ func TestKeepAliveRetry(t *testing.T) {
 	nodeAddress := "localhost:50100"
 
 	// Register node using shared lease - this will start the keep-alive loop
-	key := mgr.GetNodesPrefix() + nodeAddress
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + nodeAddress
 	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("RegisterKeyLease() error = %v", err)
@@ -100,7 +101,8 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	nodeAddress := "localhost:50101"
 
 	// Register node using shared lease
-	key := mgr.GetNodesPrefix() + nodeAddress
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + nodeAddress
 	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("RegisterKeyLease() error = %v", err)
@@ -159,7 +161,8 @@ func TestRegisterKeyLeaseIdempotent(t *testing.T) {
 	nodeAddress := "localhost:50102"
 
 	// Register node first time
-	key := mgr.GetNodesPrefix() + nodeAddress
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + nodeAddress
 	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("First RegisterKeyLease() error = %v", err)
@@ -209,7 +212,8 @@ func TestCloseStopsSharedLease(t *testing.T) {
 	nodeAddress := "localhost:50103"
 
 	// Register node using shared lease
-	key := mgr.GetNodesPrefix() + nodeAddress
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + nodeAddress
 	_, err := mgr.RegisterKeyLease(ctx, key, nodeAddress, NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("RegisterKeyLease() error = %v", err)

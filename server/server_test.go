@@ -182,7 +182,8 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 
 	// Register the node using shared lease API
 	ctx := context.Background()
-	key := etcdMgr.GetNodesPrefix() + config.AdvertiseAddress
+	nodesPrefix := etcdMgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + config.AdvertiseAddress
 	_, err = etcdMgr.RegisterKeyLease(ctx, key, config.AdvertiseAddress, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
@@ -295,7 +296,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Get all registered nodes using etcd manager's GetClient
 	ctx := context.Background()
-	getResp, err := mgr.GetClient().Get(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
+	nodesPrefix := mgr.GetPrefix() + "/nodes/"
+	getResp, err := mgr.GetClient().Get(ctx, nodesPrefix, clientv3.WithPrefix())
 	if err != nil {
 		t.Fatalf("Failed to get nodes from etcd: %v", err)
 	}
@@ -406,7 +408,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	// Verify node was unregistered from etcd after stopping
 	time.Sleep(1 * time.Second) // Give time for cleanup
 
-	getResp, err = mgr.GetClient().Get(ctx, mgr.GetNodesPrefix(), clientv3.WithPrefix())
+	getResp, err = mgr.GetClient().Get(ctx, nodesPrefix, clientv3.WithPrefix())
 	if err != nil {
 		t.Fatalf("Failed to get nodes from etcd after stop: %v", err)
 	}
