@@ -19,7 +19,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	c := mustNewCluster(ctx, t, "localhost:47201", testPrefix)
 
 	// Wait for cluster to be ready (Start() initializes everything)
-	timeout := NodeStabilityDuration + ShardMappingCheckInterval + 5*time.Second
+	timeout := testutil.WaitForShardMappingTimeout
 	select {
 	case <-c.ClusterReady():
 		t.Log("✓ Cluster correctly became ready after BOTH node connections AND shard mapping are available")

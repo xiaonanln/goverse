@@ -148,7 +148,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 
 	// Create full shard mapping
 	ctx := context.Background()
-	err = cm.UpdateShardMapping(ctx)
+	err = cm.ReassignShardTargetNodes(ctx)
 	if err != nil {
 		t.Fatalf("Failed to create shard mapping: %v", err)
 	}

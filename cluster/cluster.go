@@ -761,7 +761,7 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 		return
 	}
 
-	err := c.consensusManager.UpdateShardMapping(ctx)
+	err := c.consensusManager.ReassignShardTargetNodes(ctx)
 	if err != nil {
 		c.logger.Errorf("Failed to update shard mapping: %v", err)
 	} else {

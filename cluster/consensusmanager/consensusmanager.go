@@ -99,7 +99,9 @@ func (cs *ClusterState) Clone() *ClusterState {
 		cscp.Nodes[n] = v
 	}
 
-	// Deep copy shard mapping if present
+	// Deep copy shard mapping
+	// Note: cs.ShardMapping could be nil if Clone is called before Initialize
+	// but cscp.ShardMapping is always initialized above
 	if cs.ShardMapping != nil {
 		for sid, info := range cs.ShardMapping.Shards {
 			cscp.ShardMapping.Shards[sid] = info
@@ -657,7 +659,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 		shardID int
 		err     error
 	}
-	
+
 	// Create tasks for each shard
 	tasks := make([]workerpool.Task, len(shardIDs))
 	for i, shardID := range shardIDs {
@@ -724,7 +726,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	clusterState := cm.state.Clone()
 	cm.mu.RUnlock()
 
-	if clusterState == nil || clusterState.ShardMapping == nil || len(clusterState.ShardMapping.Shards) == 0 {
+	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
 		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
 		return nil
 	}
@@ -755,23 +757,23 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 		cm.logger.Warnf("Failed to claim some shards: claimed %d/%d, error: %v", successCount, len(shardsToUpdate), err)
 		return err
 	}
-	
+
 	cm.logger.Infof("Successfully claimed ownership of %d shards", successCount)
 	return nil
 }
 
-// UpdateShardMapping updates the shard mapping based on the current node list
-func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
+// computeShardUpdates computes which shards need to be reassigned based on current nodes.
+// Returns a map of shard IDs to new ShardInfo, or nil if no changes are needed.
+func (cm *ConsensusManager) computeShardUpdates() map[int]ShardInfo {
 	cm.mu.RLock()
-	clusterState := cm.state
-	cm.mu.RUnlock()
+	defer cm.mu.RUnlock()
 
-	if len(clusterState.Nodes) == 0 {
-		return fmt.Errorf("no nodes available to assign shards")
+	if len(cm.state.Nodes) == 0 {
+		return nil
 	}
 
 	// Sort nodes for deterministic assignment
-	nodes := slices.Sorted(maps.Keys(clusterState.Nodes))
+	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
 	nodeSet := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
 		nodeSet[n] = true
@@ -779,15 +781,16 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 
 	// Check if any changes are needed
 	updateShards := make(map[int]ShardInfo)
-	currentMapping := clusterState.ShardMapping
-	if currentMapping == nil {
-		currentMapping = &ShardMapping{
-			Shards: make(map[int]ShardInfo),
-		}
+	var currentShards map[int]ShardInfo
+	if cm.state.ShardMapping != nil {
+		currentShards = cm.state.ShardMapping.Shards
+	} else {
+		// ShardMapping can be nil if ReassignShardTargetNodes is called before Initialize
+		currentShards = make(map[int]ShardInfo)
 	}
 
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
-		currentInfo := currentMapping.Shards[shardID]
+		currentInfo := currentShards[shardID]
 		if !nodeSet[currentInfo.TargetNode] {
 			// Assign to a new node using round-robin
 			nodeIdx := shardID % len(nodes)
@@ -801,6 +804,19 @@ func (cm *ConsensusManager) UpdateShardMapping(ctx context.Context) error {
 	}
 
 	if len(updateShards) == 0 {
+		return nil
+	}
+
+	return updateShards
+}
+
+// ReassignShardTargetNodes reassigns shard target nodes based on the current node list.
+// This only updates TargetNode fields for shards whose current target is no longer in the active node list.
+// It does not modify CurrentNode fields - use ClaimShardsForNode for that.
+func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) error {
+	updateShards := cm.computeShardUpdates()
+
+	if updateShards == nil {
 		cm.logger.Infof("No changes needed to shard mapping")
 		return nil
 	}
