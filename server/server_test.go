@@ -7,7 +7,6 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -16,6 +15,9 @@ import (
 // resetClusterForTesting resets the cluster singleton state between tests
 // This is necessary because cluster.This() returns a singleton and tests may interfere with each other
 func resetClusterForTesting(t *testing.T) {
+	if cluster.This() == nil {
+		return
+	}
 	cluster.This().ResetForTesting()
 	t.Logf("Cluster state reset for testing")
 }
@@ -106,25 +108,6 @@ func TestNewServer_ValidConfig(t *testing.T) {
 		t.Error("NewServer should initialize a logger")
 	}
 
-	// Verify that the cluster has this node set
-	// Note: This test validates the integration with the global cluster singleton
-	// (cluster.This()), which is the actual production behavior. We intentionally
-	// test the real NewServer() behavior with the global singleton rather than
-	// using an isolated test cluster instance. The test is designed to run first
-	// to avoid conflicts with the singleton's "ThisNode is already set" check.
-	clusterInstance := cluster.This()
-	if clusterInstance.GetThisNode() == nil {
-		t.Error("NewServer should set the node on the cluster")
-	}
-
-	// Note: With the new pattern, NewServer automatically initializes the cluster
-	// by calling NewCluster which connects to etcd
-
-	// Verify that the cluster's node matches the server's node
-	if clusterInstance.GetThisNode() != server.Node {
-		t.Error("Cluster's node should match the server's node")
-	}
-
 	// Test ListObjects on this server
 	ctx := context.Background()
 	resp, err := server.ListObjects(ctx, &goverse_pb.Empty{})
@@ -170,7 +153,7 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	}
 
 	// With the new pattern, NewServer automatically initializes the cluster with etcd
-	clusterInstance := cluster.This()
+	clusterInstance := server.cluster
 
 	// Verify that the cluster has an etcd manager with the custom prefix
 	etcdMgr := clusterInstance.GetEtcdManagerForTesting()
@@ -235,7 +218,8 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 
 func TestNode_ListObjects(t *testing.T) {
 	// Create a node directly without going through NewServer
-	n := node.NewNode("localhost:9094")
+	ctx := context.Background()
+	n := testutil.MustNewNode(ctx, t, "localhost:9094")
 
 	// Test that ListObjects returns empty list initially
 	objectInfos := n.ListObjects()

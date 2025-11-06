@@ -4,16 +4,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // TestCreateObject_FixedNodeAddress tests creating objects with fixed node addresses
 func TestCreateObject_FixedNodeAddress(t *testing.T) {
-	c := newClusterForTesting("TestCreateObject_FixedNodeAddress")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
 	// The object ID format "nodeAddress/objectID" causes GetNodeForObject
@@ -21,8 +21,6 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 
 	// Register a simple object type for testing
 	testNode.RegisterObjectType((*testObject)(nil))
-
-	ctx := context.Background()
 
 	// Test creating an object with a fixed node address pointing to this node
 	objID := "localhost:7000/test-object-123"
@@ -56,16 +54,14 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 
 // TestCallObject_FixedNodeAddress tests calling object methods with fixed node addresses
 func TestCallObject_FixedNodeAddress(t *testing.T) {
-	c := newClusterForTesting("TestCallObject_FixedNodeAddress")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
 
 	// Register and create an echo object type for testing
 	testNode.RegisterObjectType((*echoObject)(nil))
-
-	ctx := context.Background()
 
 	// Create an object with a fixed node address
 	objID := "localhost:7000/echo-obj"
@@ -89,14 +85,12 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 // TestCreateObject_FixedNodeAddress_WrongNode tests that objects with fixed addresses
 // are not created on the wrong node
 func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
-	c := newClusterForTesting("TestCreateObject_FixedNodeAddress_WrongNode")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_WrongNode")
 
 	// Register object type
 	testNode.RegisterObjectType((*testObject)(nil))
-
-	ctx := context.Background()
 
 	// Try to create an object with a fixed node address pointing to a different node
 	// This should fail because node connections are not set up
@@ -115,11 +109,9 @@ func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 // TestCallObject_FixedNodeAddress_WrongNode tests that calls with fixed addresses
 // fail appropriately when routing to a different node without connections
 func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
-	c := newClusterForTesting("TestCallObject_FixedNodeAddress_WrongNode")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
-
 	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress_WrongNode")
 
 	// Try to call an object on a different node without node connections set up
 	objID := "localhost:7001/remote-obj"
@@ -131,15 +123,13 @@ func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 
 // TestCreateObject_FixedNodeAddress_Format tests various fixed node address formats
 func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
-	c := newClusterForTesting("TestCreateObject_FixedNodeAddress_Format")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_Format")
 
 	// Note: Fixed node addresses bypass consensus manager routing
 
 	testNode.RegisterObjectType((*testObject)(nil))
-
-	ctx := context.Background()
 
 	tests := []struct {
 		name        string
@@ -185,3 +175,10 @@ func (o *echoObject) OnCreated() {}
 func (o *echoObject) Echo(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
 	return req, nil
 }
+
+// Mock object type for testing
+type testObject struct {
+	object.BaseObject
+}
+
+func (o *testObject) OnCreated() {}

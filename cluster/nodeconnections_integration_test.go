@@ -17,18 +17,13 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create cluster
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	// Create cluster with node1
+	node1 := node.NewNode("localhost:47001")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
-
-	// Create etcd manager
-
-	// Create node
-	node1 := node.NewNode("localhost:47001")
-	cluster1.SetThisNode(node1)
+	defer cluster1.closeEtcd()
 
 	// Start node
 	err = node1.Start(ctx)
@@ -38,14 +33,14 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	defer node1.Stop(ctx)
 
 	// Register node
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.unregisterNode(ctx)
 
 	// Start watching nodes
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.startWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes: %v", err)
 	}
@@ -54,11 +49,11 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Start NodeConnections
-	err = cluster1.StartNodeConnections(ctx)
+	err = cluster1.startNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	defer cluster1.stopNodeConnections()
 
 	// Verify NodeConnections is running
 	nc := cluster1.GetNodeConnections()
@@ -72,14 +67,12 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	}
 
 	// Now create a second cluster/node to test dynamic connection
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	node2 := node.NewNode("localhost:47002")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
-
-	node2 := node.NewNode("localhost:47002")
-	cluster2.SetThisNode(node2)
+	defer cluster2.closeEtcd()
 
 	err = node2.Start(ctx)
 	if err != nil {
@@ -87,11 +80,11 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	defer cluster2.unregisterNode(ctx)
 
 	// Wait for node2 to be discovered and connected
 	// The NodeConnections watcher runs every 5 seconds
@@ -103,7 +96,7 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	t.Logf("After node2 registration, cluster1 has %d connections", nc.NumConnections())
 
 	// Unregister node2 and verify it gets disconnected
-	err = cluster2.UnregisterNode(ctx)
+	err = cluster2.unregisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to unregister node2: %v", err)
 	}
@@ -122,15 +115,13 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Setup cluster1
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	// Setup cluster1 with node1
+	node1 := node.NewNode("localhost:47011")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
-
-	node1 := node.NewNode("localhost:47011")
-	cluster1.SetThisNode(node1)
+	defer cluster1.closeEtcd()
 
 	err = node1.Start(ctx)
 	if err != nil {
@@ -138,23 +129,23 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.unregisterNode(ctx)
 
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.startWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
 
 	// Start NodeConnections before any other nodes exist
-	err = cluster1.StartNodeConnections(ctx)
+	err = cluster1.startNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	defer cluster1.stopNodeConnections()
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -162,15 +153,13 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	initialCount := nc1.NumConnections()
 	t.Logf("Initial connection count: %d", initialCount)
 
-	// Setup cluster2 AFTER NodeConnections is already running
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	// Setup cluster2 AFTER NodeConnections is already running with node2
+	node2 := node.NewNode("localhost:47012")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
-
-	node2 := node.NewNode("localhost:47012")
-	cluster2.SetThisNode(node2)
+	defer cluster2.closeEtcd()
 
 	err = node2.Start(ctx)
 	if err != nil {
@@ -178,11 +167,11 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	defer cluster2.unregisterNode(ctx)
 
 	// Wait for dynamic discovery (watcher runs every 5 seconds)
 	time.Sleep(6 * time.Second)
@@ -203,15 +192,13 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Setup cluster1
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
+	// Setup cluster1 with node1
+	node1 := node.NewNode("localhost:47021")
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster1: %v", err)
 	}
-	defer cluster1.CloseEtcd()
-
-	node1 := node.NewNode("localhost:47021")
-	cluster1.SetThisNode(node1)
+	defer cluster1.closeEtcd()
 
 	err = node1.Start(ctx)
 	if err != nil {
@@ -219,23 +206,23 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	}
 	defer node1.Stop(ctx)
 
-	err = cluster1.RegisterNode(ctx)
+	err = cluster1.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
-	defer cluster1.UnregisterNode(ctx)
+	defer cluster1.unregisterNode(ctx)
 
-	err = cluster1.StartWatching(ctx)
+	err = cluster1.startWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
 	}
 
 	// Start NodeConnections
-	err = cluster1.StartNodeConnections(ctx)
+	err = cluster1.startNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
-	defer cluster1.StopNodeConnections()
+	defer cluster1.stopNodeConnections()
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -243,15 +230,13 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	initialCount := nc1.NumConnections()
 	t.Logf("Initial connection count: %d", initialCount)
 
-	// Setup cluster2
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	// Setup cluster2 with node2
+	node2 := node.NewNode("localhost:47022")
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	defer cluster2.CloseEtcd()
-
-	node2 := node.NewNode("localhost:47022")
-	cluster2.SetThisNode(node2)
+	defer cluster2.closeEtcd()
 
 	err = node2.Start(ctx)
 	if err != nil {
@@ -260,7 +245,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	defer node2.Stop(ctx)
 
 	// Step 1: Register node2
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
@@ -272,7 +257,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	t.Logf("After node2 added, cluster1 has %d connections", countAfterAdd)
 
 	// Step 2: Unregister node2 (remove it)
-	err = cluster2.UnregisterNode(ctx)
+	err = cluster2.unregisterNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to unregister node2: %v", err)
 	}
@@ -284,11 +269,11 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	t.Logf("After node2 removed, cluster1 has %d connections", countAfterRemoval)
 
 	// Step 3: Re-register node2 (add it again)
-	err = cluster2.RegisterNode(ctx)
+	err = cluster2.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to re-register node2: %v", err)
 	}
-	defer cluster2.UnregisterNode(ctx)
+	defer cluster2.unregisterNode(ctx)
 
 	// Wait for node2 to be re-discovered and reconnected
 	time.Sleep(6 * time.Second)

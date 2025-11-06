@@ -18,46 +18,16 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create two clusters to test shard claiming
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-	defer cluster1.CloseEtcd()
-
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
-	}
-	defer cluster2.CloseEtcd()
-
-	// Create nodes - node1 will be leader (smaller address)
+	// Create two nodes - node1 will be leader (smaller address)
 	node1 := node.NewNode("localhost:51001")
 	node2 := node.NewNode("localhost:51002")
 
-	cluster1.SetThisNode(node1)
-	cluster2.SetThisNode(node2)
-
 	// Start and register node1
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
-
-	err = cluster1.RegisterNode(ctx)
-	if err != nil {
-		t.Fatalf("Failed to register node1: %v", err)
-	}
-	defer cluster1.UnregisterNode(ctx)
-
-	err = cluster1.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
-	}
-
-	// Wait for registration to complete
-	time.Sleep(500 * time.Millisecond)
 
 	// Start and register node2
 	err = node2.Start(ctx)
@@ -66,23 +36,28 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	}
 	defer node2.Stop(ctx)
 
-	err = cluster2.RegisterNode(ctx)
+	// Create two clusters to test shard claiming
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
-		t.Fatalf("Failed to register node2: %v", err)
-	}
-	defer cluster2.UnregisterNode(ctx)
-
-	err = cluster2.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
+		t.Fatalf("Failed to create cluster1: %v", err)
 	}
 
-	// Start shard mapping management on both nodes
-	cluster1.StartShardMappingManagement(ctx)
-	defer cluster1.StopShardMappingManagement()
+	err = cluster1.Start(ctx, node1)
+	if err != nil {
+		t.Fatalf("Failed to start cluster1: %v", err)
+	}
+	defer cluster1.Stop(ctx)
 
-	cluster2.StartShardMappingManagement(ctx)
-	defer cluster2.StopShardMappingManagement()
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+
+	err = cluster2.Start(ctx, node2)
+	if err != nil {
+		t.Fatalf("Failed to start cluster2: %v", err)
+	}
+	defer cluster2.Stop(ctx)
 
 	// Wait for leader election and shard mapping to stabilize
 	time.Sleep(testutil.WaitForShardMappingTimeout)

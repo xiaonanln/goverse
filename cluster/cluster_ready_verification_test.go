@@ -17,13 +17,11 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup cluster
-	c, err := newClusterWithEtcdForTesting("TestClusterReadyRequiresBothConnectionsAndShardMapping", "localhost:2379", testPrefix)
+	n := node.NewNode("localhost:47201")
+	c, err := newClusterWithEtcdForTesting("TestClusterReadyRequiresBothConnectionsAndShardMapping", n, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster: %v", err)
 	}
-
-	n := node.NewNode("localhost:47201")
-	c.SetThisNode(n)
 
 	err = n.Start(ctx)
 	if err != nil {
@@ -31,13 +29,13 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	}
 	defer n.Stop(ctx)
 
-	err = c.RegisterNode(ctx)
+	err = c.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
-	defer c.UnregisterNode(ctx)
+	defer c.unregisterNode(ctx)
 
-	err = c.StartWatching(ctx)
+	err = c.startWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching: %v", err)
 	}
@@ -53,11 +51,11 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	}
 
 	// Start node connections
-	err = c.StartNodeConnections(ctx)
+	err = c.startNodeConnections(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node connections: %v", err)
 	}
-	defer c.StopNodeConnections()
+	defer c.stopNodeConnections()
 
 	// At this point: node connections started, but no shard mapping yet
 	// Cluster should still NOT be ready
@@ -70,11 +68,11 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	}
 
 	// Start shard mapping management
-	err = c.StartShardMappingManagement(ctx)
+	err = c.startShardMappingManagement(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start shard mapping management: %v", err)
 	}
-	defer c.StopShardMappingManagement()
+	defer c.stopShardMappingManagement()
 
 	// Now both conditions should be met after shard mapping is created
 	// Wait for cluster to be ready

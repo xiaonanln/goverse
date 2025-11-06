@@ -7,12 +7,13 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestClusterSetMinQuorum(t *testing.T) {
-	c := newClusterForTesting("TestClusterSetMinQuorum")
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
+	c := newClusterForTesting(testNode, "TestClusterSetMinQuorum")
 
 	// Test default value
 	if c.GetMinQuorum() != 1 {
@@ -46,13 +47,13 @@ func TestConsensusManagerMinQuorum(t *testing.T) {
 func TestClusterMinQuorumPropagation(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	c, err := newClusterWithEtcdForTesting("TestClusterMinQuorumPropagation", "localhost:2379", testPrefix)
+	ctx := context.Background()
+	n := testutil.MustNewNode(ctx, t, "localhost:47001")
+	c, err := newClusterWithEtcdForTesting("TestClusterMinQuorumPropagation", n, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
 		return
 	}
-	defer c.CloseEtcd()
-
 	// Set minQuorum on cluster
 	c.SetMinQuorum(3)
 
@@ -67,26 +68,24 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	ctx := context.Background()
 
 	// Create cluster and register nodes
-	c1, err := newClusterWithEtcdForTesting("Node1", "localhost:2379", testPrefix)
+	n1 := testutil.MustNewNode(ctx, t, "localhost:47001")
+	c1, err := newClusterWithEtcdForTesting("Node1", n1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
 		return
 	}
-	defer c1.CloseEtcd()
-
-	n1 := node.NewNode("localhost:47001")
-	c1.SetThisNode(n1)
+	defer c1.closeEtcd()
 
 	// Set minimum nodes to 3
 	c1.SetMinQuorum(3)
 
-	err = c1.StartWatching(ctx)
+	err = c1.startWatching(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watching cluster state: %v", err)
 	}
 
 	// Register first node
-	err = c1.RegisterNode(ctx)
+	err = c1.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node 1: %v", err)
 	}
@@ -116,32 +115,30 @@ func TestConsensusManagerIsReadyWithMinQuorum(t *testing.T) {
 	}
 
 	// Register more nodes
-	c2, err := newClusterWithEtcdForTesting("Node2", "localhost:2379", testPrefix)
+	n2 := testutil.MustNewNode(ctx, t, "localhost:47002")
+	c2, err := newClusterWithEtcdForTesting("Node2", n2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster 2: %v", err)
 	}
-	defer c2.CloseEtcd()
+	defer c2.closeEtcd()
 
-	n2 := node.NewNode("localhost:47002")
-	c2.SetThisNode(n2)
 	c2.SetMinQuorum(3)
 
-	err = c2.RegisterNode(ctx)
+	err = c2.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node 2: %v", err)
 	}
 
-	c3, err := newClusterWithEtcdForTesting("Node3", "localhost:2379", testPrefix)
+	n3 := testutil.MustNewNode(ctx, t, "localhost:47003")
+	c3, err := newClusterWithEtcdForTesting("Node3", n3, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster 3: %v", err)
 	}
-	defer c3.CloseEtcd()
+	defer c3.closeEtcd()
 
-	n3 := node.NewNode("localhost:47003")
-	c3.SetThisNode(n3)
 	c3.SetMinQuorum(3)
 
-	err = c3.RegisterNode(ctx)
+	err = c3.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node 3: %v", err)
 	}
@@ -172,21 +169,19 @@ func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 	ctx := context.Background()
 
 	// Create cluster and register nodes
-	c1, err := newClusterWithEtcdForTesting("Node1", "localhost:2379", testPrefix)
+	n1 := testutil.MustNewNode(ctx, t, "localhost:47001")
+	c1, err := newClusterWithEtcdForTesting("Node1", n1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test - etcd not available: %v", err)
 		return
 	}
-	defer c1.CloseEtcd()
-
-	n1 := node.NewNode("localhost:47001")
-	c1.SetThisNode(n1)
+	defer c1.closeEtcd()
 
 	// Set minimum nodes to 2
 	c1.SetMinQuorum(2)
 
 	// Register first node
-	err = c1.RegisterNode(ctx)
+	err = c1.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node 1: %v", err)
 	}
@@ -206,16 +201,14 @@ func TestConsensusManagerIsStateStableWithMinQuorum(t *testing.T) {
 	}
 
 	// Register second node
-	c2, err := newClusterWithEtcdForTesting("Node2", "localhost:2379", testPrefix)
+	n2 := testutil.MustNewNode(ctx, t, "localhost:47002")
+	c2, err := newClusterWithEtcdForTesting("Node2", n2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create cluster 2: %v", err)
 	}
-	defer c2.CloseEtcd()
+	defer c2.closeEtcd()
 
-	n2 := node.NewNode("localhost:47002")
-	c2.SetThisNode(n2)
-
-	err = c2.RegisterNode(ctx)
+	err = c2.registerNode(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register node 2: %v", err)
 	}

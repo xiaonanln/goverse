@@ -21,61 +21,45 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create cluster 1
-	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", "localhost:2379", testPrefix)
-	if err != nil {
-		t.Fatalf("Failed to create cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.CloseEtcd() })
-
+	// Create node1 and cluster1
 	node1 := node.NewNode("localhost:47011")
-	cluster1.SetThisNode(node1)
 	node1.RegisterClientType((*client.BaseClient)(nil))
-
-	err = node1.Start(ctx)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	t.Cleanup(func() { node1.Stop(ctx) })
 
-	err = cluster1.RegisterNode(ctx)
+	cluster1, err := newClusterWithEtcdForTesting("TestCluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
-		t.Fatalf("Failed to register node1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.UnregisterNode(ctx) })
-
-	err = cluster1.StartWatching(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster1: %v", err)
+		t.Fatalf("Failed to create cluster1: %v", err)
 	}
 
-	// Create cluster 2
-	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", "localhost:2379", testPrefix)
+	err = cluster1.Start(ctx, node1)
 	if err != nil {
-		t.Fatalf("Failed to create cluster2: %v", err)
+		t.Fatalf("Failed to start cluster1: %v", err)
 	}
-	t.Cleanup(func() { cluster2.CloseEtcd() })
+	t.Cleanup(func() { cluster1.Stop(ctx) })
 
+	// Create node2 and cluster2
 	node2 := node.NewNode("localhost:47012")
-	cluster2.SetThisNode(node2)
 	node2.RegisterClientType((*client.BaseClient)(nil))
-
 	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
 	t.Cleanup(func() { node2.Stop(ctx) })
 
-	err = cluster2.RegisterNode(ctx)
+	cluster2, err := newClusterWithEtcdForTesting("TestCluster2", node2, "localhost:2379", testPrefix)
 	if err != nil {
-		t.Fatalf("Failed to register node2: %v", err)
+		t.Fatalf("Failed to create cluster2: %v", err)
 	}
-	t.Cleanup(func() { cluster2.UnregisterNode(ctx) })
 
-	err = cluster2.StartWatching(ctx)
+	err = cluster2.Start(ctx, node2)
 	if err != nil {
-		t.Fatalf("Failed to start watching nodes for cluster2: %v", err)
+		t.Fatalf("Failed to start cluster2: %v", err)
 	}
+	t.Cleanup(func() { cluster2.Stop(ctx) })
 
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
@@ -99,24 +83,8 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 	t.Cleanup(func() { testServer2.Stop() })
 
-	// Wait for servers to be ready
-	time.Sleep(500 * time.Millisecond)
-
-	// Start NodeConnections for both clusters (needed for routing)
-	err = cluster1.StartNodeConnections(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node connections for cluster1: %v", err)
-	}
-	t.Cleanup(func() { cluster1.StopNodeConnections() })
-
-	err = cluster2.StartNodeConnections(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node connections for cluster2: %v", err)
-	}
-	t.Cleanup(func() { cluster2.StopNodeConnections() })
-
-	// Wait for connections to be established
-	time.Sleep(1 * time.Second)
+	// Wait for node connections to be established (cluster.Start already handles StartNodeConnections)
+	time.Sleep(5 * time.Second)
 
 	// Register a client on node2
 	clientObj, err := node2.RegisterClient()
@@ -137,8 +105,8 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	const numMessages = 100
 	const numCrossNode = 50
 	const numLocal = 50
-	const messageDelay = 1 * time.Millisecond  // Small delay to avoid overwhelming channel buffer
-	const receiveTimeout = 10 * time.Second    // Timeout for receiving all messages
+	const messageDelay = 1 * time.Millisecond // Small delay to avoid overwhelming channel buffer
+	const receiveTimeout = 10 * time.Second   // Timeout for receiving all messages
 
 	// Track received messages
 	type messageStats struct {
@@ -213,12 +181,12 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 
 	// Wait for all messages to be received
 	success := <-done
-	
+
 	// Report any errors collected by the goroutine
 	for _, err := range stats.errors {
 		t.Error(err)
 	}
-	
+
 	if !success {
 		t.Fatal("Failed to receive all messages")
 	}

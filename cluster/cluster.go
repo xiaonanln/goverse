@@ -76,9 +76,10 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 // This function assigns the created cluster to the singleton and should be called once during application initialization.
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
-func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
+func NewCluster(node *node.Node, etcdAddress string, etcdPrefix string) (*Cluster, error) {
 	// Create a new cluster instance
 	c := &Cluster{
+		thisNode:         node,
 		logger:           logger.NewLogger("Cluster"),
 		clusterReadyChan: make(chan bool),
 		etcdAddress:      etcdAddress,
@@ -97,16 +98,17 @@ func NewCluster(etcdAddress string, etcdPrefix string) (*Cluster, error) {
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
-func newClusterForTesting(name string) *Cluster {
+func newClusterForTesting(node *node.Node, name string) *Cluster {
 	return &Cluster{
+		thisNode:         node,
 		logger:           logger.NewLogger(name),
 		clusterReadyChan: make(chan bool),
 	}
 }
 
 // newClusterWithEtcdForTesting creates a new cluster instance for testing and initializes it with etcd
-func newClusterWithEtcdForTesting(name string, etcdAddress string, etcdPrefix string) (*Cluster, error) {
-	c, err := NewCluster(etcdAddress, etcdPrefix)
+func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress string, etcdPrefix string) (*Cluster, error) {
+	c, err := NewCluster(node, etcdAddress, etcdPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -117,38 +119,70 @@ func newClusterWithEtcdForTesting(name string, etcdAddress string, etcdPrefix st
 	return c, nil
 }
 
-// initializeEtcdForTesting initializes the etcd manager for a test cluster instance
-// WARNING: This should only be used in tests
-func (c *Cluster) initializeEtcdForTesting(etcdAddress string, etcdPrefix string) error {
-	if c.etcdManager != nil {
-		return fmt.Errorf("etcd manager already initialized")
+// Start initializes and starts the cluster with the given node.Add a comment on line R154Add diff commentMarkdown input:  edit mode selected.WritePreviewAdd a suggestionHeadingBoldItalicQuoteCodeLinkUnordered listNumbered listTask listMentionReferenceSaved repliesAdd FilesPaste, drop, or click to add filesCancelCommentStart a reviewReturn to code
+// It performs the following operations in sequence:
+// 1. Sets the node on the cluster
+// 2. Registers the node with etcd
+// 3. Starts watching cluster state changes
+// 4. Starts node connections
+// 5. Starts shard mapping management
+//
+// This function should be called once during cluster initialization.
+// Use Stop() to cleanly shutdown the cluster.
+func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
+	// Register this node with etcd
+	if err := c.registerNode(ctx); err != nil {
+		return fmt.Errorf("failed to register node: %w", err)
 	}
 
-	c.etcdAddress = etcdAddress
-	c.etcdPrefix = etcdPrefix
-
-	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
-	if err != nil {
-		return err
+	// Start watching for cluster state changes
+	if err := c.startWatching(ctx); err != nil {
+		return fmt.Errorf("failed to start watching: %w", err)
 	}
 
-	c.etcdManager = mgr
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
-
-	// Propagate minQuorum to consensus manager if already set
-	if c.minQuorum > 0 {
-		c.consensusManager.SetMinQuorum(c.minQuorum)
+	// Start shard mapping management
+	if err := c.startShardMappingManagement(ctx); err != nil {
+		return fmt.Errorf("failed to start shard mapping management: %w", err)
 	}
 
+	// Start node connections
+	if err := c.startNodeConnections(ctx); err != nil {
+		return fmt.Errorf("failed to start node connections: %w", err)
+	}
+
+	c.logger.Infof("Cluster started successfully")
 	return nil
 }
 
-func (c *Cluster) SetThisNode(n *node.Node) {
-	if c.thisNode != nil {
-		panic("ThisNode is already set")
+// Stop cleanly stops the cluster and releases all resources.
+// It performs the following operations in reverse order of Start:
+// 1. Stops shard mapping management
+// 2. Stops node connections
+// 3. Unregisters the node from etcd
+// 4. Closes the etcd connection
+func (c *Cluster) Stop(ctx context.Context) error {
+	c.logger.Infof("Stopping cluster...")
+
+	// Stop node connections
+	c.stopNodeConnections()
+
+	// Stop shard mapping management
+	c.stopShardMappingManagement()
+
+	// Unregister from etcd
+	if err := c.unregisterNode(ctx); err != nil {
+		c.logger.Errorf("Failed to unregister node: %v", err)
+		// Continue with cleanup even if unregister fails
 	}
-	c.thisNode = n
-	c.logger.Infof("This Node is %s", n)
+
+	// Close etcd connection
+	if err := c.closeEtcd(); err != nil {
+		c.logger.Errorf("Failed to close etcd: %v", err)
+		// Continue with cleanup even if close fails
+	}
+
+	c.logger.Infof("Cluster stopped")
+	return nil
 }
 
 // SetMinQuorum sets the minimal number of nodes required for cluster stability
@@ -484,15 +518,15 @@ func (c *Cluster) GetEtcdManagerForTesting() *etcdmanager.EtcdManager {
 }
 
 // RegisterNode registers this node with etcd
-func (c *Cluster) RegisterNode(ctx context.Context) error {
+func (c *Cluster) registerNode(ctx context.Context) error {
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
 	}
 	return c.etcdManager.RegisterNode(ctx, c.thisNode.GetAdvertiseAddress())
 }
 
-// UnregisterNode unregisters this node from etcd
-func (c *Cluster) UnregisterNode(ctx context.Context) error {
+// unregisterNode unregisters this node from etcd
+func (c *Cluster) unregisterNode(ctx context.Context) error {
 	if c.etcdManager == nil {
 		// No-op if etcd manager is not set
 		return nil
@@ -503,17 +537,17 @@ func (c *Cluster) UnregisterNode(ctx context.Context) error {
 	return c.etcdManager.UnregisterNode(ctx, c.thisNode.GetAdvertiseAddress())
 }
 
-// CloseEtcd closes the etcd connection
-func (c *Cluster) CloseEtcd() error {
+// closeEtcd closes the etcd connection
+func (c *Cluster) closeEtcd() error {
 	if c.etcdManager == nil {
 		return nil
 	}
 	return c.etcdManager.Close()
 }
 
-// StartWatching initializes and starts watching all cluster state changes in etcd
+// startWatching initializes and starts watching all cluster state changes in etcd
 // This includes node changes and shard mapping updates
-func (c *Cluster) StartWatching(ctx context.Context) error {
+func (c *Cluster) startWatching(ctx context.Context) error {
 	// Initialize consensus manager state from etcd
 	err := c.consensusManager.Initialize(ctx)
 	if err != nil {
@@ -588,11 +622,11 @@ func (c *Cluster) InvalidateShardMappingCache() {
 	c.logger.Debugf("InvalidateShardMappingCache is deprecated with ConsensusManager")
 }
 
-// StartShardMappingManagement starts a background goroutine that periodically manages shard mapping
+// startShardMappingManagement starts a background goroutine that periodically manages shard mapping
 // If this node is the leader and the node list has been stable for NodeStabilityDuration,
 // it will update/initialize the shard mapping.
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
-func (c *Cluster) StartShardMappingManagement(ctx context.Context) error {
+func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 	if c.shardMappingRunning {
 		c.logger.Warnf("Shard mapping management already running")
 		return nil
@@ -608,8 +642,8 @@ func (c *Cluster) StartShardMappingManagement(ctx context.Context) error {
 	return nil
 }
 
-// StopShardMappingManagement stops the shard mapping management background task
-func (c *Cluster) StopShardMappingManagement() {
+// stopShardMappingManagement stops the shard mapping management background task
+func (c *Cluster) stopShardMappingManagement() {
 	if c.shardMappingCancel != nil {
 		c.shardMappingCancel()
 		c.shardMappingCancel = nil
@@ -649,7 +683,7 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 	}
 
 	clusterState := c.consensusManager.GetClusterState()
-	
+
 	// Only claim shards when cluster state is stable
 	if !clusterState.IsStable(NodeStabilityDuration) {
 		return
@@ -714,9 +748,9 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	}
 }
 
-// StartNodeConnections initializes and starts the node connections manager
+// startNodeConnections initializes and starts the node connections manager
 // This should be called after StartWatching is started
-func (c *Cluster) StartNodeConnections(ctx context.Context) error {
+func (c *Cluster) startNodeConnections(ctx context.Context) error {
 	if c.nodeConnections != nil {
 		c.logger.Warnf("NodeConnections already started")
 		return nil
@@ -733,8 +767,8 @@ func (c *Cluster) StartNodeConnections(ctx context.Context) error {
 	return nil
 }
 
-// StopNodeConnections stops the node connections manager
-func (c *Cluster) StopNodeConnections() {
+// stopNodeConnections stops the node connections manager
+func (c *Cluster) stopNodeConnections() {
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil

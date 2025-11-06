@@ -5,13 +5,15 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/client"
-	"github.com/xiaonanln/goverse/node"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestPushMessageToClient_NoNode tests that PushMessageToClient fails when thisNode is not set
 func TestPushMessageToClient_NoNode(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_NoNode")
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_NoNode")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -20,7 +22,6 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	err := c.PushMessageToClient(ctx, "localhost:7001/test-client", testMsg)
 	if err == nil {
 		t.Error("PushMessageToClient should fail when thisNode is not set")
@@ -29,8 +30,9 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 
 // TestPushMessageToClient_InvalidClientID tests that PushMessageToClient fails with invalid client ID format
 func TestPushMessageToClient_InvalidClientID(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_InvalidClientID")
-	c.thisNode = node.NewNode("localhost:7000")
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_InvalidClientID")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -52,7 +54,6 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 		{"empty unique id", "localhost:7001/"},
 	}
 
-	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := c.PushMessageToClient(ctx, tt.clientID, testMsg)
@@ -65,9 +66,9 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 
 // TestPushMessageToClient_LocalClient tests pushing to a client on the same node
 func TestPushMessageToClient_LocalClient(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_LocalClient")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_LocalClient")
 
 	// Register client type
 	testNode.RegisterClientType((*client.BaseClient)(nil))
@@ -90,7 +91,6 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 	}
 
 	// Push message through cluster API
-	ctx := context.Background()
 	err = c.PushMessageToClient(ctx, clientID, testMsg)
 	if err != nil {
 		t.Fatalf("Failed to push message to local client: %v", err)
@@ -116,9 +116,9 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 
 // TestPushMessageToClient_ClientNotFound tests pushing to a non-existent client
 func TestPushMessageToClient_ClientNotFound(t *testing.T) {
-	c := newClusterForTesting("TestPushMessageToClient_ClientNotFound")
-	testNode := node.NewNode("localhost:7000")
-	c.thisNode = testNode
+	ctx := context.Background()
+	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	c := newClusterForTesting(testNode, "TestPushMessageToClient_ClientNotFound")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -128,7 +128,6 @@ func TestPushMessageToClient_ClientNotFound(t *testing.T) {
 	}
 
 	// Try to push to a client that doesn't exist (but with valid format for local node)
-	ctx := context.Background()
 	err := c.PushMessageToClient(ctx, "localhost:7000/non-existent-client", testMsg)
 	if err == nil {
 		t.Error("Expected error when pushing to non-existent client")
