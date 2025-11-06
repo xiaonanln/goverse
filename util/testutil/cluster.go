@@ -16,21 +16,24 @@ import (
 //   - ctx: context for operations
 //   - t: testing.T instance
 //   - nodeAddr: address for the node (e.g., "localhost:50000")
+//   - etcdPrefix: etcd prefix for cluster isolation (obtain via PrepareEtcdPrefix)
 //
 // Returns:
 //   - *cluster.Cluster: the created and started cluster
 //
 // The function automatically:
-//   - Generates unique etcd prefix based on test name
 //   - Creates and starts a node with the specified address
-//   - Creates cluster with etcd connection
+//   - Creates cluster with etcd connection using the provided prefix
 //   - Starts the cluster (registers node, starts watching, etc.)
 //   - Registers cleanup to stop cluster and node when test completes
-func MustNewCluster(ctx context.Context, t *testing.T, nodeAddr string) *cluster.Cluster {
+//
+// Usage:
+//
+//	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+//	c1 := testutil.MustNewCluster(ctx, t, "localhost:50000", prefix)
+//	c2 := testutil.MustNewCluster(ctx, t, "localhost:50001", prefix)  // Reuse same prefix
+func MustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPrefix string) *cluster.Cluster {
 	t.Helper()
-
-	// Generate unique etcd prefix based on test name
-	etcdPrefix := PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a node
 	n := node.NewNode(nodeAddr)
