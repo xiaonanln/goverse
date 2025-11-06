@@ -578,6 +578,14 @@ func (cm *ConsensusManager) GetNodeForObject(objectID string) (string, error) {
 	// Use CurrentNode if set, otherwise fall back to TargetNode
 	// This ensures we route to where the shard actually is, not where it should eventually be
 	if shardInfo.CurrentNode != "" {
+		// Verify that CurrentNode is in the active node list
+		cm.mu.RLock()
+		nodeExists := cm.state.HasNode(shardInfo.CurrentNode)
+		cm.mu.RUnlock()
+		
+		if !nodeExists {
+			return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
+		}
 		return shardInfo.CurrentNode, nil
 	}
 	return shardInfo.TargetNode, nil
@@ -602,6 +610,14 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 	// Use CurrentNode if set, otherwise fall back to TargetNode
 	// This ensures we route to where the shard actually is, not where it should eventually be
 	if shardInfo.CurrentNode != "" {
+		// Verify that CurrentNode is in the active node list
+		cm.mu.RLock()
+		nodeExists := cm.state.HasNode(shardInfo.CurrentNode)
+		cm.mu.RUnlock()
+		
+		if !nodeExists {
+			return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
+		}
 		return shardInfo.CurrentNode, nil
 	}
 	return shardInfo.TargetNode, nil

@@ -79,8 +79,8 @@ All queries are served from in-memory state (no etcd round-trip):
 - `GetNodes()` - List of registered nodes
 - `GetLeaderNode()` - Current leader (lexicographically smallest node)
 - `GetShardMapping()` - Current shard assignments
-- `GetNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode if set, otherwise TargetNode)
-- `GetNodeForShard(shardID)` - Which node currently owns this shard (uses CurrentNode if set, otherwise TargetNode)
+- `GetNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode if set and alive, otherwise TargetNode)
+- `GetNodeForShard(shardID)` - Which node currently owns this shard (uses CurrentNode if set and alive, otherwise TargetNode)
 
 ### State Modifications (Leader only)
 
@@ -101,6 +101,7 @@ When locating objects, `GetNodeForObject` and `GetNodeForShard` prefer `CurrentN
 1. **Correct routing during migration**: Objects are routed to where they actually exist, not where they should eventually be
 2. **Shard claiming**: Nodes claim shards by setting `CurrentNode = TargetNode` when stable
 3. **Migration tracking**: During rebalancing, `CurrentNode` and `TargetNode` may differ temporarily
+4. **Node liveness check**: If `CurrentNode` is set but not in the active node list, the lookup fails with an error
 
 Example lifecycle:
 ```go
@@ -111,9 +112,13 @@ ShardInfo{TargetNode: "node1", CurrentNode: "node1"}  // Node1 claimed it
 // During migration: Leader updates TargetNode
 ShardInfo{TargetNode: "node2", CurrentNode: "node1"}  // Migration in progress
 ShardInfo{TargetNode: "node2", CurrentNode: "node2"}  // Migration complete
+
+// Node failure: CurrentNode no longer in active node list
+ShardInfo{TargetNode: "node2", CurrentNode: "node1"}  // Node1 is dead
+GetNodeForShard(shardID) // Returns error: "current node node1 for shard X is not in active node list"
 ```
 
-Queries always route to `CurrentNode` when set, ensuring objects are found at their actual location.
+Queries always route to `CurrentNode` when set **and the node is alive** (in the active node list), ensuring objects are found at their actual location. If the `CurrentNode` is not alive, the query fails to prevent routing to a dead node.
 
 ## Usage Example
 
