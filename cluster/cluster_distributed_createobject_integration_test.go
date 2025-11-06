@@ -237,7 +237,6 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	// Set up all 3 nodes
 	for i := 0; i < 3; i++ {
 		nodes[i] = node.NewNode(nodeAddrs[i])
-		nodes[i].RegisterObjectType((*TestDistributedObject)(nil))
 
 		err := nodes[i].Start(ctx)
 		if err != nil {
