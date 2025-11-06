@@ -79,8 +79,8 @@ All queries are served from in-memory state (no etcd round-trip):
 - `GetNodes()` - List of registered nodes
 - `GetLeaderNode()` - Current leader (lexicographically smallest node)
 - `GetShardMapping()` - Current shard assignments
-- `GetNodeForObject(objectID)` - Which node handles this object
-- `GetNodeForShard(shardID)` - Which node owns this shard
+- `GetNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode if set, otherwise TargetNode)
+- `GetNodeForShard(shardID)` - Which node currently owns this shard (uses CurrentNode if set, otherwise TargetNode)
 
 ### State Modifications (Leader only)
 
@@ -88,6 +88,32 @@ The leader can modify cluster state:
 - `CreateShardMapping()` - Generate initial mapping
 - `UpdateShardMapping()` - Update mapping when nodes change
 - `storeShardMapping(ctx, mapping)` - Persist to etcd
+
+## Shard Migration and CurrentNode vs TargetNode
+
+Each shard has two node references:
+
+- **TargetNode**: The node that should handle this shard (desired state)
+- **CurrentNode**: The node that currently handles this shard (actual state)
+
+When locating objects, `GetNodeForObject` and `GetNodeForShard` prefer `CurrentNode` over `TargetNode`. This ensures:
+
+1. **Correct routing during migration**: Objects are routed to where they actually exist, not where they should eventually be
+2. **Shard claiming**: Nodes claim shards by setting `CurrentNode = TargetNode` when stable
+3. **Migration tracking**: During rebalancing, `CurrentNode` and `TargetNode` may differ temporarily
+
+Example lifecycle:
+```go
+// Initial state: Node claims shard
+ShardInfo{TargetNode: "node1", CurrentNode: ""}       // Not yet claimed
+ShardInfo{TargetNode: "node1", CurrentNode: "node1"}  // Node1 claimed it
+
+// During migration: Leader updates TargetNode
+ShardInfo{TargetNode: "node2", CurrentNode: "node1"}  // Migration in progress
+ShardInfo{TargetNode: "node2", CurrentNode: "node2"}  // Migration complete
+```
+
+Queries always route to `CurrentNode` when set, ensuring objects are found at their actual location.
 
 ## Usage Example
 
