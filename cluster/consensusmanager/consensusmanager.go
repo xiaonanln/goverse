@@ -562,33 +562,34 @@ func (cm *ConsensusManager) GetNodeForObject(objectID string) (string, error) {
 		}
 	}
 
-	// Standard shard-based assignment requires shard mapping
-	mapping, err := cm.GetShardMapping()
-	if err != nil {
-		return "", err
-	}
-
 	// Use the sharding logic to determine the node
 	shardID := sharding.GetShardID(objectID)
-	shardInfo, ok := mapping.Shards[shardID]
+
+	// Get shard mapping and check node existence under a single lock
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if cm.state.ShardMapping == nil {
+		return "", fmt.Errorf("shard mapping not available")
+	}
+
+	shardInfo, ok := cm.state.ShardMapping.Shards[shardID]
 	if !ok {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
 
-	// Use CurrentNode if set, otherwise fall back to TargetNode
-	// This ensures we route to where the shard actually is, not where it should eventually be
-	if shardInfo.CurrentNode != "" {
-		// Verify that CurrentNode is in the active node list
-		cm.mu.RLock()
-		nodeExists := cm.state.HasNode(shardInfo.CurrentNode)
-		cm.mu.RUnlock()
-		
-		if !nodeExists {
-			return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
-		}
-		return shardInfo.CurrentNode, nil
+	// Only use CurrentNode for locating objects
+	// TargetNode is only used for planning/migration, not for routing
+	if shardInfo.CurrentNode == "" {
+		return "", fmt.Errorf("shard %d has no current node (not yet claimed)", shardID)
 	}
-	return shardInfo.TargetNode, nil
+
+	// Verify that CurrentNode is in the active node list
+	if !cm.state.HasNode(shardInfo.CurrentNode) {
+		return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
+	}
+
+	return shardInfo.CurrentNode, nil
 }
 
 // GetNodeForShard returns the node that owns the given shard
@@ -597,30 +598,31 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 		return "", fmt.Errorf("invalid shard ID: %d", shardID)
 	}
 
-	mapping, err := cm.GetShardMapping()
-	if err != nil {
-		return "", err
+	// Get shard mapping and check node existence under a single lock
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if cm.state.ShardMapping == nil {
+		return "", fmt.Errorf("shard mapping not available")
 	}
 
-	shardInfo, ok := mapping.Shards[shardID]
+	shardInfo, ok := cm.state.ShardMapping.Shards[shardID]
 	if !ok {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
 
-	// Use CurrentNode if set, otherwise fall back to TargetNode
-	// This ensures we route to where the shard actually is, not where it should eventually be
-	if shardInfo.CurrentNode != "" {
-		// Verify that CurrentNode is in the active node list
-		cm.mu.RLock()
-		nodeExists := cm.state.HasNode(shardInfo.CurrentNode)
-		cm.mu.RUnlock()
-		
-		if !nodeExists {
-			return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
-		}
-		return shardInfo.CurrentNode, nil
+	// Only use CurrentNode for locating shards
+	// TargetNode is only used for planning/migration, not for routing
+	if shardInfo.CurrentNode == "" {
+		return "", fmt.Errorf("shard %d has no current node (not yet claimed)", shardID)
 	}
-	return shardInfo.TargetNode, nil
+
+	// Verify that CurrentNode is in the active node list
+	if !cm.state.HasNode(shardInfo.CurrentNode) {
+		return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
+	}
+
+	return shardInfo.CurrentNode, nil
 }
 
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state

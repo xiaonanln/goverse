@@ -324,12 +324,12 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	// Set a mapping
+	// Set a mapping with CurrentNode set
 	cm.mu.Lock()
+	cm.state.Nodes["localhost:47001"] = true
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: map[int]ShardInfo{
-			0: {TargetNode: "localhost:47001", CurrentNode: ""},
-			1: {TargetNode: "localhost:47002", CurrentNode: ""},
+			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47001"},
 		},
 	}
 	cm.mu.Unlock()
@@ -341,6 +341,30 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 
 	if node != "localhost:47001" {
 		t.Errorf("Expected localhost:47001, got %s", node)
+	}
+}
+
+func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set a mapping with CurrentNode empty
+	cm.mu.Lock()
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: map[int]ShardInfo{
+			0: {TargetNode: "localhost:47001", CurrentNode: ""},
+		},
+	}
+	cm.mu.Unlock()
+
+	_, err := cm.GetNodeForShard(0)
+	if err == nil {
+		t.Error("Expected error when CurrentNode is empty")
+	}
+
+	expectedErrMsg := "shard 0 has no current node (not yet claimed)"
+	if err.Error() != expectedErrMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 	}
 }
 
@@ -356,7 +380,6 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: map[int]ShardInfo{
 			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47002"},
-			1: {TargetNode: "localhost:47002", CurrentNode: ""},
 		},
 	}
 	cm.mu.Unlock()
@@ -369,16 +392,6 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 
 	if node != "localhost:47002" {
 		t.Errorf("Expected CurrentNode localhost:47002, got %s", node)
-	}
-
-	// Should return TargetNode when CurrentNode is empty
-	node, err = cm.GetNodeForShard(1)
-	if err != nil {
-		t.Fatalf("Failed to get node for shard: %v", err)
-	}
-
-	if node != "localhost:47002" {
-		t.Errorf("Expected TargetNode localhost:47002, got %s", node)
 	}
 }
 
@@ -396,8 +409,10 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	// Set a complete mapping
+	// Set a complete mapping with CurrentNode set
 	cm.mu.Lock()
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes["localhost:47002"] = true
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
@@ -406,7 +421,7 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 		nodeIdx := i % 2
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  nodes[nodeIdx],
-			CurrentNode: "",
+			CurrentNode: nodes[nodeIdx], // CurrentNode is set and matches TargetNode
 		}
 	}
 	cm.mu.Unlock()
@@ -420,6 +435,34 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	// Should be one of the nodes
 	if node != "localhost:47001" && node != "localhost:47002" {
 		t.Errorf("Unexpected node: %s", node)
+	}
+}
+
+func TestGetNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set a complete mapping with CurrentNode empty
+	cm.mu.Lock()
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	for i := 0; i < sharding.NumShards; i++ {
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
+			TargetNode:  "localhost:47001",
+			CurrentNode: "", // CurrentNode not set
+		}
+	}
+	cm.mu.Unlock()
+
+	// Should fail because CurrentNode is not set
+	_, err := cm.GetNodeForObject("test-object-123")
+	if err == nil {
+		t.Error("Expected error when CurrentNode is empty")
+	}
+
+	if err != nil && !strings.Contains(err.Error(), "has no current node") {
+		t.Errorf("Expected error message to contain 'has no current node', got '%s'", err.Error())
 	}
 }
 
