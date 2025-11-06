@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -16,80 +15,68 @@ func IsGitHubActions() bool {
 	return os.Getenv("GITHUB_ACTIONS") == "true"
 }
 
-// isDockerAvailable checks if Docker is available on the system
-func isDockerAvailable() bool {
-	cmd := exec.Command("docker", "ps")
-	err := cmd.Run()
-	return err == nil
-}
-
-// isSystemdAvailable checks if systemd is available on the system
-func isSystemdAvailable() bool {
-	cmd := exec.Command("systemctl", "--version")
-	err := cmd.Run()
-	return err == nil
-}
-
 // StopEtcd stops the etcd service
-// It tries Docker first (if available), then falls back to systemctl
-// Returns an error if neither method is available or if stopping fails
+// Returns an error if stopping fails
 func StopEtcd() error {
-	// Try Docker first
-	if isDockerAvailable() {
-		// Check if there's an etcd container running
-		checkCmd := exec.Command("docker", "ps", "--filter", "name=etcd", "--format", "{{.Names}}")
-		output, err := checkCmd.Output()
-		if err == nil && strings.TrimSpace(string(output)) != "" {
-			containerName := strings.TrimSpace(string(output))
-			cmd := exec.Command("docker", "stop", containerName)
-			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("failed to stop etcd container: %w", err)
-			}
-			return nil
-		}
-	}
-
-	// Try systemctl
-	if isSystemdAvailable() {
-		cmd := exec.Command("sudo", "systemctl", "stop", "etcd")
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to stop etcd service: %w", err)
-		}
+	// First try systemctl (for CI environment)
+	cmd := exec.Command("sudo", "systemctl", "stop", "etcd")
+	if err := cmd.Run(); err == nil {
 		return nil
 	}
 
-	return fmt.Errorf("neither Docker nor systemd is available to stop etcd")
+	// Fall back to killing the process (for Docker/local development)
+	cmd = exec.Command("pkill", "-9", "etcd")
+	if err := cmd.Run(); err != nil {
+		// pkill returns error if no processes found, which is ok
+		// We only care if we can't run the command itself
+		if _, ok := err.(*exec.ExitError); !ok {
+			return fmt.Errorf("failed to stop etcd: %w", err)
+		}
+	}
+	return nil
 }
 
 // StartEtcd starts the etcd service
-// It tries Docker first (if available), then falls back to systemctl
-// Returns an error if neither method is available or if starting fails
+// Returns an error if starting fails
 func StartEtcd() error {
-	// Try Docker first
-	if isDockerAvailable() {
-		// Check if there's an etcd container that's stopped
-		checkCmd := exec.Command("docker", "ps", "-a", "--filter", "name=etcd", "--format", "{{.Names}}")
-		output, err := checkCmd.Output()
-		if err == nil && strings.TrimSpace(string(output)) != "" {
-			containerName := strings.TrimSpace(string(output))
-			cmd := exec.Command("docker", "start", containerName)
-			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("failed to start etcd container: %w", err)
-			}
-			return nil
-		}
-	}
-
-	// Try systemctl
-	if isSystemdAvailable() {
-		cmd := exec.Command("sudo", "systemctl", "start", "etcd")
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to start etcd service: %w", err)
-		}
+	// First try systemctl (for CI environment)
+	cmd := exec.Command("sudo", "systemctl", "start", "etcd")
+	if err := cmd.Run(); err == nil {
 		return nil
 	}
 
-	return fmt.Errorf("neither Docker nor systemd is available to start etcd")
+	// Fall back to starting as background process (for Docker/local development)
+	// Clean up any stale etcd data directory
+	if _, err := os.Stat("/app/default.etcd"); err == nil {
+		os.RemoveAll("/app/default.etcd")
+	}
+
+	// Start etcd in background
+	cmd = exec.Command("etcd",
+		"--listen-client-urls", "http://0.0.0.0:2379",
+		"--advertise-client-urls", "http://0.0.0.0:2379")
+	
+	// Redirect output to /tmp/etcd.log
+	logFile, err := os.OpenFile("/tmp/etcd.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open etcd log file: %w", err)
+	}
+	
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	
+	if err := cmd.Start(); err != nil {
+		logFile.Close()
+		return fmt.Errorf("failed to start etcd: %w", err)
+	}
+	
+	// Don't wait for the command to finish (it runs in background)
+	go func() {
+		cmd.Wait()
+		logFile.Close()
+	}()
+	
+	return nil
 }
 
 // WaitForEtcd waits for etcd to be available at the given endpoint
