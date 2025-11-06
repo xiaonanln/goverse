@@ -180,14 +180,15 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	}
 	defer etcdMgr.Close()
 
-	// Register the node
+	// Register the node using shared lease API
 	ctx := context.Background()
-	err = etcdMgr.RegisterNode(ctx, config.AdvertiseAddress)
+	key := etcdMgr.GetNodesPrefix() + config.AdvertiseAddress
+	_, err = etcdMgr.RegisterKeyLease(ctx, key, config.AdvertiseAddress, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
 
-	// Wait for maintainLease to complete registration
+	// Wait for registration to complete
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify the node is stored at the correct etcd path with custom prefix
@@ -209,8 +210,8 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 
 	t.Logf("Node successfully registered at custom etcd path: %s with value: %s", expectedNodePath, storedAddress)
 
-	// Cleanup: unregister the node
-	err = etcdMgr.UnregisterNode(ctx, config.AdvertiseAddress)
+	// Cleanup: unregister the node using shared lease API
+	err = etcdMgr.UnregisterKeyLease(ctx, key)
 	if err != nil {
 		t.Logf("Warning: failed to unregister node: %v", err)
 	}

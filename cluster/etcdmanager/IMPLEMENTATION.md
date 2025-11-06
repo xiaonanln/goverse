@@ -2,10 +2,7 @@
 
 ## Overview
 
-The EtcdManager provides two lease management strategies:
-
-1. **Shared Lease API** (New): Generic, process-scoped shared lease for arbitrary key-value pairs
-2. **Node Registration API** (Wrapper): Backward-compatible wrapper for node registration
+The EtcdManager provides a generic shared lease API for registering arbitrary key-value pairs with etcd. Node registration is now handled at the cluster layer using this shared lease API.
 
 ## Shared Lease API
 
@@ -83,33 +80,35 @@ RegisterKeyLease()
 3. Lease is revoked cleanly
 4. Manager ready to start new lease on next `RegisterKeyLease()`
 
-## Node Registration API (Wrapper)
+## Node Registration at Cluster Layer
 
-### Backward Compatibility
+Node registration is now implemented at the cluster layer (`cluster/cluster.go`) using the shared lease API:
 
-The `RegisterNode()` and `UnregisterNode()` methods are now thin wrappers around the shared lease API:
+### cluster.registerNode()
 
-#### RegisterNode(ctx, nodeAddress) error
+```go
+func (c *Cluster) registerNode(ctx context.Context) error {
+    key := c.etcdManager.GetNodesPrefix() + c.thisNode.GetAdvertiseAddress()
+    value := c.thisNode.GetAdvertiseAddress()
+    _, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
+    return err
+}
+```
 
-- Enforces single-node restriction: only one node can be registered per manager
-- If the same node is registered again, it's a no-op (returns success)
-- If a different node is attempted, returns an error
-- Calls `RegisterKeyLease()` with key = `<prefix>/nodes/<nodeAddress>`, ttl = NodeLeaseTTL (15s)
-- Sets `registeredNodeID` field for enforcement
+### cluster.unregisterNode()
 
-#### UnregisterNode(ctx, nodeAddress) error
+```go
+func (c *Cluster) unregisterNode(ctx context.Context) error {
+    key := c.etcdManager.GetNodesPrefix() + c.thisNode.GetAdvertiseAddress()
+    return c.etcdManager.UnregisterKeyLease(ctx, key)
+}
+```
 
-- Calls `UnregisterKeyLease()` with the node key
-- Clears `registeredNodeID` field
-- After unregister, a different node can be registered
-
-### Migration Path
-
-Existing code using `RegisterNode/UnregisterNode` continues to work without changes:
-- Same single-node restriction behavior
-- Same automatic lease renewal
-- Same resilient recovery on etcd failures
-- Now backed by the shared lease mechanism
+This design:
+- Removes node-specific logic from EtcdManager
+- Makes EtcdManager a generic key-value lease manager
+- Allows cluster layer to control node registration semantics
+- Enables multiple nodes to be registered from different cluster instances using the same etcd prefix
 
 ## Synchronization
 
@@ -117,7 +116,6 @@ Existing code using `RegisterNode/UnregisterNode` continues to work without chan
 
 - `sharedKeysMu`: Protects the shared keys map and lease state
 - `sharedLeaseWg`: Tracks the shared lease goroutine lifecycle
-- `keepAliveMu`: Still used for legacy node-specific fields (kept for compatibility)
 
 ### Clean Shutdown
 
@@ -129,12 +127,14 @@ Existing code using `RegisterNode/UnregisterNode` continues to work without chan
 
 ## Testing
 
-Comprehensive tests in `etcdmanager_test.go`:
+Comprehensive tests in `etcdmanager_test.go` and `keepalive_test.go`:
 
 - **TestRegisterKeyLeaseAndUnregisterKey**: Tests basic shared lease functionality with multiple keys
-- **TestRegisterNodeWrapperPreservesSingleNodeRestriction**: Verifies RegisterNode wrapper behavior
 - **TestSharedLeaseResilience**: Tests that keys remain registered over time with keepalive
-- **Existing tests**: All previous RegisterNode/UnregisterNode tests continue to pass
+- **TestKeepAliveRetry**: Tests keep-alive retry mechanism
+- **TestKeepAliveContextCancellation**: Tests clean shutdown
+- **TestRegisterKeyLeaseIdempotent**: Tests key overwrite behavior
+- **TestCloseStopsSharedLease**: Tests that Close() stops the shared lease loop
 
 ### Running Tests
 
@@ -148,9 +148,33 @@ go test -v
 1. **Generic API**: Can register any key-value pairs, not just nodes
 2. **Efficient**: Single lease for all keys reduces etcd overhead
 3. **Resilient**: Automatic recovery from etcd failures
-4. **Backward Compatible**: Existing node registration code works unchanged
-5. **Clean Separation**: Generic shared lease API decoupled from node-specific logic
+4. **Clean Separation**: Generic shared lease API decoupled from node-specific logic
+5. **Flexible**: Cluster layer controls node registration semantics
 6. **Production Ready**: Comprehensive error handling, logging, and synchronization
+
+## Migration Guide
+
+### Before (Old API - Removed)
+
+```go
+// Old node-specific API - NO LONGER AVAILABLE
+mgr.RegisterNode(ctx, nodeAddress)
+mgr.UnregisterNode(ctx, nodeAddress)
+```
+
+### After (New Shared Lease API)
+
+```go
+// New generic shared lease API
+key := mgr.GetNodesPrefix() + nodeAddress
+value := nodeAddress
+mgr.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
+mgr.UnregisterKeyLease(ctx, key)
+```
+
+### For Cluster Usage
+
+The cluster layer (`cluster/cluster.go`) now handles node registration using the shared lease API internally. No changes needed for code using the Cluster API.
 
 ## Future Enhancements
 
