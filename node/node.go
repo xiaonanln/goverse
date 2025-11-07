@@ -25,24 +25,30 @@ type ClientObject = client.ClientObject
 
 // Node represents a node in the distributed system that manages objects and clients
 type Node struct {
-	advertiseAddress string
-	objectTypes      map[string]reflect.Type
-	objectTypesMu    sync.RWMutex
-	clientObjectType string
-	objects          map[string]Object
-	objectsMu        sync.RWMutex
-	inspectorClient  inspector_pb.InspectorServiceClient
-	logger           *logger.Logger
-	startupTime      time.Time
+	advertiseAddress      string
+	objectTypes           map[string]reflect.Type
+	objectTypesMu         sync.RWMutex
+	clientObjectType      string
+	objects               map[string]Object
+	objectsMu             sync.RWMutex
+	inspectorClient       inspector_pb.InspectorServiceClient
+	logger                *logger.Logger
+	startupTime           time.Time
+	persistenceProvider   object.PersistenceProvider
+	persistenceInterval   time.Duration
+	persistenceCtx        context.Context
+	persistenceCancel     context.CancelFunc
+	persistenceDone       chan struct{}
 }
 
 // NewNode creates a new Node instance
 func NewNode(advertiseAddress string) *Node {
 	node := &Node{
-		advertiseAddress: advertiseAddress,
-		objectTypes:      make(map[string]reflect.Type),
-		objects:          make(map[string]Object),
-		logger:           logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
+		advertiseAddress:    advertiseAddress,
+		objectTypes:         make(map[string]reflect.Type),
+		objects:             make(map[string]Object),
+		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
+		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
 
 	return node
@@ -51,6 +57,12 @@ func NewNode(advertiseAddress string) *Node {
 // Start starts the node and connects it to the inspector
 func (node *Node) Start(ctx context.Context) error {
 	node.startupTime = time.Now()
+	
+	// Start periodic persistence if provider is configured
+	if node.persistenceProvider != nil {
+		node.StartPeriodicPersistence(ctx)
+	}
+	
 	return node.connectToInspector()
 }
 
@@ -61,6 +73,18 @@ func (node *Node) IsStarted() bool {
 // Stop stops the node and unregisters it from the inspector
 func (node *Node) Stop(ctx context.Context) error {
 	node.logger.Infof("Node stopping")
+	
+	// Stop periodic persistence and save all objects one final time
+	if node.persistenceProvider != nil {
+		node.StopPeriodicPersistence()
+		
+		// Save all objects before shutting down
+		node.logger.Infof("Saving all objects before shutdown...")
+		if err := node.SaveAllObjects(ctx); err != nil {
+			node.logger.Errorf("Failed to save all objects during shutdown: %v", err)
+		}
+	}
+	
 	return node.unregisterFromInspector()
 }
 
@@ -433,4 +457,114 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 	default:
 		return fmt.Errorf("client %s message channel is full or closed", clientID)
 	}
+}
+
+// SetPersistenceProvider configures the persistence provider for this node
+// Must be called before Start() to enable periodic persistence
+func (node *Node) SetPersistenceProvider(provider object.PersistenceProvider) {
+	node.persistenceProvider = provider
+}
+
+// SetPersistenceInterval configures how often objects are persisted
+// Must be called before Start() to take effect
+func (node *Node) SetPersistenceInterval(interval time.Duration) {
+	node.persistenceInterval = interval
+}
+
+// StartPeriodicPersistence starts the background goroutine that periodically saves objects
+func (node *Node) StartPeriodicPersistence(ctx context.Context) {
+	if node.persistenceProvider == nil {
+		node.logger.Warnf("Cannot start periodic persistence: no persistence provider configured")
+		return
+	}
+
+	node.persistenceCtx, node.persistenceCancel = context.WithCancel(ctx)
+	node.persistenceDone = make(chan struct{})
+
+	node.logger.Infof("Starting periodic persistence (interval: %v)", node.persistenceInterval)
+
+	go node.periodicPersistenceLoop()
+}
+
+// StopPeriodicPersistence stops the periodic persistence goroutine
+func (node *Node) StopPeriodicPersistence() {
+	if node.persistenceCancel == nil {
+		return
+	}
+
+	node.logger.Infof("Stopping periodic persistence...")
+	node.persistenceCancel()
+
+	// Wait for the goroutine to finish
+	if node.persistenceDone != nil {
+		<-node.persistenceDone
+	}
+
+	node.logger.Infof("Periodic persistence stopped")
+}
+
+// periodicPersistenceLoop is the background goroutine that saves objects periodically
+func (node *Node) periodicPersistenceLoop() {
+	defer close(node.persistenceDone)
+
+	ticker := time.NewTicker(node.persistenceInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-node.persistenceCtx.Done():
+			node.logger.Infof("Periodic persistence loop stopped")
+			return
+		case <-ticker.C:
+			node.logger.Infof("Running periodic persistence...")
+			if err := node.SaveAllObjects(node.persistenceCtx); err != nil {
+				node.logger.Errorf("Periodic persistence failed: %v", err)
+			} else {
+				node.logger.Infof("Periodic persistence completed successfully")
+			}
+		}
+	}
+}
+
+// SaveAllObjects saves all persistent objects to storage
+// Non-persistent objects are automatically skipped
+func (node *Node) SaveAllObjects(ctx context.Context) error {
+	if node.persistenceProvider == nil {
+		return fmt.Errorf("no persistence provider configured")
+	}
+
+	node.objectsMu.RLock()
+	objectsCopy := make([]Object, 0, len(node.objects))
+	for _, obj := range node.objects {
+		objectsCopy = append(objectsCopy, obj)
+	}
+	node.objectsMu.RUnlock()
+
+	savedCount := 0
+	skippedCount := 0
+	errorCount := 0
+
+	for _, obj := range objectsCopy {
+		err := object.SaveObject(ctx, node.persistenceProvider, obj)
+		if err != nil {
+			node.logger.Errorf("Failed to save object %s: %v", obj.Id(), err)
+			errorCount++
+		} else {
+			// Check if object was actually saved (not skipped due to being non-persistent)
+			_, toDataErr := obj.ToData()
+			if toDataErr == object.ErrNotPersistent {
+				skippedCount++
+			} else {
+				savedCount++
+			}
+		}
+	}
+
+	node.logger.Infof("Persistence summary: saved=%d, skipped=%d, errors=%d", savedCount, skippedCount, errorCount)
+
+	if errorCount > 0 {
+		return fmt.Errorf("failed to save %d objects", errorCount)
+	}
+
+	return nil
 }
