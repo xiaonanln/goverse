@@ -26,6 +26,7 @@ type NodeConnections struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	running       bool
+	runningMu     sync.RWMutex
 }
 
 // New creates a new NodeConnections manager
@@ -38,6 +39,9 @@ func New() *NodeConnections {
 
 // Start begins managing connections to cluster nodes
 func (nc *NodeConnections) Start(ctx context.Context) error {
+	nc.runningMu.Lock()
+	defer nc.runningMu.Unlock()
+
 	if nc.running {
 		nc.logger.Warnf("NodeConnections already running")
 		return nil
@@ -52,7 +56,9 @@ func (nc *NodeConnections) Start(ctx context.Context) error {
 
 // Stop stops the NodeConnections manager and closes all connections
 func (nc *NodeConnections) Stop() {
+	nc.runningMu.Lock()
 	if !nc.running {
+		nc.runningMu.Unlock()
 		return
 	}
 
@@ -61,6 +67,7 @@ func (nc *NodeConnections) Stop() {
 	}
 
 	nc.running = false
+	nc.runningMu.Unlock()
 
 	// Close all connections
 	nc.connectionsMu.Lock()
@@ -168,7 +175,11 @@ func (nc *NodeConnections) GetAllConnections() map[string]goverse_pb.GoverseClie
 // It will connect to new nodes and disconnect from removed nodes
 // The caller should exclude this node's address from the list
 func (nc *NodeConnections) SetNodes(nodes []string) {
-	if !nc.running {
+	nc.runningMu.RLock()
+	isRunning := nc.running
+	nc.runningMu.RUnlock()
+
+	if !isRunning {
 		nc.logger.Warnf("SetNodes called but NodeConnections not running")
 		return
 	}
