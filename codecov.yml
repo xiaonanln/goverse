@@ -1,5 +1,8 @@
 codecov:
   require_ci_to_pass: yes
+  # Wait for all 3 coverage uploads (test.yml, chat.yml, chat-clustered.yml) 
+  # before reporting project status to avoid false failures when tests haven't finished
+  after_n_builds: 3
   precision: 2
   round: down
   layout: "reach,diff,flags,tree"
