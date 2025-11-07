@@ -78,7 +78,15 @@ jobs:
           done
 
       - name: Run tests with coverage
-        run: go test -v -p 1 -failfast -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -v -failfast -coverprofile=coverage.out -covermode=atomic ./...
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+
+      - name: Run etcd restart tests
+        run: go test -v -tags=etcd_restart -p=1 ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
