@@ -49,6 +49,13 @@ jobs:
       - name: Tidy Go modules
         run: go mod tidy
       
+      - name: Build chat application (no -race -cover needed for integration test)
+        run: |
+          # Build chat server and client to verify they compile
+          # Note: -race and -cover are not needed here as runtime coverage is collected via GOCOVERDIR
+          go build -o /tmp/chat-server ./samples/chat/server/
+          go build -o /tmp/chat-client ./samples/chat/client/
+      
       - name: Install and start etcd
         run: |
           sudo apt-get install -y etcd-server
