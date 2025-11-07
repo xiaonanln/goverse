@@ -555,7 +555,7 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 	}
 	node.objectsMu.RUnlock()
 
-	savedCount := 0
+	processedCount := 0
 	errorCount := 0
 
 	for _, obj := range objectsCopy {
@@ -566,12 +566,11 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 			node.logger.Errorf("Failed to save object %s: %v", obj.Id(), err)
 			errorCount++
 		} else {
-			// This counts both saved and skipped (non-persistent) objects
-			savedCount++
+			processedCount++
 		}
 	}
 
-	node.logger.Infof("Persistence summary: processed=%d, errors=%d", savedCount, errorCount)
+	node.logger.Infof("Persistence summary: processed=%d, errors=%d", processedCount, errorCount)
 
 	if errorCount > 0 {
 		return fmt.Errorf("Failed to save %d objects", errorCount)
