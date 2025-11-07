@@ -32,6 +32,9 @@ func StopEtcd() error {
 		cmd := exec.Command("/bin/bash", "/app/script/docker/stop-etcd.sh")
 		if err := cmd.Run(); err == nil {
 			return nil
+		} else {
+			// Log the error but continue to fallback methods
+			fmt.Fprintf(os.Stderr, "Warning: Docker stop-etcd.sh failed: %v, trying other methods\n", err)
 		}
 		// If Docker script fails, fall through to other methods
 	}
@@ -62,6 +65,9 @@ func StartEtcd() error {
 		cmd := exec.Command("/bin/bash", "/app/script/docker/start-etcd.sh")
 		if err := cmd.Run(); err == nil {
 			return nil
+		} else {
+			// Log the error but continue to fallback methods
+			fmt.Fprintf(os.Stderr, "Warning: Docker start-etcd.sh failed: %v, trying other methods\n", err)
 		}
 		// If Docker script fails, fall through to other methods
 	}
