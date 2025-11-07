@@ -1,0 +1,320 @@
+package node
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/xiaonanln/goverse/object"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
+)
+
+// MockPersistenceProvider for testing
+type MockPersistenceProvider struct {
+	storage   map[string][]byte
+	mu        sync.Mutex
+	saveCount int
+	SaveErr   error
+	LoadErr   error
+}
+
+func NewMockPersistenceProvider() *MockPersistenceProvider {
+	return &MockPersistenceProvider{
+		storage: make(map[string][]byte),
+	}
+}
+
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.SaveErr != nil {
+		return m.SaveErr
+	}
+	m.storage[objectID] = data
+	m.saveCount++
+	return nil
+}
+
+func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.LoadErr != nil {
+		return nil, m.LoadErr
+	}
+	data, ok := m.storage[objectID]
+	if !ok {
+		return nil, nil
+	}
+	return data, nil
+}
+
+func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.storage, objectID)
+	return nil
+}
+
+func (m *MockPersistenceProvider) GetSaveCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.saveCount
+}
+
+// TestPersistentObject for testing
+type TestPersistentObject struct {
+	object.BaseObject
+	Value string
+}
+
+func (t *TestPersistentObject) OnCreated() {}
+
+func (t *TestPersistentObject) ToData() (proto.Message, error) {
+	data, err := structpb.NewStruct(map[string]interface{}{
+		"id":    t.Id(),
+		"value": t.Value,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (t *TestPersistentObject) FromData(data proto.Message) error {
+	structData, ok := data.(*structpb.Struct)
+	if !ok {
+		return nil
+	}
+	if value, ok := structData.Fields["value"]; ok {
+		t.Value = value.GetStringValue()
+	}
+	return nil
+}
+
+// TestNonPersistentObject for testing
+type TestNonPersistentObject struct {
+	object.BaseObject
+	Value string
+}
+
+func (t *TestNonPersistentObject) OnCreated() {}
+
+func TestNode_SetPersistenceProvider(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+
+	node.SetPersistenceProvider(provider)
+
+	if node.persistenceProvider != provider {
+		t.Error("SetPersistenceProvider did not set the provider")
+	}
+}
+
+func TestNode_SetPersistenceInterval(t *testing.T) {
+	node := NewNode("localhost:47000")
+	interval := 10 * time.Second
+
+	node.SetPersistenceInterval(interval)
+
+	if node.persistenceInterval != interval {
+		t.Errorf("SetPersistenceInterval: expected %v, got %v", interval, node.persistenceInterval)
+	}
+}
+
+func TestNode_SaveAllObjects_NoPersistentObjects(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+
+	// Register non-persistent object type
+	node.RegisterObjectType((*TestNonPersistentObject)(nil))
+
+	// Create a non-persistent object
+	ctx := context.Background()
+	obj := &TestNonPersistentObject{}
+	obj.OnInit(obj, "test-obj-1", nil)
+	obj.Value = "test-value"
+
+	node.objects["test-obj-1"] = obj
+
+	// Save all objects
+	err := node.SaveAllObjects(ctx)
+	if err != nil {
+		t.Fatalf("SaveAllObjects returned error: %v", err)
+	}
+
+	// Verify nothing was saved (non-persistent object)
+	if provider.GetSaveCount() != 0 {
+		t.Errorf("Expected 0 saved objects, got %d", provider.GetSaveCount())
+	}
+}
+
+func TestNode_SaveAllObjects_WithPersistentObjects(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+
+	// Register persistent object type
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create persistent objects
+	ctx := context.Background()
+	obj1 := &TestPersistentObject{}
+	obj1.OnInit(obj1, "test-obj-1", nil)
+	obj1.Value = "value1"
+
+	obj2 := &TestPersistentObject{}
+	obj2.OnInit(obj2, "test-obj-2", nil)
+	obj2.Value = "value2"
+
+	node.objects["test-obj-1"] = obj1
+	node.objects["test-obj-2"] = obj2
+
+	// Save all objects
+	err := node.SaveAllObjects(ctx)
+	if err != nil {
+		t.Fatalf("SaveAllObjects returned error: %v", err)
+	}
+
+	// Verify objects were saved
+	if provider.GetSaveCount() != 2 {
+		t.Errorf("Expected 2 saved objects, got %d", provider.GetSaveCount())
+	}
+
+	// Verify data was saved
+	if len(provider.storage) != 2 {
+		t.Errorf("Expected 2 objects in storage, got %d", len(provider.storage))
+	}
+}
+
+func TestNode_SaveAllObjects_MixedObjects(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+
+	// Register both types
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+	node.RegisterObjectType((*TestNonPersistentObject)(nil))
+
+	// Create mixed objects
+	ctx := context.Background()
+	persistentObj := &TestPersistentObject{}
+	persistentObj.OnInit(persistentObj, "persistent-1", nil)
+	persistentObj.Value = "persistent"
+
+	nonPersistentObj := &TestNonPersistentObject{}
+	nonPersistentObj.OnInit(nonPersistentObj, "non-persistent-1", nil)
+	nonPersistentObj.Value = "non-persistent"
+
+	node.objects["persistent-1"] = persistentObj
+	node.objects["non-persistent-1"] = nonPersistentObj
+
+	// Save all objects
+	err := node.SaveAllObjects(ctx)
+	if err != nil {
+		t.Fatalf("SaveAllObjects returned error: %v", err)
+	}
+
+	// Only persistent object should be saved
+	if provider.GetSaveCount() != 1 {
+		t.Errorf("Expected 1 saved object, got %d", provider.GetSaveCount())
+	}
+}
+
+func TestNode_PeriodicPersistence_Integration(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+	node.SetPersistenceInterval(100 * time.Millisecond) // Short interval for testing
+
+	// Register persistent object type
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create persistent object
+	obj := &TestPersistentObject{}
+	obj.OnInit(obj, "test-obj-1", nil)
+	obj.Value = "test-value"
+	node.objects["test-obj-1"] = obj
+
+	// Start periodic persistence
+	ctx := context.Background()
+	node.StartPeriodicPersistence(ctx)
+
+	// Wait for at least one save cycle
+	time.Sleep(250 * time.Millisecond)
+
+	// Stop periodic persistence
+	node.StopPeriodicPersistence()
+
+	// Verify at least one save occurred
+	saveCount := provider.GetSaveCount()
+	if saveCount < 1 {
+		t.Errorf("Expected at least 1 save, got %d", saveCount)
+	}
+}
+
+func TestNode_StartStop_WithPersistence(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+	node.SetPersistenceInterval(1 * time.Second) // Longer interval to avoid multiple saves
+
+	// Register persistent object type
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create persistent object
+	obj := &TestPersistentObject{}
+	obj.OnInit(obj, "test-obj-1", nil)
+	obj.Value = "test-value"
+	node.objects["test-obj-1"] = obj
+
+	// Start node
+	ctx := context.Background()
+	err := node.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+
+	// Wait a bit
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop node (should save all objects)
+	err = node.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop node: %v", err)
+	}
+
+	// Verify at least one save occurred (during shutdown)
+	saveCount := provider.GetSaveCount()
+	if saveCount < 1 {
+		t.Errorf("Expected at least 1 save during shutdown, got %d", saveCount)
+	}
+}
+
+func TestNode_SaveAllObjects_NoProvider(t *testing.T) {
+	node := NewNode("localhost:47000")
+	// No provider set
+
+	ctx := context.Background()
+	err := node.SaveAllObjects(ctx)
+	if err == nil {
+		t.Error("Expected error when no provider is configured")
+	}
+}
+
+func TestNode_StartPeriodicPersistence_NoProvider(t *testing.T) {
+	node := NewNode("localhost:47000")
+	// No provider set
+
+	ctx := context.Background()
+	
+	// Should not panic, just log warning
+	node.StartPeriodicPersistence(ctx)
+
+	// Stop should also not panic
+	node.StopPeriodicPersistence()
+}
