@@ -545,18 +545,19 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 	errorCount := 0
 
 	for _, obj := range objectsCopy {
+		// Check if object is persistent before attempting to save
+		_, toDataErr := obj.ToData()
+		if toDataErr == object.ErrNotPersistent {
+			skippedCount++
+			continue
+		}
+
 		err := object.SaveObject(ctx, node.persistenceProvider, obj)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj.Id(), err)
 			errorCount++
 		} else {
-			// Check if object was actually saved (not skipped due to being non-persistent)
-			_, toDataErr := obj.ToData()
-			if toDataErr == object.ErrNotPersistent {
-				skippedCount++
-			} else {
-				savedCount++
-			}
+			savedCount++
 		}
 	}
 
