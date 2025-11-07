@@ -1,3 +1,6 @@
+//go:build !etcd_restart
+// +build !etcd_restart
+
 package consensusmanager
 
 import (
