@@ -20,8 +20,11 @@ type PersistenceProvider interface {
 // Returns nil if the object is not persistent (ToData returns error)
 func SaveObject(ctx context.Context, provider PersistenceProvider, obj Object) error {
 	protoMsg, err := obj.ToData()
-	if err != nil {
+	if err == ErrNotPersistent {
 		// Object is not persistent, skip silently
+		return nil
+	}
+	if err != nil {
 		return nil
 	}
 

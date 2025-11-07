@@ -24,6 +24,9 @@ type Object interface {
 	FromData(data proto.Message) error
 }
 
+// ErrNotPersistent is returned when an object type does not support persistence.
+var ErrNotPersistent = fmt.Errorf("object is not persistent")
+
 type BaseObject struct {
 	self         Object
 	id           string
@@ -61,11 +64,11 @@ func (base *BaseObject) CreationTime() time.Time {
 // ToData provides a default implementation for non-persistent objects
 // Returns an error indicating this object type is not persistent
 func (base *BaseObject) ToData() (proto.Message, error) {
-	return nil, fmt.Errorf("object type %s is not persistent", base.Type())
+	return nil, ErrNotPersistent
 }
 
 // FromData provides a default implementation for non-persistent objects
 // Returns an error indicating this object type is not persistent
 func (base *BaseObject) FromData(data proto.Message) error {
-	return fmt.Errorf("object type %s is not persistent", base.Type())
+	return ErrNotPersistent
 }
