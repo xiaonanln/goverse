@@ -28,11 +28,16 @@ class BinaryHelper:
         try:
             # Check if coverage is enabled via environment variable
             enable_coverage = os.environ.get('ENABLE_COVERAGE', '').lower() in ('true', '1', 'yes')
+            # Check if race detector is enabled via environment variable
+            enable_race = os.environ.get('ENABLE_RACE', '').lower() in ('true', '1', 'yes')
 
             cmd: List[str] = ['go', 'build', '-buildvcs=false']
             if enable_coverage:
                 cmd.append('-cover')
                 print(f"  Coverage instrumentation enabled for {name}")
+            if enable_race:
+                cmd.append('-race')
+                print(f"  Race detector enabled for {name}")
 
             cmd.extend(['-o', output_path, source_path])
 
