@@ -27,27 +27,28 @@ func TestIsDockerEnvironment(t *testing.T) {
 	}
 }
 
-// TestIsDockerEnvironment_WithTempDir tests IsDockerEnvironment with temporary directory setup
-func TestIsDockerEnvironment_WithTempDir(t *testing.T) {
-	// This test creates a temporary directory structure to test the logic
-	// We can't easily test the positive case without actually creating /app/script/docker
-	// So we just verify the function returns false when scripts don't exist
+// TestIsDockerEnvironment_Consistency tests that IsDockerEnvironment is consistent
+func TestIsDockerEnvironment_Consistency(t *testing.T) {
+	// This test verifies that IsDockerEnvironment returns consistent results
+	// The actual result depends on whether /app/script/docker scripts exist
 	
-	// Save original working directory
-	originalWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get working directory: %v", err)
+	// Call the function multiple times to ensure consistency
+	result1 := IsDockerEnvironment()
+	result2 := IsDockerEnvironment()
+	
+	if result1 != result2 {
+		t.Errorf("IsDockerEnvironment() returned inconsistent results: %v != %v", result1, result2)
 	}
-	defer os.Chdir(originalWd)
 	
-	// Create a temporary directory
-	tempDir := t.TempDir()
-	os.Chdir(tempDir)
+	// Verify the logic: both files must exist for true result
+	_, startErr := os.Stat("/app/script/docker/start-etcd.sh")
+	_, stopErr := os.Stat("/app/script/docker/stop-etcd.sh")
+	expectedResult := (startErr == nil && stopErr == nil)
 	
-	// Without creating the scripts, function should return false
-	result := IsDockerEnvironment()
-	if result {
-		t.Error("IsDockerEnvironment() = true when scripts don't exist, want false")
+	if result1 != expectedResult {
+		t.Errorf("IsDockerEnvironment() = %v, but expected %v based on file existence", result1, expectedResult)
+		t.Logf("start-etcd.sh exists: %v", startErr == nil)
+		t.Logf("stop-etcd.sh exists: %v", stopErr == nil)
 	}
 }
 
