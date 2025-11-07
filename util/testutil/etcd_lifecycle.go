@@ -15,16 +15,34 @@ func IsGitHubActions() bool {
 	return os.Getenv("GITHUB_ACTIONS") == "true"
 }
 
+// IsDockerEnvironment returns true if running in Docker environment
+// It checks for the existence of Docker-specific etcd scripts
+func IsDockerEnvironment() bool {
+	// Check if both Docker etcd scripts exist
+	_, startErr := os.Stat("/app/script/docker/start-etcd.sh")
+	_, stopErr := os.Stat("/app/script/docker/stop-etcd.sh")
+	return startErr == nil && stopErr == nil
+}
+
 // StopEtcd stops the etcd service
 // Returns an error if stopping fails
 func StopEtcd() error {
-	// First try systemctl (for CI environment)
+	// First try Docker script if in Docker environment
+	if IsDockerEnvironment() {
+		cmd := exec.Command("/bin/bash", "/app/script/docker/stop-etcd.sh")
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+		// If Docker script fails, fall through to other methods
+	}
+
+	// Try systemctl (for CI environment)
 	cmd := exec.Command("sudo", "systemctl", "stop", "etcd")
 	if err := cmd.Run(); err == nil {
 		return nil
 	}
 
-	// Fall back to killing the process (for Docker/local development)
+	// Fall back to killing the process (for local development)
 	cmd = exec.Command("pkill", "-9", "etcd")
 	if err := cmd.Run(); err != nil {
 		// pkill returns error if no processes found, which is ok
@@ -39,13 +57,22 @@ func StopEtcd() error {
 // StartEtcd starts the etcd service
 // Returns an error if starting fails
 func StartEtcd() error {
-	// First try systemctl (for CI environment)
+	// First try Docker script if in Docker environment
+	if IsDockerEnvironment() {
+		cmd := exec.Command("/bin/bash", "/app/script/docker/start-etcd.sh")
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+		// If Docker script fails, fall through to other methods
+	}
+
+	// Try systemctl (for CI environment)
 	cmd := exec.Command("sudo", "systemctl", "start", "etcd")
 	if err := cmd.Run(); err == nil {
 		return nil
 	}
 
-	// Fall back to starting as background process (for Docker/local development)
+	// Fall back to starting as background process (for local development)
 	// Clean up any stale etcd data directory
 	if _, err := os.Stat("/app/default.etcd"); err == nil {
 		os.RemoveAll("/app/default.etcd")
