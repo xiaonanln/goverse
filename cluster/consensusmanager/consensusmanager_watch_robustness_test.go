@@ -14,7 +14,7 @@ import (
 
 // TestWatchReconnection tests that the watch reconnects after etcd is stopped and restarted
 func TestWatchReconnection(t *testing.T) {
-	if !testutil.IsGitHubActions() {
+	if !testutil.IsGitHubActions() && !testutil.IsDockerEnvironment() {
 		t.Skip("Skipping watch robustness test - not in CI environment")
 	}
 
