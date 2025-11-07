@@ -311,7 +311,7 @@ func TestNode_StartPeriodicPersistence_NoProvider(t *testing.T) {
 	// No provider set
 
 	ctx := context.Background()
-	
+
 	// Should not panic, just log warning
 	node.StartPeriodicPersistence(ctx)
 
