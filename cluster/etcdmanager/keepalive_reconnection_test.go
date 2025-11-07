@@ -13,7 +13,7 @@ import (
 
 // TestRegisterKeyLeaseReconnection tests that RegisterKeyLease persists through etcd reconnection
 func TestRegisterKeyLeaseReconnection(t *testing.T) {
-	if !testutil.IsGitHubActions() {
+	if !testutil.IsGitHubActions() && !testutil.IsDockerEnvironment() {
 		t.Skip("Skipping reconnection test - not in CI environment")
 	}
 
