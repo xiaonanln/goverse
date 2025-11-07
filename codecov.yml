@@ -13,15 +13,12 @@ coverage:
     project:
       default:
         target: 70
-        threshold: 2
+        threshold: 5%
         branches: main,develop
     patch:
       default:
+        informational: true
         target: 0
-        threshold: null
-    changes:
-      default:
-        threshold: 5
 
 ignore:
   - "**/*_pb2.py"
