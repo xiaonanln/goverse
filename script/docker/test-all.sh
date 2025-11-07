@@ -26,11 +26,7 @@ echo "✓ Go unit tests passed"
 echo
 echo "Running etcd restart tests..."
 echo
-if ! go test -p=1 -run=TestRegisterKeyLeaseReconnection ./cluster/etcdmanager/ -count=1 -v; then
-    echo "✗ Etcd restart tests failed"
-    exit 1
-fi
-if ! go test -p=1 -run=TestWatchReconnection ./cluster/consensusmanager/ -count=1 -v; then
+if ! go test -p=1 -run=^.*Reconnection$ ./... -count=1 -v; then
     echo "✗ Etcd restart tests failed"
     exit 1
 fi

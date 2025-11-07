@@ -86,9 +86,7 @@ jobs:
           POSTGRES_DB: postgres
 
       - name: Run etcd restart tests
-        run: |
-          go test -v -p=1 -run=TestRegisterKeyLeaseReconnection ./cluster/etcdmanager/
-          go test -v -p=1 -run=TestWatchReconnection ./cluster/consensusmanager/
+        run: go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
