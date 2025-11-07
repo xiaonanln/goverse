@@ -26,13 +26,11 @@ echo "✓ Go unit tests passed"
 echo
 echo "Running etcd restart tests..."
 echo
-if ! go test -p=1 -run=^.*Reconnection$ ./... -count=1 -v; then
+if ! go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ ./... -count=1; then
     echo "✗ Etcd restart tests failed"
     exit 1
 fi
-echo "✓ Etcd restart tests passed"
-
-echo
+echo "✓ Etcd restart tests passed"echo
 echo "Running integration tests..."
 echo
 
