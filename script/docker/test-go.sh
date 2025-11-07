@@ -26,7 +26,7 @@ echo "✓ Go unit tests passed"
 echo
 echo "Running etcd restart tests..."
 echo
-if ! go test -tags=etcd_restart -p=1 -count=1 -v ./...; then
+if ! go test -tags=etcd_restart -p=1 ./... -count=1 -v; then
     echo "✗ Etcd restart tests failed"
     exit 1
 fi
