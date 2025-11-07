@@ -56,6 +56,20 @@ All service management scripts are **reentrant**, meaning they can be executed m
 - **`test-all.sh`** - Run all tests
 - **`test-reentrant.sh`** - Test script to verify reentrant behavior of start/stop scripts
 
+#### Etcd Restart Tests
+
+Some tests restart the etcd service to test reconnection behavior. These tests are isolated using the `etcd_restart` build tag to prevent interference with other tests.
+
+```bash
+# Run normal tests (fast, parallel)
+go test ./...
+
+# Run etcd restart tests (slow, sequential)
+go test -tags=etcd_restart -p=1 ./...
+
+# Both are automatically run by test-go.sh and test-all.sh
+```
+
 ### Running Tests
 
 ```bash

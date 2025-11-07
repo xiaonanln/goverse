@@ -16,12 +16,21 @@ echo "Running Go unit tests..."
 echo
 
 # run all go tests (no caching) and fail fast on errors
-if ! go test ./... -p 1 -count=1 -v -failfast; then
+if ! go test ./... -count=1 -v -failfast; then
     echo "✗ Go unit tests failed"
     exit 1
 fi
 
 echo "✓ Go unit tests passed"
+
+echo
+echo "Running etcd restart tests..."
+echo
+if ! go test -tags=etcd_restart -p=1 -count=1 -v ./...; then
+    echo "✗ Etcd restart tests failed"
+    exit 1
+fi
+echo "✓ Etcd restart tests passed"
 
 # Clean up etcd data directory after tests
 echo
