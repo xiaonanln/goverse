@@ -19,6 +19,7 @@ const (
 // EtcdManager manages the connection to etcd
 type EtcdManager struct {
 	client    *clientv3.Client
+	clientMu  sync.RWMutex // protects client access
 	endpoints []string
 	logger    *logger.Logger
 	prefix    string // global prefix for all etcd keys
@@ -74,7 +75,10 @@ func (mgr *EtcdManager) Connect() error {
 		return fmt.Errorf("failed to connect to etcd: %w", err)
 	}
 
+	mgr.clientMu.Lock()
 	mgr.client = cli
+	mgr.clientMu.Unlock()
+
 	mgr.logger.Infof("Successfully created etcd client to %v", mgr.endpoints)
 
 	// Test the connection
@@ -105,6 +109,9 @@ func (mgr *EtcdManager) Close() error {
 	// Wait for the shared lease loop to stop
 	mgr.sharedLeaseWg.Wait()
 
+	mgr.clientMu.Lock()
+	defer mgr.clientMu.Unlock()
+
 	if mgr.client != nil {
 		mgr.logger.Infof("Closing etcd connection")
 		err := mgr.client.Close()
@@ -116,6 +123,8 @@ func (mgr *EtcdManager) Close() error {
 
 // GetClient returns the etcd client
 func (mgr *EtcdManager) GetClient() *clientv3.Client {
+	mgr.clientMu.RLock()
+	defer mgr.clientMu.RUnlock()
 	return mgr.client
 }
 

@@ -161,8 +161,9 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 // It performs the following operations in reverse order of Start:
 // 1. Stops shard mapping management
 // 2. Stops node connections
-// 3. Unregisters the node from etcd
-// 4. Closes the etcd connection
+// 3. Stops watching cluster state
+// 4. Unregisters the node from etcd
+// 5. Closes the etcd connection
 func (c *Cluster) Stop(ctx context.Context) error {
 	c.logger.Infof("Stopping cluster...")
 
@@ -171,6 +172,11 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	// Stop shard mapping management
 	c.stopShardMappingManagement()
+
+	// Stop watching cluster state (must stop before closing etcd)
+	if c.consensusManager != nil {
+		c.consensusManager.StopWatch()
+	}
 
 	// Unregister from etcd
 	if err := c.unregisterNode(ctx); err != nil {
