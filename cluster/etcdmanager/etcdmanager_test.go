@@ -2,8 +2,6 @@ package etcdmanager
 
 import (
 	"context"
-	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -415,29 +413,4 @@ func TestRegisterKeyLeaseWithoutConnect(t *testing.T) {
 	if err == nil {
 		t.Fatal("RegisterKeyLease() should fail when not connected")
 	}
-}
-
-func isGithubAction() bool {
-	// GitHub Actions sets GITHUB_ACTIONS=true; check the environment variable directly
-	return os.Getenv("GITHUB_ACTIONS") == "true"
-}
-
-// executeCommand is a helper function to execute shell commands
-func executeCommand(cmd string) (string, error) {
-	parts := []string{"sh", "-c", cmd}
-	execCmd := &struct {
-		name string
-		args []string
-	}{
-		name: parts[0],
-		args: parts[1:],
-	}
-
-	// Using a simple approach since we need sudo commands
-	var output []byte
-	var err error
-
-	// Import os/exec if not already imported
-	output, err = exec.Command(execCmd.name, execCmd.args...).CombinedOutput()
-	return string(output), err
 }
