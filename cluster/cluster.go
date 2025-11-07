@@ -85,6 +85,7 @@ func NewCluster(node *node.Node, etcdAddress string, etcdPrefix string) (*Cluste
 		clusterReadyChan: make(chan bool),
 		etcdAddress:      etcdAddress,
 		etcdPrefix:       etcdPrefix,
+		nodeConnections:  nodeconnections.New(),
 	}
 
 	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
@@ -104,6 +105,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		thisNode:         node,
 		logger:           logger.NewLogger(name),
 		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
 	}
 }
 
@@ -285,17 +287,11 @@ func (c *Cluster) markClusterReady() {
 }
 
 // checkAndMarkReady checks if all conditions are met to mark the cluster as ready:
-// - Node connections are established (nodeConnections is not nil and running)
+// - Node connections are running
 // - Shard mapping is available
 // If both conditions are met, it marks the cluster as ready
 func (c *Cluster) checkAndMarkReady() {
 	if c.IsReady() {
-		return
-	}
-
-	// Check if node connections are established
-	if c.nodeConnections == nil {
-		c.logger.Debugf("Cannot mark cluster ready: node connections not established")
 		return
 	}
 
@@ -340,10 +336,6 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 
 	// Route to the appropriate node
 	c.logger.Infof("Routing CallObject for %s.%s to node %s", id, method, nodeAddr)
-
-	if c.nodeConnections == nil {
-		return nil, fmt.Errorf("node connections not initialized")
-	}
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -414,11 +406,6 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 	// Route to the appropriate node
 	c.logger.Infof("Routing CreateObject for %s to node %s", objID, nodeAddr)
 
-	if c.nodeConnections == nil {
-		c.logger.Warnf("CreateObject failed: Node connections not initialized")
-		return "", fmt.Errorf("node connections not initialized")
-	}
-
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
 		c.logger.Warnf("CreateObject failed: %v", err)
@@ -478,10 +465,6 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 
 	// Route to the appropriate node
 	c.logger.Infof("Routing PushMessageToClient for %s to node %s", clientID, nodeAddr)
-
-	if c.nodeConnections == nil {
-		return fmt.Errorf("node connections not initialized")
-	}
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -772,12 +755,10 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 // startNodeConnections initializes and starts the node connections manager
 // This should be called after StartWatching is started
 func (c *Cluster) startNodeConnections(ctx context.Context) error {
-	if c.nodeConnections != nil {
-		c.logger.Warnf("NodeConnections already started")
-		return nil
+	if c.nodeConnections == nil {
+		return fmt.Errorf("nodeConnections is nil - cluster not properly initialized")
 	}
 
-	c.nodeConnections = nodeconnections.New()
 	err := c.nodeConnections.Start(ctx)
 	if err != nil {
 		return err
@@ -793,16 +774,13 @@ func (c *Cluster) startNodeConnections(ctx context.Context) error {
 
 // stopNodeConnections stops the node connections manager
 func (c *Cluster) stopNodeConnections() {
-	if c.nodeConnections != nil {
-		c.nodeConnections.Stop()
-		c.nodeConnections = nil
-	}
+	c.nodeConnections.Stop()
 }
 
 // updateNodeConnections updates the NodeConnections with the current list of cluster nodes
 func (c *Cluster) updateNodeConnections() {
-	if c.nodeConnections == nil || c.thisNode == nil {
-		c.logger.Warnf("updateNodeConnections: NodeConnections or thisNode is not initialized")
+	if c.thisNode == nil {
+		c.logger.Warnf("updateNodeConnections: thisNode is not initialized")
 		return
 	}
 
