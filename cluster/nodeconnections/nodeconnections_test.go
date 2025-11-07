@@ -32,15 +32,17 @@ func TestNodeConnections_StartStop(t *testing.T) {
 		t.Fatalf("Failed to start NodeConnections: %v", err)
 	}
 
-	if !nc.running {
-		t.Error("NodeConnections should be running after Start()")
+	// Verify context is set
+	if nc.ctx == nil {
+		t.Error("NodeConnections context should be set after Start()")
 	}
 
 	// Stop NodeConnections
 	nc.Stop()
 
-	if nc.running {
-		t.Error("NodeConnections should not be running after Stop()")
+	// Verify connections are closed
+	if nc.NumConnections() != 0 {
+		t.Errorf("Expected 0 connections after Stop(), got %d", nc.NumConnections())
 	}
 }
 

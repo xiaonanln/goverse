@@ -25,8 +25,6 @@ type NodeConnections struct {
 	logger        *logger.Logger
 	ctx           context.Context
 	cancel        context.CancelFunc
-	running       bool
-	runningMu     sync.RWMutex
 }
 
 // New creates a new NodeConnections manager
@@ -39,16 +37,10 @@ func New() *NodeConnections {
 
 // Start begins managing connections to cluster nodes
 func (nc *NodeConnections) Start(ctx context.Context) error {
-	nc.runningMu.Lock()
-	defer nc.runningMu.Unlock()
-
-	if nc.running {
-		nc.logger.Warnf("NodeConnections already running")
-		return nil
-	}
+	nc.connectionsMu.Lock()
+	defer nc.connectionsMu.Unlock()
 
 	nc.ctx, nc.cancel = context.WithCancel(ctx)
-	nc.running = true
 
 	nc.logger.Infof("Started NodeConnections manager")
 	return nil
@@ -56,29 +48,20 @@ func (nc *NodeConnections) Start(ctx context.Context) error {
 
 // Stop stops the NodeConnections manager and closes all connections
 func (nc *NodeConnections) Stop() {
-	nc.runningMu.Lock()
-	wasRunning := nc.running
-	if nc.running {
-		if nc.cancel != nil {
-			nc.cancel()
-		}
-		nc.running = false
-	}
-	nc.runningMu.Unlock()
+	nc.connectionsMu.Lock()
+	defer nc.connectionsMu.Unlock()
 
-	if !wasRunning {
-		return
+	if nc.cancel != nil {
+		nc.cancel()
 	}
 
 	// Close all connections
-	nc.connectionsMu.Lock()
 	for addr, conn := range nc.connections {
 		if err := nc.closeConnection(conn); err != nil {
 			nc.logger.Errorf("Error closing connection to %s: %v", addr, err)
 		}
 		delete(nc.connections, addr)
 	}
-	nc.connectionsMu.Unlock()
 
 	nc.logger.Infof("Stopped NodeConnections manager")
 }
@@ -176,27 +159,18 @@ func (nc *NodeConnections) GetAllConnections() map[string]goverse_pb.GoverseClie
 // It will connect to new nodes and disconnect from removed nodes
 // The caller should exclude this node's address from the list
 func (nc *NodeConnections) SetNodes(nodes []string) {
-	nc.runningMu.RLock()
-	isRunning := nc.running
-	nc.runningMu.RUnlock()
-
-	if !isRunning {
-		nc.logger.Warnf("SetNodes called but NodeConnections not running")
-		return
-	}
-
 	// Build a map of desired nodes
 	desiredNodes := make(map[string]bool)
 	for _, nodeAddr := range nodes {
 		desiredNodes[nodeAddr] = true
 	}
 
-	nc.connectionsMu.Lock()
+	nc.connectionsMu.RLock()
 	currentNodes := make(map[string]bool)
 	for addr := range nc.connections {
 		currentNodes[addr] = true
 	}
-	nc.connectionsMu.Unlock()
+	nc.connectionsMu.RUnlock()
 
 	// Connect to new nodes
 	for nodeAddr := range desiredNodes {
