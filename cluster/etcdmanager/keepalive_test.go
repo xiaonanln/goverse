@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestKeepAliveRetry tests that the keep-alive mechanism retries when the channel closes
