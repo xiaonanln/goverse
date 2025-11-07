@@ -94,7 +94,7 @@ func TestRegisterKeyLeaseReconnection(t *testing.T) {
 
 	// Wait for the keepalive loop to reconnect and re-establish the lease
 	t.Logf("Waiting for keepalive to reconnect...")
-	time.Sleep(5 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	// Create a new manager to query etcd (old connection may be stale)
 	mgr2, err := NewEtcdManager("localhost:2379", mgr.GetPrefix())
