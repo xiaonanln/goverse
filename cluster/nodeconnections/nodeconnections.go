@@ -57,17 +57,18 @@ func (nc *NodeConnections) Start(ctx context.Context) error {
 // Stop stops the NodeConnections manager and closes all connections
 func (nc *NodeConnections) Stop() {
 	nc.runningMu.Lock()
-	if !nc.running {
-		nc.runningMu.Unlock()
+	wasRunning := nc.running
+	if nc.running {
+		if nc.cancel != nil {
+			nc.cancel()
+		}
+		nc.running = false
+	}
+	nc.runningMu.Unlock()
+
+	if !wasRunning {
 		return
 	}
-
-	if nc.cancel != nil {
-		nc.cancel()
-	}
-
-	nc.running = false
-	nc.runningMu.Unlock()
 
 	// Close all connections
 	nc.connectionsMu.Lock()
