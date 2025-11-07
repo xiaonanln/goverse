@@ -35,6 +35,7 @@ type Node struct {
 	logger                *logger.Logger
 	startupTime           time.Time
 	persistenceProvider   object.PersistenceProvider
+	persistenceProviderMu sync.RWMutex
 	persistenceInterval   time.Duration
 	persistenceCtx        context.Context
 	persistenceCancel     context.CancelFunc
@@ -75,7 +76,11 @@ func (node *Node) Stop(ctx context.Context) error {
 	node.logger.Infof("Node stopping")
 	
 	// Stop periodic persistence and save all objects one final time
-	if node.persistenceProvider != nil {
+	node.persistenceProviderMu.RLock()
+	hasProvider := node.persistenceProvider != nil
+	node.persistenceProviderMu.RUnlock()
+
+	if hasProvider {
 		node.StopPeriodicPersistence()
 		
 		// Save all objects before shutting down
@@ -462,6 +467,8 @@ func (node *Node) PushMessageToClient(clientID string, message proto.Message) er
 // SetPersistenceProvider configures the persistence provider for this node
 // Must be called before Start() to enable periodic persistence
 func (node *Node) SetPersistenceProvider(provider object.PersistenceProvider) {
+	node.persistenceProviderMu.Lock()
+	defer node.persistenceProviderMu.Unlock()
 	node.persistenceProvider = provider
 }
 
@@ -473,7 +480,11 @@ func (node *Node) SetPersistenceInterval(interval time.Duration) {
 
 // StartPeriodicPersistence starts the background goroutine that periodically saves objects
 func (node *Node) StartPeriodicPersistence(ctx context.Context) {
-	if node.persistenceProvider == nil {
+	node.persistenceProviderMu.RLock()
+	hasProvider := node.persistenceProvider != nil
+	node.persistenceProviderMu.RUnlock()
+
+	if !hasProvider {
 		node.logger.Warnf("Cannot start periodic persistence: no persistence provider configured")
 		return
 	}
@@ -529,7 +540,11 @@ func (node *Node) periodicPersistenceLoop() {
 // SaveAllObjects saves all persistent objects to storage
 // Non-persistent objects are automatically skipped
 func (node *Node) SaveAllObjects(ctx context.Context) error {
-	if node.persistenceProvider == nil {
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider == nil {
 		return fmt.Errorf("no persistence provider configured")
 	}
 
@@ -541,30 +556,25 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 	node.objectsMu.RUnlock()
 
 	savedCount := 0
-	skippedCount := 0
 	errorCount := 0
 
 	for _, obj := range objectsCopy {
-		// Check if object is persistent before attempting to save
-		_, toDataErr := obj.ToData()
-		if toDataErr == object.ErrNotPersistent {
-			skippedCount++
-			continue
-		}
-
-		err := object.SaveObject(ctx, node.persistenceProvider, obj)
+		// Object might have been deleted after we copied the list
+		// SaveObject handles non-persistent objects by returning nil
+		err := object.SaveObject(ctx, provider, obj)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj.Id(), err)
 			errorCount++
 		} else {
+			// This counts both saved and skipped (non-persistent) objects
 			savedCount++
 		}
 	}
 
-	node.logger.Infof("Persistence summary: saved=%d, skipped=%d, errors=%d", savedCount, skippedCount, errorCount)
+	node.logger.Infof("Persistence summary: processed=%d, errors=%d", savedCount, errorCount)
 
 	if errorCount > 0 {
-		return fmt.Errorf("failed to save %d objects", errorCount)
+		return fmt.Errorf("Failed to save %d objects", errorCount)
 	}
 
 	return nil
