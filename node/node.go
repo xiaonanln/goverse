@@ -590,7 +590,8 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 	}
 	node.objectsMu.RUnlock()
 
-	processedCount := 0
+	savedCount := 0
+	nonPersistentCount := 0
 	errorCount := 0
 
 	for _, obj := range objectsCopy {
@@ -599,11 +600,12 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 		data, err := obj.ToData()
 		if err == object.ErrNotPersistent {
 			// Object is not persistent, skip silently
-			processedCount++
+			node.logger.Infof("Object %s is not persistent", obj)
+			nonPersistentCount++
 			continue
 		}
 		if err != nil {
-			node.logger.Errorf("Failed to get data for object %s: %v", obj.Id(), err)
+			node.logger.Errorf("Failed to get data for object %s: %v", obj, err)
 			errorCount++
 			continue
 		}
@@ -611,14 +613,14 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 		// Save the object data
 		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
 		if err != nil {
-			node.logger.Errorf("Failed to save object %s: %v", obj.Id(), err)
+			node.logger.Errorf("Failed to save object %s: %v", obj, err)
 			errorCount++
 		} else {
-			processedCount++
+			savedCount++
 		}
 	}
 
-	node.logger.Infof("Persistence summary: processed=%d, errors=%d", processedCount, errorCount)
+	node.logger.Infof("Persistence summary: saved=%d, non-persistent=%d, errors=%d", savedCount, nonPersistentCount, errorCount)
 
 	if errorCount > 0 {
 		return fmt.Errorf("Failed to save %d objects", errorCount)
