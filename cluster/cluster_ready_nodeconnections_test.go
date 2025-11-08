@@ -21,7 +21,7 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 
 	// Wait for shard mapping to be created and cluster to be marked ready
 	// This should happen within NodeStabilityDuration + ShardMappingCheckInterval + some buffer
-	timeout := NodeStabilityDuration + ShardMappingCheckInterval + 5*time.Second
+	timeout := testutil.WaitForShardMappingTimeout
 	select {
 	case <-cluster1.ClusterReady():
 		t.Log("Cluster is now ready")
