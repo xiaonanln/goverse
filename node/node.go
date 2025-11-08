@@ -202,9 +202,9 @@ func isConcreteProtoMessage(t reflect.Type) bool {
 }
 
 // RegisterClient creates a new client object
-func (node *Node) RegisterClient() (ClientObject, error) {
+func (node *Node) RegisterClient(ctx context.Context) (ClientObject, error) {
 	// Placeholder for client registration logic
-	clientObj, err := node.newClientObject()
+	clientObj, err := node.newClientObject(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -212,13 +212,13 @@ func (node *Node) RegisterClient() (ClientObject, error) {
 	return clientObj.(ClientObject), nil
 }
 
-func (node *Node) newClientObject() (Object, error) {
+func (node *Node) newClientObject(ctx context.Context) (Object, error) {
 	if node.clientObjectType == "" {
 		return nil, fmt.Errorf("client object type not registered")
 	}
 
 	clientId := node.advertiseAddress + "/" + uniqueid.UniqueId()
-	clientObj, err := node.createObject(node.clientObjectType, clientId, nil)
+	clientObj, err := node.createObject(ctx, node.clientObjectType, clientId, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ClientProxy object: %w", err)
 	}
@@ -317,7 +317,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, initD
 		return "", fmt.Errorf("object ID must be specified")
 	}
 
-	obj, err := node.createObject(typ, id, initData)
+	obj, err := node.createObject(ctx, typ, id, initData)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
 		return "", err
@@ -325,7 +325,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, initD
 	return obj.Id(), nil
 }
 
-func (node *Node) createObject(typ string, id string, initData proto.Message) (Object, error) {
+func (node *Node) createObject(ctx context.Context, typ string, id string, initData proto.Message) (Object, error) {
 	// ID must be specified to ensure proper shard mapping
 	if id == "" {
 		return nil, fmt.Errorf("object ID must be specified")
@@ -340,9 +340,33 @@ func (node *Node) createObject(typ string, id string, initData proto.Message) (O
 
 	// Create a new instance of the object
 	objectValue := reflect.New(objectType)
-	object, ok := objectValue.Interface().(Object)
+	obj, ok := objectValue.Interface().(Object)
 	if !ok {
 		return nil, fmt.Errorf("type %s does not implement Object interface", typ)
+	}
+
+	// Attempt to load from persistence if provider is configured
+	dataToInit := initData
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider != nil {
+		err := object.LoadObject(ctx, provider, obj, id)
+		if err == nil {
+			// Successfully loaded from persistence
+			node.logger.Infof("Loaded object %s from persistence", id)
+			dataToInit = nil // Don't use initData since we loaded from persistence
+		} else if errors.Is(err, object.ErrNotPersistent) {
+			// Object type doesn't support persistence, use initData
+			node.logger.Debugf("Object type %s is not persistent, using initData", typ)
+		} else if errors.Is(err, object.ErrObjectNotFound) {
+			// Object not found in storage, use initData
+			node.logger.Debugf("Object %s not found in persistence, using initData", id)
+		} else {
+			// Other error loading from persistence, log warning and use initData
+			node.logger.Warnf("Failed to load object %s from persistence: %v, using initData", id, err)
+		}
 	}
 
 	// Lock once, check if exists, create if not, unlock
@@ -354,22 +378,22 @@ func (node *Node) createObject(typ string, id string, initData proto.Message) (O
 		return nil, fmt.Errorf("object with id %s already exists: %v", id, node.objects[id])
 	}
 
-	object.OnInit(object, id, initData)
-	id = object.Id()
-	node.objects[id] = object
+	obj.OnInit(obj, id, dataToInit)
+	id = obj.Id()
+	node.objects[id] = obj
 	node.objectsMu.Unlock()
 
 	node.logger.Infof("Created object %s of type %s", id, typ)
-	object.OnCreated()
+	obj.OnCreated()
 
 	if node.IsStarted() {
-		err := node.registerObjectWithInspector(object)
+		err := node.registerObjectWithInspector(obj)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			node.logger.Errorf("Failed to register object with inspector: %v", err)
 		}
 	}
 
-	return object, nil
+	return obj, nil
 }
 
 func (node *Node) destroyObject(id string) {
