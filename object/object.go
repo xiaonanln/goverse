@@ -71,5 +71,5 @@ func (base *BaseObject) ToData() (proto.Message, error) {
 // FromData provides a default implementation for non-persistent objects
 // Returns an error indicating this object type is not persistent
 func (base *BaseObject) FromData(data proto.Message) error {
-	return ErrNotPersistent
+	return nil
 }

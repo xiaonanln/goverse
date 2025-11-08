@@ -392,13 +392,11 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 		}
 	}
 
-	// Restore state from data (either from persistence or initData)
-	if dataToRestore != nil {
-		err := obj.FromData(dataToRestore)
-		if err != nil && !errors.Is(err, object.ErrNotPersistent) {
-			node.logger.Errorf("Failed to restore object %s from data: %v", id, err)
-			return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
-		}
+	// Always call FromData (even with nil data) to ensure consistent initialization
+	err := obj.FromData(dataToRestore)
+	if err != nil {
+		node.logger.Errorf("Failed to restore object %s from data: %v", id, err)
+		return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
 	}
 
 	// Lock and store the object in the registry
