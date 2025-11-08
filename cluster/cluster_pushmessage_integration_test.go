@@ -56,7 +56,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Register a client on node2
-	clientObj, err := node2.RegisterClient()
+	clientObj, err := node2.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client on node2: %v", err)
 	}

@@ -74,7 +74,7 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 	testNode.RegisterClientType((*client.BaseClient)(nil))
 
 	// Create a client
-	clientObj, err := testNode.RegisterClient()
+	clientObj, err := testNode.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
