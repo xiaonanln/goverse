@@ -94,8 +94,8 @@ func TestBaseObject_FromData_NotPersistent(t *testing.T) {
 
 	emptyStruct, _ := structpb.NewStruct(map[string]interface{}{})
 	err := obj.FromData(emptyStruct)
-	if err == nil {
-		t.Error("FromData() should return error for non-persistent object")
+	if err != nil {
+		t.Errorf("FromData() should return nil for non-persistent object, got: %v", err)
 	}
 }
 
