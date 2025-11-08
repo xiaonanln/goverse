@@ -68,12 +68,22 @@ func (m *MockPersistenceProvider) GetSaveCount() int {
 // TestPersistentObject for testing
 type TestPersistentObject struct {
 	object.BaseObject
+	mu    sync.Mutex
 	Value string
 }
 
 func (t *TestPersistentObject) OnCreated() {}
 
+func (t *TestPersistentObject) SetValue(value string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.Value = value
+}
+
 func (t *TestPersistentObject) ToData() (proto.Message, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":    t.Id(),
 		"value": t.Value,
@@ -89,6 +99,10 @@ func (t *TestPersistentObject) FromData(data proto.Message) error {
 	if !ok {
 		return nil
 	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if value, ok := structData.Fields["value"]; ok {
 		t.Value = value.GetStringValue()
 	}
@@ -237,7 +251,7 @@ func TestNode_PeriodicPersistence_Integration(t *testing.T) {
 	// Create persistent object
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-obj-1", nil)
-	obj.Value = "test-value"
+	obj.SetValue("test-value")
 	node.objects["test-obj-1"] = obj
 
 	// Start periodic persistence
@@ -269,7 +283,7 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 	// Create persistent object
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-obj-1", nil)
-	obj.Value = "test-value"
+	obj.SetValue("test-value")
 	node.objects["test-obj-1"] = obj
 
 	// Start node
@@ -335,12 +349,12 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 	// Create multiple persistent objects
 	obj1 := &TestPersistentObject{}
 	obj1.OnInit(obj1, "periodic-obj-1", nil)
-	obj1.Value = "value1"
+	obj1.SetValue("value1")
 	node.objects["periodic-obj-1"] = obj1
 
 	obj2 := &TestPersistentObject{}
 	obj2.OnInit(obj2, "periodic-obj-2", nil)
-	obj2.Value = "value2"
+	obj2.SetValue("value2")
 	node.objects["periodic-obj-2"] = obj2
 
 	// Start periodic persistence
@@ -444,7 +458,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	// Create persistent object
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "update-obj", nil)
-	obj.Value = "initial-value"
+	obj.SetValue("initial-value")
 	node.objects["update-obj"] = obj
 
 	// Start periodic persistence
@@ -472,7 +486,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	}
 
 	// Change the object value
-	obj.Value = "updated-value"
+	obj.SetValue("updated-value")
 
 	// Wait for next save cycle
 	time.Sleep(200 * time.Millisecond)
@@ -514,7 +528,7 @@ func TestNode_PeriodicPersistence_StopsCleanly(t *testing.T) {
 	// Create persistent object
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "stop-test-obj", nil)
-	obj.Value = "test-value"
+	obj.SetValue("test-value")
 	node.objects["stop-test-obj"] = obj
 
 	// Start periodic persistence
