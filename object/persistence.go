@@ -31,8 +31,10 @@ func SaveObject(ctx context.Context, provider PersistenceProvider, objectID, obj
 // ErrObjectNotFound is returned when an object is not found in persistence storage
 var ErrObjectNotFound = fmt.Errorf("object not found in persistence storage")
 
-// LoadObject loads an object using the provided persistence provider
-func LoadObject(ctx context.Context, provider PersistenceProvider, obj Object, objectID string) error {
+// LoadObject loads object data from the provided persistence provider
+// Returns the data as proto.Message. The caller should create a proto.Message instance
+// to unmarshal into, then call obj.FromData() to restore the object state
+func LoadObject(ctx context.Context, provider PersistenceProvider, objectID string, protoMsg proto.Message) error {
 	jsonData, err := provider.LoadObject(ctx, objectID)
 	if err != nil {
 		return fmt.Errorf("failed to load object data: %w", err)
@@ -43,20 +45,13 @@ func LoadObject(ctx context.Context, provider PersistenceProvider, obj Object, o
 		return ErrObjectNotFound
 	}
 
-	// Create a new instance of the expected proto.Message type
-	// The object's ToData() should return the correct type as a template
-	protoMsg, err := obj.ToData()
-	if err != nil {
-		return fmt.Errorf("object type does not support persistence: %w", err)
-	}
-
 	// Unmarshal JSON to proto.Message
 	err = protojson.Unmarshal(jsonData, protoMsg)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal JSON to proto message: %w", err)
 	}
 
-	return obj.FromData(protoMsg)
+	return nil
 }
 
 // MarshalProtoToJSON is a utility function to marshal proto.Message to JSON
