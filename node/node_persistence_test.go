@@ -580,7 +580,11 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 	savedObj.OnInit(savedObj, "load-test-obj", nil)
 	savedObj.SetValue("persisted-value")
 
-	err := object.SaveObject(ctx, provider, savedObj)
+	data, err := savedObj.ToData()
+	if err != nil {
+		t.Fatalf("Failed to get object data: %v", err)
+	}
+	err = object.SaveObject(ctx, provider, savedObj.Id(), savedObj.Type(), data)
 	if err != nil {
 		t.Fatalf("Failed to save object: %v", err)
 	}
@@ -619,7 +623,11 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	savedObj.OnInit(savedObj, "persistent-obj-123", nil)
 	savedObj.SetValue("saved-state")
 
-	err := object.SaveObject(ctx, provider, savedObj)
+	data, err := savedObj.ToData()
+	if err != nil {
+		t.Fatalf("Failed to get object data: %v", err)
+	}
+	err = object.SaveObject(ctx, provider, savedObj.Id(), savedObj.Type(), data)
 	if err != nil {
 		t.Fatalf("Failed to save object: %v", err)
 	}
@@ -706,8 +714,9 @@ func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
 }
 
 func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
-	// This test verifies that when persistence loading fails,
-	// the object still gets created with initData
+	// This test verifies that when persistence loading fails with a real error,
+	// the object creation fails (does not fall back to initData)
+	// This prevents data loss or inconsistency when there are database errors
 	node := NewNode("localhost:47000")
 	provider := NewMockPersistenceProvider()
 	provider.LoadErr = fmt.Errorf("simulated load error")
@@ -716,18 +725,18 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create object - load will fail, should fall back to initData
+	// Create object - load will fail, should return error (not fall back to initData)
 	obj, err := node.createObject(ctx, "TestPersistentObject", "error-obj", nil)
-	if err != nil {
-		t.Fatalf("Failed to create object despite load error: %v", err)
+	if err == nil {
+		t.Fatal("Expected error when persistence loading fails, but got nil")
 	}
 
-	if obj.Id() != "error-obj" {
-		t.Errorf("Expected object ID 'error-obj', got '%s'", obj.Id())
+	if obj != nil {
+		t.Errorf("Expected nil object when creation fails, got %v", obj)
 	}
 
-	// The object should be registered in the node
-	if node.objects["error-obj"] == nil {
-		t.Error("Object was not registered in node.objects")
+	// The object should NOT be registered in the node
+	if node.objects["error-obj"] != nil {
+		t.Error("Object should not be registered when creation fails")
 	}
 }

@@ -16,25 +16,16 @@ type PersistenceProvider interface {
 	DeleteObject(ctx context.Context, objectID string) error
 }
 
-// SaveObject saves an object using the provided persistence provider
-// Returns nil if the object is not persistent (ToData returns error)
-func SaveObject(ctx context.Context, provider PersistenceProvider, obj Object) error {
-	protoMsg, err := obj.ToData()
-	if err == ErrNotPersistent {
-		// Object is not persistent, skip silently
-		return nil
-	}
-	if err != nil {
-		return nil
-	}
-
+// SaveObject saves object data using the provided persistence provider
+// The caller should call obj.ToData() to get the proto.Message before calling this function
+func SaveObject(ctx context.Context, provider PersistenceProvider, objectID, objectType string, data proto.Message) error {
 	// Convert proto.Message to JSON bytes using protojson
-	jsonData, err := protojson.Marshal(protoMsg)
+	jsonData, err := protojson.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal proto message to JSON: %w", err)
 	}
 
-	return provider.SaveObject(ctx, obj.Id(), obj.Type(), jsonData)
+	return provider.SaveObject(ctx, objectID, objectType, jsonData)
 }
 
 // ErrObjectNotFound is returned when an object is not found in persistence storage

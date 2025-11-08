@@ -120,7 +120,11 @@ func main() {
 	fmt.Printf("  Email: %s\n", user1.Email)
 	fmt.Printf("  Score: %d\n", user1.Score)
 
-	err = object.SaveObject(ctx, provider, user1)
+	data, err := user1.ToData()
+	if err != nil {
+		log.Fatalf("Failed to get object data: %v", err)
+	}
+	err = object.SaveObject(ctx, provider, user1.Id(), user1.Type(), data)
 	if err != nil {
 		log.Fatalf("Failed to save object: %v", err)
 	}
@@ -153,7 +157,11 @@ func main() {
 	fmt.Printf("  Email: %s\n", user2.Email)
 	fmt.Printf("  Score: %d\n", user2.Score)
 
-	err = object.SaveObject(ctx, provider, user2)
+	data, err = user2.ToData()
+	if err != nil {
+		log.Fatalf("Failed to get object data: %v", err)
+	}
+	err = object.SaveObject(ctx, provider, user2.Id(), user2.Type(), data)
 	if err != nil {
 		log.Fatalf("Failed to update object: %v", err)
 	}
@@ -179,7 +187,11 @@ func main() {
 		userObj.Email = u.email
 		userObj.Score = u.score
 
-		err = object.SaveObject(ctx, provider, userObj)
+		data, err := userObj.ToData()
+		if err != nil {
+			log.Fatalf("Failed to get object data for %s: %v", u.id, err)
+		}
+		err = object.SaveObject(ctx, provider, userObj.Id(), userObj.Type(), data)
 		if err != nil {
 			log.Fatalf("Failed to save user %s: %v", u.id, err)
 		}

@@ -151,8 +151,14 @@ func TestSaveObject_Persistent(t *testing.T) {
 	obj.OnInit(obj, "test-id", nil)
 	obj.CustomData = "test-data"
 
+	// Call ToData() to get the proto.Message
+	data, err := obj.ToData()
+	if err != nil {
+		t.Fatalf("ToData() returned error: %v", err)
+	}
+
 	ctx := context.Background()
-	err := SaveObject(ctx, provider, obj)
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
@@ -173,12 +179,13 @@ func TestSaveObject_NotPersistent(t *testing.T) {
 	obj := &TestObject{} // Non-persistent object
 	obj.OnInit(obj, "test-id", nil)
 
-	ctx := context.Background()
-	err := SaveObject(ctx, provider, obj)
-	if err != nil {
-		t.Fatalf("SaveObject() returned error: %v", err)
+	// Try to get data from non-persistent object - should return error
+	_, err := obj.ToData()
+	if err == nil {
+		t.Fatal("ToData() should return error for non-persistent object")
 	}
 
+	// Since ToData() returns error, we cannot call SaveObject
 	// Verify nothing was saved
 	if len(provider.storage) != 0 {
 		t.Error("Non-persistent object should not be saved")
@@ -193,7 +200,12 @@ func TestLoadObject(t *testing.T) {
 
 	// First save an object
 	ctx := context.Background()
-	err := SaveObject(ctx, provider, obj)
+	data, err := obj.ToData()
+	if err != nil {
+		t.Fatalf("ToData() returned error: %v", err)
+	}
+
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
