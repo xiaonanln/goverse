@@ -58,12 +58,12 @@ func NewNode(advertiseAddress string) *Node {
 // Start starts the node and connects it to the inspector
 func (node *Node) Start(ctx context.Context) error {
 	node.startupTime = time.Now()
-	
+
 	// Start periodic persistence if provider is configured
 	if node.persistenceProvider != nil {
 		node.StartPeriodicPersistence(ctx)
 	}
-	
+
 	return node.connectToInspector()
 }
 
@@ -74,7 +74,7 @@ func (node *Node) IsStarted() bool {
 // Stop stops the node and unregisters it from the inspector
 func (node *Node) Stop(ctx context.Context) error {
 	node.logger.Infof("Node stopping")
-	
+
 	// Stop periodic persistence and save all objects one final time
 	node.persistenceProviderMu.RLock()
 	hasProvider := node.persistenceProvider != nil
@@ -82,14 +82,14 @@ func (node *Node) Stop(ctx context.Context) error {
 
 	if hasProvider {
 		node.StopPeriodicPersistence()
-		
+
 		// Save all objects before shutting down
 		node.logger.Infof("Saving all objects before shutdown...")
 		if err := node.SaveAllObjects(ctx); err != nil {
 			node.logger.Errorf("Failed to save all objects during shutdown: %v", err)
 		}
 	}
-	
+
 	return node.unregisterFromInspector()
 }
 
@@ -359,13 +359,14 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 			dataToInit = nil // Don't use initData since we loaded from persistence
 		} else if errors.Is(err, object.ErrNotPersistent) {
 			// Object type doesn't support persistence, use initData
-			node.logger.Debugf("Object type %s is not persistent, using initData", typ)
+			node.logger.Infof("Object type %s is not persistent, using initData", typ)
 		} else if errors.Is(err, object.ErrObjectNotFound) {
 			// Object not found in storage, use initData
-			node.logger.Debugf("Object %s not found in persistence, using initData", id)
+			node.logger.Infof("Object %s not found in persistence, using initData", id)
 		} else {
-			// Other error loading from persistence, log warning and use initData
-			node.logger.Warnf("Failed to load object %s from persistence: %v, using initData", id, err)
+			// Other error loading from persistence -> treat as serious error
+			node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
+			return nil, fmt.Errorf("failed to load object %s from persistence: %w", id, err)
 		}
 	}
 
@@ -584,8 +585,21 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 
 	for _, obj := range objectsCopy {
 		// Object might have been deleted after we copied the list
-		// SaveObject handles non-persistent objects by returning nil
-		err := object.SaveObject(ctx, provider, obj)
+		// Get object data
+		data, err := obj.ToData()
+		if err == object.ErrNotPersistent {
+			// Object is not persistent, skip silently
+			processedCount++
+			continue
+		}
+		if err != nil {
+			node.logger.Errorf("Failed to get data for object %s: %v", obj.Id(), err)
+			errorCount++
+			continue
+		}
+
+		// Save the object data
+		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj.Id(), err)
 			errorCount++
