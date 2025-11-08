@@ -318,3 +318,238 @@ func TestNode_StartPeriodicPersistence_NoProvider(t *testing.T) {
 	// Stop should also not panic
 	node.StopPeriodicPersistence()
 }
+
+func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
+	// This test verifies that the node actually saves objects at the configured interval
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+
+	// Set a short interval for testing (200ms)
+	interval := 200 * time.Millisecond
+	node.SetPersistenceInterval(interval)
+
+	// Register persistent object type
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create multiple persistent objects
+	obj1 := &TestPersistentObject{}
+	obj1.OnInit(obj1, "periodic-obj-1", nil)
+	obj1.Value = "value1"
+	node.objects["periodic-obj-1"] = obj1
+
+	obj2 := &TestPersistentObject{}
+	obj2.OnInit(obj2, "periodic-obj-2", nil)
+	obj2.Value = "value2"
+	node.objects["periodic-obj-2"] = obj2
+
+	// Start periodic persistence
+	ctx := context.Background()
+	node.StartPeriodicPersistence(ctx)
+
+	// Wait for multiple save cycles (at least 3 cycles = 600ms + buffer)
+	// We check at different intervals to verify periodic behavior
+	time.Sleep(150 * time.Millisecond) // Before first cycle
+	firstCount := provider.GetSaveCount()
+
+	time.Sleep(250 * time.Millisecond) // After first cycle (~400ms total)
+	secondCount := provider.GetSaveCount()
+
+	time.Sleep(250 * time.Millisecond) // After second cycle (~650ms total)
+	thirdCount := provider.GetSaveCount()
+
+	// Stop periodic persistence
+	node.StopPeriodicPersistence()
+
+	// Verify the behavior:
+	// 1. Initially no saves (before first cycle)
+	if firstCount != 0 {
+		t.Errorf("Expected 0 saves before first cycle, got %d", firstCount)
+	}
+
+	// 2. After first cycle, should have saved both objects (2 saves)
+	if secondCount < 2 {
+		t.Errorf("Expected at least 2 saves after first cycle, got %d", secondCount)
+	}
+
+	// 3. After second cycle, should have more saves (at least 4 total)
+	if thirdCount < 4 {
+		t.Errorf("Expected at least 4 saves after second cycle, got %d", thirdCount)
+	}
+
+	// 4. Verify periodic behavior: saves should increase over time
+	if !(firstCount < secondCount && secondCount < thirdCount) {
+		t.Errorf("Save counts should increase over time: %d, %d, %d", firstCount, secondCount, thirdCount)
+	}
+
+	// 5. Verify both objects were actually stored
+	if len(provider.storage) != 2 {
+		t.Errorf("Expected 2 objects in storage, got %d", len(provider.storage))
+	}
+
+	// 6. Verify correct objects were stored
+	if _, ok := provider.storage["periodic-obj-1"]; !ok {
+		t.Error("Object periodic-obj-1 was not stored")
+	}
+	if _, ok := provider.storage["periodic-obj-2"]; !ok {
+		t.Error("Object periodic-obj-2 was not stored")
+	}
+
+	// 7. Verify the saved data is correct for object 1
+	data1 := provider.storage["periodic-obj-1"]
+	if data1 == nil {
+		t.Fatal("No data stored for periodic-obj-1")
+	}
+	struct1 := &structpb.Struct{}
+	if err := object.UnmarshalProtoFromJSON(data1, struct1); err != nil {
+		t.Fatalf("Failed to unmarshal data for periodic-obj-1: %v", err)
+	}
+	if idField, ok := struct1.Fields["id"]; !ok || idField.GetStringValue() != "periodic-obj-1" {
+		t.Errorf("Expected id 'periodic-obj-1', got '%v'", struct1.Fields["id"])
+	}
+	if valueField, ok := struct1.Fields["value"]; !ok || valueField.GetStringValue() != "value1" {
+		t.Errorf("Expected value 'value1' for periodic-obj-1, got '%v'", struct1.Fields["value"])
+	}
+
+	// 8. Verify the saved data is correct for object 2
+	data2 := provider.storage["periodic-obj-2"]
+	if data2 == nil {
+		t.Fatal("No data stored for periodic-obj-2")
+	}
+	struct2 := &structpb.Struct{}
+	if err := object.UnmarshalProtoFromJSON(data2, struct2); err != nil {
+		t.Fatalf("Failed to unmarshal data for periodic-obj-2: %v", err)
+	}
+	if idField, ok := struct2.Fields["id"]; !ok || idField.GetStringValue() != "periodic-obj-2" {
+		t.Errorf("Expected id 'periodic-obj-2', got '%v'", struct2.Fields["id"])
+	}
+	if valueField, ok := struct2.Fields["value"]; !ok || valueField.GetStringValue() != "value2" {
+		t.Errorf("Expected value 'value2' for periodic-obj-2, got '%v'", struct2.Fields["value"])
+	}
+}
+
+func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
+	// This test verifies that periodic persistence updates objects even when they change
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+
+	// Set a very short interval for testing
+	interval := 150 * time.Millisecond
+	node.SetPersistenceInterval(interval)
+
+	// Register persistent object type
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create persistent object
+	obj := &TestPersistentObject{}
+	obj.OnInit(obj, "update-obj", nil)
+	obj.Value = "initial-value"
+	node.objects["update-obj"] = obj
+
+	// Start periodic persistence
+	ctx := context.Background()
+	node.StartPeriodicPersistence(ctx)
+
+	// Wait for first save
+	time.Sleep(250 * time.Millisecond)
+
+	// Verify initial save
+	firstCount := provider.GetSaveCount()
+	if firstCount < 1 {
+		t.Fatalf("Expected at least 1 save, got %d", firstCount)
+	}
+
+	// Load and verify initial value
+	firstData := provider.storage["update-obj"]
+	firstStruct := &structpb.Struct{}
+	if err := object.UnmarshalProtoFromJSON(firstData, firstStruct); err != nil {
+		t.Fatalf("Failed to unmarshal first data: %v", err)
+	}
+	firstValue := firstStruct.Fields["value"].GetStringValue()
+	if firstValue != "initial-value" {
+		t.Errorf("Expected initial value 'initial-value', got '%s'", firstValue)
+	}
+
+	// Change the object value
+	obj.Value = "updated-value"
+
+	// Wait for next save cycle
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify another save occurred
+	secondCount := provider.GetSaveCount()
+	if secondCount <= firstCount {
+		t.Errorf("Expected more saves after update: first=%d, second=%d", firstCount, secondCount)
+	}
+
+	// Load and verify updated value
+	secondData := provider.storage["update-obj"]
+	secondStruct := &structpb.Struct{}
+	if err := object.UnmarshalProtoFromJSON(secondData, secondStruct); err != nil {
+		t.Fatalf("Failed to unmarshal second data: %v", err)
+	}
+	secondValue := secondStruct.Fields["value"].GetStringValue()
+	if secondValue != "updated-value" {
+		t.Errorf("Expected updated value 'updated-value', got '%s'", secondValue)
+	}
+
+	// Stop periodic persistence
+	node.StopPeriodicPersistence()
+}
+
+func TestNode_PeriodicPersistence_StopsCleanly(t *testing.T) {
+	// This test verifies that stopping periodic persistence actually stops the saves
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+
+	// Set a short interval
+	interval := 150 * time.Millisecond
+	node.SetPersistenceInterval(interval)
+
+	// Register persistent object type
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create persistent object
+	obj := &TestPersistentObject{}
+	obj.OnInit(obj, "stop-test-obj", nil)
+	obj.Value = "test-value"
+	node.objects["stop-test-obj"] = obj
+
+	// Start periodic persistence
+	ctx := context.Background()
+	node.StartPeriodicPersistence(ctx)
+
+	// Wait for at least 2 save cycles to ensure it's running
+	time.Sleep(400 * time.Millisecond)
+	countBeforeStop := provider.GetSaveCount()
+
+	// Verify saves happened before stopping
+	if countBeforeStop < 2 {
+		t.Fatalf("Expected at least 2 saves before stopping, got %d", countBeforeStop)
+	}
+
+	// Stop periodic persistence (blocks until stopped)
+	node.StopPeriodicPersistence()
+
+	// Record count immediately after stop
+	countAtStop := provider.GetSaveCount()
+
+	// Wait for what would be multiple more cycles (to be sure)
+	time.Sleep(500 * time.Millisecond)
+	countAfterStop := provider.GetSaveCount()
+
+	// Verify no more saves occurred after stopping
+	// We allow for one in-progress save to complete (countAtStop might be +1 from countBeforeStop)
+	// but there should be no new saves after that
+	if countAfterStop > countAtStop {
+		t.Errorf("Expected no more saves after stop completed: atStop=%d, after=%d", countAtStop, countAfterStop)
+	}
+
+	// The count should have increased from before stopping to when we stopped
+	// (at least the in-progress save should complete)
+	if countAtStop < countBeforeStop {
+		t.Errorf("Count should not decrease: before=%d, atStop=%d", countBeforeStop, countAtStop)
+	}
+}
