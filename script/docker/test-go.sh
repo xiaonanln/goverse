@@ -1,8 +1,35 @@
 #!/bin/bash
 # Run Go unit tests inside Docker container
 # This script is meant to be run inside the goverse-dev container
+# Usage: ./script/docker/test-go.sh [-race] [-etcd-restart] [-etcd-restart-only]
 
 set -euo pipefail
+
+# Parse command line arguments
+RACE_FLAG=""
+ETCD_RESTART=false
+ETCD_RESTART_ONLY=false
+for arg in "$@"; do
+    case $arg in
+        -race)
+            RACE_FLAG="-race"
+            echo "Race detector enabled"
+            ;;
+        -etcd-restart)
+            ETCD_RESTART=true
+            echo "Etcd restart tests enabled"
+            ;;
+        -etcd-restart-only)
+            ETCD_RESTART_ONLY=true
+            echo "Running only etcd restart tests"
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Usage: ./script/docker/test-go.sh [-race] [-etcd-restart] [-etcd-restart-only]"
+            exit 1
+            ;;
+    esac
+done
 
 echo "========================================"
 echo "Starting Go Unit Tests"
@@ -11,26 +38,30 @@ echo
 
 ./script/compile-proto.sh
 
-echo
-echo "Running Go unit tests..."
-echo
+if [ "$ETCD_RESTART_ONLY" = false ]; then
+    echo
+    echo "Running Go unit tests..."
+    echo
 
-# run all go tests (no caching) and fail fast on errors
-if ! go test ./... -count=1 -v -failfast; then
-    echo "✗ Go unit tests failed"
-    exit 1
+    # run all go tests (no caching) and fail fast on errors
+    if ! go test ./... -count=1 -v -failfast $RACE_FLAG; then
+        echo "✗ Go unit tests failed"
+        exit 1
+    fi
+
+    echo "✓ Go unit tests passed"
 fi
 
-echo "✓ Go unit tests passed"
-
-echo
-echo "Running etcd restart tests..."
-echo
-if ! go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ ./...; then
-    echo "✗ Etcd restart tests failed"
-    exit 1
+if [ "$ETCD_RESTART" = true ] || [ "$ETCD_RESTART_ONLY" = true ]; then
+    echo
+    echo "Running etcd restart tests..."
+    echo
+    if ! go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ $RACE_FLAG ./...; then
+        echo "✗ Etcd restart tests failed"
+        exit 1
+    fi
+    echo "✓ Etcd restart tests passed"
 fi
-echo "✓ Etcd restart tests passed"
 
 # Clean up etcd data directory after tests
 echo
