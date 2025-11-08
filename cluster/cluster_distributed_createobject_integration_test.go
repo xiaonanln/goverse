@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -125,8 +124,8 @@ func TestDistributedCreateObject(t *testing.T) {
 		}
 	})
 
-	// Test that duplicate CreateObject with same ID returns error
-	t.Run("Duplicate CreateObject returns error", func(t *testing.T) {
+	// Test that duplicate CreateObject with same ID and type returns success (idempotent)
+	t.Run("Duplicate CreateObject with same type is idempotent", func(t *testing.T) {
 		objID := "test-duplicate-obj"
 
 		// Create the object first time
@@ -157,15 +156,13 @@ func TestDistributedCreateObject(t *testing.T) {
 		// Count objects on the node before duplicate attempt
 		objCountBefore := objectNode.NumObjects()
 
-		// Attempt to create the same object again - should fail
-		_, err = cluster1.CreateObject(ctx, "TestDistributedObject", objID, nil)
-		if err == nil {
-			t.Fatalf("Expected error when creating duplicate object, but got nil")
+		// Attempt to create the same object again with same type - should succeed (idempotent)
+		createdID2, err := cluster1.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		if err != nil {
+			t.Fatalf("Expected success when creating duplicate object with same type, but got error: %v", err)
 		}
-
-		// Verify error message mentions the duplicate
-		if !strings.Contains(err.Error(), "already exists") {
-			t.Errorf("Expected error message to mention 'already exists', got: %v", err)
+		if createdID2 != objID {
+			t.Fatalf("Expected object ID %s, got %s", objID, createdID2)
 		}
 
 		// Verify object count hasn't increased
@@ -185,7 +182,7 @@ func TestDistributedCreateObject(t *testing.T) {
 			t.Errorf("Expected exactly 1 instance of object %s, found %d", objID, objectCount)
 		}
 
-		t.Logf("Successfully verified duplicate CreateObject returns error and doesn't create object")
+		t.Logf("Successfully verified duplicate CreateObject with same type is idempotent")
 	})
 }
 
