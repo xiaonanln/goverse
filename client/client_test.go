@@ -17,7 +17,7 @@ func (tc *TestClient) OnCreated() {
 
 func TestBaseClient_MessageChan(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-client-id", nil)
+	client.OnInit(client, "test-client-id")
 	client.OnCreated()
 
 	messageChan := client.MessageChan()
@@ -28,7 +28,7 @@ func TestBaseClient_MessageChan(t *testing.T) {
 
 func TestBaseClient_OnCreated(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-client-id", nil)
+	client.OnInit(client, "test-client-id")
 	
 	// Before OnCreated, messageChan should be nil
 	if client.messageChan != nil {
@@ -50,7 +50,7 @@ func TestClientObject_Interface(t *testing.T) {
 
 func TestBaseClient_MessageChanSendReceive(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-client-id", nil)
+	client.OnInit(client, "test-client-id")
 	client.OnCreated()
 
 	messageChan := client.MessageChan()
@@ -71,7 +71,7 @@ func TestBaseClient_MessageChanSendReceive(t *testing.T) {
 
 func TestBaseClient_Id(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "my-client-id", nil)
+	client.OnInit(client, "my-client-id")
 
 	if got := client.Id(); got != "my-client-id" {
 		t.Errorf("Id() = %s; want my-client-id", got)
@@ -80,7 +80,7 @@ func TestBaseClient_Id(t *testing.T) {
 
 func TestBaseClient_Type(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-id", nil)
+	client.OnInit(client, "test-id")
 
 	if got := client.Type(); got != "TestClient" {
 		t.Errorf("Type() = %s; want TestClient", got)
@@ -89,7 +89,7 @@ func TestBaseClient_Type(t *testing.T) {
 
 func TestBaseClient_String(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-client-id", nil)
+	client.OnInit(client, "test-client-id")
 
 	expected := "TestClient(test-client-id)"
 	if got := client.String(); got != expected {
@@ -99,7 +99,7 @@ func TestBaseClient_String(t *testing.T) {
 
 func TestMessageChan_BufferCapacity(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-client-id", nil)
+	client.OnInit(client, "test-client-id")
 	client.OnCreated()
 
 	messageChan := client.MessageChan()
@@ -117,7 +117,7 @@ func TestMessageChan_BufferCapacity(t *testing.T) {
 
 func TestClientObject_ProtoMessageChannel(t *testing.T) {
 	client := &TestClient{}
-	client.OnInit(client, "test-id", nil)
+	client.OnInit(client, "test-id")
 	client.OnCreated()
 
 	// Test that MessageChan returns a channel that accepts proto.Message

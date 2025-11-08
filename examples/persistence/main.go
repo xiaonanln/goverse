@@ -110,7 +110,7 @@ func main() {
 	fmt.Println("\n--- Example 1: Creating and Saving a Persistent Object ---")
 
 	user1 := &UserProfile{}
-	user1.OnInit(user1, "user-alice", nil)
+	user1.OnInit(user1, "user-alice")
 	user1.Username = "alice"
 	user1.Email = "alice@example.com"
 	user1.Score = 100
@@ -134,7 +134,7 @@ func main() {
 	fmt.Println("\n--- Example 2: Loading a Persistent Object ---")
 
 	user2 := &UserProfile{}
-	user2.OnInit(user2, "user-alice", nil)
+	user2.OnInit(user2, "user-alice")
 
 	// Get a proto.Message to load into
 	loadedData, err := user2.ToData()
@@ -194,7 +194,7 @@ func main() {
 
 	for _, u := range users {
 		userObj := &UserProfile{}
-		userObj.OnInit(userObj, u.id, nil)
+		userObj.OnInit(userObj, u.id)
 		userObj.Username = u.username
 		userObj.Email = u.email
 		userObj.Score = u.score

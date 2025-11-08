@@ -80,7 +80,7 @@ func (t *TestPersistentObject) FromData(data proto.Message) error {
 
 func TestBaseObject_ToData_NotPersistent(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	_, err := obj.ToData()
 	if err == nil {
@@ -90,7 +90,7 @@ func TestBaseObject_ToData_NotPersistent(t *testing.T) {
 
 func TestBaseObject_FromData_NotPersistent(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	emptyStruct, _ := structpb.NewStruct(map[string]interface{}{})
 	err := obj.FromData(emptyStruct)
@@ -101,7 +101,7 @@ func TestBaseObject_FromData_NotPersistent(t *testing.T) {
 
 func TestPersistentObject_ToData(t *testing.T) {
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 	obj.CustomData = "test-value"
 
 	protoMsg, err := obj.ToData()
@@ -129,7 +129,7 @@ func TestPersistentObject_ToData(t *testing.T) {
 
 func TestPersistentObject_FromData(t *testing.T) {
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	data, _ := structpb.NewStruct(map[string]interface{}{
 		"custom_data": "loaded-value",
@@ -148,7 +148,7 @@ func TestPersistentObject_FromData(t *testing.T) {
 func TestSaveObject_Persistent(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 	obj.CustomData = "test-data"
 
 	// Call ToData() to get the proto.Message
@@ -177,7 +177,7 @@ func TestSaveObject_Persistent(t *testing.T) {
 func TestSaveObject_NotPersistent(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	obj := &TestObject{} // Non-persistent object
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	// Try to get data from non-persistent object - should return error
 	_, err := obj.ToData()
@@ -195,7 +195,7 @@ func TestSaveObject_NotPersistent(t *testing.T) {
 func TestLoadObject(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 	obj.CustomData = "test-data"
 
 	// First save an object
@@ -212,7 +212,7 @@ func TestLoadObject(t *testing.T) {
 
 	// Now load it
 	loadedObj := &TestPersistentObject{}
-	loadedObj.OnInit(loadedObj, "test-id", nil)
+	loadedObj.OnInit(loadedObj, "test-id")
 
 	// Get a proto.Message to load into
 	loadedData, err := loadedObj.ToData()

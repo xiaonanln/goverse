@@ -3,9 +3,6 @@ package object
 import (
 	"testing"
 	"time"
-
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // TestObject is a simple test implementation of the Object interface
@@ -19,7 +16,7 @@ func (t *TestObject) OnCreated() {
 
 func TestBaseObject_OnInit(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "", nil)
+	obj.OnInit(obj, "")
 
 	// Test that ID is generated when empty
 	if obj.Id() == "" {
@@ -28,7 +25,7 @@ func TestBaseObject_OnInit(t *testing.T) {
 
 	// Test with explicit ID
 	obj2 := &TestObject{}
-	obj2.OnInit(obj2, "test-id-123", nil)
+	obj2.OnInit(obj2, "test-id-123")
 	if obj2.Id() != "test-id-123" {
 		t.Errorf("OnInit should use provided ID, got %s, want test-id-123", obj2.Id())
 	}
@@ -36,7 +33,7 @@ func TestBaseObject_OnInit(t *testing.T) {
 
 func TestBaseObject_Id(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "my-unique-id", nil)
+	obj.OnInit(obj, "my-unique-id")
 
 	if got := obj.Id(); got != "my-unique-id" {
 		t.Errorf("Id() = %s; want my-unique-id", got)
@@ -45,7 +42,7 @@ func TestBaseObject_Id(t *testing.T) {
 
 func TestBaseObject_Type(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	if got := obj.Type(); got != "TestObject" {
 		t.Errorf("Type() = %s; want TestObject", got)
@@ -54,7 +51,7 @@ func TestBaseObject_Type(t *testing.T) {
 
 func TestBaseObject_String(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	expected := "TestObject(test-id)"
 	if got := obj.String(); got != expected {
@@ -64,7 +61,7 @@ func TestBaseObject_String(t *testing.T) {
 
 func TestBaseObject_LoggerInitialization(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	if obj.Logger == nil {
 		t.Error("Logger should be initialized after OnInit")
@@ -73,8 +70,7 @@ func TestBaseObject_LoggerInitialization(t *testing.T) {
 
 func TestBaseObject_OnInitWithProtoMessage(t *testing.T) {
 	obj := &TestObject{}
-	data := &emptypb.Empty{}
-	obj.OnInit(obj, "test-id", data)
+	obj.OnInit(obj, "test-id")
 
 	// Should not panic and should initialize properly
 	if obj.Id() != "test-id" {
@@ -85,10 +81,10 @@ func TestBaseObject_OnInitWithProtoMessage(t *testing.T) {
 func TestBaseObject_UniqueIDs(t *testing.T) {
 	// Test that multiple objects get unique IDs when no ID is provided
 	obj1 := &TestObject{}
-	obj1.OnInit(obj1, "", nil)
+	obj1.OnInit(obj1, "")
 
 	obj2 := &TestObject{}
-	obj2.OnInit(obj2, "", nil)
+	obj2.OnInit(obj2, "")
 
 	if obj1.Id() == obj2.Id() {
 		t.Error("Different objects should get different IDs when no ID is provided")
@@ -100,22 +96,21 @@ func TestObjectInterface(t *testing.T) {
 	var _ Object = (*TestObject)(nil)
 }
 
-// TestProtoMessageNil verifies that OnInit handles nil proto.Message correctly
+// TestProtoMessageNil verifies that OnInit doesn't require any data parameter
 func TestBaseObject_OnInitWithNilProtoMessage(t *testing.T) {
 	obj := &TestObject{}
-	var nilProto proto.Message = nil
-	obj.OnInit(obj, "test-id", nilProto)
+	obj.OnInit(obj, "test-id")
 
 	// Should not panic
 	if obj.Id() != "test-id" {
-		t.Errorf("OnInit with nil proto message failed, got ID %s, want test-id", obj.Id())
+		t.Errorf("OnInit failed, got ID %s, want test-id", obj.Id())
 	}
 }
 
 func TestBaseObject_CreationTime(t *testing.T) {
 	before := time.Now()
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 	after := time.Now()
 
 	creationTime := obj.CreationTime()
@@ -126,7 +121,7 @@ func TestBaseObject_CreationTime(t *testing.T) {
 
 func TestBaseObject_CreationTime_IsSet(t *testing.T) {
 	obj := &TestObject{}
-	obj.OnInit(obj, "test-id", nil)
+	obj.OnInit(obj, "test-id")
 
 	creationTime := obj.CreationTime()
 	if creationTime.IsZero() {
