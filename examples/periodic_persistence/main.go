@@ -79,7 +79,7 @@ func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID str
 }
 
 func main() {
-	fmt.Println("=== Goverse Periodic Persistence Example ===\n")
+	fmt.Println("=== Goverse Periodic Persistence Example ===")
 
 	// Create a node
 	n := node.NewNode("localhost:47000")
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	fmt.Println("✓ Node started with periodic persistence enabled")
-	fmt.Println("✓ Objects will be saved every 2 seconds\n")
+	fmt.Println("✓ Objects will be saved every 2 seconds")
 
 	// Create some counter objects
 	fmt.Println("Creating 3 counter objects...")
