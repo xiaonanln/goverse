@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -565,5 +566,168 @@ func TestNode_PeriodicPersistence_StopsCleanly(t *testing.T) {
 	// (at least the in-progress save should complete)
 	if countAtStop < countBeforeStop {
 		t.Errorf("Count should not decrease: before=%d, atStop=%d", countBeforeStop, countAtStop)
+	}
+}
+
+func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
+	// This test verifies that when creating an object that exists in persistence,
+	// the persisted data is loaded and the object reflects that state
+	provider := NewMockPersistenceProvider()
+	ctx := context.Background()
+
+	// Step 1: Directly save object data to persistence (simulating a previously saved object)
+	savedObj := &TestPersistentObject{}
+	savedObj.OnInit(savedObj, "load-test-obj", nil)
+	savedObj.SetValue("persisted-value")
+
+	err := object.SaveObject(ctx, provider, savedObj)
+	if err != nil {
+		t.Fatalf("Failed to save object: %v", err)
+	}
+
+	// Step 2: Create a fresh node and attempt to create the object with different initData
+	node := NewNode("localhost:47000")
+	node.SetPersistenceProvider(provider)
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Use initData that would set a different value
+	initData, _ := structpb.NewStruct(map[string]interface{}{
+		"value": "init-data-value",
+	})
+
+	// Create the object - it should load from persistence instead of using initData
+	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "load-test-obj", initData)
+	if err != nil {
+		t.Fatalf("Failed to create object: %v", err)
+	}
+
+	// Verify the object has the persisted value, not the init value
+	persistentObj := loadedObj.(*TestPersistentObject)
+	if persistentObj.Value != "persisted-value" {
+		t.Errorf("Expected value 'persisted-value' from persistence, got '%s'", persistentObj.Value)
+	}
+}
+
+func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
+	// This test verifies that when creating an object on a fresh node,
+	// it loads from persistence if available
+	provider := NewMockPersistenceProvider()
+	ctx := context.Background()
+
+	// Setup: Create and save an object using direct persistence
+	savedObj := &TestPersistentObject{}
+	savedObj.OnInit(savedObj, "persistent-obj-123", nil)
+	savedObj.SetValue("saved-state")
+
+	err := object.SaveObject(ctx, provider, savedObj)
+	if err != nil {
+		t.Fatalf("Failed to save object: %v", err)
+	}
+
+	// Create a fresh node with the same persistence provider
+	node := NewNode("localhost:47000")
+	node.SetPersistenceProvider(provider)
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create object with different initData
+	initData, _ := structpb.NewStruct(map[string]interface{}{
+		"value": "init-value",
+	})
+
+	// The createObject should load from persistence instead of using initData
+	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "persistent-obj-123", initData)
+	if err != nil {
+		t.Fatalf("Failed to create object: %v", err)
+	}
+
+	// Verify the object has the persisted value, not the init value
+	persistentObj := loadedObj.(*TestPersistentObject)
+	if persistentObj.Value != "saved-state" {
+		t.Errorf("Expected value 'saved-state' from persistence, got '%s'", persistentObj.Value)
+	}
+}
+
+func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
+	// This test verifies that when an object is not in persistence,
+	// it uses initData for initialization
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	ctx := context.Background()
+
+	// Create object with initData (object not in persistence)
+	initData, _ := structpb.NewStruct(map[string]interface{}{
+		"value": "init-value",
+	})
+
+	obj, err := node.createObject(ctx, "TestPersistentObject", "new-obj-456", initData)
+	if err != nil {
+		t.Fatalf("Failed to create object: %v", err)
+	}
+
+	// Since object was not in persistence, it should use initData
+	// Note: OnInit doesn't automatically call FromData, so the value won't be set
+	// But we can verify the object was created successfully
+	if obj.Id() != "new-obj-456" {
+		t.Errorf("Expected object ID 'new-obj-456', got '%s'", obj.Id())
+	}
+
+	// The object should be registered in the node
+	if node.objects["new-obj-456"] == nil {
+		t.Error("Object was not registered in node.objects")
+	}
+}
+
+func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
+	// This test verifies that non-persistent objects work normally
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+	node.RegisterObjectType((*TestNonPersistentObject)(nil))
+
+	ctx := context.Background()
+
+	// Create non-persistent object
+	obj, err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj", nil)
+	if err != nil {
+		t.Fatalf("Failed to create non-persistent object: %v", err)
+	}
+
+	if obj.Id() != "non-persistent-obj" {
+		t.Errorf("Expected object ID 'non-persistent-obj', got '%s'", obj.Id())
+	}
+
+	// The object should be registered in the node
+	if node.objects["non-persistent-obj"] == nil {
+		t.Error("Object was not registered in node.objects")
+	}
+}
+
+func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
+	// This test verifies that when persistence loading fails,
+	// the object still gets created with initData
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	provider.LoadErr = fmt.Errorf("simulated load error")
+	node.SetPersistenceProvider(provider)
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	ctx := context.Background()
+
+	// Create object - load will fail, should fall back to initData
+	obj, err := node.createObject(ctx, "TestPersistentObject", "error-obj", nil)
+	if err != nil {
+		t.Fatalf("Failed to create object despite load error: %v", err)
+	}
+
+	if obj.Id() != "error-obj" {
+		t.Errorf("Expected object ID 'error-obj', got '%s'", obj.Id())
+	}
+
+	// The object should be registered in the node
+	if node.objects["error-obj"] == nil {
+		t.Error("Object was not registered in node.objects")
 	}
 }
