@@ -331,6 +331,20 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 		return nil, fmt.Errorf("object ID must be specified")
 	}
 
+	// Check if object already exists
+	node.objectsMu.RLock()
+	existingObj := node.objects[id]
+	node.objectsMu.RUnlock()
+	if existingObj != nil {
+		// If object exists and has the same type, return it successfully
+		if existingObj.Type() == typ {
+			node.logger.Infof("Object %s of type %s already exists, returning existing object", id, typ)
+			return existingObj, nil
+		}
+		// Type mismatch - this is an error
+		return nil, fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
+	}
+
 	node.objectTypesMu.RLock()
 	objectType, ok := node.objectTypes[typ]
 	node.objectTypesMu.RUnlock()
@@ -380,17 +394,9 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 		}
 	}
 
-	// Lock once, check if exists, create if not, unlock
+	// Lock, initialize and store the object
 	node.objectsMu.Lock()
-
-	// Check for duplicate ID (ID is guaranteed to be non-empty at this point)
-	if node.objects[id] != nil {
-		node.objectsMu.Unlock()
-		return nil, fmt.Errorf("object with id %s already exists: %v", id, node.objects[id])
-	}
-
 	obj.OnInit(obj, id, dataToInit)
-	id = obj.Id()
 	node.objects[id] = obj
 	node.objectsMu.Unlock()
 
