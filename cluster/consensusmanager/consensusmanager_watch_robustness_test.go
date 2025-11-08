@@ -12,9 +12,14 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
+// canEtcdRestart checks if etcd can be restarted in the current environment
+func canEtcdRestart() bool {
+	return testutil.IsGitHubActions()
+}
+
 // TestWatchReconnection tests that the watch reconnects after etcd is stopped and restarted
 func TestWatchReconnection(t *testing.T) {
-	if !testutil.IsGitHubActions() && !testutil.IsDockerEnvironment() {
+	if !canEtcdRestart() {
 		t.Skip("Skipping watch robustness test - not in CI environment")
 	}
 

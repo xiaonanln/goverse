@@ -11,9 +11,14 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
+// canEtcdRestart checks if etcd can be restarted in the current environment
+func canEtcdRestart() bool {
+	return testutil.IsGitHubActions()
+}
+
 // TestRegisterKeyLeaseReconnection tests that RegisterKeyLease persists through etcd reconnection
 func TestRegisterKeyLeaseReconnection(t *testing.T) {
-	if !testutil.IsGitHubActions() && !testutil.IsDockerEnvironment() {
+	if !canEtcdRestart() {
 		t.Skip("Skipping reconnection test - not in CI environment")
 	}
 
