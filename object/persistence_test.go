@@ -214,9 +214,21 @@ func TestLoadObject(t *testing.T) {
 	loadedObj := &TestPersistentObject{}
 	loadedObj.OnInit(loadedObj, "test-id", nil)
 
-	err = LoadObject(ctx, provider, loadedObj, "test-id")
+	// Get a proto.Message to load into
+	loadedData, err := loadedObj.ToData()
+	if err != nil {
+		t.Fatalf("ToData() returned error: %v", err)
+	}
+
+	err = LoadObject(ctx, provider, "test-id", loadedData)
 	if err != nil {
 		t.Fatalf("LoadObject() returned error: %v", err)
+	}
+
+	// Restore the object state from loaded data
+	err = loadedObj.FromData(loadedData)
+	if err != nil {
+		t.Fatalf("FromData() returned error: %v", err)
 	}
 
 	if loadedObj.CustomData != "test-data" {

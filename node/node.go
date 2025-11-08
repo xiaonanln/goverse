@@ -352,21 +352,31 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 	node.persistenceProviderMu.RUnlock()
 
 	if provider != nil {
-		err := object.LoadObject(ctx, provider, obj, id)
+		// Try to get a template proto.Message to load into
+		protoMsg, err := obj.ToData()
 		if err == nil {
-			// Successfully loaded from persistence
-			node.logger.Infof("Loaded object %s from persistence", id)
-			dataToInit = nil // Don't use initData since we loaded from persistence
+			// Object supports persistence, try to load
+			err = object.LoadObject(ctx, provider, id, protoMsg)
+			if err == nil {
+				// Successfully loaded from persistence, restore the object state
+				err = obj.FromData(protoMsg)
+				if err != nil {
+					node.logger.Errorf("Failed to restore object %s from loaded data: %v", id, err)
+					return nil, fmt.Errorf("failed to restore object %s from loaded data: %w", id, err)
+				}
+				node.logger.Infof("Loaded object %s from persistence", id)
+				dataToInit = nil // Don't use initData since we loaded from persistence
+			} else if errors.Is(err, object.ErrObjectNotFound) {
+				// Object not found in storage, use initData
+				node.logger.Infof("Object %s not found in persistence, using initData", id)
+			} else {
+				// Other error loading from persistence -> treat as serious error
+				node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
+				return nil, fmt.Errorf("failed to load object %s from persistence: %w", id, err)
+			}
 		} else if errors.Is(err, object.ErrNotPersistent) {
 			// Object type doesn't support persistence, use initData
 			node.logger.Infof("Object type %s is not persistent, using initData", typ)
-		} else if errors.Is(err, object.ErrObjectNotFound) {
-			// Object not found in storage, use initData
-			node.logger.Infof("Object %s not found in persistence, using initData", id)
-		} else {
-			// Other error loading from persistence -> treat as serious error
-			node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
-			return nil, fmt.Errorf("failed to load object %s from persistence: %w", id, err)
 		}
 	}
 

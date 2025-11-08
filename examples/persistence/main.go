@@ -136,9 +136,21 @@ func main() {
 	user2 := &UserProfile{}
 	user2.OnInit(user2, "user-alice", nil)
 
-	err = object.LoadObject(ctx, provider, user2, "user-alice")
+	// Get a proto.Message to load into
+	loadedData, err := user2.ToData()
+	if err != nil {
+		log.Fatalf("Failed to create data template: %v", err)
+	}
+
+	err = object.LoadObject(ctx, provider, "user-alice", loadedData)
 	if err != nil {
 		log.Fatalf("Failed to load object: %v", err)
+	}
+
+	// Restore the object state from loaded data
+	err = user2.FromData(loadedData)
+	if err != nil {
+		log.Fatalf("Failed to restore object from data: %v", err)
 	}
 
 	fmt.Printf("Loaded UserProfile: %s\n", user2.Id())
