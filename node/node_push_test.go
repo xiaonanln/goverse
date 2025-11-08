@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"testing"
 
 	"github.com/xiaonanln/goverse/client"
@@ -15,7 +16,8 @@ func TestPushMessageToClient(t *testing.T) {
 	node.RegisterClientType((*client.BaseClient)(nil))
 	
 	// Create a client object
-	clientObj, err := node.RegisterClient()
+	ctx := context.Background()
+	clientObj, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
@@ -83,7 +85,8 @@ func TestPushMessageToClient_NotAClient(t *testing.T) {
 	node.RegisterObjectType((*TestObject)(nil))
 	
 	// Create a regular object (not through RegisterClient)
-	obj, err := node.createObject("TestObject", "test-object-123", nil)
+	ctx := context.Background()
+	obj, err := node.createObject(ctx, "TestObject", "test-object-123", nil)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}

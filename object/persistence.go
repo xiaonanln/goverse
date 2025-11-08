@@ -37,11 +37,19 @@ func SaveObject(ctx context.Context, provider PersistenceProvider, obj Object) e
 	return provider.SaveObject(ctx, obj.Id(), obj.Type(), jsonData)
 }
 
+// ErrObjectNotFound is returned when an object is not found in persistence storage
+var ErrObjectNotFound = fmt.Errorf("object not found in persistence storage")
+
 // LoadObject loads an object using the provided persistence provider
 func LoadObject(ctx context.Context, provider PersistenceProvider, obj Object, objectID string) error {
 	jsonData, err := provider.LoadObject(ctx, objectID)
 	if err != nil {
 		return fmt.Errorf("failed to load object data: %w", err)
+	}
+
+	// If no data was found (provider returned nil, nil), return ErrObjectNotFound
+	if jsonData == nil {
+		return ErrObjectNotFound
 	}
 
 	// Create a new instance of the expected proto.Message type
