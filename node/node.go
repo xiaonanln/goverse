@@ -359,8 +359,11 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 		return nil, fmt.Errorf("type %s does not implement Object interface", typ)
 	}
 
-	// Attempt to load from persistence if provider is configured
-	dataToInit := initData
+	// Initialize the object first (without data)
+	obj.OnInit(obj, id)
+
+	// Now handle data initialization - either from persistence or initData
+	dataToRestore := initData
 	node.persistenceProviderMu.RLock()
 	provider := node.persistenceProvider
 	node.persistenceProviderMu.RUnlock()
@@ -372,14 +375,9 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 			// Object supports persistence, try to load
 			err = object.LoadObject(ctx, provider, id, protoMsg)
 			if err == nil {
-				// Successfully loaded from persistence, restore the object state
-				err = obj.FromData(protoMsg)
-				if err != nil {
-					node.logger.Errorf("Failed to restore object %s from loaded data: %v", id, err)
-					return nil, fmt.Errorf("failed to restore object %s from loaded data: %w", id, err)
-				}
+				// Successfully loaded from persistence, use this data instead of initData
 				node.logger.Infof("Loaded object %s from persistence", id)
-				dataToInit = nil // Don't use initData since we loaded from persistence
+				dataToRestore = protoMsg
 			} else if errors.Is(err, object.ErrObjectNotFound) {
 				// Object not found in storage, use initData
 				node.logger.Infof("Object %s not found in persistence, using initData", id)
@@ -394,9 +392,17 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 		}
 	}
 
-	// Lock, initialize and store the object
+	// Restore state from data (either from persistence or initData)
+	if dataToRestore != nil {
+		err := obj.FromData(dataToRestore)
+		if err != nil && !errors.Is(err, object.ErrNotPersistent) {
+			node.logger.Errorf("Failed to restore object %s from data: %v", id, err)
+			return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
+		}
+	}
+
+	// Lock and store the object in the registry
 	node.objectsMu.Lock()
-	obj.OnInit(obj, id, dataToInit)
 	node.objects[id] = obj
 	node.objectsMu.Unlock()
 

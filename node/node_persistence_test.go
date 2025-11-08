@@ -151,7 +151,7 @@ func TestNode_SaveAllObjects_NoPersistentObjects(t *testing.T) {
 	// Create a non-persistent object
 	ctx := context.Background()
 	obj := &TestNonPersistentObject{}
-	obj.OnInit(obj, "test-obj-1", nil)
+	obj.OnInit(obj, "test-obj-1")
 	obj.Value = "test-value"
 
 	node.objects["test-obj-1"] = obj
@@ -179,11 +179,11 @@ func TestNode_SaveAllObjects_WithPersistentObjects(t *testing.T) {
 	// Create persistent objects
 	ctx := context.Background()
 	obj1 := &TestPersistentObject{}
-	obj1.OnInit(obj1, "test-obj-1", nil)
+	obj1.OnInit(obj1, "test-obj-1")
 	obj1.Value = "value1"
 
 	obj2 := &TestPersistentObject{}
-	obj2.OnInit(obj2, "test-obj-2", nil)
+	obj2.OnInit(obj2, "test-obj-2")
 	obj2.Value = "value2"
 
 	node.objects["test-obj-1"] = obj1
@@ -218,11 +218,11 @@ func TestNode_SaveAllObjects_MixedObjects(t *testing.T) {
 	// Create mixed objects
 	ctx := context.Background()
 	persistentObj := &TestPersistentObject{}
-	persistentObj.OnInit(persistentObj, "persistent-1", nil)
+	persistentObj.OnInit(persistentObj, "persistent-1")
 	persistentObj.Value = "persistent"
 
 	nonPersistentObj := &TestNonPersistentObject{}
-	nonPersistentObj.OnInit(nonPersistentObj, "non-persistent-1", nil)
+	nonPersistentObj.OnInit(nonPersistentObj, "non-persistent-1")
 	nonPersistentObj.Value = "non-persistent"
 
 	node.objects["persistent-1"] = persistentObj
@@ -251,7 +251,7 @@ func TestNode_PeriodicPersistence_Integration(t *testing.T) {
 
 	// Create persistent object
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "test-obj-1", nil)
+	obj.OnInit(obj, "test-obj-1")
 	obj.SetValue("test-value")
 	node.objects["test-obj-1"] = obj
 
@@ -283,7 +283,7 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 
 	// Create persistent object
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "test-obj-1", nil)
+	obj.OnInit(obj, "test-obj-1")
 	obj.SetValue("test-value")
 	node.objects["test-obj-1"] = obj
 
@@ -349,12 +349,12 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 
 	// Create multiple persistent objects
 	obj1 := &TestPersistentObject{}
-	obj1.OnInit(obj1, "periodic-obj-1", nil)
+	obj1.OnInit(obj1, "periodic-obj-1")
 	obj1.SetValue("value1")
 	node.objects["periodic-obj-1"] = obj1
 
 	obj2 := &TestPersistentObject{}
-	obj2.OnInit(obj2, "periodic-obj-2", nil)
+	obj2.OnInit(obj2, "periodic-obj-2")
 	obj2.SetValue("value2")
 	node.objects["periodic-obj-2"] = obj2
 
@@ -458,7 +458,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 
 	// Create persistent object
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "update-obj", nil)
+	obj.OnInit(obj, "update-obj")
 	obj.SetValue("initial-value")
 	node.objects["update-obj"] = obj
 
@@ -528,7 +528,7 @@ func TestNode_PeriodicPersistence_StopsCleanly(t *testing.T) {
 
 	// Create persistent object
 	obj := &TestPersistentObject{}
-	obj.OnInit(obj, "stop-test-obj", nil)
+	obj.OnInit(obj, "stop-test-obj")
 	obj.SetValue("test-value")
 	node.objects["stop-test-obj"] = obj
 
@@ -577,7 +577,7 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 
 	// Step 1: Directly save object data to persistence (simulating a previously saved object)
 	savedObj := &TestPersistentObject{}
-	savedObj.OnInit(savedObj, "load-test-obj", nil)
+	savedObj.OnInit(savedObj, "load-test-obj")
 	savedObj.SetValue("persisted-value")
 
 	data, err := savedObj.ToData()
@@ -620,7 +620,7 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 
 	// Setup: Create and save an object using direct persistence
 	savedObj := &TestPersistentObject{}
-	savedObj.OnInit(savedObj, "persistent-obj-123", nil)
+	savedObj.OnInit(savedObj, "persistent-obj-123")
 	savedObj.SetValue("saved-state")
 
 	data, err := savedObj.ToData()

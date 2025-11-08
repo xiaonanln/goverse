@@ -15,12 +15,13 @@ type Object interface {
 	Type() string
 	String() string
 	CreationTime() time.Time
-	OnInit(self Object, id string, data proto.Message)
+	OnInit(self Object, id string)
 	OnCreated()
 	// ToData serializes the object state to a proto.Message for persistence
 	// Returns (nil, error) for non-persistent objects
 	ToData() (proto.Message, error)
 	// FromData deserializes object state from a proto.Message
+	// For non-persistent objects, this is called with initData (if provided)
 	FromData(data proto.Message) error
 }
 
@@ -34,7 +35,7 @@ type BaseObject struct {
 	Logger       *logger.Logger
 }
 
-func (base *BaseObject) OnInit(self Object, id string, data proto.Message) {
+func (base *BaseObject) OnInit(self Object, id string) {
 	base.self = self
 	if id == "" {
 		id = uniqueid.UniqueId()
