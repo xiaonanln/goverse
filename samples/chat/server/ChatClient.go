@@ -18,7 +18,7 @@ func (cc *ChatClient) OnCreated() {
 }
 
 func (cc *ChatClient) ListChatRooms(ctx context.Context, request *chat_pb.Client_ListChatRoomsRequest) (*chat_pb.Client_ListChatRoomsResponse, error) {
-	resp, err := goverseapi.CallObject(ctx, "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
+	resp, err := goverseapi.CallObject(ctx, "ChatRoomManager", "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -31,12 +31,12 @@ func (cc *ChatClient) Join(ctx context.Context, request *chat_pb.Client_JoinChat
 	cc.Logger.Infof("Joining chat room %s as user %s", request.RoomName, request.UserName)
 	
 	// Ensure chat rooms are created by calling ListChatRooms first
-	_, err := goverseapi.CallObject(ctx, "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
+	_, err := goverseapi.CallObject(ctx, "ChatRoomManager", "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
 	if err != nil {
 		cc.Logger.Warnf("Failed to list chat rooms (will try to join anyway): %v", err)
 	}
 	
-	resp, err := goverseapi.CallObject(ctx, "ChatRoom-"+request.RoomName, "Join", &chat_pb.ChatRoom_JoinRequest{
+	resp, err := goverseapi.CallObject(ctx, "ChatRoom", "ChatRoom-"+request.RoomName, "Join", &chat_pb.ChatRoom_JoinRequest{
 		UserName: request.UserName,
 		ClientId: cc.Id(), // Pass client ID for push notifications
 	})
@@ -57,7 +57,7 @@ func (cc *ChatClient) SendMessage(ctx context.Context, request *chat_pb.Client_S
 		return nil, fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	_, err := goverseapi.CallObject(ctx, "ChatRoom-"+cc.currentChatRoom, "SendMessage", &chat_pb.ChatRoom_SendChatMessageRequest{
+	_, err := goverseapi.CallObject(ctx, "ChatRoom", "ChatRoom-"+cc.currentChatRoom, "SendMessage", &chat_pb.ChatRoom_SendChatMessageRequest{
 		UserName: request.GetUserName(),
 		Message:  request.GetMessage(),
 	})
@@ -72,7 +72,7 @@ func (cc *ChatClient) GetRecentMessages(ctx context.Context, request *chat_pb.Cl
 		return nil, fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	resp, err := goverseapi.CallObject(ctx, "ChatRoom-"+cc.currentChatRoom, "GetRecentMessages", &chat_pb.ChatRoom_GetRecentMessagesRequest{})
+	resp, err := goverseapi.CallObject(ctx, "ChatRoom", "ChatRoom-"+cc.currentChatRoom, "GetRecentMessages", &chat_pb.ChatRoom_GetRecentMessagesRequest{})
 	if err != nil {
 		return nil, err
 	}

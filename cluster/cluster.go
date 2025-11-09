@@ -322,7 +322,7 @@ func (c *Cluster) checkAndMarkReady() {
 	c.markClusterReady()
 }
 
-func (c *Cluster) CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
+func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
 	if c.thisNode == nil {
 		return nil, fmt.Errorf("ThisNode is not set")
 	}
@@ -336,12 +336,12 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 	// Check if the object is on this node
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Call locally
-		c.logger.Infof("Calling object %s.%s locally", id, method)
-		return c.thisNode.CallObject(ctx, id, method, request)
+		c.logger.Infof("Calling object %s.%s locally (type: %s)", id, method, objType)
+		return c.thisNode.CallObject(ctx, objType, id, method, request)
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("Routing CallObject for %s.%s to node %s", id, method, nodeAddr)
+	c.logger.Infof("Routing CallObject for %s.%s to node %s (type: %s)", id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -361,6 +361,7 @@ func (c *Cluster) CallObject(ctx context.Context, id string, method string, requ
 	req := &goverse_pb.CallObjectRequest{
 		Id:      id,
 		Method:  method,
+		Type:    objType,
 		Request: requestAny,
 	}
 

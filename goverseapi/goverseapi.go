@@ -37,8 +37,8 @@ func CreateObject(ctx context.Context, objType, objID string, initData proto.Mes
 	return cluster.This().CreateObject(ctx, objType, objID, initData)
 }
 
-func CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
-	return cluster.This().CallObject(ctx, id, method, request)
+func CallObject(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error) {
+	return cluster.This().CallObject(ctx, objType, id, method, request)
 }
 
 // PushMessageToClient sends a message to a client via their client object

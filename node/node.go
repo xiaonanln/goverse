@@ -239,7 +239,7 @@ func (node *Node) CallClient(ctx context.Context, clientId, method string, reque
 		return nil, fmt.Errorf("failed to unmarshal request: %w", err)
 	}
 
-	resp, err := node.CallObject(ctx, clientId, method, request)
+	resp, err := node.CallObject(ctx, node.clientObjectType, clientId, method, request)
 	if err != nil {
 		return nil, err
 	}
@@ -253,13 +253,18 @@ func (node *Node) CallClient(ctx context.Context, clientId, method string, reque
 }
 
 // CallObject implements the Goverse gRPC service CallObject method
-func (node *Node) CallObject(ctx context.Context, id string, method string, request proto.Message) (proto.Message, error) {
-	node.logger.Infof("CallObject received: id=%s, method=%s", id, method)
+func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error) {
+	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 	node.objectsMu.RLock()
 	obj, ok := node.objects[id]
 	node.objectsMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("object not found: %s", id)
+	}
+
+	// Validate that the provided type matches the object's actual type
+	if obj.Type() != typ {
+		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", typ, obj.Type(), id)
 	}
 
 	objValue := reflect.ValueOf(obj)

@@ -72,7 +72,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 
 	// Call the object using the fixed node address
 	req := &emptypb.Empty{}
-	resp, err := c.CallObject(ctx, objID, "Echo", req)
+	resp, err := c.CallObject(ctx, "echoObject", objID, "Echo", req)
 	if err != nil {
 		t.Fatalf("CallObject with fixed node address failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 
 	// Try to call an object on a different node without node connections set up
 	objID := "localhost:7001/remote-obj"
-	_, err := c.CallObject(ctx, objID, "Echo", nil)
+	_, err := c.CallObject(ctx, "echoObject", objID, "Echo", nil)
 	if err == nil {
 		t.Error("CallObject should fail when trying to route to a different node without node connections")
 	}
