@@ -24,7 +24,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 
 	// Test creating an object with a fixed node address pointing to this node
 	objID := "localhost:7000/test-object-123"
-	createdID, err := c.CreateObject(ctx, "testObject", objID, nil)
+	createdID, err := c.CreateObject(ctx, "testObject", objID)
 	if err != nil {
 		t.Fatalf("CreateObject with fixed node address failed: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 
 	// Create an object with a fixed node address
 	objID := "localhost:7000/echo-obj"
-	_, err := testNode.CreateObject(ctx, "echoObject", objID, nil)
+	_, err := testNode.CreateObject(ctx, "echoObject", objID)
 	if err != nil {
 		t.Fatalf("Failed to create test object: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 	// Try to create an object with a fixed node address pointing to a different node
 	// This should fail because node connections are not set up
 	objID := "localhost:7001/test-object-456"
-	_, err := c.CreateObject(ctx, "testObject", objID, nil)
+	_, err := c.CreateObject(ctx, "testObject", objID)
 	if err == nil {
 		t.Error("CreateObject should fail when trying to route to a different node without node connections")
 	}
@@ -155,7 +155,7 @@ func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := c.CreateObject(ctx, "testObject", tt.objectID, nil)
+			_, err := c.CreateObject(ctx, "testObject", tt.objectID)
 			if tt.shouldLocal {
 				if err != nil {
 					t.Errorf("CreateObject failed for local fixed node: %v", err)

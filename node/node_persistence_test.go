@@ -625,23 +625,18 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 		t.Fatalf("Failed to save object: %v", err)
 	}
 
-	// Step 2: Create a fresh node and attempt to create the object with different initData
+	// Step 2: Create a fresh node and create the object again
 	node := NewNode("localhost:47000")
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
-	// Use initData that would set a different value
-	initData, _ := structpb.NewStruct(map[string]interface{}{
-		"value": "init-data-value",
-	})
-
-	// Create the object - it should load from persistence instead of using initData
-	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "load-test-obj", initData)
+	// Create the object - it should load from persistence
+	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "load-test-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
-	// Verify the object has the persisted value, not the init value
+	// Verify the object has the persisted value
 	persistentObj := loadedObj.(*TestPersistentObject)
 	if persistentObj.Value != "persisted-value" {
 		t.Errorf("Expected value 'persisted-value' from persistence, got '%s'", persistentObj.Value)
@@ -673,18 +668,13 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
-	// Create object with different initData
-	initData, _ := structpb.NewStruct(map[string]interface{}{
-		"value": "init-value",
-	})
-
-	// The createObject should load from persistence instead of using initData
-	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "persistent-obj-123", initData)
+	// Create the object - it should load from persistence
+	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "persistent-obj-123")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
-	// Verify the object has the persisted value, not the init value
+	// Verify the object has the persisted value
 	persistentObj := loadedObj.(*TestPersistentObject)
 	if persistentObj.Value != "saved-state" {
 		t.Errorf("Expected value 'saved-state' from persistence, got '%s'", persistentObj.Value)
@@ -701,21 +691,22 @@ func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create object with initData (object not in persistence)
-	initData, _ := structpb.NewStruct(map[string]interface{}{
-		"value": "init-value",
-	})
-
-	obj, err := node.createObject(ctx, "TestPersistentObject", "new-obj-456", initData)
+	// Create object (object not in persistence, so FromData(nil) will be called)
+	obj, err := node.createObject(ctx, "TestPersistentObject", "new-obj-456")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
-	// Since object was not in persistence, it should use initData
-	// Note: OnInit doesn't automatically call FromData, so the value won't be set
-	// But we can verify the object was created successfully
+	// Since object was not in persistence, FromData(nil) should have been called
+	// This indicates a new object creation
 	if obj.Id() != "new-obj-456" {
 		t.Errorf("Expected object ID 'new-obj-456', got '%s'", obj.Id())
+	}
+
+	// Verify that the object has empty value (FromData(nil) was called)
+	persistentObj := obj.(*TestPersistentObject)
+	if persistentObj.Value != "" {
+		t.Errorf("Expected empty value for new object, got '%s'", persistentObj.Value)
 	}
 
 	// The object should be registered in the node
@@ -734,7 +725,7 @@ func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create non-persistent object
-	obj, err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj", nil)
+	obj, err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj")
 	if err != nil {
 		t.Fatalf("Failed to create non-persistent object: %v", err)
 	}
@@ -761,8 +752,8 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create object - load will fail, should return error (not fall back to initData)
-	obj, err := node.createObject(ctx, "TestPersistentObject", "error-obj", nil)
+	// Create object - load will fail, should return error
+	obj, err := node.createObject(ctx, "TestPersistentObject", "error-obj")
 	if err == nil {
 		t.Fatal("Expected error when persistence loading fails, but got nil")
 	}

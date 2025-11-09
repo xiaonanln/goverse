@@ -50,9 +50,8 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 
 	// Test 1: Empty ID should fail
 	req := &goverse_pb.CreateObjectRequest{
-		Type:     "TestObject",
-		Id:       "", // Empty ID
-		InitData: nil,
+		Type: "TestObject",
+		Id:   "", // Empty ID
 	}
 
 	_, err2 := server.CreateObject(ctx, req)
@@ -66,9 +65,8 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 
 	// Test 2: Non-empty ID
 	req2 := &goverse_pb.CreateObjectRequest{
-		Type:     "TestObject",
-		Id:       "test-obj-123",
-		InitData: nil,
+		Type: "TestObject",
+		Id:   "test-obj-123",
 	}
 
 	// The server will try to check shard mapping which requires etcd

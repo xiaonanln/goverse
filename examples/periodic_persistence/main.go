@@ -121,7 +121,7 @@ func main() {
 	fmt.Println("Creating 3 counter objects...")
 	for i := 1; i <= 3; i++ {
 		id := fmt.Sprintf("counter-%d", i)
-		_, err = n.CreateObject(ctx, "Counter", id, nil)
+		_, err = n.CreateObject(ctx, "Counter", id)
 		if err != nil {
 			log.Fatalf("Failed to create %s: %v", id, err)
 		}

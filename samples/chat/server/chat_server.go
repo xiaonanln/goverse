@@ -47,6 +47,6 @@ func initializeChatServer() {
 		<-goverseapi.ClusterReady()
 		serverLogger.Infof("Cluster is ready, creating ChatRoomMgr0 in 5 seconds...")
 		time.Sleep(5 * time.Second)
-		goverseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0", nil)
+		goverseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0")
 	}()
 }

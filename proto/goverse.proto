@@ -35,8 +35,7 @@ message CallObjectResponse {
 
 message CreateObjectRequest {
   string type = 1;
-  google.protobuf.Any init_data = 2;
-  string id = 3; // Optional: if not provided, the node will generate an ID
+  string id = 2; // ID must be specified
 }
 
 message CreateObjectResponse {
