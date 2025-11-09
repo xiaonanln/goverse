@@ -66,6 +66,32 @@ func (m *MockPersistenceProvider) GetSaveCount() int {
 	return m.saveCount
 }
 
+func (m *MockPersistenceProvider) GetStoredData(objectID string) []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	data, ok := m.storage[objectID]
+	if !ok {
+		return nil
+	}
+	// Return a copy to avoid race conditions
+	result := make([]byte, len(data))
+	copy(result, data)
+	return result
+}
+
+func (m *MockPersistenceProvider) HasStoredData(objectID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.storage[objectID]
+	return ok
+}
+
+func (m *MockPersistenceProvider) GetStorageCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.storage)
+}
+
 // TestPersistentObject for testing
 type TestPersistentObject struct {
 	object.BaseObject
@@ -201,8 +227,8 @@ func TestNode_SaveAllObjects_WithPersistentObjects(t *testing.T) {
 	}
 
 	// Verify data was saved
-	if len(provider.storage) != 2 {
-		t.Errorf("Expected 2 objects in storage, got %d", len(provider.storage))
+	if provider.GetStorageCount() != 2 {
+		t.Errorf("Expected 2 objects in storage, got %d", provider.GetStorageCount())
 	}
 }
 
@@ -398,20 +424,20 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 	}
 
 	// 5. Verify both objects were actually stored
-	if len(provider.storage) != 2 {
-		t.Errorf("Expected 2 objects in storage, got %d", len(provider.storage))
+	if provider.GetStorageCount() != 2 {
+		t.Errorf("Expected 2 objects in storage, got %d", provider.GetStorageCount())
 	}
 
 	// 6. Verify correct objects were stored
-	if _, ok := provider.storage["periodic-obj-1"]; !ok {
+	if !provider.HasStoredData("periodic-obj-1") {
 		t.Error("Object periodic-obj-1 was not stored")
 	}
-	if _, ok := provider.storage["periodic-obj-2"]; !ok {
+	if !provider.HasStoredData("periodic-obj-2") {
 		t.Error("Object periodic-obj-2 was not stored")
 	}
 
 	// 7. Verify the saved data is correct for object 1
-	data1 := provider.storage["periodic-obj-1"]
+	data1 := provider.GetStoredData("periodic-obj-1")
 	if data1 == nil {
 		t.Fatal("No data stored for periodic-obj-1")
 	}
@@ -427,7 +453,7 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 	}
 
 	// 8. Verify the saved data is correct for object 2
-	data2 := provider.storage["periodic-obj-2"]
+	data2 := provider.GetStoredData("periodic-obj-2")
 	if data2 == nil {
 		t.Fatal("No data stored for periodic-obj-2")
 	}
@@ -476,7 +502,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	}
 
 	// Load and verify initial value
-	firstData := provider.storage["update-obj"]
+	firstData := provider.GetStoredData("update-obj")
 	firstStruct := &structpb.Struct{}
 	if err := object.UnmarshalProtoFromJSON(firstData, firstStruct); err != nil {
 		t.Fatalf("Failed to unmarshal first data: %v", err)
@@ -499,7 +525,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	}
 
 	// Load and verify updated value
-	secondData := provider.storage["update-obj"]
+	secondData := provider.GetStoredData("update-obj")
 	secondStruct := &structpb.Struct{}
 	if err := object.UnmarshalProtoFromJSON(secondData, secondStruct); err != nil {
 		t.Fatalf("Failed to unmarshal second data: %v", err)
