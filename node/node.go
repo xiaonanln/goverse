@@ -90,6 +90,13 @@ func (node *Node) Stop(ctx context.Context) error {
 		}
 	}
 
+	// Clear all objects from memory after saving
+	node.objectsMu.Lock()
+	objectCount := len(node.objects)
+	node.objects = make(map[string]Object)
+	node.objectsMu.Unlock()
+	node.logger.Infof("Cleared %d objects from memory", objectCount)
+
 	return node.unregisterFromInspector()
 }
 

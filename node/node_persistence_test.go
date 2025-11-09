@@ -320,6 +320,11 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 
+	// Verify object exists before stop
+	if node.NumObjects() != 1 {
+		t.Fatalf("Expected 1 object before stop, got %d", node.NumObjects())
+	}
+
 	// Wait a bit
 	time.Sleep(100 * time.Millisecond)
 
@@ -333,6 +338,11 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 	saveCount := provider.GetSaveCount()
 	if saveCount < 1 {
 		t.Errorf("Expected at least 1 save during shutdown, got %d", saveCount)
+	}
+
+	// Verify objects were cleared from memory
+	if node.NumObjects() != 0 {
+		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 }
 
@@ -764,5 +774,101 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 	// The object should NOT be registered in the node
 	if node.objects["error-obj"] != nil {
 		t.Error("Object should not be registered when creation fails")
+	}
+}
+
+func TestNode_Stop_ClearsObjects(t *testing.T) {
+	node := NewNode("localhost:47000")
+	provider := NewMockPersistenceProvider()
+	node.SetPersistenceProvider(provider)
+	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Create some objects
+	ctx := context.Background()
+	for i := 1; i <= 5; i++ {
+		obj := &TestPersistentObject{}
+		obj.OnInit(obj, fmt.Sprintf("test-obj-%d", i))
+		obj.SetValue(fmt.Sprintf("value-%d", i))
+		node.objects[fmt.Sprintf("test-obj-%d", i)] = obj
+	}
+
+	// Start node
+	err := node.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+
+	// Verify objects exist
+	if node.NumObjects() != 5 {
+		t.Fatalf("Expected 5 objects before stop, got %d", node.NumObjects())
+	}
+
+	// Stop node
+	err = node.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop node: %v", err)
+	}
+
+	// Verify objects were saved
+	if provider.GetSaveCount() != 5 {
+		t.Errorf("Expected 5 objects to be saved, got %d", provider.GetSaveCount())
+	}
+
+	// Verify objects were cleared from memory
+	if node.NumObjects() != 0 {
+		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+	}
+
+	// Verify the map is actually empty
+	node.objectsMu.RLock()
+	mapLen := len(node.objects)
+	node.objectsMu.RUnlock()
+	if mapLen != 0 {
+		t.Errorf("Expected empty objects map after stop, got %d entries", mapLen)
+	}
+}
+
+func TestNode_Stop_ClearsObjects_NoPersistence(t *testing.T) {
+	node := NewNode("localhost:47000")
+	// No persistence provider set
+	node.RegisterObjectType((*TestNonPersistentObject)(nil))
+
+	// Create some objects
+	ctx := context.Background()
+	for i := 1; i <= 3; i++ {
+		obj := &TestNonPersistentObject{}
+		obj.OnInit(obj, fmt.Sprintf("test-obj-%d", i))
+		obj.Value = fmt.Sprintf("value-%d", i)
+		node.objects[fmt.Sprintf("test-obj-%d", i)] = obj
+	}
+
+	// Start node
+	err := node.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+
+	// Verify objects exist
+	if node.NumObjects() != 3 {
+		t.Fatalf("Expected 3 objects before stop, got %d", node.NumObjects())
+	}
+
+	// Stop node
+	err = node.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop node: %v", err)
+	}
+
+	// Verify objects were cleared from memory even without persistence
+	if node.NumObjects() != 0 {
+		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+	}
+
+	// Verify the map is actually empty
+	node.objectsMu.RLock()
+	mapLen := len(node.objects)
+	node.objectsMu.RUnlock()
+	if mapLen != 0 {
+		t.Errorf("Expected empty objects map after stop, got %d entries", mapLen)
 	}
 }
