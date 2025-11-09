@@ -44,3 +44,4 @@ default.etcd/
 etcd-*.tar.gz
 etcd-*/# Compiled binaries
 persistence
+periodic_persistence
