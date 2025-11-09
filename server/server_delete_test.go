@@ -4,12 +4,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 )
 
 func TestServerDeleteObject_Success(t *testing.T) {
+	// Reset cluster state to ensure no interference from other tests
+	resetClusterForTesting(t)
+
 	// Create a node directly without using cluster
 	n := node.NewNode("localhost:47000")
 	n.RegisterObjectType((*TestObject)(nil))
@@ -26,6 +30,9 @@ func TestServerDeleteObject_Success(t *testing.T) {
 		Node:   n,
 		logger: logger.NewLogger("ServerTest"),
 	}
+
+	// Ensure cluster singleton is nil for this standalone test
+	cluster.SetThis(nil)
 
 	ctx := context.Background()
 
@@ -56,6 +63,9 @@ func TestServerDeleteObject_Success(t *testing.T) {
 }
 
 func TestServerDeleteObject_RequiresID(t *testing.T) {
+	// Reset cluster state to ensure no interference from other tests
+	resetClusterForTesting(t)
+
 	// Create a node
 	n := node.NewNode("localhost:47000")
 
@@ -71,6 +81,9 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 		Node:   n,
 		logger: logger.NewLogger("ServerTest"),
 	}
+
+	// Ensure cluster singleton is nil for this standalone test
+	cluster.SetThis(nil)
 
 	ctx := context.Background()
 
@@ -90,6 +103,9 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 }
 
 func TestServerDeleteObject_NotFound(t *testing.T) {
+	// Reset cluster state to ensure no interference from other tests
+	resetClusterForTesting(t)
+
 	// Create a node
 	n := node.NewNode("localhost:47000")
 	n.RegisterObjectType((*TestObject)(nil))
@@ -106,6 +122,9 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 		Node:   n,
 		logger: logger.NewLogger("ServerTest"),
 	}
+
+	// Ensure cluster singleton is nil for this standalone test
+	cluster.SetThis(nil)
 
 	ctx := context.Background()
 
