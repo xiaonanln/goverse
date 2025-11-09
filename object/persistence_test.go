@@ -2,6 +2,7 @@ package object
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -46,15 +47,20 @@ func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID str
 }
 
 // TestPersistentObject is a test implementation of a persistent object
+// It demonstrates the correct thread-safe implementation pattern
 type TestPersistentObject struct {
 	BaseObject
+	mu         sync.Mutex // Protects concurrent access to CustomData
 	CustomData string
 }
 
 func (t *TestPersistentObject) OnCreated() {}
 
-// ToData implements persistence for TestPersistentObject
+// ToData implements persistence for TestPersistentObject with proper thread-safety
 func (t *TestPersistentObject) ToData() (proto.Message, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":          t.id,
 		"type":        t.Type(),
@@ -66,12 +72,16 @@ func (t *TestPersistentObject) ToData() (proto.Message, error) {
 	return data, nil
 }
 
-// FromData implements deserialization for TestPersistentObject
+// FromData implements deserialization for TestPersistentObject with proper thread-safety
 func (t *TestPersistentObject) FromData(data proto.Message) error {
 	structData, ok := data.(*structpb.Struct)
 	if !ok {
 		return nil
 	}
+	
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	
 	if customData, ok := structData.Fields["custom_data"]; ok {
 		t.CustomData = customData.GetStringValue()
 	}
