@@ -86,7 +86,7 @@ func TestPushMessageToClient_NotAClient(t *testing.T) {
 	
 	// Create a regular object (not through RegisterClient)
 	ctx := context.Background()
-	obj, err := node.createObject(ctx, "TestObject", "test-object-123", nil)
+	obj, err := node.createObject(ctx, "TestObject", "test-object-123")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}

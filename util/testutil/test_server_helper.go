@@ -100,7 +100,7 @@ func (tsh *TestServerHelper) IsRunning() bool {
 }
 
 type nodeInterface interface {
-	CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error)
+	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	PushMessageToClient(clientID string, message proto.Message) error
 }
@@ -200,15 +200,7 @@ func (m *MockGoverseServer) CreateObject(ctx context.Context, req *goverse_pb.Cr
 	}
 
 	// Call CreateObject on the actual node
-	var initData proto.Message
-	var err error
-	if req.InitData != nil {
-		initData, err = anypb.UnmarshalNew(req.InitData, proto.UnmarshalOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal init data: %v", err)
-		}
-	}
-	createdID, err := node.CreateObject(ctx, req.Type, req.Id, initData)
+	createdID, err := node.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create object: %v", err)
 	}

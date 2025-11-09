@@ -23,7 +23,7 @@ func (mgr *ChatRoomMgr) OnCreated() {
 	// This happens after the cluster is ready (shard mapping is available)
 	mgr.Logger.Infof("Creating chat rooms...")
 	for _, roomName := range chatRooms {
-		roomID, err := goverseapi.CreateObject(context.Background(), "ChatRoom", "ChatRoom-"+roomName, nil)
+		roomID, err := goverseapi.CreateObject(context.Background(), "ChatRoom", "ChatRoom-"+roomName)
 		if err != nil {
 			mgr.Logger.Errorf("Failed to create chat room %s: %v", roomName, err)
 		} else {

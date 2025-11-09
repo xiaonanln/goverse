@@ -225,7 +225,7 @@ func (node *Node) newClientObject(ctx context.Context) (Object, error) {
 	}
 
 	clientId := node.advertiseAddress + "/" + uniqueid.UniqueId()
-	clientObj, err := node.createObject(ctx, node.clientObjectType, clientId, nil)
+	clientObj, err := node.createObject(ctx, node.clientObjectType, clientId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ClientProxy object: %w", err)
 	}
@@ -321,7 +321,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
-func (node *Node) CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error) {
+func (node *Node) CreateObject(ctx context.Context, typ string, id string) (string, error) {
 	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
 
 	// ID must be specified to ensure it belongs to this node according to shard mapping
@@ -329,7 +329,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, initD
 		return "", fmt.Errorf("object ID must be specified")
 	}
 
-	obj, err := node.createObject(ctx, typ, id, initData)
+	obj, err := node.createObject(ctx, typ, id)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
 		return "", err
@@ -337,7 +337,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, initD
 	return obj.Id(), nil
 }
 
-func (node *Node) createObject(ctx context.Context, typ string, id string, initData proto.Message) (Object, error) {
+func (node *Node) createObject(ctx context.Context, typ string, id string) (Object, error) {
 	// ID must be specified to ensure proper shard mapping
 	if id == "" {
 		return nil, fmt.Errorf("object ID must be specified")
@@ -374,8 +374,8 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 	// Initialize the object first (without data)
 	obj.OnInit(obj, id)
 
-	// Now handle data initialization - either from persistence or initData
-	dataToRestore := initData
+	// Now handle data initialization - either from persistence or nil
+	var dataToRestore proto.Message
 	node.persistenceProviderMu.RLock()
 	provider := node.persistenceProvider
 	node.persistenceProviderMu.RUnlock()
@@ -387,20 +387,22 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, initD
 			// Object supports persistence, try to load
 			err = object.LoadObject(ctx, provider, id, protoMsg)
 			if err == nil {
-				// Successfully loaded from persistence, use this data instead of initData
+				// Successfully loaded from persistence
 				node.logger.Infof("Loaded object %s from persistence", id)
 				dataToRestore = protoMsg
 			} else if errors.Is(err, object.ErrObjectNotFound) {
-				// Object not found in storage, use initData
-				node.logger.Infof("Object %s not found in persistence, using initData", id)
+				// Object not found in storage, will call FromData(nil) to indicate new creation
+				node.logger.Infof("Object %s not found in persistence, creating new object", id)
+				dataToRestore = nil
 			} else {
 				// Other error loading from persistence -> treat as serious error
 				node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
 				return nil, fmt.Errorf("failed to load object %s from persistence: %w", id, err)
 			}
 		} else if errors.Is(err, object.ErrNotPersistent) {
-			// Object type doesn't support persistence, use initData
-			node.logger.Infof("Object type %s is not persistent, using initData", typ)
+			// Object type doesn't support persistence, call FromData(nil)
+			node.logger.Infof("Object type %s is not persistent, creating new object", typ)
+			dataToRestore = nil
 		}
 	}
 

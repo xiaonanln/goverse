@@ -27,7 +27,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 	ctx := context.Background()
 
 	// Test 1: Empty ID should fail
-	_, err := node.CreateObject(ctx, "TestObject", "", nil)
+	_, err := node.CreateObject(ctx, "TestObject", "")
 	if err == nil {
 		t.Fatal("Expected error when creating object with empty ID, got nil")
 	}
@@ -37,7 +37,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 	}
 
 	// Test 2: Non-empty ID should succeed
-	id, err := node.CreateObject(ctx, "TestObject", "test-obj-123", nil)
+	id, err := node.CreateObject(ctx, "TestObject", "test-obj-123")
 	if err != nil {
 		t.Fatalf("Expected success when creating object with valid ID, got error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 	ctx := context.Background()
 
 	// Create first object
-	id1, err := node.CreateObject(ctx, "TestObject", "duplicate-id", nil)
+	id1, err := node.CreateObject(ctx, "TestObject", "duplicate-id")
 	if err != nil {
 		t.Fatalf("Failed to create first object: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 	}
 
 	// Try to create second object with same ID and type - should succeed and return existing object
-	id2, err := node.CreateObject(ctx, "TestObject", "duplicate-id", nil)
+	id2, err := node.CreateObject(ctx, "TestObject", "duplicate-id")
 	if err != nil {
 		t.Fatalf("Expected success when creating object with duplicate ID and same type, got error: %v", err)
 	}
@@ -120,13 +120,13 @@ func TestCreateObject_DuplicateID_DifferentType(t *testing.T) {
 	ctx := context.Background()
 
 	// Create object with first type
-	_, err := node.CreateObject(ctx, "TestObject", "same-id", nil)
+	_, err := node.CreateObject(ctx, "TestObject", "same-id")
 	if err != nil {
 		t.Fatalf("Failed to create first object: %v", err)
 	}
 
 	// Try to create object with same ID but different type - should fail
-	_, err = node.CreateObject(ctx, "TestObject2", "same-id", nil)
+	_, err = node.CreateObject(ctx, "TestObject2", "same-id")
 	if err == nil {
 		t.Fatal("Expected error when creating object with same ID but different type, got nil")
 	}
@@ -144,7 +144,7 @@ func TestCreateObject_UnknownType(t *testing.T) {
 	ctx := context.Background()
 
 	// Try to create object with unregistered type
-	_, err := node.CreateObject(ctx, "UnknownType", "test-obj-456", nil)
+	_, err := node.CreateObject(ctx, "UnknownType", "test-obj-456")
 	if err == nil {
 		t.Fatal("Expected error when creating object with unknown type, got nil")
 	}

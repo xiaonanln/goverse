@@ -33,8 +33,8 @@ func RegisterObjectType(obj Object) {
 	cluster.This().GetThisNode().RegisterObjectType(obj)
 }
 
-func CreateObject(ctx context.Context, objType, objID string, initData proto.Message) (string, error) {
-	return cluster.This().CreateObject(ctx, objType, objID, initData)
+func CreateObject(ctx context.Context, objType, objID string) (string, error) {
+	return cluster.This().CreateObject(ctx, objType, objID)
 }
 
 func CallObject(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error) {

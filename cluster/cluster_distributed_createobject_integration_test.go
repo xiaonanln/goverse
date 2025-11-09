@@ -94,7 +94,7 @@ func TestDistributedCreateObject(t *testing.T) {
 			t.Logf("Creating object %s from %s, expect target node %s", objID, creatorCluster.GetThisNode().GetAdvertiseAddress(), targetNode)
 
 			// Create the object - it will be routed if needed
-			createdID, err := creatorCluster.CreateObject(ctx, "TestDistributedObject", objID, nil)
+			createdID, err := creatorCluster.CreateObject(ctx, "TestDistributedObject", objID)
 			if err != nil {
 				t.Fatalf("CreateObject failed for %s: %v", objID, err)
 			}
@@ -129,7 +129,7 @@ func TestDistributedCreateObject(t *testing.T) {
 		objID := "test-duplicate-obj"
 
 		// Create the object first time
-		createdID, err := cluster1.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		createdID, err := cluster1.CreateObject(ctx, "TestDistributedObject", objID)
 		if err != nil {
 			t.Fatalf("First CreateObject failed: %v", err)
 		}
@@ -157,7 +157,7 @@ func TestDistributedCreateObject(t *testing.T) {
 		objCountBefore := objectNode.NumObjects()
 
 		// Attempt to create the same object again with same type - should succeed (idempotent)
-		createdID2, err := cluster1.CreateObject(ctx, "TestDistributedObject", objID, nil)
+		createdID2, err := cluster1.CreateObject(ctx, "TestDistributedObject", objID)
 		if err != nil {
 			t.Fatalf("Expected success when creating duplicate object with same type, but got error: %v", err)
 		}

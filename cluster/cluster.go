@@ -386,7 +386,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 // CreateObject creates a distributed object on the appropriate node based on sharding
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
-func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initData proto.Message) (string, error) {
+func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
 	if c.thisNode == nil {
 		return "", fmt.Errorf("ThisNode is not set")
 	}
@@ -407,7 +407,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Create locally
 		c.logger.Infof("Creating object %s locally (type: %s)", objID, objType)
-		return c.thisNode.CreateObject(ctx, objType, objID, initData)
+		return c.thisNode.CreateObject(ctx, objType, objID)
 	}
 
 	// Route to the appropriate node
@@ -419,21 +419,10 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string, initD
 		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
-	// Marshal initData to Any
-	var initDataAny *anypb.Any
-	if initData != nil {
-		initDataAny = &anypb.Any{}
-		if err := initDataAny.MarshalFrom(initData); err != nil {
-			c.logger.Warnf("CreateObject failed: %v", err)
-			return "", fmt.Errorf("failed to marshal init data: %w", err)
-		}
-	}
-
 	// Call CreateObject on the remote node
 	req := &goverse_pb.CreateObjectRequest{
-		Type:     objType,
-		Id:       objID,
-		InitData: initDataAny,
+		Type: objType,
+		Id:   objID,
 	}
 
 	resp, err := client.CreateObject(ctx, req)
