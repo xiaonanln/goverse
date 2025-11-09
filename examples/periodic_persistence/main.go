@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/xiaonanln/goverse/node"
@@ -15,6 +16,7 @@ import (
 // Counter is a simple persistent object that maintains a count
 type Counter struct {
 	object.BaseObject
+	mu    sync.Mutex // Protects concurrent access to Count during persistence
 	Count int
 }
 
@@ -23,7 +25,12 @@ func (c *Counter) OnCreated() {
 }
 
 // ToData serializes the Counter state for persistence
+// Note: Thread-safe implementation with mutex to prevent race conditions
+// during periodic persistence saves
 func (c *Counter) ToData() (proto.Message, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":    c.Id(),
 		"count": float64(c.Count),
@@ -35,11 +42,17 @@ func (c *Counter) ToData() (proto.Message, error) {
 }
 
 // FromData deserializes the Counter state
+// Note: Thread-safe implementation with mutex to prevent race conditions
+// during object initialization
 func (c *Counter) FromData(data proto.Message) error {
 	structData, ok := data.(*structpb.Struct)
 	if !ok {
 		return nil
 	}
+	
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
 	if count, ok := structData.Fields["count"]; ok {
 		c.Count = int(count.GetNumberValue())
 	}

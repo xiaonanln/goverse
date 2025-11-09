@@ -314,34 +314,57 @@ GoVerse supports optional PostgreSQL persistence for distributed objects, enabli
    GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;
    ```
 
-2. **Create a Persistent Object**:
+2. **Create a Persistent Object** ⚠️ **Thread-Safe Implementation Required**:
    ```go
-   import "github.com/xiaonanln/goverse/object"
+   import (
+       "sync"
+       "github.com/xiaonanln/goverse/object"
+       "google.golang.org/protobuf/proto"
+       "google.golang.org/protobuf/types/known/structpb"
+   )
 
    type UserProfile struct {
        object.BaseObject
+       mu       sync.Mutex  // REQUIRED: Protects concurrent access
        Username string
        Email    string
        Score    int
    }
 
-   func (u *UserProfile) ToData() (map[string]interface{}, error) {
-       data := map[string]interface{}{
+   // ToData must be thread-safe - called during periodic persistence
+   func (u *UserProfile) ToData() (proto.Message, error) {
+       u.mu.Lock()
+       defer u.mu.Unlock()
+       
+       return structpb.NewStruct(map[string]interface{}{
            "username": u.Username,
            "email":    u.Email,
            "score":    u.Score,
-       }
-       return data, nil
+       })
    }
 
-   func (u *UserProfile) FromData(data map[string]interface{}) error {
-       if username, ok := data["username"].(string); ok {
-           u.Username = username
+   // FromData must be thread-safe - called during initialization
+   func (u *UserProfile) FromData(data proto.Message) error {
+       structData, ok := data.(*structpb.Struct)
+       if !ok {
+           return nil
+       }
+       
+       u.mu.Lock()
+       defer u.mu.Unlock()
+       
+       if username, ok := structData.Fields["username"]; ok {
+           u.Username = username.GetStringValue()
        }
        // ... load other fields
        return nil
    }
    ```
+   
+   **Important**: `ToData()` and `FromData()` MUST use mutex protection because:
+   - Periodic persistence runs in background goroutines
+   - Objects may process requests while being persisted
+   - Race conditions can cause data corruption without proper locking
 
 3. **Save and Load**:
    ```go

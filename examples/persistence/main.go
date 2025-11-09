@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/postgres"
@@ -14,6 +15,7 @@ import (
 // UserProfile is an example of a persistent distributed object
 type UserProfile struct {
 	object.BaseObject
+	mu       sync.Mutex // Protects concurrent access to fields during persistence
 	Username string
 	Email    string
 	Score    int
@@ -25,7 +27,12 @@ func (u *UserProfile) OnCreated() {
 }
 
 // ToData serializes the UserProfile to a proto.Message for persistence
+// Note: Thread-safe implementation with mutex to handle concurrent access
+// during periodic persistence or object method execution
 func (u *UserProfile) ToData() (proto.Message, error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":       u.Id(),
 		"type":     u.Type(),
@@ -40,11 +47,17 @@ func (u *UserProfile) ToData() (proto.Message, error) {
 }
 
 // FromData deserializes the UserProfile from a proto.Message
+// Note: Thread-safe implementation with mutex to handle concurrent access
+// during object initialization or reactivation
 func (u *UserProfile) FromData(data proto.Message) error {
 	structData, ok := data.(*structpb.Struct)
 	if !ok {
 		return nil
 	}
+	
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	
 	if username, ok := structData.Fields["username"]; ok {
 		u.Username = username.GetStringValue()
 	}

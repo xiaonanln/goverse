@@ -121,46 +121,98 @@ defer db.Close()
 
 ## Creating Persistent Objects
 
-### 1. Define Your Object
+### Thread-Safety Requirements ⚠️
 
-Extend `BaseObject` and implement serialization methods:
+**IMPORTANT**: All persistent objects MUST implement thread-safe `ToData()` and `FromData()` methods because:
+- Periodic persistence runs in a background goroutine
+- Objects may be processing requests while being persisted
+- Multiple save operations can overlap during shutdown
+
+**Always use a mutex** to protect field access:
 
 ```go
-import "github.com/xiaonanln/goverse/object"
+import (
+    "sync"
+    "github.com/xiaonanln/goverse/object"
+    "google.golang.org/protobuf/proto"
+    "google.golang.org/protobuf/types/known/structpb"
+)
 
 type UserProfile struct {
     object.BaseObject
+    mu       sync.Mutex  // Required for thread-safety
     Username string
     Email    string
     Score    int
 }
+```
 
+### 1. Define Your Object
+
+Extend `BaseObject` and implement thread-safe serialization methods:
+
+```go
 func (u *UserProfile) OnCreated() {
     u.Logger.Infof("UserProfile created: %s", u.Id())
 }
 
-// Serialize object state
-func (u *UserProfile) ToData() (map[string]interface{}, error) {
-    data := map[string]interface{}{
+// Serialize object state with proper locking
+func (u *UserProfile) ToData() (proto.Message, error) {
+    u.mu.Lock()
+    defer u.mu.Unlock()
+    
+    data, err := structpb.NewStruct(map[string]interface{}{
         "username": u.Username,
         "email":    u.Email,
         "score":    u.Score,
-    }
-    return data, nil
+    })
+    return data, err
 }
 
-// Deserialize object state
-func (u *UserProfile) FromData(data map[string]interface{}) error {
-    if username, ok := data["username"].(string); ok {
-        u.Username = username
+// Deserialize object state with proper locking
+func (u *UserProfile) FromData(data proto.Message) error {
+    structData, ok := data.(*structpb.Struct)
+    if !ok {
+        return nil
     }
-    if email, ok := data["email"].(string); ok {
-        u.Email = email
+    
+    u.mu.Lock()
+    defer u.mu.Unlock()
+    
+    if username, ok := structData.Fields["username"]; ok {
+        u.Username = username.GetStringValue()
     }
-    if score, ok := data["score"].(float64); ok {
-        u.Score = int(score)
+    if email, ok := structData.Fields["email"]; ok {
+        u.Email = email.GetStringValue()
+    }
+    if score, ok := structData.Fields["score"]; ok {
+        u.Score = int(score.GetNumberValue())
     }
     return nil
+}
+```
+
+### Common Pitfalls to Avoid
+
+❌ **Don't forget the mutex:**
+```go
+// UNSAFE - No mutex protection
+func (u *UserProfile) ToData() (proto.Message, error) {
+    return structpb.NewStruct(map[string]interface{}{
+        "username": u.Username,  // Race condition!
+    })
+}
+```
+
+✅ **Always lock before accessing fields:**
+```go
+// SAFE - Mutex protects concurrent access
+func (u *UserProfile) ToData() (proto.Message, error) {
+    u.mu.Lock()
+    defer u.mu.Unlock()
+    return structpb.NewStruct(map[string]interface{}{
+        "username": u.Username,  // Protected!
+    })
 }
 ```
 
