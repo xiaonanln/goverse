@@ -2,6 +2,8 @@
 
 > ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
+> 📢 **BREAKING CHANGE** - The `CallObject` API now requires an explicit object type parameter. See [CHANGELOG.md](CHANGELOG.md) for migration details.
+
 [![Go Tests](https://github.com/xiaonanln/goverse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/goverse/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/xiaonanln/goverse/branch/main/graph/badge.svg)](https://codecov.io/gh/xiaonanln/goverse)
 
