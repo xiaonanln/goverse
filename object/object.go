@@ -17,11 +17,43 @@ type Object interface {
 	CreationTime() time.Time
 	OnInit(self Object, id string)
 	OnCreated()
-	// ToData serializes the object state to a proto.Message for persistence
-	// Returns (nil, error) for non-persistent objects
+	
+	// ToData serializes the object state to a proto.Message for persistence.
+	//
+	// Thread-Safety Requirements:
+	// This method MUST be thread-safe as it can be called concurrently with
+	// object method execution (e.g., during periodic persistence while the
+	// object is processing requests).
+	//
+	// Best Practice - Use a mutex to ensure consistent state snapshots:
+	//   func (obj *MyObject) ToData() (proto.Message, error) {
+	//       obj.mu.Lock()
+	//       defer obj.mu.Unlock()
+	//       // ... serialize fields safely
+	//   }
+	//
+	// Returns:
+	//   - proto.Message: Serialized object state
+	//   - error: ErrNotPersistent for non-persistent objects, or serialization error
 	ToData() (proto.Message, error)
-	// FromData deserializes object state from a proto.Message
-	// For non-persistent objects, this is called with initData (if provided)
+	
+	// FromData deserializes object state from a proto.Message.
+	//
+	// Thread-Safety Requirements:
+	// This method MUST be thread-safe as it may be called during object
+	// initialization or reactivation while other operations are in progress.
+	//
+	// Best Practice - Use the same mutex as ToData():
+	//   func (obj *MyObject) FromData(data proto.Message) error {
+	//       obj.mu.Lock()
+	//       defer obj.mu.Unlock()
+	//       // ... restore fields safely
+	//   }
+	//
+	// Parameters:
+	//   - data: proto.Message containing serialized state (may be nil)
+	// Returns:
+	//   - error: Deserialization error, or nil for non-persistent objects
 	FromData(data proto.Message) error
 }
 
