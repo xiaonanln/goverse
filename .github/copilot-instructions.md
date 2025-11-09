@@ -328,6 +328,99 @@ func TestDistributedScenario(t *testing.T) {
 - Use unique ports (47001, 47002, etc.) to avoid conflicts between parallel tests
 - Always defer `Stop()` to ensure cleanup even if tests fail
 
+### MockPersistenceProvider for Persistence Testing
+
+**CRITICAL**: When testing persistence functionality, use `MockPersistenceProvider` and **always access it through thread-safe methods** to avoid race conditions.
+
+The `MockPersistenceProvider` is defined in `node/node_persistence_test.go` and provides an in-memory persistence implementation for testing.
+
+#### Creating and Using MockPersistenceProvider
+
+```go
+import "github.com/xiaonanln/goverse/node"
+
+func TestWithPersistence(t *testing.T) {
+    // Create a new mock provider
+    provider := node.NewMockPersistenceProvider()
+    
+    // Configure the node to use it
+    n := node.NewNode("localhost:47000")
+    n.SetPersistenceProvider(provider)
+    
+    // Create persistent objects and test...
+}
+```
+
+#### Thread-Safe Access Methods
+
+**ALWAYS use these thread-safe methods** when accessing the mock provider's data in tests:
+
+```go
+// Check if data exists for an object
+if provider.HasStoredData("object-id") {
+    // Object was saved
+}
+
+// Get stored data (returns a copy to prevent race conditions)
+data := provider.GetStoredData("object-id")
+if data != nil {
+    // Unmarshal and verify data
+    var protoMsg structpb.Struct
+    object.UnmarshalProtoFromJSON(data, &protoMsg)
+}
+
+// Get the number of objects stored
+count := provider.GetStorageCount()
+
+// Get the number of times SaveObject was called
+saveCount := provider.GetSaveCount()
+```
+
+#### NEVER Access Storage Directly
+
+**❌ WRONG - Race Condition:**
+```go
+// DO NOT DO THIS - causes data races
+if _, ok := provider.storage["object-id"]; ok {
+    // ...
+}
+data := provider.storage["object-id"]
+count := len(provider.storage)
+```
+
+**✅ CORRECT - Thread-Safe:**
+```go
+// Use the provided methods instead
+if provider.HasStoredData("object-id") {
+    // ...
+}
+data := provider.GetStoredData("object-id")
+count := provider.GetStorageCount()
+```
+
+#### Why Thread Safety Matters
+
+The `MockPersistenceProvider` is often accessed concurrently by:
+- **Test goroutine**: Reading data to verify test expectations
+- **Periodic persistence goroutine**: Writing data in the background
+- **SaveAllObjects calls**: Writing data from various test operations
+
+All access methods use an internal mutex to ensure thread-safe access to the underlying storage map. The `GetStoredData` method returns a **copy** of the data to prevent external modifications from causing race conditions.
+
+#### Simulating Errors
+
+You can configure the mock provider to simulate errors:
+
+```go
+provider := node.NewMockPersistenceProvider()
+
+// Simulate save errors
+provider.SaveErr = errors.New("simulated save error")
+
+// Simulate load errors
+provider.LoadErr = errors.New("simulated load error")
+```
+
 ### Writing Tests
 
 - Place tests in `*_test.go` files alongside the code
