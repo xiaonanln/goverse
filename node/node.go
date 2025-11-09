@@ -421,7 +421,17 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	}
 
 	// Lock and store the object in the registry
+	// IMPORTANT: Check again after acquiring write lock to prevent race condition
 	node.objectsMu.Lock()
+	if existingObj := node.objects[id]; existingObj != nil {
+		node.objectsMu.Unlock()
+		// Another goroutine created the object while we were initializing
+		if existingObj.Type() == typ {
+			node.logger.Infof("Object %s already created by another goroutine, returning existing object", id)
+			return existingObj, nil
+		}
+		return nil, fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
+	}
 	node.objects[id] = obj
 	node.objectsMu.Unlock()
 
