@@ -159,7 +159,7 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 	node := NewNode("test-node:1234")
 
 	// Register test object type
-	node.RegisterObjectType((*TestObject)(nil))
+	node.RegisterObjectType((*TestConcurrencyObject)(nil))
 
 	ctx := context.Background()
 
@@ -177,7 +177,7 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 	// Launch concurrent CreateObject calls
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			id, err := node.CreateObject(ctx, "TestObject", objectID)
+			id, err := node.CreateObject(ctx, "TestConcurrencyObject", objectID)
 
 			// Get the object
 			node.objectsMu.RLock()
@@ -246,11 +246,12 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 		t.Errorf("Expected exactly 1 object with ID '%s', got %d", objectID, count)
 	}
 } // TestCreateObject_ConcurrentDifferentObjects tests concurrent creation of different objects
+
 func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 	node := NewNode("test-node:1234")
 
 	// Register test object type
-	node.RegisterObjectType((*TestObject)(nil))
+	node.RegisterObjectType((*TestConcurrencyObject)(nil))
 
 	ctx := context.Background()
 
@@ -264,7 +265,7 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 	for i := 0; i < numObjects; i++ {
 		go func(index int) {
 			objectID := strings.Repeat("a", index+1) // Different length IDs: "a", "aa", "aaa", etc.
-			id, err := node.CreateObject(ctx, "TestObject", objectID)
+			id, err := node.CreateObject(ctx, "TestConcurrencyObject", objectID)
 			results <- struct {
 				id  string
 				err error
@@ -301,4 +302,23 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 	if actualCount != numObjects {
 		t.Errorf("Expected %d objects in registry, got %d", numObjects, actualCount)
 	}
+}
+
+// TestConcurrencyObject is a simple test object for testing concurrency
+type TestConcurrencyObject struct {
+	object.BaseObject
+}
+
+func (tco *TestConcurrencyObject) OnInit(obj object.Object, id string) {
+	tco.BaseObject.OnInit(obj, id)
+	// Introduce a small, variable busy-wait delay to increase contention in tests.
+	// Use object ID length to vary delay without importing extra packages.
+	delay := 50000 * (1 + len(tco.Id())%5) // adjustable small work amount
+	for i := 0; i < delay; i++ {
+		_ = i * i
+	}
+}
+
+func (tco *TestConcurrencyObject) OnCreated() {
+	// No-op for testing
 }
