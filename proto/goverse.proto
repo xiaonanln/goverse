@@ -25,6 +25,7 @@ message StatusResponse {
 message CallObjectRequest {
   string id = 1;
   string method = 2;
+  string type = 3;
   google.protobuf.Any request = 4;
 }
 

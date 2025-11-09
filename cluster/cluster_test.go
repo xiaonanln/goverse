@@ -91,7 +91,7 @@ func TestCallObject_NodeNotSet(t *testing.T) {
 	cluster := &Cluster{}
 
 	ctx := context.Background()
-	_, err := cluster.CallObject(ctx, "test-id", "TestMethod", &emptypb.Empty{})
+	_, err := cluster.CallObject(ctx, "testType", "test-id", "TestMethod", &emptypb.Empty{})
 
 	if err == nil {
 		t.Error("CallObject should return error when ThisNode is not set")

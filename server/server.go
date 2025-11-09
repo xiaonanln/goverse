@@ -240,7 +240,7 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		}
 	}
 
-	resp, err := server.Node.CallObject(ctx, req.GetId(), req.GetMethod(), requestMsg)
+	resp, err := server.Node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg)
 	if err != nil {
 		return nil, err
 	}

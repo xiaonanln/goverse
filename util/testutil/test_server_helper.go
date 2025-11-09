@@ -101,6 +101,7 @@ func (tsh *TestServerHelper) IsRunning() bool {
 
 type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string, initData proto.Message) (string, error)
+	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	PushMessageToClient(clientID string, message proto.Message) error
 }
 
@@ -149,9 +150,43 @@ func (m *MockGoverseServer) Status(ctx context.Context, req *goverse_pb.Empty) (
 	}, nil
 }
 
-// CallObject returns an error (not implemented for mock)
+// CallObject handles remote object calls by delegating to the node
 func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
-	return nil, fmt.Errorf("CallObject not implemented in mock server")
+	m.mu.Lock()
+	node := m.node
+	m.mu.Unlock()
+
+	if node == nil {
+		return nil, fmt.Errorf("no node assigned to mock server")
+	}
+
+	// Unmarshal request
+	var requestMsg proto.Message
+	var err error
+	if req.Request != nil {
+		requestMsg, err = anypb.UnmarshalNew(req.Request, proto.UnmarshalOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal request: %v", err)
+		}
+	}
+
+	// Call the object on the node
+	resp, err := node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Marshal response
+	var respAny anypb.Any
+	if resp != nil {
+		if err := respAny.MarshalFrom(resp); err != nil {
+			return nil, fmt.Errorf("failed to marshal response: %v", err)
+		}
+	}
+
+	return &goverse_pb.CallObjectResponse{
+		Response: &respAny,
+	}, nil
 }
 
 // CreateObject handles remote object creation by delegating to the node
