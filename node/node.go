@@ -266,7 +266,14 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	obj, ok := node.objects[id]
 	node.objectsMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("object not found: %s", id)
+		// Object doesn't exist - create it automatically
+		// This will handle persistence: load if available, otherwise FromData(nil)
+		node.logger.Infof("Object %s not found, creating automatically", id)
+		var err error
+		obj, err = node.createObject(ctx, typ, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
+		}
 	}
 
 	// Validate that the provided type matches the object's actual type
