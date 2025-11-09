@@ -458,6 +458,54 @@ func (node *Node) destroyObject(id string) {
 	node.logger.Infof("Destroyed object %s", object.String())
 }
 
+// DeleteObject removes an object from the node and deletes it from persistence if configured.
+// This is a public method that properly handles both memory cleanup and persistence deletion.
+// Returns error if object doesn't exist or if persistence deletion fails.
+func (node *Node) DeleteObject(ctx context.Context, id string) error {
+	// First check if object exists
+	node.objectsMu.RLock()
+	obj, exists := node.objects[id]
+	node.objectsMu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("object %s not found", id)
+	}
+
+	// If persistence provider is configured, try to delete from persistence first
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider != nil {
+		// Check if object supports persistence
+		_, err := obj.ToData()
+		if err == nil {
+			// Object is persistent, delete from storage
+			node.logger.Infof("Deleting object %s from persistence", id)
+			err = provider.DeleteObject(ctx, id)
+			if err != nil {
+				node.logger.Errorf("Failed to delete object %s from persistence: %v", id, err)
+				return fmt.Errorf("failed to delete object from persistence: %w", err)
+			}
+			node.logger.Infof("Successfully deleted object %s from persistence", id)
+		} else if errors.Is(err, object.ErrNotPersistent) {
+			// Object is not persistent, skip persistence deletion
+			node.logger.Infof("Object %s is not persistent, skipping persistence deletion", id)
+		} else {
+			// Some other error occurred
+			node.logger.Warnf("Could not check persistence for object %s: %v", id, err)
+		}
+	}
+
+	// Remove from memory
+	node.objectsMu.Lock()
+	delete(node.objects, id)
+	node.objectsMu.Unlock()
+
+	node.logger.Infof("Deleted object %s from node", id)
+	return nil
+}
+
 func (node *Node) registerObjectWithInspector(object Object) error {
 	if node.inspectorClient == nil {
 		return nil
