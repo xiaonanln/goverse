@@ -435,6 +435,54 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	return resp.Id, nil
 }
 
+// DeleteObject deletes an object from the cluster.
+// It determines which node hosts the object and routes the deletion request accordingly.
+func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
+	if c.thisNode == nil {
+		return fmt.Errorf("ThisNode is not set")
+	}
+
+	if objID == "" {
+		return fmt.Errorf("object ID must be specified")
+	}
+
+	// Determine which node hosts this object
+	nodeAddr, err := c.GetNodeForObject(ctx, objID)
+	if err != nil {
+		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
+	}
+
+	// Check if the object should be deleted on this node
+	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+		// Delete locally
+		c.logger.Infof("Deleting object %s locally", objID)
+		return c.thisNode.DeleteObject(ctx, objID)
+	}
+
+	// Route to the appropriate node
+	c.logger.Infof("Routing DeleteObject for %s to node %s", objID, nodeAddr)
+
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		c.logger.Warnf("DeleteObject failed: %v", err)
+		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
+
+	// Call DeleteObject on the remote node
+	req := &goverse_pb.DeleteObjectRequest{
+		Id: objID,
+	}
+
+	_, err = client.DeleteObject(ctx, req)
+	if err != nil {
+		c.logger.Warnf("DeleteObject failed: %v", err)
+		return fmt.Errorf("remote DeleteObject failed on node %s: %w", nodeAddr, err)
+	}
+
+	c.logger.Infof("Successfully deleted object %s on node %s", objID, nodeAddr)
+	return nil
+}
+
 // PushMessageToClient sends a message to a client by its ID
 // Client IDs have the format: {nodeAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target node and routes the message accordingly

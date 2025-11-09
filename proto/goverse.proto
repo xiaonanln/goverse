@@ -13,6 +13,7 @@ service Goverse {
   rpc ListObjects (Empty) returns (ListObjectsResponse);
   rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
+  rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
   rpc PushMessageToClient (PushMessageToClientRequest) returns (PushMessageToClientResponse);
 }
 
@@ -40,6 +41,14 @@ message CreateObjectRequest {
 
 message CreateObjectResponse {
   string id = 1;
+}
+
+message DeleteObjectRequest {
+  string id = 1;
+}
+
+message DeleteObjectResponse {
+  // Empty response - success is indicated by no error
 }
 
 message ObjectInfo {

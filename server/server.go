@@ -289,6 +289,37 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 	return response, nil
 }
 
+func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteObjectRequest) (*goverse_pb.DeleteObjectResponse, error) {
+	server.logRPC("DeleteObject", req)
+
+	// ID must be specified in the request
+	if req.GetId() == "" {
+		return nil, fmt.Errorf("object ID must be specified in DeleteObject request")
+	}
+
+	// Check with cluster that this ID is sharded to this node
+	clusterInstance := cluster.This()
+	if clusterInstance != nil && clusterInstance.GetThisNode() != nil {
+		targetNode, err := clusterInstance.GetNodeForObject(ctx, req.GetId())
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine target node for object %s: %w", req.GetId(), err)
+		}
+
+		thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
+		if targetNode != thisNodeAddr {
+			return nil, fmt.Errorf("object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
+		}
+	}
+
+	err := server.Node.DeleteObject(ctx, req.GetId())
+	if err != nil {
+		server.logger.Errorf("DeleteObject failed: %v", err)
+		return nil, err
+	}
+	response := &goverse_pb.DeleteObjectResponse{}
+	return response, nil
+}
+
 func (server *Server) Status(ctx context.Context, req *goverse_pb.Empty) (*goverse_pb.StatusResponse, error) {
 	server.logRPC("Status", req)
 
