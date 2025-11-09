@@ -259,7 +259,13 @@ func (node *Node) CallObject(ctx context.Context, id string, method string, requ
 	obj, ok := node.objects[id]
 	node.objectsMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("object not found: %s", id)
+		// Object not found - try to auto-create it by finding a matching type
+		// that implements the requested method with compatible signature
+		var err error
+		obj, err = node.autoCreateObjectForMethod(ctx, id, method, request)
+		if err != nil {
+			return nil, fmt.Errorf("object not found: %s", id)
+		}
 	}
 
 	objValue := reflect.ValueOf(obj)
@@ -306,6 +312,81 @@ func (node *Node) CallObject(ctx context.Context, id string, method string, requ
 
 	node.logger.Infof("Response type: %T, value: %+v", resp.Interface(), resp.Interface())
 	return resp.Interface().(proto.Message), nil
+}
+
+// autoCreateObjectForMethod attempts to auto-create an object by finding a registered type
+// that has a method matching the requested method signature.
+// If multiple types have the method, the first matching type is used.
+func (node *Node) autoCreateObjectForMethod(ctx context.Context, id string, method string, request proto.Message) (Object, error) {
+	node.logger.Infof("Attempting auto-create for object %s with method %s", id, method)
+
+	// Get the expected request type for method matching
+	var expectedReqType reflect.Type
+	if request != nil {
+		expectedReqType = reflect.TypeOf(request)
+	}
+
+	// Scan registered object types for a matching method
+	node.objectTypesMu.RLock()
+	var matchingType string
+	for typeName, objType := range node.objectTypes {
+		// Create a pointer value to check for methods
+		ptrType := reflect.PtrTo(objType)
+		methodValue, found := ptrType.MethodByName(method)
+		if !found {
+			continue
+		}
+
+		// Check method signature: func(ctx context.Context, req proto.Message) (proto.Message, error)
+		methodType := methodValue.Type
+		// methodType.NumIn() includes receiver, so we expect 3 parameters: receiver, context, request
+		if methodType.NumIn() != 3 {
+			continue
+		}
+
+		// Check first param (after receiver) is context.Context
+		if !methodType.In(1).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
+			continue
+		}
+
+		// Check second param (after receiver) is a concrete proto.Message
+		if !isConcreteProtoMessage(methodType.In(2)) {
+			continue
+		}
+
+		// If request is provided, check that types match
+		if expectedReqType != nil && methodType.In(2) != expectedReqType {
+			continue
+		}
+
+		// Check return types: (proto.Message, error)
+		if methodType.NumOut() != 2 ||
+			!isConcreteProtoMessage(methodType.Out(0)) ||
+			!methodType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+			continue
+		}
+
+		// Found a matching type
+		matchingType = typeName
+		node.logger.Infof("Found matching type %s for method %s", typeName, method)
+		break
+	}
+	node.objectTypesMu.RUnlock()
+
+	if matchingType == "" {
+		return nil, fmt.Errorf("no registered type found with method %s", method)
+	}
+
+	// Create the object using the existing createObject logic
+	// This will handle persistence loading if provider is configured
+	obj, err := node.createObject(ctx, matchingType, id, nil)
+	if err != nil {
+		node.logger.Errorf("Failed to auto-create object: %v", err)
+		return nil, err
+	}
+
+	node.logger.Infof("Auto-created object %s of type %s", id, matchingType)
+	return obj, nil
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
