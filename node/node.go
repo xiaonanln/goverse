@@ -274,16 +274,11 @@ func (node *Node) CallClient(ctx context.Context, clientId, method string, reque
 
 // CallObject implements the Goverse gRPC service CallObject method
 func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error) {
-	// Check if node is stopped before acquiring lock
-	if node.stopped.Load() {
-		return nil, fmt.Errorf("node is stopped")
-	}
-
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
 
-	// Check again after acquiring lock in case Stop was called concurrently
+	// Check if node is stopped after acquiring lock
 	if node.stopped.Load() {
 		return nil, fmt.Errorf("node is stopped")
 	}
@@ -356,16 +351,11 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 // CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string) (string, error) {
-	// Check if node is stopped before acquiring lock
-	if node.stopped.Load() {
-		return "", fmt.Errorf("node is stopped")
-	}
-
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
 
-	// Check again after acquiring lock in case Stop was called concurrently
+	// Check if node is stopped after acquiring lock
 	if node.stopped.Load() {
 		return "", fmt.Errorf("node is stopped")
 	}
@@ -503,16 +493,11 @@ func (node *Node) destroyObject(id string) {
 // This is a public method that properly handles both memory cleanup and persistence deletion.
 // Returns error if object doesn't exist or if persistence deletion fails.
 func (node *Node) DeleteObject(ctx context.Context, id string) error {
-	// Check if node is stopped before acquiring lock
-	if node.stopped.Load() {
-		return fmt.Errorf("node is stopped")
-	}
-
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
 
-	// Check again after acquiring lock in case Stop was called concurrently
+	// Check if node is stopped after acquiring lock
 	if node.stopped.Load() {
 		return fmt.Errorf("node is stopped")
 	}
@@ -719,21 +704,13 @@ func (node *Node) periodicPersistenceLoop() {
 // SaveAllObjects saves all persistent objects to storage
 // Non-persistent objects are automatically skipped
 func (node *Node) SaveAllObjects(ctx context.Context) error {
-	// Check if node is stopped before acquiring lock
-	// Note: We don't check stopped flag here because SaveAllObjects is called
-	// from Stop() itself to do the final persistence. The stopMu coordination
-	// happens at the caller level (periodicPersistenceLoop checks stopped state).
-	if node.stopped.Load() {
-		// If called from periodic persistence while stopping, just return
-		// The final save will be done by Stop() itself
-		return fmt.Errorf("node is stopped")
-	}
-
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
 
-	// Check again after acquiring lock in case Stop was called concurrently
+	// Check if node is stopped after acquiring lock
+	// Note: If called from periodic persistence while stopping, this will return early.
+	// The final save will be done by Stop() itself using saveAllObjectsInternal().
 	if node.stopped.Load() {
 		return fmt.Errorf("node is stopped")
 	}
