@@ -311,7 +311,7 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 		t.Fatal("CallObject should fail with type mismatch")
 	}
 
-	if err.Error() != "object type mismatch: expected TestPersistentObjectWithMethod, got TestObjectWithMethod for object type-test-1" {
+	if err.Error() != "failed to auto-create object type-test-1: object with id type-test-1 already exists but with different type: expected TestPersistentObjectWithMethod, got TestObjectWithMethod" {
 		t.Errorf("Expected type mismatch error, got: %v", err)
 	}
 }
