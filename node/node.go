@@ -25,6 +25,30 @@ type Object = object.Object
 type ClientObject = client.ClientObject
 
 // Node represents a node in the distributed system that manages objects and clients
+//
+// Locking Strategy:
+// The Node uses a three-level locking hierarchy to ensure thread safety:
+//
+// 1. stopMu (RWMutex): Coordinates Stop() with in-flight operations
+//    - Operations acquire stopMu.RLock() to prevent Stop during execution
+//    - Stop() acquires stopMu.Lock() to wait for operations to complete
+//
+// 2. keyLock (per-object ID): Prevents concurrent create/delete on same object
+//    - Create/Delete operations acquire keyLock.Lock(id) for exclusive access
+//    - Call/Save operations acquire keyLock.RLock(id) for shared access
+//    - Automatically cleaned up via reference counting when no longer in use
+//
+// 3. objectsMu (RWMutex): Protects the objects map
+//    - Brief locks for map read/write operations only
+//
+// Lock Ordering Rule (MUST be followed to avoid deadlocks):
+//   stopMu.RLock() → keyLock.Lock/RLock(id) → objectsMu.Lock/RLock()
+//
+// This ensures:
+// - No concurrent create/delete on the same object ID
+// - Calls and saves can proceed concurrently on the same object
+// - Deletes wait for all calls/saves to complete before removing object
+// - Creates prevent any calls/saves/deletes until object is fully initialized
 type Node struct {
 	advertiseAddress      string
 	objectTypes           map[string]reflect.Type
