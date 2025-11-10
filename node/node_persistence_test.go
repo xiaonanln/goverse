@@ -631,10 +631,15 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	// Create the object - it should load from persistence
-	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "load-test-obj")
+	err = node.createObject(ctx, "TestPersistentObject", "load-test-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	loadedObj := node.objects["load-test-obj"]
+	node.objectsMu.RUnlock()
 
 	// Verify the object has the persisted value
 	persistentObj := loadedObj.(*TestPersistentObject)
@@ -669,10 +674,15 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	// Create the object - it should load from persistence
-	loadedObj, err := node.createObject(ctx, "TestPersistentObject", "persistent-obj-123")
+	err = node.createObject(ctx, "TestPersistentObject", "persistent-obj-123")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	loadedObj := node.objects["persistent-obj-123"]
+	node.objectsMu.RUnlock()
 
 	// Verify the object has the persisted value
 	persistentObj := loadedObj.(*TestPersistentObject)
@@ -692,10 +702,15 @@ func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
 	ctx := context.Background()
 
 	// Create object (object not in persistence, so FromData(nil) will be called)
-	obj, err := node.createObject(ctx, "TestPersistentObject", "new-obj-456")
+	err := node.createObject(ctx, "TestPersistentObject", "new-obj-456")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["new-obj-456"]
+	node.objectsMu.RUnlock()
 
 	// Since object was not in persistence, FromData(nil) should have been called
 	// This indicates a new object creation
@@ -725,10 +740,15 @@ func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create non-persistent object
-	obj, err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj")
+	err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj")
 	if err != nil {
 		t.Fatalf("Failed to create non-persistent object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["non-persistent-obj"]
+	node.objectsMu.RUnlock()
 
 	if obj.Id() != "non-persistent-obj" {
 		t.Errorf("Expected object ID 'non-persistent-obj', got '%s'", obj.Id())
@@ -753,10 +773,15 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 	ctx := context.Background()
 
 	// Create object - load will fail, should return error
-	obj, err := node.createObject(ctx, "TestPersistentObject", "error-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "error-obj")
 	if err == nil {
 		t.Fatal("Expected error when persistence loading fails, but got nil")
 	}
+
+	// Object should not be in the map since creation failed
+	node.objectsMu.RLock()
+	obj := node.objects["error-obj"]
+	node.objectsMu.RUnlock()
 
 	if obj != nil {
 		t.Errorf("Expected nil object when creation fails, got %v", obj)

@@ -264,9 +264,18 @@ func (node *Node) newClientObject(ctx context.Context) (Object, error) {
 	}
 
 	clientId := node.advertiseAddress + "/" + uniqueid.UniqueId()
-	clientObj, err := node.createObject(ctx, node.clientObjectType, clientId)
+	err := node.createObject(ctx, node.clientObjectType, clientId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ClientProxy object: %w", err)
+	}
+
+	// Fetch the created object from the map
+	node.objectsMu.RLock()
+	clientObj := node.objects[clientId]
+	node.objectsMu.RUnlock()
+
+	if clientObj == nil {
+		return nil, fmt.Errorf("client object %s not found after creation", clientId)
 	}
 
 	node.logger.Infof("Registered new client: %s", clientObj.String())
@@ -321,8 +330,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		// Object doesn't exist - need to create it automatically
 		// Create the object (which will acquire per-key Lock)
 		node.logger.Infof("Object %s not found, creating automatically", id)
-		var err error
-		obj, err = node.createObject(ctx, typ, id)
+		err := node.createObject(ctx, typ, id)
 		if err != nil {
 			return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		}
@@ -332,7 +340,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	unlockKey := node.keyLock.RLock(id)
 	defer unlockKey()
 	
-	// Re-fetch the object to ensure it still exists
+	// Fetch the object while holding the lock
 	node.objectsMu.RLock()
 	obj, ok = node.objects[id]
 	node.objectsMu.RUnlock()
@@ -411,18 +419,18 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string) (stri
 		return "", fmt.Errorf("object ID must be specified")
 	}
 
-	obj, err := node.createObject(ctx, typ, id)
+	err := node.createObject(ctx, typ, id)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
 		return "", err
 	}
-	return obj.Id(), nil
+	return id, nil
 }
 
-func (node *Node) createObject(ctx context.Context, typ string, id string) (Object, error) {
+func (node *Node) createObject(ctx context.Context, typ string, id string) error {
 	// ID must be specified to ensure proper shard mapping
 	if id == "" {
-		return nil, fmt.Errorf("object ID must be specified")
+		return fmt.Errorf("object ID must be specified")
 	}
 
 	// Lock ordering: per-key Lock → objectsMu
@@ -436,13 +444,13 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	node.objectsMu.RUnlock()
 	
 	if existingObj != nil {
-		// If object exists and has the same type, return it successfully
+		// If object exists and has the same type, return success
 		if existingObj.Type() == typ {
 			node.logger.Infof("Object %s of type %s already exists, returning existing object", id, typ)
-			return existingObj, nil
+			return nil
 		}
 		// Type mismatch - this is an error
-		return nil, fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
+		return fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
 	}
 
 	// Now acquire objectsMu.Lock() for the create flow
@@ -453,7 +461,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	node.objectTypesMu.RUnlock()
 	if !ok {
 		node.objectsMu.Unlock()
-		return nil, fmt.Errorf("unknown object type: %s", typ)
+		return fmt.Errorf("unknown object type: %s", typ)
 	}
 
 	// Create a new instance of the object
@@ -461,7 +469,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	obj, ok := objectValue.Interface().(Object)
 	if !ok {
 		node.objectsMu.Unlock()
-		return nil, fmt.Errorf("type %s does not implement Object interface", typ)
+		return fmt.Errorf("type %s does not implement Object interface", typ)
 	}
 
 	// Initialize the object first (without data)
@@ -491,7 +499,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 				// Other error loading from persistence -> treat as serious error
 				node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
 				node.objectsMu.Unlock()
-				return nil, fmt.Errorf("failed to load object %s from persistence: %w", id, err)
+				return fmt.Errorf("failed to load object %s from persistence: %w", id, err)
 			}
 		} else if errors.Is(err, object.ErrNotPersistent) {
 			// Object type doesn't support persistence, call FromData(nil)
@@ -505,7 +513,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	if err != nil {
 		node.logger.Errorf("Failed to restore object %s from data: %v", id, err)
 		node.objectsMu.Unlock()
-		return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
+		return fmt.Errorf("failed to restore object %s from data: %w", id, err)
 	}
 
 	// Release the lock before calling user code (OnCreated) to prevent deadlock
@@ -531,7 +539,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 		}
 	}
 
-	return obj, nil
+	return nil
 }
 
 func (node *Node) destroyObject(id string) {

@@ -242,7 +242,7 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 
 	// Create an object
 	objID := "delete-call-test"
-	_, err = node.createObject(ctx, "TestPersistentObjectWithMethod", objID)
+	err = node.createObject(ctx, "TestPersistentObjectWithMethod", objID)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}

@@ -85,7 +85,7 @@ func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
 	// Create objects
 	for i := 0; i < numObjects; i++ {
 		objID := "call-delete-obj"
-		_, err := node.createObject(ctx, "TestPersistentObjectWithMethod", objID)
+		err := node.createObject(ctx, "TestPersistentObjectWithMethod", objID)
 		if err != nil {
 			t.Fatalf("Failed to create object: %v", err)
 		}
@@ -147,7 +147,7 @@ func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
 	// Create multiple objects
 	for i := 0; i < 10; i++ {
 		objID := "save-delete-obj"
-		_, err := node.createObject(ctx, "TestPersistentObject", objID)
+		err := node.createObject(ctx, "TestPersistentObject", objID)
 		if err != nil {
 			t.Fatalf("Failed to create object: %v", err)
 		}
@@ -198,7 +198,7 @@ func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
 	defer node.Stop(ctx)
 
 	// Create object
-	_, err = node.createObject(ctx, "TestPersistentObjectWithMethod", "concurrent-call-obj")
+	err = node.createObject(ctx, "TestPersistentObjectWithMethod", "concurrent-call-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
