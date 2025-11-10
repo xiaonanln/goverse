@@ -24,7 +24,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 		AdvertiseAddress:    "localhost:47000",
 		ClientListenAddress: "localhost:0",
 	}
-	
+
 	server := &Server{
 		config: config,
 		Node:   n,
@@ -75,7 +75,7 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 		AdvertiseAddress:    "localhost:47000",
 		ClientListenAddress: "localhost:0",
 	}
-	
+
 	server := &Server{
 		config: config,
 		Node:   n,
@@ -116,7 +116,7 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 		AdvertiseAddress:    "localhost:47000",
 		ClientListenAddress: "localhost:0",
 	}
-	
+
 	server := &Server{
 		config: config,
 		Node:   n,
@@ -133,22 +133,18 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 		Id: "non-existent-obj",
 	}
 	_, err := server.DeleteObject(ctx, deleteReq)
-	if err == nil {
-		t.Fatal("Expected error when deleting non-existent object, got nil")
-	}
-
-	// The error should mention that the object was not found
-	expectedErrContains := "not found"
-	if !contains(err.Error(), expectedErrContains) {
-		t.Errorf("Expected error to contain '%s', got '%s'", expectedErrContains, err.Error())
+	if err != nil {
+		// nil is correct: DeleteObject is idempotent and should succeed for non-existent objects
+		t.Errorf("Expected no error when deleting non-existent object (idempotent), got: %v", err)
+		return
 	}
 }
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		findInString(s, substr)))
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			findInString(s, substr)))
 }
 
 func findInString(s, substr string) bool {
