@@ -462,15 +462,29 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 		return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
 	}
 
-	// Insert the object into the map (still holding objectsMu.Lock())
-	node.objects[id] = obj
-	
 	// Release the lock before calling user code (OnCreated) to prevent deadlock
 	// if OnCreated makes reentrant calls to CreateObject or CallObject
+	// Note: OnCreated is called BEFORE adding to the map to ensure it completes
+	// before any other thread can call methods on this object
 	node.objectsMu.Unlock()
 
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
+
+	// Now add the object to the map after OnCreated has completed
+	// Check again if object was created by another goroutine while we were calling OnCreated
+	node.objectsMu.Lock()
+	if existingObj := node.objects[id]; existingObj != nil {
+		node.objectsMu.Unlock()
+		// Another goroutine created the object while we were in OnCreated
+		if existingObj.Type() == typ {
+			node.logger.Infof("Object %s already created by another goroutine during OnCreated, discarding our instance", id)
+			return existingObj, nil
+		}
+		return nil, fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
+	}
+	node.objects[id] = obj
+	node.objectsMu.Unlock()
 
 	if node.IsStarted() {
 		err := node.registerObjectWithInspector(obj)

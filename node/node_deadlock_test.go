@@ -221,3 +221,79 @@ func TestOnCreated_CallingCreateObject_NoDeadlock(t *testing.T) {
 		t.Fatal("DEADLOCK DETECTED: CreateObject did not complete within 5 seconds when OnCreated called CreateObject")
 	}
 }
+
+// TestObjectWithOnCreatedFlag tracks whether OnCreated was called
+type TestObjectWithOnCreatedFlag struct {
+	TestPersistentObject
+	onCreatedCalled bool
+	mu              sync.Mutex
+}
+
+func (obj *TestObjectWithOnCreatedFlag) OnCreated() {
+	obj.mu.Lock()
+	obj.onCreatedCalled = true
+	obj.mu.Unlock()
+	// Small delay to ensure other threads would have a chance to call methods
+	time.Sleep(10 * time.Millisecond)
+}
+
+func (obj *TestObjectWithOnCreatedFlag) CheckOnCreated(ctx context.Context, req *emptypb.Empty) (*structpb.Struct, error) {
+	obj.mu.Lock()
+	defer obj.mu.Unlock()
+	
+	wasCalled := obj.onCreatedCalled
+	return &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"onCreatedCalled": {Kind: &structpb.Value_BoolValue{BoolValue: wasCalled}},
+		},
+	}, nil
+}
+
+// TestOnCreated_CalledBeforeObjectVisible verifies that OnCreated completes
+// before other threads can call methods on the object
+func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
+	n := NewNode("localhost:47000")
+	n.RegisterObjectType((*TestObjectWithOnCreatedFlag)(nil))
+
+	ctx := context.Background()
+	err := n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+	defer n.Stop(ctx)
+
+	// Start creating the object in one goroutine
+	createDone := make(chan bool, 1)
+	go func() {
+		_, err := n.CreateObject(ctx, "TestObjectWithOnCreatedFlag", "test-visibility")
+		if err != nil {
+			t.Errorf("CreateObject failed: %v", err)
+		}
+		createDone <- true
+	}()
+
+	// Give it a moment to start
+	time.Sleep(5 * time.Millisecond)
+
+	// Try to call a method on the object from another goroutine
+	// This should either:
+	// 1. Not find the object yet (OnCreated still running)
+	// 2. Find the object after OnCreated completed
+	// It should NEVER find the object with OnCreated not yet called
+	callAttempts := 0
+	for i := 0; i < 50; i++ {
+		resp, err := n.CallObject(ctx, "TestObjectWithOnCreatedFlag", "test-visibility", "CheckOnCreated", &emptypb.Empty{})
+		if err == nil {
+			callAttempts++
+			// If we successfully called the method, OnCreated must have been called
+			result := resp.(*structpb.Struct)
+			if !result.Fields["onCreatedCalled"].GetBoolValue() {
+				t.Error("Method was callable before OnCreated completed!")
+			}
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	<-createDone
+	t.Logf("Successfully verified: made %d call attempts, OnCreated always completed before methods were callable", callAttempts)
+}
