@@ -41,6 +41,193 @@ Goverse is a **distributed object runtime for Go** implementing the **virtual ac
 - Use `goverseapi.CallObject()` to call methods on distributed objects
 - Register types with `goverseapi.RegisterObjectType()` and `goverseapi.RegisterClientType()`
 
+### Node Package Locking Strategy
+
+The `node` package uses a sophisticated multi-level locking strategy to ensure thread safety while avoiding deadlocks:
+
+#### Lock Hierarchy (Must Be Acquired in This Order)
+
+1. **stopMu (RWMutex)** - Protects node lifecycle (Start/Stop)
+2. **keyLock (per-object key-based locks)** - Serializes operations on individual objects
+3. **objectsMu (RWMutex)** - Protects the objects map
+
+**CRITICAL**: Always acquire locks in this order to prevent deadlocks. Never acquire a higher-level lock while holding a lower-level lock.
+
+#### Per-Object Key-Based Locking
+
+The node uses a `KeyLock` manager that provides per-object exclusive and read-write locks:
+
+```go
+// Exclusive lock for an object (used in CreateObject, DeleteObject)
+unlockKey := node.keyLock.Lock(objectID)
+defer unlockKey()
+
+// Read lock for an object (used in CallObject for read-only methods)
+unlockKey := node.keyLock.RLock(objectID)
+defer unlockKey()
+```
+
+**Key Benefits:**
+- Operations on different objects can proceed in parallel
+- Operations on the same object are serialized to prevent race conditions
+- Automatic cleanup: locks are garbage collected when reference count reaches zero
+- No global lock contention for unrelated objects
+
+#### Typical Lock Patterns
+
+**CreateObject Pattern:**
+```go
+func (node *Node) CreateObject(...) {
+    // 1. Acquire stopMu read lock (allows concurrent operations while preventing Stop)
+    node.stopMu.RLock()
+    defer node.stopMu.RUnlock()
+    
+    // Check if stopped
+    if node.stopped.Load() {
+        return fmt.Errorf("node is stopped")
+    }
+    
+    // 2. Acquire per-key exclusive lock (serialize operations on this object)
+    unlockKey := node.keyLock.Lock(id)
+    defer unlockKey()
+    
+    // 3. Acquire objectsMu for map operations (double-checked locking pattern)
+    node.objectsMu.RLock()
+    _, exists := node.objects[id]
+    node.objectsMu.RUnlock()
+    
+    if exists {
+        return fmt.Errorf("object with id %s already exists", id)
+    }
+    
+    // Create object...
+    
+    // 4. Add to map with write lock
+    node.objectsMu.Lock()
+    node.objects[id] = obj
+    node.objectsMu.Unlock()
+}
+```
+
+**DeleteObject Pattern (Idempotent):**
+```go
+func (node *Node) DeleteObject(...) {
+    // 1. Acquire stopMu read lock
+    node.stopMu.RLock()
+    defer node.stopMu.RUnlock()
+    
+    // Check if stopped - IDEMPOTENT: succeed if node stopped (objects already cleared)
+    if node.stopped.Load() {
+        node.logger.Infof("Node is stopped, object %s already cleared", id)
+        return nil  // Success - desired state achieved
+    }
+    
+    // 2. Acquire per-key exclusive lock
+    unlockKey := node.keyLock.Lock(id)
+    defer unlockKey()
+    
+    // 3. Check if object exists - IDEMPOTENT: succeed if object doesn't exist
+    node.objectsMu.RLock()
+    obj, exists := node.objects[id]
+    node.objectsMu.RUnlock()
+    
+    if !exists {
+        node.logger.Infof("Object %s does not exist, nothing to delete", id)
+        return nil  // Success - desired state achieved
+    }
+    
+    // Delete from persistence and memory...
+}
+```
+
+**CallObject Pattern:**
+```go
+func (node *Node) CallObject(...) {
+    // 1. Acquire stopMu read lock
+    node.stopMu.RLock()
+    defer node.stopMu.RUnlock()
+    
+    if node.stopped.Load() {
+        return nil, fmt.Errorf("node is stopped")
+    }
+    
+    // 2. Acquire per-key lock (exclusive or read based on method)
+    unlockKey := node.keyLock.Lock(id)  // or RLock for read-only methods
+    defer unlockKey()
+    
+    // 3. Get object from map (may auto-create)
+    node.objectsMu.RLock()
+    obj, exists := node.objects[id]
+    node.objectsMu.RUnlock()
+    
+    // Call method on object...
+}
+```
+
+#### Idempotency Principles
+
+The node package follows idempotent operation semantics where appropriate:
+
+**DeleteObject is Fully Idempotent:**
+- ✅ **Object exists** → Delete it and return success
+- ✅ **Object doesn't exist** → Return success (desired state already achieved)
+- ✅ **Node is stopped** → Return success (all objects already cleared)
+- ❌ **Only fails for true operational errors** (e.g., persistence deletion failure)
+
+This follows distributed systems best practices: operations should succeed if the desired postcondition is met, regardless of how that state was achieved. This matches HTTP DELETE idempotency semantics.
+
+**Other Operations After Stop:**
+- `CreateObject` - Returns error (cannot create on stopped node)
+- `CallObject` - Returns error (cannot call on stopped node)
+- `SaveAllObjects` - Returns error (cannot save on stopped node)
+
+DeleteObject is special because when the node is stopped, all objects are already cleared, so the deletion request is already satisfied.
+
+#### Double-Checked Locking Pattern
+
+Many operations use double-checked locking to minimize lock contention:
+
+```go
+// First check with read lock (fast path)
+node.objectsMu.RLock()
+obj, exists := node.objects[id]
+node.objectsMu.RUnlock()
+
+if !exists {
+    // Object doesn't exist, create it
+    // ... creation logic ...
+    
+    // Add to map with write lock
+    node.objectsMu.Lock()
+    // Check again - another goroutine may have created it
+    if _, exists := node.objects[id]; exists {
+        node.objectsMu.Unlock()
+        return existingObject
+    }
+    node.objects[id] = newObject
+    node.objectsMu.Unlock()
+}
+```
+
+#### Preventing Deadlocks
+
+**Golden Rules:**
+1. **Always acquire locks in the defined hierarchy order**
+2. **Never call a method that acquires a higher-level lock while holding a lower-level lock**
+3. **Use per-key locks to isolate operations on different objects**
+4. **Keep critical sections short - release locks as soon as possible**
+5. **Use defer for lock release to ensure cleanup on panic**
+
+**Common Deadlock Scenarios to Avoid:**
+- ❌ Holding objectsMu while calling a method that acquires stopMu
+- ❌ Holding a per-key lock while acquiring another per-key lock
+- ❌ Holding any lock while calling user code (object methods)
+
+**Safe Patterns:**
+- ✅ Release map locks before calling object methods
+- ✅ Use double-checked locking to minimize write lock duration
+- ✅ Acquire stopMu.RLock at the start, per-key locks in the middle, map locks briefly for map operations
+
 ## Development Workflow
 
 ### Prerequisites
