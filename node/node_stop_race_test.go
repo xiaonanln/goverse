@@ -236,26 +236,24 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 	close(results)
 
 	// Collect results
+	// With idempotent DeleteObject, all operations should succeed:
+	// - Operations that complete before Stop will delete the object
+	// - Operations that run after Stop will succeed because node is stopped (idempotent)
+	// - Operations that run after first delete will succeed because object doesn't exist (idempotent)
 	successCount := 0
-	stoppedCount := 0
-	notFoundCount := 0
 	for err := range results {
 		if err == nil {
 			successCount++
-		} else if err.Error() == "node is stopped" {
-			stoppedCount++
-		} else if err.Error() == "object delete-race-obj not found" {
-			notFoundCount++
 		} else {
-			t.Logf("Unexpected error: %v", err)
+			t.Errorf("Unexpected error from DeleteObject: %v", err)
 		}
 	}
 
-	t.Logf("Results: %d successful, %d stopped, %d not found", successCount, stoppedCount, notFoundCount)
+	t.Logf("Results: %d successful deletions (idempotent)", successCount)
 
-	// At least some operations should have been stopped
-	if stoppedCount == 0 {
-		t.Error("Expected at least some operations to be stopped")
+	// All operations should succeed due to idempotency
+	if successCount != 20 {
+		t.Errorf("Expected all 20 DeleteObject calls to succeed, got %d", successCount)
 	}
 
 	// Verify node is properly stopped
@@ -395,12 +393,12 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 		t.Errorf("Expected 'node is stopped' error, got: %v", err)
 	}
 
-	// Try DeleteObject - should fail
+	// Try DeleteObject - should succeed (idempotent: node stopped = objects cleared)
+	// Unlike other operations, DeleteObject succeeds when node is stopped because
+	// the desired state (object not existing) is already achieved
 	err = node.DeleteObject(ctx, "after-stop-obj")
-	if err == nil {
-		t.Error("Expected DeleteObject to fail after stop")
-	} else if err.Error() != "node is stopped" {
-		t.Errorf("Expected 'node is stopped' error, got: %v", err)
+	if err != nil {
+		t.Errorf("Expected DeleteObject to succeed after stop (idempotent), got error: %v", err)
 	}
 
 	// Try SaveAllObjects - should fail
