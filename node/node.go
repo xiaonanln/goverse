@@ -560,8 +560,11 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	unlockKey := node.keyLock.Lock(id)
 	defer unlockKey()
 
-	// Check if object exists (while holding the lock)
+	// Check if object exists (must hold objectsMu for map access)
+	node.objectsMu.RLock()
 	obj, exists := node.objects[id]
+	node.objectsMu.RUnlock()
+
 	if !exists {
 		return fmt.Errorf("object %s not found", id)
 	}
