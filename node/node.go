@@ -285,13 +285,12 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 	
-	// Acquire objectsMu.RLock() for the entire method invocation as the single serialization point
+	// Find the object - acquire lock briefly to get object reference
 	node.objectsMu.RLock()
 	obj, ok := node.objects[id]
+	node.objectsMu.RUnlock()
+	
 	if !ok {
-		// Need to create object - must release read lock and acquire write lock
-		node.objectsMu.RUnlock()
-		
 		// Object doesn't exist - create it automatically
 		// This will handle persistence: load if available, otherwise FromData(nil)
 		node.logger.Infof("Object %s not found, creating automatically", id)
@@ -300,11 +299,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		if err != nil {
 			return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		}
-		
-		// Re-acquire read lock for method invocation
-		node.objectsMu.RLock()
 	}
-	defer node.objectsMu.RUnlock()
 
 	// Validate that the provided type matches the object's actual type
 	if obj.Type() != typ {
@@ -339,7 +334,8 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		return nil, fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
 	}
 
-	// Call the method with the unmarshaled request as argument (while holding objectsMu.RLock())
+	// Call the method with the unmarshaled request as argument
+	// IMPORTANT: Lock is NOT held during method invocation to allow reentrant calls
 	results := methodValue.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
 
 	if len(results) != 2 {
