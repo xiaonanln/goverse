@@ -284,10 +284,14 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
+	
+	// Acquire objectsMu.RLock() for the entire method invocation as the single serialization point
 	node.objectsMu.RLock()
 	obj, ok := node.objects[id]
-	node.objectsMu.RUnlock()
 	if !ok {
+		// Need to create object - must release read lock and acquire write lock
+		node.objectsMu.RUnlock()
+		
 		// Object doesn't exist - create it automatically
 		// This will handle persistence: load if available, otherwise FromData(nil)
 		node.logger.Infof("Object %s not found, creating automatically", id)
@@ -296,7 +300,11 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		if err != nil {
 			return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		}
+		
+		// Re-acquire read lock for method invocation
+		node.objectsMu.RLock()
 	}
+	defer node.objectsMu.RUnlock()
 
 	// Validate that the provided type matches the object's actual type
 	if obj.Type() != typ {
@@ -331,7 +339,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		return nil, fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
 	}
 
-	// Call the method with the unmarshaled request as argument
+	// Call the method with the unmarshaled request as argument (while holding objectsMu.RLock())
 	results := methodValue.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
 
 	if len(results) != 2 {
@@ -381,10 +389,12 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 		return nil, fmt.Errorf("object ID must be specified")
 	}
 
-	// Check if object already exists
-	node.objectsMu.RLock()
+	// Acquire objectsMu.Lock() for the entire create flow as the single serialization point
+	node.objectsMu.Lock()
+	defer node.objectsMu.Unlock()
+
+	// Check if object already exists (while holding the lock)
 	existingObj := node.objects[id]
-	node.objectsMu.RUnlock()
 	if existingObj != nil {
 		// If object exists and has the same type, return it successfully
 		if existingObj.Type() == typ {
@@ -451,20 +461,8 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 		return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
 	}
 
-	// Lock and store the object in the registry
-	// IMPORTANT: Check again after acquiring write lock to prevent race condition
-	node.objectsMu.Lock()
-	if existingObj := node.objects[id]; existingObj != nil {
-		node.objectsMu.Unlock()
-		// Another goroutine created the object while we were initializing
-		if existingObj.Type() == typ {
-			node.logger.Infof("Object %s already created by another goroutine, returning existing object", id)
-			return existingObj, nil
-		}
-		return nil, fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
-	}
+	// Insert the object into the map (still holding objectsMu.Lock())
 	node.objects[id] = obj
-	node.objectsMu.Unlock()
 
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
@@ -502,16 +500,17 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		return fmt.Errorf("node is stopped")
 	}
 
-	// First check if object exists
-	node.objectsMu.RLock()
-	obj, exists := node.objects[id]
-	node.objectsMu.RUnlock()
+	// Acquire objectsMu.Lock() for the entire delete operation as the single serialization point
+	node.objectsMu.Lock()
+	defer node.objectsMu.Unlock()
 
+	// Check if object exists (while holding the lock)
+	obj, exists := node.objects[id]
 	if !exists {
 		return fmt.Errorf("object %s not found", id)
 	}
 
-	// If persistence provider is configured, try to delete from persistence first
+	// If persistence provider is configured, delete from persistence while holding the lock
 	node.persistenceProviderMu.RLock()
 	provider := node.persistenceProvider
 	node.persistenceProviderMu.RUnlock()
@@ -520,7 +519,7 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		// Check if object supports persistence
 		_, err := obj.ToData()
 		if err == nil {
-			// Object is persistent, delete from storage
+			// Object is persistent, delete from storage (while holding objectsMu.Lock())
 			node.logger.Infof("Deleting object %s from persistence", id)
 			err = provider.DeleteObject(ctx, id)
 			if err != nil {
@@ -537,10 +536,8 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		}
 	}
 
-	// Remove from memory
-	node.objectsMu.Lock()
+	// Remove from memory (still holding objectsMu.Lock())
 	delete(node.objects, id)
-	node.objectsMu.Unlock()
 
 	node.logger.Infof("Deleted object %s from node", id)
 	return nil
@@ -729,19 +726,16 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 		return fmt.Errorf("no persistence provider configured")
 	}
 
+	// Acquire objectsMu.RLock() for the entire save operation as the single serialization point
 	node.objectsMu.RLock()
-	objectsCopy := make([]Object, 0, len(node.objects))
-	for _, obj := range node.objects {
-		objectsCopy = append(objectsCopy, obj)
-	}
-	node.objectsMu.RUnlock()
+	defer node.objectsMu.RUnlock()
 
 	savedCount := 0
 	nonPersistentCount := 0
 	errorCount := 0
 
-	for _, obj := range objectsCopy {
-		// Object might have been deleted after we copied the list
+	// Iterate and save objects while holding objectsMu.RLock()
+	for _, obj := range node.objects {
 		// Get object data
 		data, err := obj.ToData()
 		if err == object.ErrNotPersistent {
@@ -756,7 +750,7 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 			continue
 		}
 
-		// Save the object data
+		// Save the object data (while holding objectsMu.RLock())
 		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj, err)
