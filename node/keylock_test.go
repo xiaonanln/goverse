@@ -81,7 +81,7 @@ func TestKeyLock_MultipleKeys(t *testing.T) {
 // TestKeyLock_ConcurrentReaders tests multiple concurrent readers
 func TestKeyLock_ConcurrentReaders(t *testing.T) {
 	kl := NewKeyLock()
-	const numReaders = 10
+	const numReaders = 100
 
 	var wg sync.WaitGroup
 	wg.Add(numReaders)
@@ -109,7 +109,7 @@ func TestKeyLock_ExclusionBetweenWriters(t *testing.T) {
 	kl := NewKeyLock()
 	var counter int32
 
-	const numWriters = 5
+	const numWriters = 50
 	var wg sync.WaitGroup
 	wg.Add(numWriters)
 
@@ -144,8 +144,9 @@ func TestKeyLock_WriterExcludesReaders(t *testing.T) {
 	var writerInCritical atomic.Bool
 	var readerSeenWriterInCritical atomic.Bool
 
+	const numReaders = 20
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(numReaders + 1)
 
 	// Writer goroutine
 	go func() {
@@ -161,17 +162,19 @@ func TestKeyLock_WriterExcludesReaders(t *testing.T) {
 	// Wait a bit for writer to start
 	time.Sleep(10 * time.Millisecond)
 
-	// Reader goroutine
-	go func() {
-		defer wg.Done()
-		unlock := kl.RLock("key1")
-		defer unlock()
+	// Multiple reader goroutines
+	for i := 0; i < numReaders; i++ {
+		go func() {
+			defer wg.Done()
+			unlock := kl.RLock("key1")
+			defer unlock()
 
-		// If writer was in critical section, we failed exclusion
-		if writerInCritical.Load() {
-			readerSeenWriterInCritical.Store(true)
-		}
-	}()
+			// If writer was in critical section, we failed exclusion
+			if writerInCritical.Load() {
+				readerSeenWriterInCritical.Store(true)
+			}
+		}()
+	}
 
 	wg.Wait()
 

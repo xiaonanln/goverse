@@ -110,7 +110,7 @@ func TestStop_RaceWithCallObject(t *testing.T) {
 	}
 
 	// Pre-create an object
-	_, err = node.createObject(ctx, "TestPersistentObjectWithMethod", "call-obj-1")
+	err = node.createObject(ctx, "TestPersistentObjectWithMethod", "call-obj-1")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 
 	// Pre-create multiple objects
 	for i := 0; i < 10; i++ {
-		_, err = node.createObject(ctx, "TestPersistentObject", "delete-race-obj")
+		err = node.createObject(ctx, "TestPersistentObject", "delete-race-obj")
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
@@ -282,10 +282,14 @@ func TestStop_RaceWithSaveAllObjects(t *testing.T) {
 
 	// Pre-create multiple objects
 	for i := 0; i < 5; i++ {
-		obj, err := node.createObject(ctx, "TestPersistentObject", "save-race-obj")
+		err := node.createObject(ctx, "TestPersistentObject", "save-race-obj")
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
+		// Fetch the object from the map
+		node.objectsMu.RLock()
+		obj := node.objects["save-race-obj"]
+		node.objectsMu.RUnlock()
 		persistentObj := obj.(*TestPersistentObject)
 		persistentObj.SetValue("test-value")
 	}
@@ -426,10 +430,14 @@ func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
 	// Create multiple objects
 	objectIDs := []string{"persist-obj-1", "persist-obj-2", "persist-obj-3"}
 	for _, id := range objectIDs {
-		obj, err := node.createObject(ctx, "TestPersistentObject", id)
+		err := node.createObject(ctx, "TestPersistentObject", id)
 		if err != nil {
 			t.Fatalf("Failed to create object %s: %v", id, err)
 		}
+		// Fetch the object from the map
+		node.objectsMu.RLock()
+		obj := node.objects[id]
+		node.objectsMu.RUnlock()
 		persistentObj := obj.(*TestPersistentObject)
 		persistentObj.SetValue(id + "-value")
 	}

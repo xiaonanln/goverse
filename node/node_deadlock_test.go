@@ -58,7 +58,7 @@ func TestCallObject_MethodCallingCreateObject_NoDeadlock(t *testing.T) {
 	defer n.Stop(ctx)
 
 	// Create the parent object
-	_, err = n.createObject(ctx, "TestObjectMethodCallingCreateReentrant", "parent-object")
+	err = n.createObject(ctx, "TestObjectMethodCallingCreateReentrant", "parent-object")
 	if err != nil {
 		t.Fatalf("Failed to create parent object: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCallObject_MethodCallingCallObject_NoDeadlock(t *testing.T) {
 	defer n.Stop(ctx)
 
 	// Create the source object
-	_, err = n.createObject(ctx, "TestObjectMethodCallingCallReentrant", "source-object")
+	err = n.createObject(ctx, "TestObjectMethodCallingCallReentrant", "source-object")
 	if err != nil {
 		t.Fatalf("Failed to create source object: %v", err)
 	}

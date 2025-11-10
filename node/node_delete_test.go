@@ -16,11 +16,15 @@ func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a persistent object
-	obj, err := node.createObject(ctx, "TestPersistentObject", "delete-obj-1")
+	err := node.createObject(ctx, "TestPersistentObject", "delete-obj-1")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["delete-obj-1"]
+	node.objectsMu.RUnlock()
 	persistentObj := obj.(*TestPersistentObject)
 	persistentObj.SetValue("test-value")
 
@@ -67,11 +71,15 @@ func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a non-persistent object
-	obj, err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-obj")
+	err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["non-persist-obj"]
+	node.objectsMu.RUnlock()
 	nonPersistentObj := obj.(*TestNonPersistentObject)
 	nonPersistentObj.Value = "test-value"
 
@@ -107,11 +115,15 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a persistent object
-	obj, err := node.createObject(ctx, "TestPersistentObject", "no-provider-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "no-provider-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["no-provider-obj"]
+	node.objectsMu.RUnlock()
 	persistentObj := obj.(*TestPersistentObject)
 	persistentObj.SetValue("test-value")
 
@@ -163,11 +175,15 @@ func TestNode_DeleteObject_PersistenceError(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and save a persistent object
-	obj, err := node.createObject(ctx, "TestPersistentObject", "error-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "error-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["error-obj"]
+	node.objectsMu.RUnlock()
 	persistentObj := obj.(*TestPersistentObject)
 	persistentObj.SetValue("test-value")
 
@@ -202,10 +218,15 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 
 	// Create multiple persistent objects
 	for i := 1; i <= 5; i++ {
-		obj, err := node.createObject(ctx, "TestPersistentObject", fmt.Sprintf("multi-obj-%d", i))
+		objID := fmt.Sprintf("multi-obj-%d", i)
+		err := node.createObject(ctx, "TestPersistentObject", objID)
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
+		// Fetch the object from the map
+		node.objectsMu.RLock()
+		obj := node.objects[objID]
+		node.objectsMu.RUnlock()
 		persistentObj := obj.(*TestPersistentObject)
 		persistentObj.SetValue(fmt.Sprintf("value-%d", i))
 	}
@@ -281,10 +302,15 @@ func TestNode_DeleteObject_ThreadSafety(t *testing.T) {
 	// Create multiple objects
 	objectCount := 10
 	for i := 0; i < objectCount; i++ {
-		obj, err := node.createObject(ctx, "TestPersistentObject", fmt.Sprintf("thread-obj-%d", i))
+		objID := fmt.Sprintf("thread-obj-%d", i)
+		err := node.createObject(ctx, "TestPersistentObject", objID)
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
+		// Fetch the object from the map
+		node.objectsMu.RLock()
+		obj := node.objects[objID]
+		node.objectsMu.RUnlock()
 		persistentObj := obj.(*TestPersistentObject)
 		persistentObj.SetValue(fmt.Sprintf("value-%d", i))
 	}

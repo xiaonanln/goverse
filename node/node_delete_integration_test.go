@@ -17,10 +17,15 @@ func TestDeleteObject_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create a persistent object
-	obj, err := node.createObject(ctx, "TestPersistentObject", "integration-test-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "integration-test-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["integration-test-obj"]
+	node.objectsMu.RUnlock()
 
 	// Set some data on the object
 	persistentObj := obj.(*TestPersistentObject)
@@ -76,10 +81,15 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create a non-persistent object
-	obj, err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-integration-obj")
+	err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-integration-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["non-persist-integration-obj"]
+	node.objectsMu.RUnlock()
 
 	// Set some data on the object
 	nonPersistentObj := obj.(*TestNonPersistentObject)
@@ -121,20 +131,30 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 
 	// Create 3 persistent objects
 	for i := 1; i <= 3; i++ {
-		obj, err := node.createObject(ctx, "TestPersistentObject", objID("persist", i))
+		id := objID("persist", i)
+		err := node.createObject(ctx, "TestPersistentObject", id)
 		if err != nil {
 			t.Fatalf("Failed to create persistent object %d: %v", i, err)
 		}
+		// Fetch the object from the map
+		node.objectsMu.RLock()
+		obj := node.objects[id]
+		node.objectsMu.RUnlock()
 		persistentObj := obj.(*TestPersistentObject)
 		persistentObj.SetValue(objValue("value", i))
 	}
 
 	// Create 2 non-persistent objects
 	for i := 1; i <= 2; i++ {
-		obj, err := node.createObject(ctx, "TestNonPersistentObject", objID("non-persist", i))
+		id := objID("non-persist", i)
+		err := node.createObject(ctx, "TestNonPersistentObject", id)
 		if err != nil {
 			t.Fatalf("Failed to create non-persistent object %d: %v", i, err)
 		}
+		// Fetch the object from the map
+		node.objectsMu.RLock()
+		obj := node.objects[id]
+		node.objectsMu.RUnlock()
 		nonPersistentObj := obj.(*TestNonPersistentObject)
 		nonPersistentObj.Value = objValue("temp", i)
 	}

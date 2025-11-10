@@ -86,10 +86,15 @@ func TestPushMessageToClient_NotAClient(t *testing.T) {
 	
 	// Create a regular object (not through RegisterClient)
 	ctx := context.Background()
-	obj, err := node.createObject(ctx, "TestObject", "test-object-123")
+	err := node.createObject(ctx, "TestObject", "test-object-123")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Fetch the object from the map
+	node.objectsMu.RLock()
+	obj := node.objects["test-object-123"]
+	node.objectsMu.RUnlock()
 	
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
