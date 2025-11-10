@@ -11,6 +11,7 @@ import (
 
 	"github.com/xiaonanln/goverse/client"
 	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/grpc"
@@ -57,7 +58,7 @@ type Node struct {
 	clientObjectType      string
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
-	keyLock               *KeyLock // Per-object ID locking for create/delete/call/save coordination
+	keyLock               *keylock.KeyLock // Per-object ID locking for create/delete/call/save coordination
 	inspectorClient       inspector_pb.InspectorServiceClient
 	logger                *logger.Logger
 	startupTime           time.Time
@@ -77,7 +78,7 @@ func NewNode(advertiseAddress string) *Node {
 		advertiseAddress:    advertiseAddress,
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
-		keyLock:             NewKeyLock(),
+		keyLock:             keylock.NewKeyLock(),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
