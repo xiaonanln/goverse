@@ -812,3 +812,140 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 		t.Errorf("Shard should not be claimed when localNode is empty, CurrentNode: %s", shard0.CurrentNode)
 	}
 }
+
+// TestClaimShardOwnership_DeadCurrentNode tests that a node claims ownership
+// of shards when CurrentNode is not in the active node list (dead node)
+func TestClaimShardOwnership_DeadCurrentNode(t *testing.T) {
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
+	if err != nil {
+		t.Skipf("Skipping test - etcd not available: %v", err)
+		return
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("Skipping test - etcd connection failed: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	cm := NewConsensusManager(mgr)
+	ctx := context.Background()
+
+	// Define this node's address and a dead node
+	thisNodeAddr := "localhost:47001"
+	deadNodeAddr := "localhost:47003"
+
+	// Add nodes to state - note that deadNodeAddr is NOT in the active node list
+	cm.mu.Lock()
+	cm.state.Nodes[thisNodeAddr] = true
+	cm.state.Nodes["localhost:47002"] = true
+	// deadNodeAddr is intentionally NOT added to simulate a dead node
+
+	// Initialize shard mapping with some shards
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+
+	// Shard 0: target is another node, current is dead node (should be claimed)
+	cm.state.ShardMapping.Shards[0] = ShardInfo{
+		TargetNode:  "localhost:47002",
+		CurrentNode: deadNodeAddr,
+		ModRevision: 0,
+	}
+
+	// Shard 1: target is this node, current is dead node (should be claimed)
+	cm.state.ShardMapping.Shards[1] = ShardInfo{
+		TargetNode:  thisNodeAddr,
+		CurrentNode: deadNodeAddr,
+		ModRevision: 0,
+	}
+
+	// Shard 2: target is another node, current is empty (should be claimed)
+	cm.state.ShardMapping.Shards[2] = ShardInfo{
+		TargetNode:  "localhost:47002",
+		CurrentNode: "",
+		ModRevision: 0,
+	}
+
+	// Shard 3: target is another node, current is alive (should NOT be claimed)
+	cm.state.ShardMapping.Shards[3] = ShardInfo{
+		TargetNode:  "localhost:47002",
+		CurrentNode: "localhost:47002",
+		ModRevision: 0,
+	}
+
+	cm.mu.Unlock()
+
+	// Call ClaimShardsForNode
+	err = cm.ClaimShardsForNode(ctx, thisNodeAddr)
+	if err != nil {
+		t.Fatalf("ClaimShardsForNode failed: %v", err)
+	}
+
+	// Wait a bit for the async update to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Reload the state from etcd to verify
+	client := mgr.GetClient()
+
+	// Verify shard 0 was claimed (dead CurrentNode)
+	key0 := prefix + "/shard/0"
+	resp0, err := client.Get(ctx, key0)
+	if err != nil {
+		t.Fatalf("Failed to get shard 0 from etcd: %v", err)
+	}
+	if len(resp0.Kvs) == 0 {
+		t.Error("Shard 0 should exist in etcd after claiming")
+	} else {
+		shardInfo0 := parseShardInfo(resp0.Kvs[0])
+		if shardInfo0.CurrentNode != thisNodeAddr {
+			t.Errorf("Shard 0 CurrentNode should be %s (claimed from dead node), got %s", thisNodeAddr, shardInfo0.CurrentNode)
+		}
+	}
+
+	// Verify shard 1 was claimed (target is this node)
+	key1 := prefix + "/shard/1"
+	resp1, err := client.Get(ctx, key1)
+	if err != nil {
+		t.Fatalf("Failed to get shard 1 from etcd: %v", err)
+	}
+	if len(resp1.Kvs) == 0 {
+		t.Error("Shard 1 should exist in etcd after claiming")
+	} else {
+		shardInfo1 := parseShardInfo(resp1.Kvs[0])
+		if shardInfo1.CurrentNode != thisNodeAddr {
+			t.Errorf("Shard 1 CurrentNode should be %s (target is this node), got %s", thisNodeAddr, shardInfo1.CurrentNode)
+		}
+	}
+
+	// Verify shard 2 was claimed (empty CurrentNode)
+	key2 := prefix + "/shard/2"
+	resp2, err := client.Get(ctx, key2)
+	if err != nil {
+		t.Fatalf("Failed to get shard 2 from etcd: %v", err)
+	}
+	if len(resp2.Kvs) == 0 {
+		t.Error("Shard 2 should exist in etcd after claiming")
+	} else {
+		shardInfo2 := parseShardInfo(resp2.Kvs[0])
+		if shardInfo2.CurrentNode != thisNodeAddr {
+			t.Errorf("Shard 2 CurrentNode should be %s (empty CurrentNode), got %s", thisNodeAddr, shardInfo2.CurrentNode)
+		}
+	}
+
+	// Verify shard 3 was NOT claimed (alive CurrentNode)
+	key3 := prefix + "/shard/3"
+	resp3, err := client.Get(ctx, key3)
+	if err != nil {
+		t.Fatalf("Failed to get shard 3 from etcd: %v", err)
+	}
+	// Shard 3 should not have been updated
+	if len(resp3.Kvs) > 0 {
+		shardInfo3 := parseShardInfo(resp3.Kvs[0])
+		if shardInfo3.CurrentNode == thisNodeAddr {
+			t.Errorf("Shard 3 should NOT be claimed by this node (CurrentNode is alive), but CurrentNode is: %s", shardInfo3.CurrentNode)
+		}
+	}
+}
