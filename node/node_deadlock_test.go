@@ -159,3 +159,65 @@ func TestCallObject_MethodCallingCallObject_NoDeadlock(t *testing.T) {
 		t.Fatal("DEADLOCK DETECTED: CallObject did not complete within 5 seconds when method called CallObject")
 	}
 }
+
+// TestObjectOnCreatedCallingCreate is a test object that calls CreateObject in OnCreated
+type TestObjectOnCreatedCallingCreate struct {
+	TestPersistentObject // Embed to get all the required methods
+}
+
+func (obj *TestObjectOnCreatedCallingCreate) OnCreated() {
+	// This simulates OnCreated making a reentrant call to CreateObject
+	// This should NOT deadlock
+	testNodeMu.Lock()
+	n := testNodeRef
+	testNodeMu.Unlock()
+	
+	_, err := n.CreateObject(context.Background(), "TestPersistentObject", "oncreated-child-123")
+	if err != nil {
+		// Log error but don't fail - we're just checking for deadlock
+		println("OnCreated CreateObject error:", err.Error())
+	}
+}
+
+// TestOnCreated_CallingCreateObject_NoDeadlock verifies that OnCreated
+// can call CreateObject without causing a deadlock
+func TestOnCreated_CallingCreateObject_NoDeadlock(t *testing.T) {
+	n := NewNode("localhost:47000")
+	n.RegisterObjectType((*TestObjectOnCreatedCallingCreate)(nil))
+	n.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Set global reference
+	testNodeMu.Lock()
+	testNodeRef = n
+	testNodeMu.Unlock()
+
+	ctx := context.Background()
+	err := n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+	defer n.Stop(ctx)
+
+	// Use a channel to detect deadlock
+	done := make(chan bool, 1)
+	var createErr error
+
+	go func() {
+		// Create an object whose OnCreated calls CreateObject
+		_, createErr = n.CreateObject(ctx, "TestObjectOnCreatedCallingCreate", "parent-oncreated")
+		done <- true
+	}()
+
+	// Wait for completion or timeout (deadlock detection)
+	select {
+	case <-done:
+		if createErr != nil {
+			t.Logf("CreateObject completed with error: %v (this is ok, we're just checking for deadlock)", createErr)
+		} else {
+			t.Logf("CreateObject completed successfully - no deadlock")
+		}
+		// Success - no deadlock
+	case <-time.After(5 * time.Second):
+		t.Fatal("DEADLOCK DETECTED: CreateObject did not complete within 5 seconds when OnCreated called CreateObject")
+	}
+}

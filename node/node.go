@@ -385,13 +385,14 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 		return nil, fmt.Errorf("object ID must be specified")
 	}
 
-	// Acquire objectsMu.Lock() for the entire create flow as the single serialization point
+	// Acquire objectsMu.Lock() for the create flow as the single serialization point
+	// Note: We release the lock before calling OnCreated() to prevent deadlock
 	node.objectsMu.Lock()
-	defer node.objectsMu.Unlock()
 
 	// Check if object already exists (while holding the lock)
 	existingObj := node.objects[id]
 	if existingObj != nil {
+		node.objectsMu.Unlock()
 		// If object exists and has the same type, return it successfully
 		if existingObj.Type() == typ {
 			node.logger.Infof("Object %s of type %s already exists, returning existing object", id, typ)
@@ -405,6 +406,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	objectType, ok := node.objectTypes[typ]
 	node.objectTypesMu.RUnlock()
 	if !ok {
+		node.objectsMu.Unlock()
 		return nil, fmt.Errorf("unknown object type: %s", typ)
 	}
 
@@ -412,6 +414,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	objectValue := reflect.New(objectType)
 	obj, ok := objectValue.Interface().(Object)
 	if !ok {
+		node.objectsMu.Unlock()
 		return nil, fmt.Errorf("type %s does not implement Object interface", typ)
 	}
 
@@ -441,6 +444,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 			} else {
 				// Other error loading from persistence -> treat as serious error
 				node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
+				node.objectsMu.Unlock()
 				return nil, fmt.Errorf("failed to load object %s from persistence: %w", id, err)
 			}
 		} else if errors.Is(err, object.ErrNotPersistent) {
@@ -454,11 +458,16 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	err := obj.FromData(dataToRestore)
 	if err != nil {
 		node.logger.Errorf("Failed to restore object %s from data: %v", id, err)
+		node.objectsMu.Unlock()
 		return nil, fmt.Errorf("failed to restore object %s from data: %w", id, err)
 	}
 
 	// Insert the object into the map (still holding objectsMu.Lock())
 	node.objects[id] = obj
+	
+	// Release the lock before calling user code (OnCreated) to prevent deadlock
+	// if OnCreated makes reentrant calls to CreateObject or CallObject
+	node.objectsMu.Unlock()
 
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
