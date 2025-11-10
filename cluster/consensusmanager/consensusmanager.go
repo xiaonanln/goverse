@@ -715,7 +715,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 }
 
 // ClaimShardsForNode checks all shards and claims ownership for shards
-// where the given localNode is the target, or where CurrentNode is empty or not alive
+// where the given localNode is the target AND CurrentNode is empty or not alive
 func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode string) error {
 	if localNode == "" {
 		return fmt.Errorf("localNode cannot be empty")
@@ -734,24 +734,8 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	// Collect shards that need to be claimed
 	shardsToUpdate := make(map[int]ShardInfo)
 	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
-		// Claim shard if:
-		// 1. TargetNode is this node, OR
-		// 2. CurrentNode is empty or not alive (not in active node list)
-		shouldClaim := false
-		
-		if shardInfo.TargetNode == localNode {
-			// Condition 1: Target node is this node
-			shouldClaim = true
-		} else if shardInfo.CurrentNode == "" {
-			// Condition 2a: CurrentNode is empty
-			shouldClaim = true
-		} else if !clusterState.HasNode(shardInfo.CurrentNode) {
-			// Condition 2b: CurrentNode is not in the active node list (not alive)
-			shouldClaim = true
-		}
-		
-		if shouldClaim {
-			// Claim this shard for the local node
+		// Claim shard if: TargetNode is this node AND (CurrentNode is empty or not alive)
+		if shardInfo.TargetNode == localNode && (shardInfo.CurrentNode == "" || !clusterState.HasNode(shardInfo.CurrentNode)) {
 			shardsToUpdate[shardID] = ShardInfo{
 				TargetNode:  shardInfo.TargetNode,
 				CurrentNode: localNode,
