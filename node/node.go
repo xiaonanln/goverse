@@ -32,6 +32,7 @@ type Node struct {
 	clientObjectType      string
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
+	keyLock               *KeyLock // Per-object-ID read/write lock manager
 	inspectorClient       inspector_pb.InspectorServiceClient
 	logger                *logger.Logger
 	startupTime           time.Time
@@ -51,6 +52,7 @@ func NewNode(advertiseAddress string) *Node {
 		advertiseAddress:    advertiseAddress,
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
+		keyLock:             NewKeyLock(),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
@@ -284,18 +286,35 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
+	
+	// First check if object exists without acquiring per-key lock
 	node.objectsMu.RLock()
 	obj, ok := node.objects[id]
 	node.objectsMu.RUnlock()
+	
 	if !ok {
 		// Object doesn't exist - create it automatically
 		// This will handle persistence: load if available, otherwise FromData(nil)
+		// createObject will acquire its own per-key exclusive lock
 		node.logger.Infof("Object %s not found, creating automatically", id)
 		var err error
 		obj, err = node.createObject(ctx, typ, id)
 		if err != nil {
 			return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		}
+	}
+
+	// Now acquire per-key shared lock to prevent concurrent delete during the method call
+	// Lock ordering: stopMu.RLock → per-key RLock
+	unlockKey := node.keyLock.RLock(id)
+	defer unlockKey()
+
+	// Re-check that object still exists (might have been deleted between the check and lock acquisition)
+	node.objectsMu.RLock()
+	obj, ok = node.objects[id]
+	node.objectsMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("object %s was deleted", id)
 	}
 
 	// Validate that the provided type matches the object's actual type
@@ -381,7 +400,13 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 		return nil, fmt.Errorf("object ID must be specified")
 	}
 
-	// Check if object already exists
+	// Acquire per-key exclusive lock to prevent concurrent creates/deletes on the same ID
+	// Lock ordering: per-key Lock → objectsMu
+	// Note: stopMu is already held by the caller (CreateObject or CallObject)
+	unlockKey := node.keyLock.Lock(id)
+	defer unlockKey()
+
+	// Check if object already exists (with per-key lock held)
 	node.objectsMu.RLock()
 	existingObj := node.objects[id]
 	node.objectsMu.RUnlock()
@@ -452,17 +477,8 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) (Obje
 	}
 
 	// Lock and store the object in the registry
-	// IMPORTANT: Check again after acquiring write lock to prevent race condition
+	// No need to double-check since we hold the per-key exclusive lock
 	node.objectsMu.Lock()
-	if existingObj := node.objects[id]; existingObj != nil {
-		node.objectsMu.Unlock()
-		// Another goroutine created the object while we were initializing
-		if existingObj.Type() == typ {
-			node.logger.Infof("Object %s already created by another goroutine, returning existing object", id)
-			return existingObj, nil
-		}
-		return nil, fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
-	}
 	node.objects[id] = obj
 	node.objectsMu.Unlock()
 
@@ -502,7 +518,12 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		return fmt.Errorf("node is stopped")
 	}
 
-	// First check if object exists
+	// Acquire per-key exclusive lock to prevent concurrent creates/calls/saves
+	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
+	unlockKey := node.keyLock.Lock(id)
+	defer unlockKey()
+
+	// Check if object exists (with per-key lock held)
 	node.objectsMu.RLock()
 	obj, exists := node.objects[id]
 	node.objectsMu.RUnlock()
@@ -511,7 +532,14 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		return fmt.Errorf("object %s not found", id)
 	}
 
-	// If persistence provider is configured, try to delete from persistence first
+	// Remove from memory FIRST (while holding per-key lock)
+	// This prevents new callers from finding the object
+	node.objectsMu.Lock()
+	delete(node.objects, id)
+	node.objectsMu.Unlock()
+
+	// If persistence provider is configured, try to delete from persistence
+	// We do this AFTER removing from memory to ensure no new operations can access the object
 	node.persistenceProviderMu.RLock()
 	provider := node.persistenceProvider
 	node.persistenceProviderMu.RUnlock()
@@ -525,6 +553,7 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 			err = provider.DeleteObject(ctx, id)
 			if err != nil {
 				node.logger.Errorf("Failed to delete object %s from persistence: %v", id, err)
+				// Object is already removed from memory, so we log but don't fail
 				return fmt.Errorf("failed to delete object from persistence: %w", err)
 			}
 			node.logger.Infof("Successfully deleted object %s from persistence", id)
@@ -536,11 +565,6 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 			node.logger.Warnf("Could not check persistence for object %s: %v", id, err)
 		}
 	}
-
-	// Remove from memory
-	node.objectsMu.Lock()
-	delete(node.objects, id)
-	node.objectsMu.Unlock()
 
 	node.logger.Infof("Deleted object %s from node", id)
 	return nil
@@ -729,6 +753,7 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 		return fmt.Errorf("no persistence provider configured")
 	}
 
+	// Get a snapshot of object IDs and references
 	node.objectsMu.RLock()
 	objectsCopy := make([]Object, 0, len(node.objects))
 	for _, obj := range node.objects {
@@ -741,29 +766,49 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 	errorCount := 0
 
 	for _, obj := range objectsCopy {
-		// Object might have been deleted after we copied the list
+		objID := obj.Id()
+
+		// Acquire per-key shared lock to prevent concurrent delete/create
+		// Lock ordering: per-key RLock (no stopMu since called from Stop or SaveAllObjects which already hold it)
+		unlockKey := node.keyLock.RLock(objID)
+
+		// Verify object still exists (might have been deleted after we copied the list)
+		node.objectsMu.RLock()
+		_, exists := node.objects[objID]
+		node.objectsMu.RUnlock()
+
+		if !exists {
+			// Object was deleted, skip it
+			unlockKey()
+			continue
+		}
+
 		// Get object data
 		data, err := obj.ToData()
 		if err == object.ErrNotPersistent {
 			// Object is not persistent, skip silently
 			node.logger.Infof("Object %s is not persistent", obj)
 			nonPersistentCount++
+			unlockKey()
 			continue
 		}
 		if err != nil {
 			node.logger.Errorf("Failed to get data for object %s: %v", obj, err)
 			errorCount++
+			unlockKey()
 			continue
 		}
 
 		// Save the object data
-		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
+		err = object.SaveObject(ctx, provider, objID, obj.Type(), data)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj, err)
 			errorCount++
 		} else {
 			savedCount++
 		}
+
+		unlockKey()
 	}
 
 	node.logger.Infof("Persistence summary: saved=%d, non-persistent=%d, errors=%d", savedCount, nonPersistentCount, errorCount)
