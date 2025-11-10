@@ -6,11 +6,30 @@ import (
 
 // keyLockEntry represents a per-key lock with reference counting
 type keyLockEntry struct {
-	mu      sync.RWMutex
+	mu       sync.RWMutex
 	refCount int
 }
 
 // KeyLock manages per-key read/write locks with automatic cleanup
+//
+// KeyLock provides a scalable way to coordinate operations on individual object IDs
+// without requiring a global lock. Each key (object ID) gets its own RWMutex that is
+// created on demand and automatically cleaned up when no longer in use.
+//
+// Key Features:
+// - Per-key exclusive locks (Lock) for operations that modify object state
+// - Per-key shared locks (RLock) for operations that read object state
+// - Reference counting ensures locks are cleaned up when no goroutines hold them
+// - Thread-safe under high concurrency
+//
+// Usage Pattern:
+//
+//	kl := NewKeyLock()
+//	unlock := kl.Lock("object-123")  // or kl.RLock("object-123")
+//	defer unlock()
+//	// ... perform operation on object-123 ...
+//
+// The unlock function MUST be called to release the lock and decrement the reference count.
 // It provides thread-safe RW locking per object ID to prevent concurrent
 // creation/deletion while allowing concurrent reads (calls/saves).
 type KeyLock struct {
