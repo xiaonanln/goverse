@@ -145,7 +145,7 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 }
 
 func TestNode_DeleteObject_NotFound(t *testing.T) {
-	// Test deleting an object that doesn't exist
+	// Test deleting an object that doesn't exist - should be idempotent (no error)
 	node := NewNode("localhost:47000")
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
@@ -153,15 +153,15 @@ func TestNode_DeleteObject_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Try to delete non-existent object
+	// Try to delete non-existent object - should succeed (idempotent)
 	err := node.DeleteObject(ctx, "non-existent-obj")
-	if err == nil {
-		t.Fatal("Expected error when deleting non-existent object, got nil")
+	if err != nil {
+		t.Errorf("Expected no error for idempotent delete of non-existent object, got: %v", err)
 	}
 
-	expectedErrMsg := "object non-existent-obj not found"
-	if err.Error() != expectedErrMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+	// Verify nothing was stored in persistence
+	if provider.GetStorageCount() != 0 {
+		t.Errorf("Expected empty storage, got %d objects", provider.GetStorageCount())
 	}
 }
 

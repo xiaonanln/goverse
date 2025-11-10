@@ -63,10 +63,10 @@ func TestDeleteObject_Integration(t *testing.T) {
 		t.Error("Object should be removed from persistence after deletion")
 	}
 
-	// Step 6: Verify we can't delete the same object again
+	// Step 6: Verify deletion is idempotent - can delete non-existent object without error
 	err = node.DeleteObject(ctx, "integration-test-obj")
-	if err == nil {
-		t.Error("Expected error when deleting already-deleted object, got nil")
+	if err != nil {
+		t.Errorf("Expected no error when deleting already-deleted object (idempotent), got: %v", err)
 	}
 }
 

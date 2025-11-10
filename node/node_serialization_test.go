@@ -269,7 +269,7 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 		}()
 	}
 
-	// Concurrent DeleteObject operations (only one should succeed)
+	// Concurrent DeleteObject operations (all should succeed due to idempotency)
 	wg.Add(numDeletes)
 	for i := 0; i < numDeletes; i++ {
 		go func() {
@@ -288,9 +288,9 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 
 	t.Logf("Results: calls=%d, deletes=%d", callSuccessCount, deleteSuccessCount)
 
-	// At most one delete should succeed
-	if deleteSuccessCount > 1 {
-		t.Errorf("Expected at most 1 successful delete, got %d", deleteSuccessCount)
+	// All deletes should succeed (idempotent behavior)
+	if deleteSuccessCount != numDeletes {
+		t.Errorf("Expected all %d deletes to succeed due to idempotency, got %d", numDeletes, deleteSuccessCount)
 	}
 
 	// Some calls should have succeeded before delete
