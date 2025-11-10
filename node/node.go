@@ -544,7 +544,8 @@ func (node *Node) destroyObject(id string) {
 
 // DeleteObject removes an object from the node and deletes it from persistence if configured.
 // This is a public method that properly handles both memory cleanup and persistence deletion.
-// Returns error if object doesn't exist or if persistence deletion fails.
+// This operation is idempotent - if the object doesn't exist, no error is returned.
+// Returns error only if the node is stopped or if persistence deletion fails.
 func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
@@ -566,7 +567,9 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	node.objectsMu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("object %s not found", id)
+		// Object doesn't exist - deletion is idempotent, this is not an error
+		node.logger.Infof("Object %s does not exist, nothing to delete", id)
+		return nil
 	}
 
 	// If persistence provider is configured, delete from persistence while holding the lock
