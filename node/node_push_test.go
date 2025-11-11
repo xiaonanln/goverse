@@ -17,12 +17,10 @@ func TestPushMessageToClient(t *testing.T) {
 	
 	// Create a client object
 	ctx := context.Background()
-	clientObj, err := node.RegisterClient(ctx)
+	clientID, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
-	
-	clientID := clientObj.Id()
 	
 	// Test pushing a message
 	testMsg := &chat_pb.Client_NewMessageNotification{
@@ -39,9 +37,15 @@ func TestPushMessageToClient(t *testing.T) {
 		t.Fatalf("Failed to push message to client: %v", err)
 	}
 	
+	// Get the client message channel to verify the message
+	messageChan, err := node.GetClientMessageChan(clientID)
+	if err != nil {
+		t.Fatalf("Failed to get client message channel: %v", err)
+	}
+	
 	// Verify the message was received
 	select {
-	case msg := <-clientObj.MessageChan():
+	case msg := <-messageChan:
 		notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
 		if !ok {
 			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
