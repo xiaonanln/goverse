@@ -56,7 +56,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Register a client on node2
-	clientID, err := node2.RegisterClient(ctx)
+	clientID, messageChan, err := node2.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client on node2: %v", err)
 	}
@@ -84,12 +84,6 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 		errors    []string
 	}
 	stats := &messageStats{}
-
-	// Get the client message channel
-	messageChan, err := node2.GetClientMessageChan(clientID)
-	if err != nil {
-		t.Fatalf("Failed to get client message channel: %v", err)
-	}
 
 	// Consume messages concurrently to avoid channel buffer overflow
 	done := make(chan bool)

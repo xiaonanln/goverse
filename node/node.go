@@ -249,14 +249,20 @@ func isConcreteProtoMessage(t reflect.Type) bool {
 	return t.Implements(protoMessageType)
 }
 
-// RegisterClient creates a new client object and returns its ID
-func (node *Node) RegisterClient(ctx context.Context) (string, error) {
+// RegisterClient creates a new client object and returns its ID and message channel
+func (node *Node) RegisterClient(ctx context.Context) (string, chan proto.Message, error) {
 	clientId, err := node.newClientObject(ctx)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return clientId, nil
+	// Get the message channel for the client
+	messageChan, err := node.GetClientMessageChan(clientId)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return clientId, messageChan, nil
 }
 
 // newClientObject creates a new client object and returns its ID
