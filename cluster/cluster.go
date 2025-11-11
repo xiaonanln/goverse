@@ -759,50 +759,52 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 		return
 	}
 
-	clusterState := c.consensusManager.GetClusterState()
-
-	// Only remove objects when cluster state is stable
-	if !clusterState.IsStable(NodeStabilityDuration) {
+	// Check if cluster state is stable without cloning
+	if !c.consensusManager.IsStateStable(NodeStabilityDuration) {
 		c.logger.Debugf("Skipping object removal: cluster state is not stable yet")
 		return
 	}
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
-	if !clusterState.HasNode(localAddr) {
+
+	// Check if this node is in the cluster
+	nodes := c.consensusManager.GetNodes()
+	hasNode := false
+	for _, node := range nodes {
+		if node == localAddr {
+			hasNode = true
+			break
+		}
+	}
+	if !hasNode {
 		c.logger.Warnf("Cannot remove objects: this node %s is not in the cluster state", localAddr)
 		return
 	}
 
 	// Get all objects on this node
 	objects := c.thisNode.ListObjects()
+	
+	// Build list of object IDs
+	objectIDs := make([]string, len(objects))
+	for i, objInfo := range objects {
+		objectIDs[i] = objInfo.Id
+	}
 
-	// Check each object to see if its shard still belongs to this node
-	for _, objInfo := range objects {
-		// Skip client objects (those with "/" in ID) as they are pinned to nodes
-		if strings.Contains(objInfo.Id, "/") {
-			continue
-		}
+	// Ask ConsensusManager to determine which objects should be evicted
+	// This is more efficient than cloning the entire cluster state
+	objectsToEvict := c.consensusManager.GetObjectsToEvict(localAddr, objectIDs)
 
-		// Get the shard for this object
-		shardID := sharding.GetShardID(objInfo.Id)
+	// Remove each object that should be evicted
+	for _, objectID := range objectsToEvict {
+		shardID := sharding.GetShardID(objectID)
+		c.logger.Infof("Removing object %s (shard %d) as it no longer belongs to this node",
+			objectID, shardID)
 
-		// Check if this shard belongs to this node
-		shardInfo, exists := clusterState.ShardMapping.Shards[shardID]
-		if !exists {
-			continue
-		}
-
-		// If CurrentNode is this node but TargetNode is different, remove the object
-		if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
-			c.logger.Infof("Removing object %s (shard %d) as it no longer belongs to this node (target: %s)",
-				objInfo.Id, shardID, shardInfo.TargetNode)
-
-			err := c.thisNode.DeleteObject(ctx, objInfo.Id)
-			if err != nil {
-				c.logger.Errorf("Failed to delete object %s: %v", objInfo.Id, err)
-			} else {
-				c.logger.Infof("Successfully removed object %s", objInfo.Id)
-			}
+		err := c.thisNode.DeleteObject(ctx, objectID)
+		if err != nil {
+			c.logger.Errorf("Failed to delete object %s: %v", objectID, err)
+		} else {
+			c.logger.Infof("Successfully removed object %s", objectID)
 		}
 	}
 }
