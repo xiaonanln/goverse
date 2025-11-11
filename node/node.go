@@ -657,9 +657,14 @@ func (node *Node) ListObjects() []ObjectInfo {
 }
 
 // ListObjectIDs returns a list of all object IDs on this node
+// Returns nil if there are no objects
 func (node *Node) ListObjectIDs() []string {
 	node.objectsMu.RLock()
 	defer node.objectsMu.RUnlock()
+
+	if len(node.objects) == 0 {
+		return nil
+	}
 
 	objectIDs := make([]string, 0, len(node.objects))
 	for _, obj := range node.objects {
