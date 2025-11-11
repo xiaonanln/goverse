@@ -92,26 +92,22 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 		t.Fatalf("Expected %d total shards assigned, got %d", expectedShards, shardCount)
 	}
 
-	// Test 4: Verify periodic refresh on non-leader
-	t.Logf("Testing periodic refresh on non-leader...")
+	// Test 4: Verify automatic cache sync via watch mechanism
+	// With ConsensusManager, the cache is kept in sync automatically via watch
+	// We just need to verify that the non-leader maintains correct shard mapping
+	t.Logf("Verifying automatic cache sync on non-leader...")
 
-	// Invalidate cache on non-leader
-	cluster2.InvalidateShardMappingCache()
-
-	// Wait for next check interval
-	time.Sleep(ShardMappingCheckInterval + 1*time.Second)
-
-	// Non-leader should have refreshed mapping from etcd
+	// Non-leader should maintain correct mapping via automatic watch mechanism
 	mapping2New, err := cluster2.GetShardMapping(ctx)
 	if err != nil {
-		t.Fatalf("Failed to get refreshed shard mapping from cluster2: %v", err)
+		t.Fatalf("Failed to get shard mapping from cluster2: %v", err)
 	}
 	// Verify it still has correct number of shards
 	if len(mapping2New.Shards) != len(mapping1.Shards) {
-		t.Fatalf("Refreshed mapping should have same shards, got %d, expected %d", len(mapping2New.Shards), len(mapping1.Shards))
+		t.Fatalf("Mapping should have same shards, got %d, expected %d", len(mapping2New.Shards), len(mapping1.Shards))
 	}
 
-	t.Logf("Non-leader successfully refreshed shard mapping")
+	t.Logf("Non-leader maintains correct shard mapping via automatic sync")
 
 	t.Logf("Test completed successfully - automatic shard mapping management is working")
 }

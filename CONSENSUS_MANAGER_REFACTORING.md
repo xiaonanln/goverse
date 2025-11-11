@@ -36,7 +36,7 @@ This refactoring introduces a new `ConsensusManager` component that centralizes 
   - `GetNodeForObject()` - no etcd call needed
   - `GetNodeForShard()` - instant lookup from memory
   - `WatchNodes()` - initializes and starts ConsensusManager watch
-  - `InvalidateShardMappingCache()` - now a no-op (automatic via watch)
+  - `InvalidateShardMappingCache()` - deprecated method removed (automatic via watch)
 
 ### 3. Improved State Management
 
@@ -45,7 +45,7 @@ This refactoring introduces a new `ConsensusManager` component that centralizes 
 // Multiple etcd interactions
 nodes := c.etcdManager.GetNodes()  // reads from etcd manager's cache
 mapping, _ := c.shardMapper.GetShardMapping(ctx)  // reads from etcd or cache
-c.shardMapper.InvalidateCache()  // manual cache invalidation needed
+// manual cache invalidation was needed before ConsensusManager
 ```
 
 **After**:
@@ -144,14 +144,14 @@ For code using cluster state:
 // Direct etcd manager access
 nodes := cluster.etcdManager.GetNodes()
 
-// ShardMapper with context and cache invalidation
+// ShardMapper with context and cache invalidation (deprecated)
 mapping, _ := cluster.shardMapper.GetShardMapping(ctx)
-cluster.shardMapper.InvalidateCache()
+// Manual cache invalidation was needed before ConsensusManager
 
-// Manual refresh loops
+// Manual refresh loops were needed before ConsensusManager
 ticker := time.NewTicker(interval)
 for range ticker.C {
-    cluster.shardMapper.InvalidateCache()
+    // Manual cache invalidation
     mapping, _ := cluster.shardMapper.GetShardMapping(ctx)
 }
 ```
