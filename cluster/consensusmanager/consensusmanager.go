@@ -884,6 +884,218 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) error 
 	return err
 }
 
+// AssignUnassignedShards assigns any shards with empty CurrentNode to the node with minimal
+// number of current shards. Ties are broken by lexicographical node address order.
+// Returns the number of shards assigned, or an error if the operation fails.
+func (cm *ConsensusManager) AssignUnassignedShards(ctx context.Context) (int, error) {
+	cm.mu.RLock()
+	
+	if len(cm.state.Nodes) == 0 {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("No nodes available for shard assignment")
+		return 0, nil
+	}
+	
+	if cm.state.ShardMapping == nil {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("No shard mapping available")
+		return 0, nil
+	}
+	
+	// Sort nodes for deterministic tie-breaking
+	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
+	
+	// Count current shards per node
+	shardCounts := make(map[string]int)
+	for _, node := range nodes {
+		shardCounts[node] = 0
+	}
+	
+	// Find unassigned shards and count current shards per node
+	var unassignedShards []int
+	for shardID := 0; shardID < sharding.NumShards; shardID++ {
+		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		if !exists || shardInfo.CurrentNode == "" {
+			unassignedShards = append(unassignedShards, shardID)
+		} else {
+			// Count this shard for its current node
+			if _, nodeExists := shardCounts[shardInfo.CurrentNode]; nodeExists {
+				shardCounts[shardInfo.CurrentNode]++
+			}
+		}
+	}
+	
+	if len(unassignedShards) == 0 {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("No unassigned shards found")
+		return 0, nil
+	}
+	
+	// Create update map
+	updateShards := make(map[int]ShardInfo)
+	
+	// For each unassigned shard, assign to node with minimal count
+	for _, shardID := range unassignedShards {
+		// Find node with minimal shard count (ties broken by lexicographical order)
+		minNode := nodes[0]
+		minCount := shardCounts[minNode]
+		
+		for _, node := range nodes[1:] {
+			count := shardCounts[node]
+			if count < minCount {
+				minNode = node
+				minCount = count
+			}
+		}
+		
+		// Get existing shard info for ModRevision
+		existingInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		var modRevision int64
+		if exists {
+			modRevision = existingInfo.ModRevision
+		}
+		
+		// Assign shard to the selected node
+		updateShards[shardID] = ShardInfo{
+			TargetNode:  minNode,
+			CurrentNode: minNode,
+			ModRevision: modRevision,
+		}
+		
+		// Update count for next assignment
+		shardCounts[minNode]++
+	}
+	
+	cm.mu.RUnlock()
+	
+	cm.logger.Infof("Assigning %d unassigned shards", len(updateShards))
+	n, err := cm.storeShardMapping(ctx, updateShards)
+	if err != nil {
+		cm.logger.Errorf("Failed to assign shards: %v", err)
+		return n, err
+	}
+	
+	cm.logger.Infof("Successfully assigned %d shards", n)
+	return n, nil
+}
+
+// RebalanceShards checks if all shards are assigned and rebalances if there's significant imbalance.
+// If all shards are assigned, finds the node with max shards (a) and min shards (b).
+// If a >= b + 2 and a > 2*b, migrates one shard from max node to min node by updating its TargetNode.
+// Returns true if a rebalance operation was performed, false otherwise, and any error encountered.
+func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
+	cm.mu.RLock()
+	
+	if len(cm.state.Nodes) == 0 {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("No nodes available for rebalancing")
+		return false, nil
+	}
+	
+	if cm.state.ShardMapping == nil {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("No shard mapping available")
+		return false, nil
+	}
+	
+	// Sort nodes for deterministic selection
+	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
+	
+	// Count current shards per node and check if all shards are assigned
+	shardCounts := make(map[string]int)
+	shardsPerNode := make(map[string][]int) // Track which shards each node has
+	for _, node := range nodes {
+		shardCounts[node] = 0
+		shardsPerNode[node] = []int{}
+	}
+	
+	allAssigned := true
+	for shardID := 0; shardID < sharding.NumShards; shardID++ {
+		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		if !exists || shardInfo.CurrentNode == "" {
+			allAssigned = false
+			break
+		}
+		
+		// Count this shard for its current node
+		if _, nodeExists := shardCounts[shardInfo.CurrentNode]; nodeExists {
+			shardCounts[shardInfo.CurrentNode]++
+			shardsPerNode[shardInfo.CurrentNode] = append(shardsPerNode[shardInfo.CurrentNode], shardID)
+		}
+	}
+	
+	if !allAssigned {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("Not all shards are assigned, skipping rebalance")
+		return false, nil
+	}
+	
+	// Find max and min shard counts
+	maxNode := nodes[0]
+	maxCount := shardCounts[maxNode]
+	minNode := nodes[0]
+	minCount := shardCounts[minNode]
+	
+	for _, node := range nodes {
+		count := shardCounts[node]
+		if count > maxCount {
+			maxNode = node
+			maxCount = count
+		}
+		if count < minCount {
+			minNode = node
+			minCount = count
+		}
+	}
+	
+	// Check rebalance conditions: a >= b + 2 and a > 2*b
+	if maxCount < minCount+2 || maxCount <= 2*minCount {
+		cm.mu.RUnlock()
+		cm.logger.Debugf("Cluster is balanced: max=%d (node=%s), min=%d (node=%s)", 
+			maxCount, maxNode, minCount, minNode)
+		return false, nil
+	}
+	
+	// Find one shard to migrate from maxNode
+	shardsToMigrate := shardsPerNode[maxNode]
+	if len(shardsToMigrate) == 0 {
+		cm.mu.RUnlock()
+		cm.logger.Warnf("No shards found on max node %s, cannot rebalance", maxNode)
+		return false, nil
+	}
+	
+	// Select the first shard to migrate
+	shardToMigrate := shardsToMigrate[0]
+	existingInfo := cm.state.ShardMapping.Shards[shardToMigrate]
+	
+	cm.mu.RUnlock()
+	
+	// Update the shard's TargetNode (CurrentNode stays the same until migration completes)
+	updateShards := map[int]ShardInfo{
+		shardToMigrate: {
+			TargetNode:  minNode,
+			CurrentNode: existingInfo.CurrentNode,
+			ModRevision: existingInfo.ModRevision,
+		},
+	}
+	
+	cm.logger.Infof("Rebalancing: migrating shard %d from %s (count=%d) to %s (count=%d)", 
+		shardToMigrate, maxNode, maxCount, minNode, minCount)
+	
+	n, err := cm.storeShardMapping(ctx, updateShards)
+	if err != nil {
+		cm.logger.Errorf("Failed to rebalance shard: %v", err)
+		return false, err
+	}
+	
+	if n > 0 {
+		cm.logger.Infof("Successfully initiated rebalance for shard %d", shardToMigrate)
+		return true, nil
+	}
+	
+	return false, nil
+}
+
 // nodesEqual checks if two sorted node lists are equal
 func nodesEqual(a, b []string) bool {
 	if len(a) != len(b) {
