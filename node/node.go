@@ -901,3 +901,9 @@ return node.migrationManager.MigrateShard(ctx, shardID, targetNode)
 func (node *Node) GetShardMigrationStatus() map[int]*ShardMigrationState {
 return node.migrationManager.GetMigrationStatus()
 }
+
+// GetShardMigrationManagerForTesting returns the migration manager for testing
+// WARNING: This should only be used in tests
+func (node *Node) GetShardMigrationManagerForTesting() *ShardMigrationManager {
+return node.migrationManager
+}
