@@ -879,7 +879,11 @@ func (cm *ConsensusManager) GetClusterState() *ClusterState {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	return cm.state.Clone()
+	startTime := time.Now()
+	clonedState := cm.state.Clone()
+	cm.logger.Infof("GetClusterState Clone operation took %d ms", time.Since(startTime).Milliseconds())
+	
+	return clonedState
 }
 
 // GetObjectsToEvict returns the list of object IDs that should be evicted from the given node
