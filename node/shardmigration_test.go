@@ -26,8 +26,8 @@ func TestShardMigrationManager_BlockNewCalls(t *testing.T) {
 	// Start migration in background
 	go func() {
 		// Create a simple state without actual objects
-		smm.mu.Lock()
-		smm.migratingShards[shardID] = &ShardMigrationState{
+		smm.Mu.Lock()
+		smm.MigratingShards[shardID] = &ShardMigrationState{
 			ShardID:   shardID,
 			OldNode:   node.GetAdvertiseAddress(),
 			NewNode:   targetNode,
@@ -35,7 +35,7 @@ func TestShardMigrationManager_BlockNewCalls(t *testing.T) {
 			Phase:     PhaseBlocking,
 			ObjectIDs: []string{},
 		}
-		smm.mu.Unlock()
+		smm.Mu.Unlock()
 	}()
 
 	// Wait a bit for the migration to start
@@ -56,9 +56,9 @@ func TestShardMigrationManager_BlockNewCalls(t *testing.T) {
 	}
 
 	// Clean up
-	smm.mu.Lock()
-	delete(smm.migratingShards, shardID)
-	smm.mu.Unlock()
+	smm.Mu.Lock()
+	delete(smm.MigratingShards, shardID)
+	smm.Mu.Unlock()
 }
 
 // TestShardMigrationManager_DrainCalls tests that in-flight calls are drained before migration proceeds
@@ -77,9 +77,9 @@ func TestShardMigrationManager_DrainCalls(t *testing.T) {
 	}
 
 	// Verify call count
-	smm.mu.RLock()
+	smm.Mu.RLock()
 	count := smm.shardCallCounts[shardID]
-	smm.mu.RUnlock()
+	smm.Mu.RUnlock()
 
 	if count != 1 {
 		t.Errorf("Expected call count 1, got %d", count)
@@ -109,9 +109,9 @@ func TestShardMigrationManager_DrainCalls(t *testing.T) {
 	}
 
 	// Verify call count is now zero
-	smm.mu.RLock()
+	smm.Mu.RLock()
 	count = smm.shardCallCounts[shardID]
-	smm.mu.RUnlock()
+	smm.Mu.RUnlock()
 
 	if count != 0 {
 		t.Errorf("Expected call count 0 after drain, got %d", count)
@@ -154,8 +154,8 @@ func TestCallObject_BlockedDuringMigration(t *testing.T) {
 
 	// Start migration of this shard
 	smm := node.migrationManager
-	smm.mu.Lock()
-	smm.migratingShards[shardID] = &ShardMigrationState{
+	smm.Mu.Lock()
+	smm.MigratingShards[shardID] = &ShardMigrationState{
 		ShardID:   shardID,
 		OldNode:   node.GetAdvertiseAddress(),
 		NewNode:   "localhost:47001",
@@ -163,7 +163,7 @@ func TestCallObject_BlockedDuringMigration(t *testing.T) {
 		Phase:     PhaseBlocking,
 		ObjectIDs: []string{},
 	}
-	smm.mu.Unlock()
+	smm.Mu.Unlock()
 
 	// Try to begin a shard call - should fail
 	endCall, err := smm.BeginShardCall(shardID)
@@ -175,9 +175,9 @@ func TestCallObject_BlockedDuringMigration(t *testing.T) {
 	}
 
 	// Clean up
-	smm.mu.Lock()
-	delete(smm.migratingShards, shardID)
-	smm.mu.Unlock()
+	smm.Mu.Lock()
+	delete(smm.MigratingShards, shardID)
+	smm.Mu.Unlock()
 }
 
 // TestCreateObject_BlockedDuringMigration tests that createObject checks shard migration
@@ -192,8 +192,8 @@ func TestCreateObject_BlockedDuringMigration(t *testing.T) {
 
 	// Start migration of this shard
 	smm := node.migrationManager
-	smm.mu.Lock()
-	smm.migratingShards[shardID] = &ShardMigrationState{
+	smm.Mu.Lock()
+	smm.MigratingShards[shardID] = &ShardMigrationState{
 		ShardID:   shardID,
 		OldNode:   node.GetAdvertiseAddress(),
 		NewNode:   "localhost:47001",
@@ -201,7 +201,7 @@ func TestCreateObject_BlockedDuringMigration(t *testing.T) {
 		Phase:     PhaseBlocking,
 		ObjectIDs: []string{},
 	}
-	smm.mu.Unlock()
+	smm.Mu.Unlock()
 
 	// Check if calls should be blocked
 	shouldBlock := smm.ShouldBlockCallsToShard(shardID)
@@ -210,9 +210,9 @@ func TestCreateObject_BlockedDuringMigration(t *testing.T) {
 	}
 
 	// Clean up
-	smm.mu.Lock()
-	delete(smm.migratingShards, shardID)
-	smm.mu.Unlock()
+	smm.Mu.Lock()
+	delete(smm.MigratingShards, shardID)
+	smm.Mu.Unlock()
 }
 
 // TestShardMigrationManager_ClientObjectsNotBlocked tests that client objects (with /) are not blocked
@@ -229,8 +229,8 @@ func TestShardMigrationManager_ClientObjectsNotBlocked(t *testing.T) {
 
 	// Start migration of this shard
 	smm := node.migrationManager
-	smm.mu.Lock()
-	smm.migratingShards[shardID] = &ShardMigrationState{
+	smm.Mu.Lock()
+	smm.MigratingShards[shardID] = &ShardMigrationState{
 		ShardID:   shardID,
 		OldNode:   node.GetAdvertiseAddress(),
 		NewNode:   "localhost:47001",
@@ -238,7 +238,7 @@ func TestShardMigrationManager_ClientObjectsNotBlocked(t *testing.T) {
 		Phase:     PhaseBlocking,
 		ObjectIDs: []string{},
 	}
-	smm.mu.Unlock()
+	smm.Mu.Unlock()
 
 	// Verify that containsSlash correctly identifies client objects
 	if !containsSlash(clientID) {
@@ -252,7 +252,7 @@ func TestShardMigrationManager_ClientObjectsNotBlocked(t *testing.T) {
 	}
 
 	// Clean up
-	smm.mu.Lock()
-	delete(smm.migratingShards, shardID)
-	smm.mu.Unlock()
+	smm.Mu.Lock()
+	delete(smm.MigratingShards, shardID)
+	smm.Mu.Unlock()
 }

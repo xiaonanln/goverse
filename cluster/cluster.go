@@ -720,6 +720,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
 	c.leaderShardMappingManagement(ctx)
 	c.claimShardOwnership(ctx)
+	c.handleShardMigrations(ctx)
 	c.updateNodeConnections()
 	c.checkAndMarkReady()
 }
@@ -748,6 +749,65 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 	if err != nil {
 		c.logger.Warnf("Failed to claim shard ownership: %v", err)
 	}
+}
+
+// handleShardMigrations detects when shards need to be migrated away from this node
+// and triggers the safe migration process
+func (c *Cluster) handleShardMigrations(ctx context.Context) {
+	if c.thisNode == nil {
+		return
+	}
+
+	clusterState := c.consensusManager.GetClusterState()
+
+	// Only handle migrations when cluster state is stable
+	if !clusterState.IsStable(NodeStabilityDuration) {
+		return
+	}
+
+	localAddr := c.thisNode.GetAdvertiseAddress()
+	if !clusterState.HasNode(localAddr) {
+		// This node is not in the cluster state
+		return
+	}
+
+	// Find shards where:
+	// - CurrentNode is this node
+	// - TargetNode is a different node (shard is being moved away)
+	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
+		if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
+			// This shard needs to be migrated away from this node
+			c.logger.Infof("Detected shard %d needs migration from %s to %s",
+				shardID, localAddr, shardInfo.TargetNode)
+
+			// Trigger migration in background
+			go func(sid int, target string) {
+				migrationCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+
+				c.logger.Infof("Starting migration of shard %d to %s", sid, target)
+				err := c.thisNode.MigrateShard(migrationCtx, sid, target)
+				if err != nil {
+					c.logger.Errorf("Failed to migrate shard %d: %v", sid, err)
+					return
+				}
+
+				c.logger.Infof("Successfully migrated shard %d to %s", sid, target)
+
+				// After successful migration, clear the CurrentNode field in etcd
+				// This signals that the shard is no longer on this node
+				err = c.clearShardCurrentNode(migrationCtx, sid, shardInfo.ModRevision)
+				if err != nil {
+					c.logger.Errorf("Failed to clear CurrentNode for shard %d: %v", sid, err)
+				}
+			}(shardID, shardInfo.TargetNode)
+		}
+	}
+}
+
+// clearShardCurrentNode clears the CurrentNode field for a shard after successful migration
+func (c *Cluster) clearShardCurrentNode(ctx context.Context, shardID int, expectedModRevision int64) error {
+	return c.consensusManager.ClearShardCurrentNode(ctx, shardID, expectedModRevision)
 }
 
 func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {

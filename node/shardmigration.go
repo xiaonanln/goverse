@@ -18,8 +18,8 @@ type ShardMigrationManager struct {
 
 	// migratingShards tracks shards that are being migrated away from this node
 	// Key: shard ID, Value: migration state
-	mu               sync.RWMutex
-	migratingShards  map[int]*ShardMigrationState
+	Mu               sync.RWMutex
+	MigratingShards  map[int]*ShardMigrationState
 	shardCallCounts  map[int]int // Number of active calls per shard
 	shardCallWaiters map[int][]chan struct{}
 }
@@ -72,7 +72,7 @@ func NewShardMigrationManager(n *Node) *ShardMigrationManager {
 	return &ShardMigrationManager{
 		node:             n,
 		logger:           logger.NewLogger("ShardMigration"),
-		migratingShards:  make(map[int]*ShardMigrationState),
+		MigratingShards:  make(map[int]*ShardMigrationState),
 		shardCallCounts:  make(map[int]int),
 		shardCallWaiters: make(map[int][]chan struct{}),
 	}
@@ -80,18 +80,18 @@ func NewShardMigrationManager(n *Node) *ShardMigrationManager {
 
 // IsShardMigrating returns true if the given shard is currently being migrated away
 func (smm *ShardMigrationManager) IsShardMigrating(shardID int) bool {
-	smm.mu.RLock()
-	defer smm.mu.RUnlock()
-	_, exists := smm.migratingShards[shardID]
+	smm.Mu.RLock()
+	defer smm.Mu.RUnlock()
+	_, exists := smm.MigratingShards[shardID]
 	return exists
 }
 
 // ShouldBlockCallsToShard returns true if calls to this shard should be blocked
 func (smm *ShardMigrationManager) ShouldBlockCallsToShard(shardID int) bool {
-	smm.mu.RLock()
-	defer smm.mu.RUnlock()
+	smm.Mu.RLock()
+	defer smm.Mu.RUnlock()
 
-	state, exists := smm.migratingShards[shardID]
+	state, exists := smm.MigratingShards[shardID]
 	if !exists {
 		return false
 	}
@@ -103,11 +103,11 @@ func (smm *ShardMigrationManager) ShouldBlockCallsToShard(shardID int) bool {
 // BeginShardCall registers the start of a call to an object in the given shard
 // Returns an error if the shard is being migrated and new calls should be blocked
 func (smm *ShardMigrationManager) BeginShardCall(shardID int) (func(), error) {
-	smm.mu.Lock()
-	defer smm.mu.Unlock()
+	smm.Mu.Lock()
+	defer smm.Mu.Unlock()
 
 	// Check if shard is migrating
-	if state, exists := smm.migratingShards[shardID]; exists {
+	if state, exists := smm.MigratingShards[shardID]; exists {
 		// Block new calls during migration
 		return nil, fmt.Errorf("shard %d is being migrated to %s (phase: %s)", 
 			shardID, state.NewNode, state.Phase)
@@ -124,8 +124,8 @@ func (smm *ShardMigrationManager) BeginShardCall(shardID int) (func(), error) {
 
 // endShardCall decrements the call count for a shard and notifies waiters if count reaches zero
 func (smm *ShardMigrationManager) endShardCall(shardID int) {
-	smm.mu.Lock()
-	defer smm.mu.Unlock()
+	smm.Mu.Lock()
+	defer smm.Mu.Unlock()
 
 	count := smm.shardCallCounts[shardID]
 	if count > 0 {
@@ -145,19 +145,19 @@ func (smm *ShardMigrationManager) endShardCall(shardID int) {
 
 // waitForShardCallsDrained waits for all in-flight calls to the given shard to complete
 func (smm *ShardMigrationManager) waitForShardCallsDrained(ctx context.Context, shardID int) error {
-	smm.mu.Lock()
+	smm.Mu.Lock()
 
 	// Check current call count
 	count := smm.shardCallCounts[shardID]
 	if count == 0 {
-		smm.mu.Unlock()
+		smm.Mu.Unlock()
 		return nil
 	}
 
 	// Create a waiter channel
 	waiter := make(chan struct{})
 	smm.shardCallWaiters[shardID] = append(smm.shardCallWaiters[shardID], waiter)
-	smm.mu.Unlock()
+	smm.Mu.Unlock()
 
 	// Wait for either the waiter to be notified or context cancellation
 	select {
@@ -171,11 +171,11 @@ func (smm *ShardMigrationManager) waitForShardCallsDrained(ctx context.Context, 
 // MigrateShard initiates migration of a shard from this node to another node
 // This performs all phases: blocking, draining, persisting, and removing
 func (smm *ShardMigrationManager) MigrateShard(ctx context.Context, shardID int, targetNode string) error {
-	smm.mu.Lock()
+	smm.Mu.Lock()
 	
 	// Check if already migrating
-	if _, exists := smm.migratingShards[shardID]; exists {
-		smm.mu.Unlock()
+	if _, exists := smm.MigratingShards[shardID]; exists {
+		smm.Mu.Unlock()
 		return fmt.Errorf("shard %d is already being migrated", shardID)
 	}
 
@@ -197,8 +197,8 @@ func (smm *ShardMigrationManager) MigrateShard(ctx context.Context, shardID int,
 	}
 	smm.node.objectsMu.RUnlock()
 
-	smm.migratingShards[shardID] = state
-	smm.mu.Unlock()
+	smm.MigratingShards[shardID] = state
+	smm.Mu.Unlock()
 
 	smm.logger.Infof("Starting migration of shard %d to %s (%d objects)", 
 		shardID, targetNode, len(state.ObjectIDs))
@@ -245,30 +245,30 @@ func (smm *ShardMigrationManager) MigrateShard(ctx context.Context, shardID int,
 		shardID, time.Since(state.StartTime))
 
 	// Clean up migration state
-	smm.mu.Lock()
-	delete(smm.migratingShards, shardID)
+	smm.Mu.Lock()
+	delete(smm.MigratingShards, shardID)
 	delete(smm.shardCallCounts, shardID)
-	smm.mu.Unlock()
+	smm.Mu.Unlock()
 
 	return nil
 }
 
 // updatePhase updates the migration phase for a shard
 func (smm *ShardMigrationManager) updatePhase(shardID int, phase MigrationPhase) {
-	smm.mu.Lock()
-	defer smm.mu.Unlock()
+	smm.Mu.Lock()
+	defer smm.Mu.Unlock()
 
-	if state, exists := smm.migratingShards[shardID]; exists {
+	if state, exists := smm.MigratingShards[shardID]; exists {
 		state.Phase = phase
 	}
 }
 
 // abortMigration aborts a migration and removes the migration state
 func (smm *ShardMigrationManager) abortMigration(shardID int) {
-	smm.mu.Lock()
-	defer smm.mu.Unlock()
+	smm.Mu.Lock()
+	defer smm.Mu.Unlock()
 
-	delete(smm.migratingShards, shardID)
+	delete(smm.MigratingShards, shardID)
 	smm.logger.Warnf("Aborted migration of shard %d", shardID)
 }
 
@@ -348,11 +348,11 @@ func (smm *ShardMigrationManager) removeShardObjects(ctx context.Context, object
 
 // GetMigrationStatus returns the current status of all shard migrations
 func (smm *ShardMigrationManager) GetMigrationStatus() map[int]*ShardMigrationState {
-	smm.mu.RLock()
-	defer smm.mu.RUnlock()
+	smm.Mu.RLock()
+	defer smm.Mu.RUnlock()
 
 	status := make(map[int]*ShardMigrationState)
-	for shardID, state := range smm.migratingShards {
+	for shardID, state := range smm.MigratingShards {
 		// Return a copy to avoid race conditions
 		stateCopy := *state
 		status[shardID] = &stateCopy
