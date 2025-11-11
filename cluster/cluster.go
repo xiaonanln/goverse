@@ -10,6 +10,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -772,23 +773,37 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 		return
 	}
 
-	// Build a map of shards owned by this node to their target nodes
-	shardTargets := make(map[int]string)
-	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
-		if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
-			shardTargets[shardID] = shardInfo.TargetNode
+	// Get all objects on this node
+	objects := c.thisNode.ListObjects()
+
+	// Check each object to see if its shard still belongs to this node
+	for _, objInfo := range objects {
+		// Skip client objects (those with "/" in ID) as they are pinned to nodes
+		if strings.Contains(objInfo.Id, "/") {
+			continue
 		}
-	}
 
-	if len(shardTargets) == 0 {
-		// No shards need to be migrated away
-		return
-	}
+		// Get the shard for this object
+		shardID := sharding.GetShardID(objInfo.Id)
 
-	// Ask the node to remove objects that don't belong to this node
-	err := c.thisNode.RemoveObjectsForShards(ctx, shardTargets)
-	if err != nil {
-		c.logger.Errorf("Failed to remove objects for migrating shards: %v", err)
+		// Check if this shard belongs to this node
+		shardInfo, exists := clusterState.ShardMapping.Shards[shardID]
+		if !exists {
+			continue
+		}
+
+		// If CurrentNode is this node but TargetNode is different, remove the object
+		if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
+			c.logger.Infof("Removing object %s (shard %d) as it no longer belongs to this node (target: %s)",
+				objInfo.Id, shardID, shardInfo.TargetNode)
+
+			err := c.thisNode.DeleteObject(ctx, objInfo.Id)
+			if err != nil {
+				c.logger.Errorf("Failed to delete object %s: %v", objInfo.Id, err)
+			} else {
+				c.logger.Infof("Successfully removed object %s", objInfo.Id)
+			}
+		}
 	}
 }
 
