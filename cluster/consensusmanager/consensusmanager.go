@@ -765,8 +765,8 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 // ReleaseShardsForNode checks all shards and releases ownership for shards where:
 // - CurrentNode is the given localNode
 // - TargetNode is not empty and not this node (another node should own it)
-// - There are no objects on this node for that shard (objectsPerShard map)
-func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, objectsPerShard map[int]int) error {
+// - There are no objects on this node for that shard (localObjectsPerShard map)
+func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, localObjectsPerShard map[int]int) error {
 	if localNode == "" {
 		return fmt.Errorf("localNode cannot be empty")
 	}
@@ -788,11 +788,11 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 		// 1. CurrentNode is this node
 		// 2. TargetNode is not empty and not this node (it's another node)
 		// 3. No objects on this node for that shard
-		objectCount := objectsPerShard[shardID]
+		localObjectCount := localObjectsPerShard[shardID]
 		if shardInfo.CurrentNode == localNode &&
 			shardInfo.TargetNode != "" &&
 			shardInfo.TargetNode != localNode &&
-			objectCount == 0 {
+			localObjectCount == 0 {
 			shardsToUpdate[shardID] = ShardInfo{
 				TargetNode:  shardInfo.TargetNode,
 				CurrentNode: "", // Clear CurrentNode to release ownership
