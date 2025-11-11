@@ -152,6 +152,38 @@ server, err := goverseapi.NewServer(config)
 
 See the [minnodes example](examples/minquorum/) for a complete demonstration.
 
+### Node Stability Duration
+
+GoVerse allows you to configure how long the cluster waits for the node list to stabilize before updating shard mapping. This is useful for environments with varying levels of node churn.
+
+```go
+config := &goverseapi.ServerConfig{
+    ListenAddress:           "localhost:7001",
+    AdvertiseAddress:        "localhost:7001",
+    ClientListenAddress:     "localhost:8001",
+    EtcdAddress:             "localhost:2379",
+    EtcdPrefix:              "/goverse",
+    MinQuorum:               1,
+    NodeStabilityDuration:   5 * time.Second, // Wait 5s for stability (default: 10s)
+}
+
+server, err := goverseapi.NewServer(config)
+```
+
+**Key Points:**
+- **Default**: If not set, `NodeStabilityDuration` defaults to 10 seconds
+- **Purpose**: Prevents frequent shard reassignments during node churn
+- **Leader Behavior**: The leader waits for this duration after the last node change before updating shard mapping
+- **Trade-offs**: 
+  - Shorter duration (e.g., 3s): Faster cluster convergence, but may cause more frequent rebalancing
+  - Longer duration (e.g., 30s): More stable in high-churn environments, but slower to react to changes
+
+**Example Use Cases:**
+- **Development/Testing**: Set to 2-3 seconds for faster iteration
+- **Production with stable nodes**: Use default 10 seconds for balanced behavior
+- **High-churn environments**: Set to 20-30 seconds to avoid premature rebalancing
+- **Cloud deployments**: Adjust based on typical VM startup/shutdown patterns
+
 ---
 
 ## 🚀 Example: Distributed Chat
