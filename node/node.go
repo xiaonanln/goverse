@@ -656,6 +656,18 @@ func (node *Node) ListObjects() []ObjectInfo {
 	return objects
 }
 
+// ListObjectIDs returns a list of all object IDs on this node
+func (node *Node) ListObjectIDs() []string {
+	node.objectsMu.RLock()
+	defer node.objectsMu.RUnlock()
+
+	objectIDs := make([]string, 0, len(node.objects))
+	for _, obj := range node.objects {
+		objectIDs = append(objectIDs, obj.Id())
+	}
+	return objectIDs
+}
+
 // ObjectInfo represents information about an object
 type ObjectInfo struct {
 	Type         string

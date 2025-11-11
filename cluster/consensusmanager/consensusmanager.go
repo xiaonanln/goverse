@@ -885,35 +885,40 @@ func (cm *ConsensusManager) GetClusterState() *ClusterState {
 // GetObjectsToEvict returns the list of object IDs that should be evicted from the given node
 // This is more efficient than cloning the entire cluster state
 func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []string) []string {
-cm.mu.RLock()
-defer cm.mu.RUnlock()
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 
-if cm.state.ShardMapping == nil {
-return nil
-}
+	if cm.state.ShardMapping == nil {
+		return nil
+	}
 
-var objectsToEvict []string
+	// Check if this node is in the cluster
+	if _, hasNode := cm.state.Nodes[localAddr]; !hasNode {
+		return nil
+	}
 
-for _, objectID := range objectIDs {
-// Skip client objects (those with "/" in ID) as they are pinned to nodes
-if strings.Contains(objectID, "/") {
-continue
-}
+	var objectsToEvict []string
 
-// Get the shard for this object
-shardID := sharding.GetShardID(objectID)
+	for _, objectID := range objectIDs {
+		// Skip client objects (those with "/" in ID) as they are pinned to nodes
+		if strings.Contains(objectID, "/") {
+			continue
+		}
 
-// Check if this shard belongs to this node
-shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
-if !exists {
-continue
-}
+		// Get the shard for this object
+		shardID := sharding.GetShardID(objectID)
 
-// If CurrentNode is this node but TargetNode is different, mark for eviction
-if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
-objectsToEvict = append(objectsToEvict, objectID)
-}
-}
+		// Check if this shard belongs to this node
+		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		if !exists {
+			continue
+		}
 
-return objectsToEvict
+		// If CurrentNode is this node but TargetNode is different, mark for eviction
+		if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
+			objectsToEvict = append(objectsToEvict, objectID)
+		}
+	}
+
+	return objectsToEvict
 }
