@@ -249,47 +249,63 @@ func isConcreteProtoMessage(t reflect.Type) bool {
 	return t.Implements(protoMessageType)
 }
 
-// RegisterClient creates a new client object
-// TODO: RegisterClient should not expose the object to the caller
-func (node *Node) RegisterClient(ctx context.Context) (ClientObject, error) {
-	// Placeholder for client registration logic
-	clientObj, err := node.newClientObject(ctx)
+// RegisterClient creates a new client object and returns its ID
+func (node *Node) RegisterClient(ctx context.Context) (string, error) {
+	clientId, err := node.newClientObject(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return clientObj.(ClientObject), nil
+	return clientId, nil
 }
 
-// TODO: newClientObject should not expose the object to the caller
-func (node *Node) newClientObject(ctx context.Context) (Object, error) {
+// newClientObject creates a new client object and returns its ID
+func (node *Node) newClientObject(ctx context.Context) (string, error) {
 	if node.clientObjectType == "" {
-		return nil, fmt.Errorf("client object type not registered")
+		return "", fmt.Errorf("client object type not registered")
 	}
 
 	clientId := node.advertiseAddress + "/" + uniqueid.UniqueId()
 	err := node.createObject(ctx, node.clientObjectType, clientId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ClientProxy object: %w", err)
+		return "", fmt.Errorf("failed to create ClientProxy object: %w", err)
 	}
 
-	// Fetch the created object from the map
+	// Verify the created object exists
 	node.objectsMu.RLock()
 	clientObj := node.objects[clientId]
 	node.objectsMu.RUnlock()
 
 	if clientObj == nil {
-		return nil, fmt.Errorf("client object %s not found after creation", clientId)
+		return "", fmt.Errorf("client object %s not found after creation", clientId)
 	}
 
 	node.logger.Infof("Registered new client: %s", clientObj.String())
-	return clientObj, nil
+	return clientId, nil
 }
 
 // UnregisterClient removes a client by its ID
 func (node *Node) UnregisterClient(clientId string) {
 	node.destroyObject(clientId)
 	node.logger.Infof("Unregistered client: %s", clientId)
+}
+
+// GetClientMessageChan returns the message channel for a client by its ID
+func (node *Node) GetClientMessageChan(clientId string) (chan proto.Message, error) {
+	node.objectsMu.RLock()
+	obj, ok := node.objects[clientId]
+	node.objectsMu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("client not found: %s", clientId)
+	}
+
+	clientObj, ok := obj.(ClientObject)
+	if !ok {
+		return nil, fmt.Errorf("object %s is not a ClientObject", clientId)
+	}
+
+	return clientObj.MessageChan(), nil
 }
 
 func (node *Node) CallClient(ctx context.Context, clientId, method string, requestAny *anypb.Any) (*anypb.Any, error) {

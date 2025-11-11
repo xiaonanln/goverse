@@ -56,11 +56,10 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Register a client on node2
-	clientObj, err := node2.RegisterClient(ctx)
+	clientID, err := node2.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client on node2: %v", err)
 	}
-	clientID := clientObj.Id()
 
 	// Verify the client ID has the correct format
 	if len(clientID) < len("localhost:47012/") {
@@ -86,13 +85,19 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 	}
 	stats := &messageStats{}
 
+	// Get the client message channel
+	messageChan, err := node2.GetClientMessageChan(clientID)
+	if err != nil {
+		t.Fatalf("Failed to get client message channel: %v", err)
+	}
+
 	// Consume messages concurrently to avoid channel buffer overflow
 	done := make(chan bool)
 	go func() {
 		timeout := time.After(receiveTimeout)
 		for stats.total < numMessages {
 			select {
-			case msg := <-clientObj.MessageChan():
+			case msg := <-messageChan:
 				notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
 				if !ok {
 					stats.errors = append(stats.errors, fmt.Sprintf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg))

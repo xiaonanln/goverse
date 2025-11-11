@@ -74,12 +74,10 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 	testNode.RegisterClientType((*client.BaseClient)(nil))
 
 	// Create a client
-	clientObj, err := testNode.RegisterClient(ctx)
+	clientID, err := testNode.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
-
-	clientID := clientObj.Id()
 
 	// Create test message
 	testMsg := &chat_pb.Client_NewMessageNotification{
@@ -96,9 +94,15 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 		t.Fatalf("Failed to push message to local client: %v", err)
 	}
 
+	// Get the client message channel to verify the message
+	messageChan, err := testNode.GetClientMessageChan(clientID)
+	if err != nil {
+		t.Fatalf("Failed to get client message channel: %v", err)
+	}
+
 	// Verify message was received
 	select {
-	case msg := <-clientObj.MessageChan():
+	case msg := <-messageChan:
 		notification, ok := msg.(*chat_pb.Client_NewMessageNotification)
 		if !ok {
 			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)

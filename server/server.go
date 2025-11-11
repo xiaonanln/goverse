@@ -198,23 +198,28 @@ func sendMessageToStream(stream client_pb.ClientService_RegisterServer, msg prot
 // Register implements the ClientService Register method for client registration
 func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientService_RegisterServer) error {
 	server.logRPC("Register", req)
-	client, err := server.Node.RegisterClient(stream.Context())
+	clientId, err := server.Node.RegisterClient(stream.Context())
 	if err != nil {
 		return fmt.Errorf("failed to register client: %v", err)
 	}
-	defer server.Node.UnregisterClient(client.Id())
+	defer server.Node.UnregisterClient(clientId)
 
 	resp := client_pb.RegisterResponse{
-		ClientId: client.Id(),
+		ClientId: clientId,
 	}
 	if err := sendMessageToStream(stream, &resp); err != nil {
 		return fmt.Errorf("failed to send RegisterResponse: %v", err)
 	}
 
-	for msg := range client.MessageChan() {
+	messageChan, err := server.Node.GetClientMessageChan(clientId)
+	if err != nil {
+		return fmt.Errorf("failed to get client message channel: %v", err)
+	}
+
+	for msg := range messageChan {
 		// Convert message to client_pb format as needed
 		if err := sendMessageToStream(stream, msg); err != nil {
-			return fmt.Errorf("failed to send message to client %s: %v", client.Id(), err)
+			return fmt.Errorf("failed to send message to client %s: %v", clientId, err)
 		}
 	}
 	return nil
