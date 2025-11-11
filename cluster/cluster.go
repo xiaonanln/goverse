@@ -31,19 +31,20 @@ const (
 )
 
 type Cluster struct {
-	thisNode            *node.Node
-	etcdManager         *etcdmanager.EtcdManager
-	consensusManager    *consensusmanager.ConsensusManager
-	nodeConnections     *nodeconnections.NodeConnections
-	logger              *logger.Logger
-	etcdAddress         string // etcd server address (e.g., "localhost:2379")
-	etcdPrefix          string // etcd key prefix for this cluster
-	minQuorum           int    // minimal number of nodes required for cluster to be considered stable
-	shardMappingCtx     context.Context
-	shardMappingCancel  context.CancelFunc
-	shardMappingRunning bool
-	clusterReadyChan    chan bool
-	clusterReadyOnce    sync.Once
+	thisNode              *node.Node
+	etcdManager           *etcdmanager.EtcdManager
+	consensusManager      *consensusmanager.ConsensusManager
+	nodeConnections       *nodeconnections.NodeConnections
+	logger                *logger.Logger
+	etcdAddress           string        // etcd server address (e.g., "localhost:2379")
+	etcdPrefix            string        // etcd key prefix for this cluster
+	minQuorum             int           // minimal number of nodes required for cluster to be considered stable
+	nodeStabilityDuration time.Duration // duration to wait for cluster state to stabilize before updating shard mapping
+	shardMappingCtx       context.Context
+	shardMappingCancel    context.CancelFunc
+	shardMappingRunning   bool
+	clusterReadyChan      chan bool
+	clusterReadyOnce      sync.Once
 }
 
 func SetThis(c *Cluster) {
@@ -219,6 +220,26 @@ func (c *Cluster) getEffectiveMinQuorum() int {
 	return c.minQuorum
 }
 
+// SetNodeStabilityDuration sets the duration to wait for cluster state to stabilize
+func (c *Cluster) SetNodeStabilityDuration(duration time.Duration) {
+	c.nodeStabilityDuration = duration
+	c.logger.Infof("Cluster node stability duration set to %v", duration)
+}
+
+// GetNodeStabilityDuration returns the duration to wait for cluster state to stabilize
+// If not set, returns the default NodeStabilityDuration (10s)
+func (c *Cluster) GetNodeStabilityDuration() time.Duration {
+	return c.getEffectiveNodeStabilityDuration()
+}
+
+// getEffectiveNodeStabilityDuration returns the effective node stability duration (with default of 10s)
+func (c *Cluster) getEffectiveNodeStabilityDuration() time.Duration {
+	if c.nodeStabilityDuration <= 0 {
+		return NodeStabilityDuration
+	}
+	return c.nodeStabilityDuration
+}
+
 // ResetForTesting resets the cluster state for testing purposes
 // WARNING: This should only be used in tests
 func (c *Cluster) ResetForTesting() {
@@ -231,6 +252,7 @@ func (c *Cluster) ResetForTesting() {
 	c.etcdAddress = ""
 	c.etcdPrefix = ""
 	c.minQuorum = 0
+	c.nodeStabilityDuration = 0
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil
@@ -313,7 +335,7 @@ func (c *Cluster) checkAndMarkReady() {
 		return
 	}
 
-	if !c.consensusManager.IsStateStable(5 * time.Second) {
+	if !c.consensusManager.IsStateStable(c.getEffectiveNodeStabilityDuration()) {
 		c.logger.Debugf("Cannot mark cluster ready: cluster state not stable yet, will check again later")
 		return
 	}
@@ -665,7 +687,7 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 
 
 // startShardMappingManagement starts a background goroutine that periodically manages shard mapping
-// If this node is the leader and the node list has been stable for NodeStabilityDuration,
+// If this node is the leader and the node list has been stable for the configured node stability duration,
 // it will update/initialize the shard mapping.
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
 func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
@@ -679,7 +701,7 @@ func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 
 	go c.shardMappingManagementLoop()
 	c.logger.Infof("Started shard mapping management (check interval: %v, stability duration: %v)",
-		ShardMappingCheckInterval, NodeStabilityDuration)
+		ShardMappingCheckInterval, c.getEffectiveNodeStabilityDuration())
 
 	return nil
 }
@@ -729,7 +751,7 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 	clusterState := c.consensusManager.GetClusterState()
 
 	// Only claim shards when cluster state is stable
-	if !clusterState.IsStable(NodeStabilityDuration) {
+	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
 		return
 	}
 
@@ -754,7 +776,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	}
 
 	// Check if cluster state is stable without cloning
-	if !c.consensusManager.IsStateStable(NodeStabilityDuration) {
+	if !c.consensusManager.IsStateStable(c.getEffectiveNodeStabilityDuration()) {
 		c.logger.Debugf("Skipping object removal: cluster state is not stable yet")
 		return
 	}
@@ -795,7 +817,7 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	c.logger.Infof("Acting as leader: %s; nodes: %d (min quorum: %d), sharding map: %d, revision: %d",
 		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minQuorum, len(clusterState.ShardMapping.Shards), clusterState.Revision)
 
-	if !clusterState.IsStable(NodeStabilityDuration) {
+	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
 		c.logger.Warnf("Cluster state not yet stable, waiting before updating shard mapping")
 		return
 	}

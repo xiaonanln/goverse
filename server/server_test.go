@@ -77,6 +77,64 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 	}
 }
 
+func TestServerConfig_NodeStabilityDuration(t *testing.T) {
+	// Reset cluster state before this test
+	resetClusterForTesting(t)
+
+	// Create config with custom NodeStabilityDuration
+	customDuration := 3 * time.Second
+	config := &ServerConfig{
+		ListenAddress:         "localhost:9097",
+		AdvertiseAddress:      "localhost:9097",
+		ClientListenAddress:   "localhost:9098",
+		NodeStabilityDuration: customDuration,
+	}
+
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	if server == nil {
+		t.Error("NewServer should return a server instance")
+		return
+	}
+
+	// Verify the cluster has the custom NodeStabilityDuration
+	if server.cluster.GetNodeStabilityDuration() != customDuration {
+		t.Errorf("Expected cluster NodeStabilityDuration to be %v, got %v", 
+			customDuration, server.cluster.GetNodeStabilityDuration())
+	}
+}
+
+func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
+	// Reset cluster state before this test
+	resetClusterForTesting(t)
+
+	// Create config without custom NodeStabilityDuration
+	config := &ServerConfig{
+		ListenAddress:       "localhost:9099",
+		AdvertiseAddress:    "localhost:9099",
+		ClientListenAddress: "localhost:9100",
+	}
+
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	if server == nil {
+		t.Error("NewServer should return a server instance")
+		return
+	}
+
+	// Verify the cluster uses the default NodeStabilityDuration
+	if server.cluster.GetNodeStabilityDuration() != cluster.NodeStabilityDuration {
+		t.Errorf("Expected cluster NodeStabilityDuration to be default %v, got %v", 
+			cluster.NodeStabilityDuration, server.cluster.GetNodeStabilityDuration())
+	}
+}
+
 func TestNewServer_ValidConfig(t *testing.T) {
 	// Reset cluster state before this test
 	resetClusterForTesting(t)
