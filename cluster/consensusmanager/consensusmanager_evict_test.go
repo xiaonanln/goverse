@@ -12,30 +12,37 @@ func TestGetObjectsToEvict(t *testing.T) {
 
 	cm := NewConsensusManager(nil)
 
-	// Set up a test shard mapping
-	testMapping := &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+	// Set up a test cluster state with nodes
+	cm.mu.Lock()
+	cm.state = &ClusterState{
+		Nodes: map[string]bool{
+			"localhost:50001": true,
+			"localhost:50002": true,
+			"localhost:50003": true,
+		},
+		ShardMapping: &ShardMapping{
+			Shards: make(map[int]ShardInfo),
+		},
 	}
 
 	// Shard 0: CurrentNode is node1, TargetNode is node2 (should be evicted from node1)
-	testMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards[0] = ShardInfo{
 		TargetNode:  "localhost:50002",
 		CurrentNode: "localhost:50001",
 	}
 
 	// Shard 1: CurrentNode is node1, TargetNode is also node1 (should NOT be evicted)
-	testMapping.Shards[1] = ShardInfo{
+	cm.state.ShardMapping.Shards[1] = ShardInfo{
 		TargetNode:  "localhost:50001",
 		CurrentNode: "localhost:50001",
 	}
 
 	// Shard 2: CurrentNode is node1, TargetNode is node3 (should be evicted from node1)
-	testMapping.Shards[2] = ShardInfo{
+	cm.state.ShardMapping.Shards[2] = ShardInfo{
 		TargetNode:  "localhost:50003",
 		CurrentNode: "localhost:50001",
 	}
-
-	cm.SetMappingForTesting(testMapping)
+	cm.mu.Unlock()
 
 	// Find object IDs that map to our test shards
 	objectIDs := []string{}
@@ -101,19 +108,26 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 
 	cm := NewConsensusManager(nil)
 
-	testMapping := &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+	// Set up cluster state with nodes
+	cm.mu.Lock()
+	cm.state = &ClusterState{
+		Nodes: map[string]bool{
+			"localhost:50001": true,
+			"localhost:50002": true,
+		},
+		ShardMapping: &ShardMapping{
+			Shards: make(map[int]ShardInfo),
+		},
 	}
 
 	// Set up all shards to need eviction
 	for i := 0; i < sharding.NumShards; i++ {
-		testMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  "localhost:50002",
 			CurrentNode: "localhost:50001",
 		}
 	}
-
-	cm.SetMappingForTesting(testMapping)
+	cm.mu.Unlock()
 
 	// Only provide client objects
 	objectIDs := []string{

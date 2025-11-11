@@ -767,31 +767,12 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
-	// Check if this node is in the cluster
-	nodes := c.consensusManager.GetNodes()
-	hasNode := false
-	for _, node := range nodes {
-		if node == localAddr {
-			hasNode = true
-			break
-		}
-	}
-	if !hasNode {
-		c.logger.Warnf("Cannot remove objects: this node %s is not in the cluster state", localAddr)
-		return
-	}
-
-	// Get all objects on this node
-	objects := c.thisNode.ListObjects()
-	
-	// Build list of object IDs
-	objectIDs := make([]string, len(objects))
-	for i, objInfo := range objects {
-		objectIDs[i] = objInfo.Id
-	}
+	// Get all object IDs on this node
+	objectIDs := c.thisNode.ListObjectIDs()
 
 	// Ask ConsensusManager to determine which objects should be evicted
 	// This is more efficient than cloning the entire cluster state
+	// ConsensusManager will also check if this node is in the cluster
 	objectsToEvict := c.consensusManager.GetObjectsToEvict(localAddr, objectIDs)
 
 	// Remove each object that should be evicted
