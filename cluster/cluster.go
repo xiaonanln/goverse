@@ -737,8 +737,8 @@ func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
 	c.leaderShardMappingManagement(ctx)
 	c.claimShardOwnership(ctx)
-	c.releaseShardOwnership(ctx)
 	c.removeObjectsNotBelongingToThisNode(ctx)
+	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
 	c.checkAndMarkReady()
 }
@@ -786,25 +786,21 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 	}
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
-	if !clusterState.HasNode(localAddr) {
-		// This node is not yet in the cluster state
-		return
-	}
 
 	// Count objects per shard on this node
 	objectIDs := c.thisNode.ListObjectIDs()
-	objectsPerShard := make(map[int]int)
+	localObjectsPerShard := make(map[int]int)
 	for _, objectID := range objectIDs {
 		// Skip client objects (those with "/" in ID)
 		if strings.Contains(objectID, "/") {
 			continue
 		}
 		shardID := sharding.GetShardID(objectID)
-		objectsPerShard[shardID]++
+		localObjectsPerShard[shardID]++
 	}
 
 	// Release ownership of shards where this node is no longer needed
-	err := c.consensusManager.ReleaseShardsForNode(ctx, localAddr, objectsPerShard)
+	err := c.consensusManager.ReleaseShardsForNode(ctx, localAddr, localObjectsPerShard)
 	if err != nil {
 		c.logger.Warnf("Failed to release shard ownership: %v", err)
 	}
