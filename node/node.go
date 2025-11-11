@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -71,7 +70,6 @@ type Node struct {
 	persistenceDone       chan struct{}
 	stopped               atomic.Bool  // Atomic flag to indicate node is stopping/stopped
 	stopMu                sync.RWMutex // RWMutex to coordinate Stop with in-flight operations
-	migrationManager      *ShardMigrationManager // Manager for safe shard migrations
 }
 
 // NewNode creates a new Node instance
@@ -84,9 +82,6 @@ func NewNode(advertiseAddress string) *Node {
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
-
-	// Initialize migration manager
-	node.migrationManager = NewShardMigrationManager(node)
 
 	return node
 }
@@ -330,17 +325,6 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 
-	// Check if the shard for this object is being migrated
-	// Skip for client objects (those with "/" in ID) as they are pinned to nodes
-	if !containsSlash(id) {
-		shardID := sharding.GetShardID(id)
-		endCall, err := node.migrationManager.BeginShardCall(shardID)
-		if err != nil {
-			return nil, fmt.Errorf("cannot call object %s: %w", id, err)
-		}
-		defer endCall()
-	}
-
 	err := node.createObject(ctx, typ, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
@@ -440,15 +424,6 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	// ID must be specified to ensure proper shard mapping
 	if id == "" {
 		return fmt.Errorf("object ID must be specified")
-	}
-
-	// Check if the shard for this object is being migrated away
-	// Skip for client objects (those with "/" in ID) as they are pinned to nodes
-	if !containsSlash(id) {
-		shardID := sharding.GetShardID(id)
-		if node.migrationManager.ShouldBlockCallsToShard(shardID) {
-			return fmt.Errorf("cannot create object %s: shard %d is being migrated", id, shardID)
-		}
 	}
 
 	// Check if object already exists first (with just objectsMu read lock)
@@ -879,31 +854,4 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// containsSlash checks if a string contains a "/" character
-func containsSlash(s string) bool {
-for i := 0; i < len(s); i++ {
-if s[i] == '/' {
-return true
-}
-}
-return false
-}
-
-// MigrateShard triggers migration of a shard from this node to another node
-// This is called by the cluster when shard ownership changes
-func (node *Node) MigrateShard(ctx context.Context, shardID int, targetNode string) error {
-return node.migrationManager.MigrateShard(ctx, shardID, targetNode)
-}
-
-// GetShardMigrationStatus returns the current status of all shard migrations
-func (node *Node) GetShardMigrationStatus() map[int]*ShardMigrationState {
-return node.migrationManager.GetMigrationStatus()
-}
-
-// GetShardMigrationManagerForTesting returns the migration manager for testing
-// WARNING: This should only be used in tests
-func (node *Node) GetShardMigrationManagerForTesting() *ShardMigrationManager {
-return node.migrationManager
 }
