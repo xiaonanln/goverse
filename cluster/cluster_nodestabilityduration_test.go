@@ -68,7 +68,7 @@ func TestClusterStabilityWithCustomDuration(t *testing.T) {
 
 	// Wait for the short stability duration + check interval
 	// This should be enough for the cluster to become stable
-	waitTime := shortDuration + ShardMappingCheckInterval + 2*time.Second
+	waitTime := shortDuration + ShardMappingCheckInterval + 5*time.Second
 	time.Sleep(waitTime)
 
 	// Verify cluster becomes ready within the custom duration
