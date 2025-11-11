@@ -662,13 +662,7 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 	return c.consensusManager.GetNodeForShard(shardID)
 }
 
-// InvalidateShardMappingCache clears the local shard mapping cache
-// This method is deprecated and kept for backward compatibility
-func (c *Cluster) InvalidateShardMappingCache() {
-	// With ConsensusManager, the cache is automatically updated via watch
-	// This is a no-op for backward compatibility
-	c.logger.Debugf("InvalidateShardMappingCache is deprecated with ConsensusManager")
-}
+
 
 // startShardMappingManagement starts a background goroutine that periodically manages shard mapping
 // If this node is the leader and the node list has been stable for NodeStabilityDuration,
