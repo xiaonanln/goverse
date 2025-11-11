@@ -17,7 +17,7 @@ func TestPushMessageToClient(t *testing.T) {
 	
 	// Create a client object
 	ctx := context.Background()
-	clientID, err := node.RegisterClient(ctx)
+	clientID, messageChan, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
@@ -35,12 +35,6 @@ func TestPushMessageToClient(t *testing.T) {
 	err = node.PushMessageToClient(clientID, testMsg)
 	if err != nil {
 		t.Fatalf("Failed to push message to client: %v", err)
-	}
-	
-	// Get the client message channel to verify the message
-	messageChan, err := node.GetClientMessageChan(clientID)
-	if err != nil {
-		t.Fatalf("Failed to get client message channel: %v", err)
 	}
 	
 	// Verify the message was received

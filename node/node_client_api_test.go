@@ -8,16 +8,16 @@ import (
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 )
 
-// TestRegisterClient_ReturnsIDNotObject demonstrates the new API returns only the client ID
+// TestRegisterClient_ReturnsIDAndMessageChan demonstrates the new API returns client ID and message channel
 // This test validates that the refactored RegisterClient API no longer exposes the ClientObject
-func TestRegisterClient_ReturnsIDNotObject(t *testing.T) {
+func TestRegisterClient_ReturnsIDAndMessageChan(t *testing.T) {
 	node := NewNode("test-node:1234")
 	node.RegisterClientType((*client.BaseClient)(nil))
 	
 	ctx := context.Background()
 	
-	// RegisterClient now returns only the client ID (string)
-	clientID, err := node.RegisterClient(ctx)
+	// RegisterClient now returns the client ID and message channel
+	clientID, messageChan, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
@@ -25,6 +25,11 @@ func TestRegisterClient_ReturnsIDNotObject(t *testing.T) {
 	// Verify the client ID is a non-empty string
 	if clientID == "" {
 		t.Fatal("Client ID should not be empty")
+	}
+	
+	// Verify the message channel is not nil
+	if messageChan == nil {
+		t.Fatal("Message channel should not be nil")
 	}
 	
 	// Verify the client ID has the correct format (node address + / + unique ID)
@@ -38,23 +43,17 @@ func TestRegisterClient_ReturnsIDNotObject(t *testing.T) {
 	}
 }
 
-// TestGetClientMessageChan_ValidClient tests the new GetClientMessageChan method
-func TestGetClientMessageChan_ValidClient(t *testing.T) {
+// TestRegisterClient_MessageChanWorks tests that the returned message channel works correctly
+func TestRegisterClient_MessageChanWorks(t *testing.T) {
 	node := NewNode("test-node:1234")
 	node.RegisterClientType((*client.BaseClient)(nil))
 	
 	ctx := context.Background()
 	
 	// Register a client using the new API
-	clientID, err := node.RegisterClient(ctx)
+	clientID, messageChan, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
-	}
-	
-	// Use GetClientMessageChan to get the message channel
-	messageChan, err := node.GetClientMessageChan(clientID)
-	if err != nil {
-		t.Fatalf("Failed to get client message channel: %v", err)
 	}
 	
 	if messageChan == nil {

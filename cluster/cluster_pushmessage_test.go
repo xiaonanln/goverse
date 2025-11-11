@@ -74,7 +74,7 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 	testNode.RegisterClientType((*client.BaseClient)(nil))
 
 	// Create a client
-	clientID, err := testNode.RegisterClient(ctx)
+	clientID, messageChan, err := testNode.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
@@ -92,12 +92,6 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 	err = c.PushMessageToClient(ctx, clientID, testMsg)
 	if err != nil {
 		t.Fatalf("Failed to push message to local client: %v", err)
-	}
-
-	// Get the client message channel to verify the message
-	messageChan, err := testNode.GetClientMessageChan(clientID)
-	if err != nil {
-		t.Fatalf("Failed to get client message channel: %v", err)
 	}
 
 	// Verify message was received
