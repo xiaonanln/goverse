@@ -16,13 +16,13 @@ func TestListObjectIDs(t *testing.T) {
 		t.Errorf("Expected 0 object IDs initially, got %d", len(ids))
 	}
 
-	// The method should return an empty slice, not nil
-	if ids == nil {
-		t.Errorf("Expected empty slice, got nil")
+	// The method should return nil when no objects exist
+	if ids != nil {
+		t.Errorf("Expected nil, got %v", ids)
 	}
 }
 
-// TestListObjectIDs_EmptySlice tests that empty list returns empty slice not nil
+// TestListObjectIDs_EmptySlice tests that empty list returns nil
 func TestListObjectIDs_EmptySlice(t *testing.T) {
 	t.Parallel()
 
@@ -30,9 +30,9 @@ func TestListObjectIDs_EmptySlice(t *testing.T) {
 
 	ids := n.ListObjectIDs()
 
-	// Should return empty slice, not nil
-	if ids == nil {
-		t.Errorf("Expected empty slice, got nil")
+	// Should return nil when no objects exist
+	if ids != nil {
+		t.Errorf("Expected nil, got %v", ids)
 	}
 
 	if len(ids) != 0 {
