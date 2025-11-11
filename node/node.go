@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -854,4 +856,52 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// RemoveObjectsForShards removes all objects that belong to the specified shards
+// shardTargets maps shard IDs to their target nodes
+func (node *Node) RemoveObjectsForShards(ctx context.Context, shardTargets map[int]string) error {
+if len(shardTargets) == 0 {
+return nil
+}
+
+// Get all objects on this node
+objects := node.ListObjects()
+
+removeCount := 0
+errorCount := 0
+
+// Check each object to see if it belongs to a shard that should be removed
+for _, objInfo := range objects {
+// Skip client objects (those with "/" in ID) as they are pinned to nodes
+if strings.Contains(objInfo.Id, "/") {
+continue
+}
+
+// Get the shard for this object
+shardID := sharding.GetShardID(objInfo.Id)
+
+// Check if this shard is in the list of shards to migrate
+if targetNode, shouldRemove := shardTargets[shardID]; shouldRemove {
+node.logger.Infof("Removing object %s (shard %d) as it no longer belongs to this node (target: %s)",
+objInfo.Id, shardID, targetNode)
+
+err := node.DeleteObject(ctx, objInfo.Id)
+if err != nil {
+node.logger.Errorf("Failed to delete object %s: %v", objInfo.Id, err)
+errorCount++
+} else {
+node.logger.Infof("Successfully removed object %s", objInfo.Id)
+removeCount++
+}
+}
+}
+
+node.logger.Infof("Shard migration cleanup: removed %d objects, %d errors", removeCount, errorCount)
+
+if errorCount > 0 {
+return fmt.Errorf("failed to remove %d objects during shard migration", errorCount)
+}
+
+return nil
 }
