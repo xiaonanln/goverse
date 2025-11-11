@@ -36,7 +36,6 @@ This refactoring introduces a new `ConsensusManager` component that centralizes 
   - `GetNodeForObject()` - no etcd call needed
   - `GetNodeForShard()` - instant lookup from memory
   - `WatchNodes()` - initializes and starts ConsensusManager watch
-  - `InvalidateShardMappingCache()` - deprecated method removed (automatic via watch)
 
 ### 3. Improved State Management
 
