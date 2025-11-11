@@ -762,6 +762,63 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	return nil
 }
 
+// ReleaseShardsForNode checks all shards and releases ownership for shards where:
+// - CurrentNode is the given localNode
+// - TargetNode is not empty and not this node (another node should own it)
+// - There are no objects on this node for that shard (objectsPerShard map)
+func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, objectsPerShard map[int]int) error {
+	if localNode == "" {
+		return fmt.Errorf("localNode cannot be empty")
+	}
+
+	// Clone the cluster state to avoid race conditions
+	cm.mu.RLock()
+	clusterState := cm.state.Clone()
+	cm.mu.RUnlock()
+
+	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
+		cm.logger.Debugf("No shard mapping available, skipping shard release")
+		return nil
+	}
+
+	// Collect shards that need to be released
+	shardsToUpdate := make(map[int]ShardInfo)
+	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
+		// Release shard if:
+		// 1. CurrentNode is this node
+		// 2. TargetNode is not empty and not this node (it's another node)
+		// 3. No objects on this node for that shard
+		objectCount := objectsPerShard[shardID]
+		if shardInfo.CurrentNode == localNode &&
+			shardInfo.TargetNode != "" &&
+			shardInfo.TargetNode != localNode &&
+			objectCount == 0 {
+			shardsToUpdate[shardID] = ShardInfo{
+				TargetNode:  shardInfo.TargetNode,
+				CurrentNode: "", // Clear CurrentNode to release ownership
+				ModRevision: shardInfo.ModRevision,
+			}
+		}
+	}
+
+	if len(shardsToUpdate) == 0 {
+		cm.logger.Debugf("No shards to release for node %s", localNode)
+		return nil
+	}
+
+	cm.logger.Infof("Releasing ownership of %d shards for node %s", len(shardsToUpdate), localNode)
+
+	// Store all updated shards at once
+	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
+	if err != nil {
+		cm.logger.Warnf("Failed to release some shards: released %d/%d, error: %v", successCount, len(shardsToUpdate), err)
+		return err
+	}
+
+	cm.logger.Infof("Successfully released ownership of %d shards", successCount)
+	return nil
+}
+
 // computeShardUpdates computes which shards need to be reassigned based on current nodes.
 // Returns a map of shard IDs to new ShardInfo, or nil if no changes are needed.
 func (cm *ConsensusManager) computeShardUpdates() map[int]ShardInfo {
