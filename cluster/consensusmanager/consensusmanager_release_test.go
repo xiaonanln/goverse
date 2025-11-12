@@ -11,6 +11,63 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
+// setupShardMapping is a helper function that sets up shard mapping in both ConsensusManager
+// state and etcd with proper ModRevision tracking. It handles the synchronization between
+// in-memory state and etcd storage.
+//
+// Parameters:
+//   - t: testing.T for error reporting
+//   - ctx: context for etcd operations
+//   - cm: ConsensusManager to configure
+//   - mgr: EtcdManager for etcd operations
+//   - nodes: map of node addresses to set up in cluster state
+//   - shards: map of shard IDs to ShardInfo to store
+//
+// The function will:
+//   1. Set up nodes in the ConsensusManager state
+//   2. Initialize the shard mapping structure
+//   3. Store all shards in both in-memory state and etcd
+//   4. Update ModRevision values to match etcd's actual revisions
+func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, mgr *etcdmanager.EtcdManager, nodes map[string]bool, shards map[int]ShardInfo) {
+	t.Helper()
+
+	prefix := mgr.GetPrefix()
+	client := mgr.GetClient()
+
+	// Set up nodes and shard mapping in ConsensusManager state
+	cm.mu.Lock()
+	cm.state.Nodes = make(map[string]bool)
+	for node, active := range nodes {
+		cm.state.Nodes[node] = active
+	}
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	cm.state.LastChange = time.Now().Add(-20 * time.Second) // Mark as stable
+
+	// Set up shards in in-memory state
+	for shardID, shardInfo := range shards {
+		cm.state.ShardMapping.Shards[shardID] = shardInfo
+	}
+	cm.mu.Unlock()
+
+	// Store all shards in etcd and update ModRevision
+	for shardID, shardInfo := range shards {
+		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
+		value := formatShardInfo(shardInfo)
+		resp, err := client.Put(ctx, key, value)
+		if err != nil {
+			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
+		}
+
+		// Update the in-memory ModRevision with the actual value from etcd
+		cm.mu.Lock()
+		shardInfo.ModRevision = resp.Header.Revision
+		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.mu.Unlock()
+	}
+}
+
 // TestReleaseShardsForNode_EmptyNode tests releasing shards when localNode is empty
 func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 	t.Parallel()
@@ -75,68 +132,51 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	otherNodeAddr := "localhost:47002"
 	prefix := mgr.GetPrefix()
 
-	// Manually set up nodes in the state
-	cm.mu.Lock()
-	cm.state.Nodes[thisNodeAddr] = true
-	cm.state.Nodes[otherNodeAddr] = true
-	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+	// Set up nodes
+	nodes := map[string]bool{
+		thisNodeAddr:  true,
+		otherNodeAddr: true,
 	}
-	cm.state.LastChange = time.Now().Add(-20 * time.Second) // Stable
 
 	// Set up test shards:
 	// Shard 0: CurrentNode=thisNode, TargetNode=otherNode, objectCount=0 -> SHOULD RELEASE
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  otherNodeAddr,
-		CurrentNode: thisNodeAddr,
-		ModRevision: 0,
-	}
-
 	// Shard 1: CurrentNode=thisNode, TargetNode=otherNode, objectCount=1 -> SHOULD NOT RELEASE (has objects)
-	cm.state.ShardMapping.Shards[1] = ShardInfo{
-		TargetNode:  otherNodeAddr,
-		CurrentNode: thisNodeAddr,
-		ModRevision: 0,
-	}
-
 	// Shard 2: CurrentNode=thisNode, TargetNode=thisNode, objectCount=0 -> SHOULD NOT RELEASE (target is self)
-	cm.state.ShardMapping.Shards[2] = ShardInfo{
-		TargetNode:  thisNodeAddr,
-		CurrentNode: thisNodeAddr,
-		ModRevision: 0,
-	}
-
 	// Shard 3: CurrentNode=thisNode, TargetNode="", objectCount=0 -> SHOULD NOT RELEASE (target is empty)
-	cm.state.ShardMapping.Shards[3] = ShardInfo{
-		TargetNode:  "",
-		CurrentNode: thisNodeAddr,
-		ModRevision: 0,
-	}
-
 	// Shard 4: CurrentNode=otherNode, TargetNode=thisNode, objectCount=0 -> SHOULD NOT RELEASE (current is not this node)
-	cm.state.ShardMapping.Shards[4] = ShardInfo{
-		TargetNode:  thisNodeAddr,
-		CurrentNode: otherNodeAddr,
-		ModRevision: 0,
+	shards := map[int]ShardInfo{
+		0: {
+			TargetNode:  otherNodeAddr,
+			CurrentNode: thisNodeAddr,
+			ModRevision: 0,
+		},
+		1: {
+			TargetNode:  otherNodeAddr,
+			CurrentNode: thisNodeAddr,
+			ModRevision: 0,
+		},
+		2: {
+			TargetNode:  thisNodeAddr,
+			CurrentNode: thisNodeAddr,
+			ModRevision: 0,
+		},
+		3: {
+			TargetNode:  "",
+			CurrentNode: thisNodeAddr,
+			ModRevision: 0,
+		},
+		4: {
+			TargetNode:  thisNodeAddr,
+			CurrentNode: otherNodeAddr,
+			ModRevision: 0,
+		},
 	}
 
-	cm.mu.Unlock()
+	// Use helper to set up shard mapping in both CM state and etcd
+	setupShardMapping(t, ctx, cm, mgr, nodes, shards)
 
-	// Store all shards in etcd first and update ModRevision
+	// Get client for verification later
 	client := mgr.GetClient()
-	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
-		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
-		value := formatShardInfo(shardInfo)
-		resp, err := client.Put(ctx, key, value)
-		if err != nil {
-			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
-		}
-		// Update the in-memory ModRevision with the actual value from etcd
-		cm.mu.Lock()
-		shardInfo.ModRevision = resp.Header.Revision
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
-		cm.mu.Unlock()
-	}
 
 	// Create objectsPerShard map
 	objectsPerShard := map[int]int{
@@ -264,40 +304,27 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	otherNodeAddr := "localhost:47002"
 	prefix := mgr.GetPrefix()
 
-	// Manually set up nodes in the state
-	cm.mu.Lock()
-	cm.state.Nodes[thisNodeAddr] = true
-	cm.state.Nodes[otherNodeAddr] = true
-	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+	// Set up nodes
+	nodes := map[string]bool{
+		thisNodeAddr:  true,
+		otherNodeAddr: true,
 	}
-	cm.state.LastChange = time.Now().Add(-20 * time.Second) // Stable
 
 	// Set up 5 shards that should all be released
+	shards := make(map[int]ShardInfo)
 	for i := 0; i < 5; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		shards[i] = ShardInfo{
 			TargetNode:  otherNodeAddr,
 			CurrentNode: thisNodeAddr,
 			ModRevision: 0,
 		}
 	}
-	cm.mu.Unlock()
 
-	// Store all shards in etcd first and update ModRevision
+	// Use helper to set up shard mapping in both CM state and etcd
+	setupShardMapping(t, ctx, cm, mgr, nodes, shards)
+
+	// Get client for verification later
 	client := mgr.GetClient()
-	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
-		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
-		value := formatShardInfo(shardInfo)
-		resp, err := client.Put(ctx, key, value)
-		if err != nil {
-			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
-		}
-		// Update the in-memory ModRevision with the actual value from etcd
-		cm.mu.Lock()
-		shardInfo.ModRevision = resp.Header.Revision
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
-		cm.mu.Unlock()
-	}
 
 	// Create objectsPerShard map with no objects for any shard
 	objectsPerShard := map[int]int{
@@ -367,14 +394,11 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	otherNodeAddr := "localhost:47002"
 	prefix := mgr.GetPrefix()
 
-	// Manually set up nodes in the state
-	cm.mu.Lock()
-	cm.state.Nodes[thisNodeAddr] = true
-	cm.state.Nodes[otherNodeAddr] = true
-	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+	// Set up nodes
+	nodes := map[string]bool{
+		thisNodeAddr:  true,
+		otherNodeAddr: true,
 	}
-	cm.state.LastChange = time.Now().Add(-20 * time.Second) // Stable
 
 	// Use real shard IDs computed from object IDs
 	testObjectID1 := "TestObject-123"
@@ -383,34 +407,24 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	shard2 := sharding.GetShardID(testObjectID2)
 
 	// Set up shards that should be released
-	cm.state.ShardMapping.Shards[shard1] = ShardInfo{
-		TargetNode:  otherNodeAddr,
-		CurrentNode: thisNodeAddr,
-		ModRevision: 0,
+	shards := map[int]ShardInfo{
+		shard1: {
+			TargetNode:  otherNodeAddr,
+			CurrentNode: thisNodeAddr,
+			ModRevision: 0,
+		},
+		shard2: {
+			TargetNode:  otherNodeAddr,
+			CurrentNode: thisNodeAddr,
+			ModRevision: 0,
+		},
 	}
-	cm.state.ShardMapping.Shards[shard2] = ShardInfo{
-		TargetNode:  otherNodeAddr,
-		CurrentNode: thisNodeAddr,
-		ModRevision: 0,
-	}
-	cm.mu.Unlock()
 
-	// Store shards in etcd and update ModRevision
+	// Use helper to set up shard mapping in both CM state and etcd
+	setupShardMapping(t, ctx, cm, mgr, nodes, shards)
+
+	// Get client for verification later
 	client := mgr.GetClient()
-	for _, shardID := range []int{shard1, shard2} {
-		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
-		value := formatShardInfo(cm.state.ShardMapping.Shards[shardID])
-		resp, err := client.Put(ctx, key, value)
-		if err != nil {
-			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
-		}
-		// Update the in-memory ModRevision with the actual value from etcd
-		cm.mu.Lock()
-		shardInfo := cm.state.ShardMapping.Shards[shardID]
-		shardInfo.ModRevision = resp.Header.Revision
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
-		cm.mu.Unlock()
-	}
 
 	// Create objectsPerShard map with no objects
 	objectsPerShard := map[int]int{
