@@ -102,7 +102,7 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 
 	// Verify the cluster has the custom NodeStabilityDuration
 	if server.cluster.GetNodeStabilityDuration() != customDuration {
-		t.Errorf("Expected cluster NodeStabilityDuration to be %v, got %v", 
+		t.Errorf("Expected cluster NodeStabilityDuration to be %v, got %v",
 			customDuration, server.cluster.GetNodeStabilityDuration())
 	}
 }
@@ -128,10 +128,10 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 		return
 	}
 
-	// Verify the cluster uses the default NodeStabilityDuration
-	if server.cluster.GetNodeStabilityDuration() != cluster.NodeStabilityDuration {
-		t.Errorf("Expected cluster NodeStabilityDuration to be default %v, got %v", 
-			cluster.NodeStabilityDuration, server.cluster.GetNodeStabilityDuration())
+	// Verify the cluster uses the default DefaultNodeStabilityDuration
+	if server.cluster.GetNodeStabilityDuration() != cluster.DefaultNodeStabilityDuration {
+		t.Errorf("Expected cluster NodeStabilityDuration to be default %v, got %v",
+			cluster.DefaultNodeStabilityDuration, server.cluster.GetNodeStabilityDuration())
 	}
 }
 

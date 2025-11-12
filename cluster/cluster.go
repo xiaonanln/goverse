@@ -26,8 +26,8 @@ var (
 const (
 	// ShardMappingCheckInterval is how often to check if shard mapping needs updating
 	ShardMappingCheckInterval = 5 * time.Second
-	// NodeStabilityDuration is how long the node list must be stable before updating shard mapping
-	NodeStabilityDuration = 10 * time.Second
+	// DefaultNodeStabilityDuration is how long the node list must be stable before updating shard mapping
+	DefaultNodeStabilityDuration = 10 * time.Second
 )
 
 type Cluster struct {
@@ -235,7 +235,7 @@ func (c *Cluster) getEffectiveMinQuorum() int {
 }
 
 // GetNodeStabilityDuration returns the duration to wait for cluster state to stabilize
-// If not set, returns the default NodeStabilityDuration (10s)
+// If not set, returns the default DefaultNodeStabilityDuration (10s)
 func (c *Cluster) GetNodeStabilityDuration() time.Duration {
 	return c.getEffectiveNodeStabilityDuration()
 }
@@ -243,7 +243,7 @@ func (c *Cluster) GetNodeStabilityDuration() time.Duration {
 // getEffectiveNodeStabilityDuration returns the effective node stability duration (with default of 10s)
 func (c *Cluster) getEffectiveNodeStabilityDuration() time.Duration {
 	if c.nodeStabilityDuration <= 0 {
-		return NodeStabilityDuration
+		return DefaultNodeStabilityDuration
 	}
 	return c.nodeStabilityDuration
 }
@@ -810,7 +810,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 	clusterState := c.consensusManager.GetClusterState()
 
 	// Only release shards when cluster state is stable
-	if !clusterState.IsStable(NodeStabilityDuration) {
+	if !clusterState.IsStable(DefaultNodeStabilityDuration) {
 		return
 	}
 

@@ -166,6 +166,12 @@ config := &goverseapi.ServerConfig{
     MinQuorum:               1,
     NodeStabilityDuration:   5 * time.Second, // Wait 5s for stability (default: 10s)
 }
+```
+
+#### Default Configuration Values
+
+- **Default**: If not set, `NodeStabilityDuration` defaults to 10 seconds (see `cluster.DefaultNodeStabilityDuration`)
+}
 
 server, err := goverseapi.NewServer(config)
 ```
