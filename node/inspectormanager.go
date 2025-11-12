@@ -14,8 +14,8 @@ import (
 
 const (
 	inspectorAddress       = "localhost:8081"
-	healthCheckInterval    = 30 * time.Second
-	reconnectRetryInterval = 10 * time.Second
+	healthCheckInterval    = 5 * time.Second
+	reconnectRetryInterval = 5 * time.Second
 )
 
 // InspectorManager manages the connection and communication with the Inspector service.
@@ -119,6 +119,7 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
 // NotifyObjectRemoved notifies the Inspector that an object has been removed.
 // Note: Current Inspector protocol doesn't have a RemoveObject RPC, so we just
 // remove from our local tracking. When we reconnect, the object won't be re-registered.
+// TODO: Add RemoveObject RPC to Inspector protocol for proper object cleanup
 func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
