@@ -15,7 +15,9 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -625,6 +627,26 @@ func (node *Node) registerObjectWithInspector(object Object) error {
 
 	_, err := node.inspectorClient.AddOrUpdateObject(context.Background(), req)
 	if err != nil {
+		// Check if the error is NotFound (node not registered with inspector)
+		st, ok := status.FromError(err)
+		if ok && st.Code() == codes.NotFound {
+			node.logger.Warnf("Node not registered with inspector (detected via object update), attempting reconnection")
+			// Attempt to reconnect and re-register
+			reconnectErr := node.connectToInspector()
+			if reconnectErr != nil {
+				node.logger.Errorf("Failed to reconnect to inspector: %v", reconnectErr)
+			} else {
+				node.logger.Infof("Successfully reconnected to inspector")
+				// Retry registering the object after reconnection
+				_, retryErr := node.inspectorClient.AddOrUpdateObject(context.Background(), req)
+				if retryErr != nil {
+					node.logger.Warnf("Failed to register object after reconnection: %v", retryErr)
+				} else {
+					node.logger.Infof("Registered object %s with inspector after reconnection", object.String())
+				}
+			}
+			return nil
+		}
 		node.logger.Warnf("Failed to register object with inspector: %v", err)
 		return nil
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type GoverseNode = models.GoverseNode
@@ -44,6 +46,13 @@ func (s *InspectorService) AddOrUpdateObject(ctx context.Context, req *inspector
 	if o == nil || o.Id == "" {
 		return &inspector_pb.Empty{}, nil
 	}
+
+	// Check if the node is registered
+	nodeAddress := req.GetNodeAddress()
+	if !s.pg.IsNodeRegistered(nodeAddress) {
+		return nil, status.Errorf(codes.NotFound, "node not registered")
+	}
+
 	x, y := randPos()
 	obj := GoverseObject{
 		ID:            o.Id,
@@ -53,7 +62,7 @@ func (s *InspectorService) AddOrUpdateObject(ctx context.Context, req *inspector
 		Size:          10,
 		Color:         "#1f77b4",
 		Type:          "object",
-		GoverseNodeID: req.GetNodeAddress(),
+		GoverseNodeID: nodeAddress,
 	}
 	s.pg.AddOrUpdateObject(obj)
 	return &inspector_pb.Empty{}, nil

@@ -561,3 +561,39 @@ func TestAddObject_MultipleNodes(t *testing.T) {
 		t.Errorf("Expected 1 object for node2, got %d", nodeCount["node2"])
 	}
 }
+
+// TestIsNodeRegistered tests checking if a node is registered
+func TestIsNodeRegistered(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Test with empty graph
+	if pg.IsNodeRegistered("node1") {
+		t.Error("IsNodeRegistered() should return false for non-existent node in empty graph")
+	}
+
+	// Add a node
+	node := models.GoverseNode{
+		ID:            "localhost:47000",
+		Label:         "Node 1",
+		AdvertiseAddr: "localhost:47000",
+	}
+	pg.AddOrUpdateNode(node)
+
+	// Test existing node
+	if !pg.IsNodeRegistered("localhost:47000") {
+		t.Error("IsNodeRegistered() should return true for registered node")
+	}
+
+	// Test non-existent node
+	if pg.IsNodeRegistered("localhost:47001") {
+		t.Error("IsNodeRegistered() should return false for non-registered node")
+	}
+
+	// Remove the node
+	pg.RemoveNode("localhost:47000")
+
+	// Test after removal
+	if pg.IsNodeRegistered("localhost:47000") {
+		t.Error("IsNodeRegistered() should return false after node removal")
+	}
+}

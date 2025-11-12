@@ -59,6 +59,14 @@ func (pg *GoverseGraph) AddOrUpdateNode(node models.GoverseNode) {
 	pg.nodes[node.ID] = node
 }
 
+// IsNodeRegistered checks if a node with the given address is registered.
+func (pg *GoverseGraph) IsNodeRegistered(nodeAddress string) bool {
+	pg.mu.RLock()
+	defer pg.mu.RUnlock()
+	_, exists := pg.nodes[nodeAddress]
+	return exists
+}
+
 func (pg *GoverseGraph) RemoveNode(goverseNodeID string) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()

@@ -9,6 +9,8 @@ import (
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestInspectorService_Ping(t *testing.T) {
@@ -27,14 +29,16 @@ func TestInspectorService_Ping(t *testing.T) {
 
 func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 	tests := []struct {
-		name       string
-		req        *inspector_pb.AddOrUpdateObjectRequest
-		wantErr    bool
-		wantCount  int
-		skipVerify bool
+		name         string
+		req          *inspector_pb.AddOrUpdateObjectRequest
+		registerNode bool
+		wantErr      bool
+		wantCode     codes.Code
+		wantCount    int
+		skipVerify   bool
 	}{
 		{
-			name: "add valid object",
+			name: "add valid object with registered node",
 			req: &inspector_pb.AddOrUpdateObjectRequest{
 				Object: &inspector_pb.Object{
 					Id:    "obj1",
@@ -42,21 +46,23 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 				},
 				NodeAddress: "node1",
 			},
-			wantErr:   false,
-			wantCount: 1,
+			registerNode: true,
+			wantErr:      false,
+			wantCount:    1,
 		},
 		{
-			name: "add object with nil object",
+			name: "add object with nil object and registered node",
 			req: &inspector_pb.AddOrUpdateObjectRequest{
 				Object:      nil,
 				NodeAddress: "node1",
 			},
-			wantErr:    false,
-			wantCount:  0,
-			skipVerify: true,
+			registerNode: true,
+			wantErr:      false,
+			wantCount:    0,
+			skipVerify:   true,
 		},
 		{
-			name: "add object with empty ID",
+			name: "add object with empty ID and registered node",
 			req: &inspector_pb.AddOrUpdateObjectRequest{
 				Object: &inspector_pb.Object{
 					Id:    "",
@@ -64,12 +70,13 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 				},
 				NodeAddress: "node1",
 			},
-			wantErr:    false,
-			wantCount:  0,
-			skipVerify: true,
+			registerNode: true,
+			wantErr:      false,
+			wantCount:    0,
+			skipVerify:   true,
 		},
 		{
-			name: "update existing object",
+			name: "update existing object with registered node",
 			req: &inspector_pb.AddOrUpdateObjectRequest{
 				Object: &inspector_pb.Object{
 					Id:    "obj1",
@@ -77,8 +84,23 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 				},
 				NodeAddress: "node2",
 			},
-			wantErr:   false,
-			wantCount: 1,
+			registerNode: true,
+			wantErr:      false,
+			wantCount:    1,
+		},
+		{
+			name: "add object with unregistered node",
+			req: &inspector_pb.AddOrUpdateObjectRequest{
+				Object: &inspector_pb.Object{
+					Id:    "obj1",
+					Class: "TestClass",
+				},
+				NodeAddress: "unregistered-node",
+			},
+			registerNode: false,
+			wantErr:      true,
+			wantCode:     codes.NotFound,
+			skipVerify:   true,
 		},
 	}
 
@@ -87,14 +109,36 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 			pg := graph.NewGoverseGraph()
 			svc := NewInspectorService(pg)
 
+			// Register node if needed
+			if tt.registerNode {
+				node := GoverseNode{
+					ID:            tt.req.NodeAddress,
+					Label:         "Test Node",
+					AdvertiseAddr: tt.req.NodeAddress,
+				}
+				pg.AddOrUpdateNode(node)
+			}
+
 			resp, err := svc.AddOrUpdateObject(context.Background(), tt.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AddOrUpdateObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			if resp == nil {
-				t.Error("AddOrUpdateObject() response should not be nil")
+			if tt.wantErr {
+				// Verify error code
+				st, ok := status.FromError(err)
+				if !ok {
+					t.Errorf("Expected gRPC status error, got %v", err)
+					return
+				}
+				if st.Code() != tt.wantCode {
+					t.Errorf("Expected error code %v, got %v", tt.wantCode, st.Code())
+				}
+			} else {
+				if resp == nil {
+					t.Error("AddOrUpdateObject() response should not be nil")
+				}
 			}
 
 			if !tt.skipVerify {
