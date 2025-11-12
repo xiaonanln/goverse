@@ -756,7 +756,15 @@ func (c *Cluster) shardMappingManagementLoop() {
 // handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
 func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
-	c.leaderShardMappingManagement(ctx)
+
+	// If leader made changes to cluster state, skip other operations this cycle
+	// to allow the cluster state to stabilize before proceeding
+	stateChanged := c.leaderShardMappingManagement(ctx)
+	if stateChanged {
+		c.logger.Debugf("Cluster state changed by leader, waiting for next cycle")
+		return
+	}
+
 	c.claimShardOwnership(ctx)
 	c.removeObjectsNotBelongingToThisNode(ctx)
 	c.releaseShardOwnership(ctx)
@@ -865,9 +873,12 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	}
 }
 
-func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
+// leaderShardMappingManagement manages shard mapping as the leader node
+// Returns true if the cluster state was changed (shards reassigned or rebalanced)
+// Only performs one operation per call to allow cluster state to stabilize between changes
+func (c *Cluster) leaderShardMappingManagement(ctx context.Context) bool {
 	if !c.IsLeader() {
-		return
+		return false
 	}
 
 	clusterState := c.consensusManager.GetClusterState()
@@ -878,51 +889,57 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 
 	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
 		c.logger.Warnf("Cluster state not yet stable, waiting before updating shard mapping")
-		return
+		return false
 	}
 
 	if len(clusterState.Nodes) == 0 {
 		c.logger.Warnf("No nodes available, skipping shard mapping update")
-		return
+		return false
 	}
 
 	// Check if we have the minimum required nodes
 	if len(clusterState.Nodes) < minQuorum {
 		c.logger.Warnf("Cluster has %d nodes but requires minimum quorum of %d nodes - waiting for more nodes to join", len(clusterState.Nodes), minQuorum)
-		return
+		return false
 	}
 
 	if c.thisNode == nil {
 		c.logger.Warnf("ThisNode not set; leader cannot ensure self registration")
-		return
+		return false
 	}
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 	if !clusterState.HasNode(localAddr) {
 		c.logger.Infof("This node %s not present in cluster state", localAddr)
-		return
+		return false
 	}
 
-	// First, reassign shards whose target nodes are no longer in the cluster
+	// First priority: reassign shards whose target nodes are no longer in the cluster
+	// This handles node failures and ensures all shards have valid target nodes
 	reassignedCount, err := c.consensusManager.ReassignShardTargetNodes(ctx)
-	if err != nil {
-		c.logger.Errorf("Failed to reassign shard target nodes: %v", err)
-		return
-	}
 	if reassignedCount > 0 {
 		c.logger.Infof("Reassigned %d shards to new target nodes", reassignedCount)
+		return true // State changed, allow it to stabilize before next operation
+	}
+	if err != nil {
+		c.logger.Errorf("Failed to reassign shard target nodes: %v", err)
+		return false
 	}
 
-	// Finally, if all shards are assigned and cluster is stable, check if rebalancing is needed
+	// Second priority: rebalance shards to improve cluster balance
+	// Only attempt if no reassignment was needed (cluster is stable)
 	rebalanced, err := c.consensusManager.RebalanceShards(ctx)
 	if err != nil {
 		c.logger.Errorf("Failed to rebalance shards: %v", err)
-		return
+		return false
 	}
 
 	if rebalanced {
 		c.logger.Infof("Rebalanced one shard to improve cluster balance")
+		return true // State changed
 	}
+
+	return false // No changes made
 }
 
 // startNodeConnections initializes and starts the node connections manager
