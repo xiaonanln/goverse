@@ -220,16 +220,6 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	return nil
 }
 
-// SetMinQuorum sets the minimal number of nodes required for cluster stability
-func (c *Cluster) SetMinQuorum(minQuorum int) {
-	c.minQuorum = minQuorum
-	c.logger.Infof("Cluster minimum quorum set to %d", minQuorum)
-	// Also update the consensus manager if it exists
-	if c.consensusManager != nil {
-		c.consensusManager.SetMinQuorum(minQuorum)
-	}
-}
-
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
 // If not set, returns 1 as the default
 func (c *Cluster) GetMinQuorum() int {
@@ -244,12 +234,6 @@ func (c *Cluster) getEffectiveMinQuorum() int {
 	return c.minQuorum
 }
 
-// SetNodeStabilityDuration sets the duration to wait for cluster state to stabilize
-func (c *Cluster) SetNodeStabilityDuration(duration time.Duration) {
-	c.nodeStabilityDuration = duration
-	c.logger.Infof("Cluster node stability duration set to %v", duration)
-}
-
 // GetNodeStabilityDuration returns the duration to wait for cluster state to stabilize
 // If not set, returns the default NodeStabilityDuration (10s)
 func (c *Cluster) GetNodeStabilityDuration() time.Duration {
@@ -262,12 +246,6 @@ func (c *Cluster) getEffectiveNodeStabilityDuration() time.Duration {
 		return NodeStabilityDuration
 	}
 	return c.nodeStabilityDuration
-}
-
-// SetShardMappingCheckInterval sets how often to check if shard mapping needs updating
-func (c *Cluster) SetShardMappingCheckInterval(duration time.Duration) {
-	c.shardMappingCheckInterval = duration
-	c.logger.Infof("Cluster shard mapping check interval set to %v", duration)
 }
 
 // GetShardMappingCheckInterval returns how often to check if shard mapping needs updating
