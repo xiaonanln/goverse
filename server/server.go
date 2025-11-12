@@ -22,13 +22,14 @@ import (
 )
 
 type ServerConfig struct {
-	ListenAddress           string
-	AdvertiseAddress        string
-	ClientListenAddress     string
-	EtcdAddress             string
-	EtcdPrefix              string        // Optional: etcd key prefix for this cluster (default: "/goverse")
-	MinQuorum               int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
-	NodeStabilityDuration   time.Duration // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
+	ListenAddress              string
+	AdvertiseAddress           string
+	ClientListenAddress        string
+	EtcdAddress                string
+	EtcdPrefix                 string        // Optional: etcd key prefix for this cluster (default: "/goverse")
+	MinQuorum                  int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
+	NodeStabilityDuration      time.Duration // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
+	ShardMappingCheckInterval  time.Duration // Optional: how often to check if shard mapping needs updating (default: 5s)
 }
 
 type Server struct {
@@ -67,6 +68,11 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	// Set node stability duration configuration
 	if config.NodeStabilityDuration > 0 {
 		c.SetNodeStabilityDuration(config.NodeStabilityDuration)
+	}
+
+	// Set shard mapping check interval configuration
+	if config.ShardMappingCheckInterval > 0 {
+		c.SetShardMappingCheckInterval(config.ShardMappingCheckInterval)
 	}
 
 	server := &Server{
