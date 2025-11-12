@@ -148,9 +148,12 @@ func TestStorageFormatFullMapping(t *testing.T) {
 
 	// Create full shard mapping
 	ctx := context.Background()
-	err = cm.ReassignShardTargetNodes(ctx)
+	n, err := cm.ReassignShardTargetNodes(ctx)
 	if err != nil {
 		t.Fatalf("Failed to create shard mapping: %v", err)
+	}
+	if n == 0 {
+		t.Error("Expected shards to be reassigned")
 	}
 
 	// Verify that 8192 shard keys exist

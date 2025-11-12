@@ -683,7 +683,14 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
-				return fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d)", id, shardInfo.ModRevision)
+				// Retrieve current ModRevision for diagnostics
+				var currentModRev int64
+				getResp, getErr := client.Get(ctx, key)
+				if getErr == nil && len(getResp.Kvs) > 0 {
+					currentModRev = getResp.Kvs[0].ModRevision
+				}
+				cm.logger.Debugf("ModRevision mismatch for shard %d: expected %d, current %d", id, shardInfo.ModRevision, currentModRev)
+				return fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d, got %d)", id, shardInfo.ModRevision, currentModRev)
 			}
 
 			return nil
@@ -870,18 +877,19 @@ func (cm *ConsensusManager) computeShardUpdates() map[int]ShardInfo {
 // ReassignShardTargetNodes reassigns shard target nodes based on the current node list.
 // This only updates TargetNode fields for shards whose current target is no longer in the active node list.
 // It does not modify CurrentNode fields - use ClaimShardsForNode for that.
-func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) error {
+// Returns the number of shards successfully updated and any error encountered.
+func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, error) {
 	updateShards := cm.computeShardUpdates()
 
 	if updateShards == nil {
 		cm.logger.Infof("No changes needed to shard mapping")
-		return nil
+		return 0, nil
 	}
 
-	cm.logger.Infof("Updating shard mapping for %d shards", len(updateShards))
+	cm.logger.Infof("Reassigning shard target nodes for %d shards", len(updateShards))
 	n, err := cm.storeShardMapping(ctx, updateShards)
 	cm.logger.Infof("Successfully updated shard mapping for %d shards - error %v", n, err)
-	return err
+	return n, err
 }
 
 // AssignUnassignedShards assigns any shards with empty CurrentNode to the node with minimal

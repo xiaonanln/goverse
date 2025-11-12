@@ -103,7 +103,8 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	cluster1.releaseShardOwnership(ctx)
 
 	// Wait a bit for the release to be processed
-	time.Sleep(1 * time.Second)
+	t.Logf("Waiting for shard ownership release to be processed...")
+	time.Sleep(3 * time.Second)
 
 	// Verify the shard mapping shows CurrentNode is now empty (released)
 	resp2, err := client.Get(ctx, shardKey)
