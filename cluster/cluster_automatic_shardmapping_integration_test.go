@@ -181,18 +181,23 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	}
 
 	// Note: Version tracking is now in ClusterState
-	// Just verify the mapping has changed (different shard count or assignments)
+	// With rebalancing enabled, shards should be distributed between both nodes
 	t.Logf("Shard mapping updated after node addition")
 
-	// Verify mapping still only contains the original node (second node should not be included)
+	// Verify mapping now includes both nodes (shards are rebalanced)
 	nodeSet := make(map[string]bool)
 	for _, assignedNode := range updatedMapping.Shards {
 		nodeSet[assignedNode.TargetNode] = true
 	}
 
-	expectedNode := "localhost:50021"
-	if len(nodeSet) != 1 || !nodeSet[expectedNode] {
-		t.Fatalf("Expected shard mapping to contain only %s, got %d nodes: %v", expectedNode, len(nodeSet), nodeSet)
+	if len(nodeSet) != 2 {
+		t.Fatalf("Expected shard mapping to contain 2 nodes after rebalancing, got %d nodes: %v", len(nodeSet), nodeSet)
+	}
+
+	expectedNode1 := "localhost:50021"
+	expectedNode2 := "localhost:50022"
+	if !nodeSet[expectedNode1] || !nodeSet[expectedNode2] {
+		t.Fatalf("Expected shard mapping to contain both %s and %s, got: %v", expectedNode1, expectedNode2, nodeSet)
 	}
 
 	t.Logf("Test completed - shard mapping successfully updated when nodes changed")
