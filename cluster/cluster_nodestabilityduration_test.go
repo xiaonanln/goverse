@@ -5,15 +5,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/nodeconnections"
+	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestClusterSetNodeStabilityDuration(t *testing.T) {
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestClusterSetNodeStabilityDuration")
+	
+	// Create cluster with production defaults to test setter methods
+	c := &Cluster{
+		thisNode:         testNode,
+		logger:           logger.NewLogger("TestClusterSetNodeStabilityDuration"),
+		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
+	}
 
-	// Test default value
+	// Test default value (when not set, should use production default)
 	if c.GetNodeStabilityDuration() != NodeStabilityDuration {
 		t.Errorf("Expected default NodeStabilityDuration to be %v, got %v", NodeStabilityDuration, c.GetNodeStabilityDuration())
 	}
@@ -29,7 +38,13 @@ func TestClusterSetNodeStabilityDuration(t *testing.T) {
 func TestClusterNodeStabilityDurationZeroValue(t *testing.T) {
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestClusterNodeStabilityDurationZeroValue")
+	
+	c := &Cluster{
+		thisNode:         testNode,
+		logger:           logger.NewLogger("TestClusterNodeStabilityDurationZeroValue"),
+		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
+	}
 
 	// Set to zero (should return default)
 	c.SetNodeStabilityDuration(0)
@@ -41,7 +56,13 @@ func TestClusterNodeStabilityDurationZeroValue(t *testing.T) {
 func TestClusterNodeStabilityDurationNegativeValue(t *testing.T) {
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestClusterNodeStabilityDurationNegativeValue")
+	
+	c := &Cluster{
+		thisNode:         testNode,
+		logger:           logger.NewLogger("TestClusterNodeStabilityDurationNegativeValue"),
+		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
+	}
 
 	// Set to negative (should return default)
 	c.SetNodeStabilityDuration(-5 * time.Second)

@@ -51,29 +51,30 @@ func NewServer(config *ServerConfig) (*Server, error) {
 
 	node := node.NewNode(config.AdvertiseAddress)
 
+	// Create cluster configuration from server config
+	clusterCfg := cluster.DefaultConfig()
+	clusterCfg.EtcdAddress = config.EtcdAddress
+	clusterCfg.EtcdPrefix = config.EtcdPrefix
+	
+	// Override defaults with server config values if provided
+	if config.MinQuorum > 0 {
+		clusterCfg.MinQuorum = config.MinQuorum
+	}
+	if config.NodeStabilityDuration > 0 {
+		clusterCfg.NodeStabilityDuration = config.NodeStabilityDuration
+	}
+	if config.ShardMappingCheckInterval > 0 {
+		clusterCfg.ShardMappingCheckInterval = config.ShardMappingCheckInterval
+	}
+
 	// Initialize cluster with etcd connection
-	c, err := cluster.NewCluster(node, config.EtcdAddress, config.EtcdPrefix)
+	c, err := cluster.NewCluster(clusterCfg, node)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)
 	}
 
 	cluster.SetThis(c)
-
-	// Set minimum quorum configuration
-	if config.MinQuorum > 0 {
-		c.SetMinQuorum(config.MinQuorum)
-	}
-
-	// Set node stability duration configuration
-	if config.NodeStabilityDuration > 0 {
-		c.SetNodeStabilityDuration(config.NodeStabilityDuration)
-	}
-
-	// Set shard mapping check interval configuration
-	if config.ShardMappingCheckInterval > 0 {
-		c.SetShardMappingCheckInterval(config.ShardMappingCheckInterval)
-	}
 
 	server := &Server{
 		config:  config,

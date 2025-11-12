@@ -5,15 +5,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/nodeconnections"
+	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestClusterSetShardMappingCheckInterval(t *testing.T) {
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestClusterSetShardMappingCheckInterval")
+	
+	// Create cluster with production defaults to test setter methods
+	c := &Cluster{
+		thisNode:         testNode,
+		logger:           logger.NewLogger("TestClusterSetShardMappingCheckInterval"),
+		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
+	}
 
-	// Test default value
+	// Test default value (when not set, should use production default)
 	if c.GetShardMappingCheckInterval() != ShardMappingCheckInterval {
 		t.Errorf("Expected default ShardMappingCheckInterval to be %v, got %v", ShardMappingCheckInterval, c.GetShardMappingCheckInterval())
 	}
@@ -29,7 +38,13 @@ func TestClusterSetShardMappingCheckInterval(t *testing.T) {
 func TestClusterShardMappingCheckIntervalZeroValue(t *testing.T) {
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestClusterShardMappingCheckIntervalZeroValue")
+	
+	c := &Cluster{
+		thisNode:         testNode,
+		logger:           logger.NewLogger("TestClusterShardMappingCheckIntervalZeroValue"),
+		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
+	}
 
 	// Set to zero (should return default)
 	c.SetShardMappingCheckInterval(0)
@@ -41,7 +56,13 @@ func TestClusterShardMappingCheckIntervalZeroValue(t *testing.T) {
 func TestClusterShardMappingCheckIntervalNegativeValue(t *testing.T) {
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestClusterShardMappingCheckIntervalNegativeValue")
+	
+	c := &Cluster{
+		thisNode:         testNode,
+		logger:           logger.NewLogger("TestClusterShardMappingCheckIntervalNegativeValue"),
+		clusterReadyChan: make(chan bool),
+		nodeConnections:  nodeconnections.New(),
+	}
 
 	// Set to negative (should return default)
 	c.SetShardMappingCheckInterval(-3 * time.Second)
