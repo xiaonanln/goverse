@@ -112,9 +112,52 @@ func TestGetShardMapping_NotAvailable(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	_, err := cm.GetShardMapping()
-	if err == nil {
-		t.Error("Expected error when shard mapping not available")
+	mapping := cm.GetShardMapping()
+	if mapping == nil {
+		t.Error("Expected non-nil mapping even when not initialized")
+	}
+	if len(mapping.Shards) != 0 {
+		t.Errorf("Expected empty mapping, got %d shards", len(mapping.Shards))
+	}
+}
+
+func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Initialize shard mapping
+	cm.mu.Lock()
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "node1", CurrentNode: "node1"}
+	cm.state.ShardMapping.Shards[1] = ShardInfo{TargetNode: "node2", CurrentNode: "node2"}
+	cm.mu.Unlock()
+
+	// Get the mapping
+	mapping1 := cm.GetShardMapping()
+
+	// Verify initial state
+	if len(mapping1.Shards) != 2 {
+		t.Fatalf("Expected 2 shards, got %d", len(mapping1.Shards))
+	}
+
+	// Modify the returned map (this should NOT affect internal state)
+	mapping1.Shards[0] = ShardInfo{TargetNode: "modified", CurrentNode: "modified"}
+	mapping1.Shards[999] = ShardInfo{TargetNode: "new", CurrentNode: "new"}
+
+	// Get the mapping again
+	mapping2 := cm.GetShardMapping()
+
+	// Verify that internal state was NOT modified
+	if mapping2.Shards[0].TargetNode != "node1" {
+		t.Errorf("Expected shard 0 to be node1, got %s (deep copy failed)", mapping2.Shards[0].TargetNode)
+	}
+	if _, exists := mapping2.Shards[999]; exists {
+		t.Error("Expected shard 999 to not exist (deep copy failed)")
+	}
+	if len(mapping2.Shards) != 2 {
+		t.Errorf("Expected 2 shards, got %d (deep copy failed)", len(mapping2.Shards))
 	}
 }
 

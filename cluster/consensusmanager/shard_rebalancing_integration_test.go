@@ -86,10 +86,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 	// Step 3: Create an imbalanced scenario and test rebalancing
 	t.Run("RebalanceImbalancedShards", func(t *testing.T) {
 		// First, get current mapping to know which shards exist
-		mapping, err := cm.GetShardMapping()
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping: %v", err)
-		}
+		mapping := cm.GetShardMapping()
 
 		// Create an imbalanced scenario: node1 has many shards, others have few
 		// Move 2000 shards from node2 and node3 to node1
@@ -130,7 +127,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		// Verify imbalance exists
-		mapping, _ = cm.GetShardMapping()
+		mapping = cm.GetShardMapping()
 		shardCounts := make(map[string]int)
 		for _, node := range nodes {
 			shardCounts[node] = 0
@@ -174,7 +171,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 		// Verify that TargetNode was updated for one shard
 		// (CurrentNode stays the same until migration completes)
-		mapping, _ = cm.GetShardMapping()
+		mapping = cm.GetShardMapping()
 		migrationCount := 0
 		for i := 0; i < sharding.NumShards; i++ {
 			shardInfo := mapping.Shards[i]

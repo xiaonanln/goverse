@@ -535,15 +535,22 @@ func (cm *ConsensusManager) GetLeaderNode() string {
 }
 
 // GetShardMapping returns the current shard mapping
-func (cm *ConsensusManager) GetShardMapping() (*ShardMapping, error) {
+func (cm *ConsensusManager) GetShardMapping() *ShardMapping {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
 	if cm.state.ShardMapping == nil {
-		return nil, fmt.Errorf("shard mapping not available")
+		return &ShardMapping{Shards: make(map[int]ShardInfo)}
 	}
 
-	return cm.state.ShardMapping, nil
+	// Return a deep copy to prevent data races when caller iterates over the map
+	// while concurrent updates may be happening via watch events
+	shardsCopy := make(map[int]ShardInfo, len(cm.state.ShardMapping.Shards))
+	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
+		shardsCopy[shardID] = shardInfo
+	}
+
+	return &ShardMapping{Shards: shardsCopy}
 }
 
 // GetNodeForObject returns the node that should handle the given object ID

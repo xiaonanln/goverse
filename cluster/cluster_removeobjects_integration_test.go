@@ -62,10 +62,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify shard mapping is ready
-	initialMapping, err := cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Shard mapping not initialized: %v", err)
-	}
+	initialMapping := cluster1.GetShardMapping(ctx)
 	t.Logf("Initial shard mapping created with %d shards", len(initialMapping.Shards))
 
 	// Helper function to check if an object exists on a node

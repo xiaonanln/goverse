@@ -27,15 +27,9 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	// Test that shards have been claimed by the appropriate nodes
 	t.Run("ShardOwnershipClaiming", func(t *testing.T) {
 		// Get the shard mapping from both clusters
-		mapping1, err := cluster1.GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping from cluster1: %v", err)
-		}
+		mapping1 := cluster1.GetShardMapping(ctx)
 
-		mapping2, err := cluster2.GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping from cluster2: %v", err)
-		}
+		mapping2 := cluster2.GetShardMapping(ctx)
 
 		// Verify that both clusters see the same shard mapping
 		if len(mapping1.Shards) != len(mapping2.Shards) {
