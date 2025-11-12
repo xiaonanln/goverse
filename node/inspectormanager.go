@@ -15,7 +15,6 @@ import (
 const (
 	defaultInspectorAddress = "localhost:8081"
 	healthCheckInterval     = 5 * time.Second
-	reconnectRetryInterval  = 5 * time.Second
 )
 
 // InspectorManager manages the connection and communication with the Inspector service.
