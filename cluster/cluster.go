@@ -810,7 +810,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 	clusterState := c.consensusManager.GetClusterState()
 
 	// Only release shards when cluster state is stable
-	if !clusterState.IsStable(DefaultNodeStabilityDuration) {
+	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
 		return
 	}
 
