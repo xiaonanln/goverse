@@ -8,8 +8,16 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
+
+// TestReleaseObject is a simple test object for shard release ownership tests
+type TestReleaseObject struct {
+	object.BaseObject
+}
+
+func (o *TestReleaseObject) OnCreated() {}
 
 // TestReleaseShardOwnership_Integration tests the complete shard ownership release flow
 // This test verifies that a node releases ownership of a shard when:
@@ -25,6 +33,10 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	// Create two nodes
 	node1 := node.NewNode("localhost:52001")
 	node2 := node.NewNode("localhost:52002")
+
+	// Register test object type
+	node1.RegisterObjectType((*TestReleaseObject)(nil))
+	node2.RegisterObjectType((*TestReleaseObject)(nil))
 
 	// Create clusters for both nodes - node1 will be leader (smaller address)
 	cluster1, err := newClusterWithEtcdForTesting("Cluster1", node1, "localhost:2379", testPrefix)
@@ -66,7 +78,7 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	// Create the object on node1 (will be routed based on shard mapping)
 	// We need to force creation on node1 by using the fixed node format
 	fixedObjectID := "localhost:52001/" + testObjectID
-	_, err = node1.CreateObject(ctx, "TestObject", fixedObjectID)
+	_, err = node1.CreateObject(ctx, "TestReleaseObject", fixedObjectID)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
