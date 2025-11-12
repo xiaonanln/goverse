@@ -430,10 +430,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify shard mapping was created and stored
-	shardMapping, err := clusterInstance.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get shard mapping: %v", err)
-	}
+	shardMapping := clusterInstance.GetShardMapping(ctx)
 
 	if shardMapping == nil {
 		t.Fatal("Shard mapping should not be nil after initialization")

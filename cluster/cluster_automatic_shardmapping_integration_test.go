@@ -42,10 +42,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// After stability period, leader should have initialized shard mapping
-	mapping1, err := cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get shard mapping from cluster1 (leader): %v", err)
-	}
+	mapping1 := cluster1.GetShardMapping(ctx)
 	if mapping1 == nil {
 		t.Fatalf("Shard mapping should be initialized by leader")
 	}
@@ -54,10 +51,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	t.Logf("Shard mapping initialized by leader")
 
 	// Test 2: Non-leader should also be able to get the shard mapping from etcd
-	mapping2, err := cluster2.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get shard mapping from cluster2 (non-leader): %v", err)
-	}
+	mapping2 := cluster2.GetShardMapping(ctx)
 	if mapping2 == nil {
 		t.Fatalf("Shard mapping should be available to non-leader")
 	}
@@ -98,10 +92,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	t.Logf("Verifying automatic cache sync on non-leader...")
 
 	// Non-leader should maintain correct mapping via automatic watch mechanism
-	mapping2New, err := cluster2.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get shard mapping from cluster2: %v", err)
-	}
+	mapping2New := cluster2.GetShardMapping(ctx)
 	// Verify it still has correct number of shards
 	if len(mapping2New.Shards) != len(mapping1.Shards) {
 		t.Fatalf("Mapping should have same shards, got %d, expected %d", len(mapping2New.Shards), len(mapping1.Shards))
@@ -144,10 +135,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Waiting for initial shard mapping...")
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
-	_, err = cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get initial shard mapping: %v", err)
-	}
+	_ = cluster1.GetShardMapping(ctx)
 	t.Logf("Initial shard mapping created")
 
 	// Now add a second node
@@ -175,10 +163,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Get updated mapping
-	updatedMapping, err := cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get updated shard mapping: %v", err)
-	}
+	updatedMapping := cluster1.GetShardMapping(ctx)
 
 	// Note: Version tracking is now in ClusterState
 	// With rebalancing enabled, shards should be distributed between both nodes

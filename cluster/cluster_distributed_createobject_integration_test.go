@@ -60,10 +60,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify shard mapping is ready
-	_, err = cluster1.GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Shard mapping not initialized: %v", err)
-	}
+	_ = cluster1.GetShardMapping(ctx)
 
 	objExistsOnNode := func(objID string, n *node.Node) bool {
 		for _, obj := range n.ListObjects() {
@@ -222,17 +219,11 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	t.Logf("Verifying shard mapping consistency across %d clusters", len(clusters))
 
 	// Get shard mapping from first cluster
-	shardMapping1, err := clusters[0].GetShardMapping(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get shard mapping from cluster 0: %v", err)
-	}
+	shardMapping1 := clusters[0].GetShardMapping(ctx)
 
 	// Verify all clusters have the same shard mapping
 	for i := 1; i < len(clusters); i++ {
-		shardMapping, err := clusters[i].GetShardMapping(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping from cluster %d: %v", i, err)
-		}
+		shardMapping := clusters[i].GetShardMapping(ctx)
 		// Note: Version is now tracked in ClusterState
 		// Verify they have same number of shards
 		if len(shardMapping.Shards) != len(shardMapping1.Shards) {

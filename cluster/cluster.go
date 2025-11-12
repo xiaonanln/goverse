@@ -678,7 +678,7 @@ func (c *Cluster) IsLeader() bool {
 }
 
 // GetShardMapping retrieves the current shard mapping
-func (c *Cluster) GetShardMapping(ctx context.Context) (*consensusmanager.ShardMapping, error) {
+func (c *Cluster) GetShardMapping(ctx context.Context) *consensusmanager.ShardMapping {
 	return c.consensusManager.GetShardMapping()
 }
 
