@@ -480,9 +480,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	obj.OnCreated()
 
 	// Notify inspector manager about the new object
-	if node.IsStarted() {
-		node.inspectorManager.NotifyObjectAdded(id, typ)
-	}
+	node.inspectorManager.NotifyObjectAdded(id, typ)
 
 	return nil
 }
@@ -494,9 +492,7 @@ func (node *Node) destroyObject(id string) {
 	node.logger.Infof("Destroyed object %s", id)
 	
 	// Notify inspector manager about object removal
-	if node.IsStarted() {
-		node.inspectorManager.NotifyObjectRemoved(id)
-	}
+	node.inspectorManager.NotifyObjectRemoved(id)
 }
 
 // DeleteObject removes an object from the node and deletes it from persistence if configured.
