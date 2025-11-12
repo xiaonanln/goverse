@@ -24,10 +24,10 @@ import (
 //   - shards: map of shard IDs to ShardInfo to store
 //
 // The function will:
-//   1. Set up nodes in the ConsensusManager state
-//   2. Initialize the shard mapping structure
-//   3. Store all shards in both in-memory state and etcd
-//   4. Update ModRevision values to match etcd's actual revisions
+//  1. Set up nodes in the ConsensusManager state
+//  2. Initialize the shard mapping structure
+//  3. Store all shards in both in-memory state and etcd
+//  4. Update ModRevision values to match etcd's actual revisions
 func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, mgr *etcdmanager.EtcdManager, nodes map[string]bool, shards map[int]ShardInfo) {
 	t.Helper()
 

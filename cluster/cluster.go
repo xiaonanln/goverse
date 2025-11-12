@@ -118,6 +118,8 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 		return nil, err
 	}
 
+	c.SetNodeStabilityDuration(3 * time.Second)
+
 	// Override logger with custom name for testing
 	c.logger = logger.NewLogger(name)
 
@@ -683,8 +685,6 @@ func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string
 func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, error) {
 	return c.consensusManager.GetNodeForShard(shardID)
 }
-
-
 
 // startShardMappingManagement starts a background goroutine that periodically manages shard mapping
 // If this node is the leader and the node list has been stable for the configured node stability duration,
