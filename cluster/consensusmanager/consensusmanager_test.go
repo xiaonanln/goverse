@@ -122,9 +122,12 @@ func TestCreateShardMapping_NoNodes(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	err := cm.ReassignShardTargetNodes(context.Background())
+	n, err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Errorf("Should not error when no nodes available, got: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("Expected 0 shards reassigned, got %d", n)
 	}
 }
 
@@ -141,9 +144,12 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 	cm.state.Nodes["localhost:47002"] = true
 	cm.mu.Unlock()
 
-	err := cm.ReassignShardTargetNodes(context.Background())
+	n, err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to create shard mapping: %v", err)
+	}
+	if n != sharding.NumShards {
+		t.Errorf("Expected %d shards reassigned (creating initial mapping), got %d", sharding.NumShards, n)
 	}
 
 	if cm.state.ShardMapping != nil {
@@ -181,9 +187,12 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Update should create a new mapping (old shard assignments may change)
-	err := cm.ReassignShardTargetNodes(context.Background())
+	n, err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
+	}
+	if n == 0 {
+		t.Error("Expected some shards to be reassigned after adding a new node")
 	}
 
 	// Note: Version tracking happens in ClusterState when storeShardMapping is called
@@ -218,9 +227,12 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Update with same nodes should return same mapping
-	err := cm.ReassignShardTargetNodes(context.Background())
+	n, err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to update shard mapping: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("Expected 0 shards reassigned when nodes unchanged, got %d", n)
 	}
 
 	// Verify the mapping is the same (pointer comparison)

@@ -31,21 +31,21 @@ const (
 )
 
 type Cluster struct {
-	thisNode                   *node.Node
-	etcdManager                *etcdmanager.EtcdManager
-	consensusManager           *consensusmanager.ConsensusManager
-	nodeConnections            *nodeconnections.NodeConnections
-	logger                     *logger.Logger
-	etcdAddress                string        // etcd server address (e.g., "localhost:2379")
-	etcdPrefix                 string        // etcd key prefix for this cluster
-	minQuorum                  int           // minimal number of nodes required for cluster to be considered stable
-	nodeStabilityDuration      time.Duration // duration to wait for cluster state to stabilize before updating shard mapping
-	shardMappingCheckInterval  time.Duration // how often to check if shard mapping needs updating
-	shardMappingCtx            context.Context
-	shardMappingCancel         context.CancelFunc
-	shardMappingRunning        bool
-	clusterReadyChan           chan bool
-	clusterReadyOnce           sync.Once
+	thisNode                  *node.Node
+	etcdManager               *etcdmanager.EtcdManager
+	consensusManager          *consensusmanager.ConsensusManager
+	nodeConnections           *nodeconnections.NodeConnections
+	logger                    *logger.Logger
+	etcdAddress               string        // etcd server address (e.g., "localhost:2379")
+	etcdPrefix                string        // etcd key prefix for this cluster
+	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
+	nodeStabilityDuration     time.Duration // duration to wait for cluster state to stabilize before updating shard mapping
+	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
+	shardMappingCtx           context.Context
+	shardMappingCancel        context.CancelFunc
+	shardMappingRunning       bool
+	clusterReadyChan          chan bool
+	clusterReadyOnce          sync.Once
 }
 
 func SetThis(c *Cluster) {
@@ -101,7 +101,7 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 
 	c.etcdManager = mgr
 	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
-	
+
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
 		c.consensusManager.SetMinQuorum(cfg.MinQuorum)
@@ -136,7 +136,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
-	
+
 	c, err := NewCluster(cfg, node)
 	if err != nil {
 		return nil, err
@@ -904,10 +904,13 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 	}
 
 	// First, reassign shards whose target nodes are no longer in the cluster
-	err := c.consensusManager.ReassignShardTargetNodes(ctx)
+	reassignedCount, err := c.consensusManager.ReassignShardTargetNodes(ctx)
 	if err != nil {
 		c.logger.Errorf("Failed to reassign shard target nodes: %v", err)
 		return
+	}
+	if reassignedCount > 0 {
+		c.logger.Infof("Reassigned %d shards to new target nodes", reassignedCount)
 	}
 
 	// Second, assign any unassigned shards (CurrentNode empty)
