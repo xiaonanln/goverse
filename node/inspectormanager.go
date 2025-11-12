@@ -13,23 +13,24 @@ import (
 )
 
 const (
-	inspectorAddress       = "localhost:8081"
-	healthCheckInterval    = 5 * time.Second
-	reconnectRetryInterval = 5 * time.Second
+	defaultInspectorAddress = "localhost:8081"
+	healthCheckInterval     = 5 * time.Second
+	reconnectRetryInterval  = 5 * time.Second
 )
 
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 type InspectorManager struct {
-	nodeAddress string
-	logger      *logger.Logger
+	nodeAddress      string
+	inspectorAddress string
+	logger           *logger.Logger
 
-	mu              sync.RWMutex
-	client          inspector_pb.InspectorServiceClient
-	conn            *grpc.ClientConn
-	connected       bool
-	objects         map[string]*inspector_pb.Object // Track objects for re-registration on reconnect
-	
+	mu        sync.RWMutex
+	client    inspector_pb.InspectorServiceClient
+	conn      *grpc.ClientConn
+	connected bool
+	objects   map[string]*inspector_pb.Object // Track objects for re-registration on reconnect
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -38,9 +39,10 @@ type InspectorManager struct {
 // NewInspectorManager creates a new InspectorManager instance.
 func NewInspectorManager(nodeAddress string) *InspectorManager {
 	return &InspectorManager{
-		nodeAddress: nodeAddress,
-		logger:      logger.NewLogger("InspectorManager"),
-		objects:     make(map[string]*inspector_pb.Object),
+		nodeAddress:      nodeAddress,
+		inspectorAddress: defaultInspectorAddress,
+		logger:           logger.NewLogger("InspectorManager"),
+		objects:          make(map[string]*inspector_pb.Object),
 	}
 }
 
@@ -67,7 +69,7 @@ func (im *InspectorManager) Start(ctx context.Context) error {
 // Stop gracefully shuts down the InspectorManager and unregisters from Inspector.
 func (im *InspectorManager) Stop() error {
 	im.mu.Lock()
-	
+
 	// Cancel the context to signal shutdown
 	if im.cancel != nil {
 		im.cancel()
@@ -80,7 +82,7 @@ func (im *InspectorManager) Stop() error {
 	// Unregister from inspector before closing
 	im.mu.Lock()
 	defer im.mu.Unlock()
-	
+
 	if im.connected && im.client != nil {
 		if err := im.unregisterNodeLocked(); err != nil {
 			im.logger.Warnf("Failed to unregister from inspector: %v", err)
@@ -92,7 +94,7 @@ func (im *InspectorManager) Stop() error {
 		im.conn.Close()
 		im.conn = nil
 	}
-	
+
 	im.connected = false
 	im.client = nil
 
@@ -130,17 +132,17 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 // connectLocked attempts to connect to the Inspector service.
 // Must be called with im.mu held.
 func (im *InspectorManager) connectLocked() error {
-	conn, err := grpc.NewClient(inspectorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(im.inspectorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
 
 	client := inspector_pb.NewInspectorServiceClient(conn)
-	
+
 	// Test the connection with a ping
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	_, err = client.Ping(ctx, &inspector_pb.Empty{})
 	if err != nil {
 		conn.Close()
@@ -151,7 +153,7 @@ func (im *InspectorManager) connectLocked() error {
 	im.client = client
 	im.connected = true
 
-	im.logger.Infof("Connected to inspector service at %s", inspectorAddress)
+	im.logger.Infof("Connected to inspector service at %s", im.inspectorAddress)
 
 	// Register the node with all current objects
 	if err := im.registerNodeLocked(); err != nil {
@@ -283,7 +285,7 @@ func (im *InspectorManager) healthCheck() {
 		_, err := im.client.Ping(ctx, &inspector_pb.Empty{})
 		if err != nil {
 			im.logger.Warnf("Inspector health check failed: %v (will attempt reconnect)", err)
-			
+
 			// Connection lost, close and mark as disconnected
 			if im.conn != nil {
 				im.conn.Close()
