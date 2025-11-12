@@ -7,104 +7,13 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
-	"github.com/xiaonanln/goverse/cmd/inspector/models"
+	"github.com/xiaonanln/goverse/inspector"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// InspectorServiceImpl is a test implementation of the Inspector gRPC service
-type InspectorServiceImpl struct {
-	inspector_pb.UnimplementedInspectorServiceServer
-	pg *graph.GoverseGraph
-}
-
-// NewInspectorServiceImpl creates a new inspector service for testing
-func NewInspectorServiceImpl(pg *graph.GoverseGraph) *InspectorServiceImpl {
-	return &InspectorServiceImpl{pg: pg}
-}
-
-// Ping handles ping requests
-func (s *InspectorServiceImpl) Ping(ctx context.Context, req *inspector_pb.Empty) (*inspector_pb.Empty, error) {
-	return &inspector_pb.Empty{}, nil
-}
-
-// RegisterNode handles node registration
-func (s *InspectorServiceImpl) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRequest) (*inspector_pb.RegisterNodeResponse, error) {
-	addr := req.GetAdvertiseAddress()
-	if addr == "" {
-		return nil, grpc.Errorf(3, "advertise address cannot be empty")
-	}
-
-	node := models.GoverseNode{
-		ID:            addr,
-		Label:         "Node " + addr,
-		X:             0,
-		Y:             0,
-		Width:         120,
-		Height:        80,
-		Color:         "#4CAF50",
-		Type:          "goverse_node",
-		AdvertiseAddr: addr,
-		RegisteredAt:  time.Now(),
-	}
-	s.pg.AddOrUpdateNode(node)
-
-	// Register initial objects
-	for _, o := range req.GetObjects() {
-		if o == nil || o.Id == "" {
-			continue
-		}
-		obj := models.GoverseObject{
-			ID:            o.Id,
-			Label:         o.GetClass() + " (" + o.GetId() + ")",
-			X:             0,
-			Y:             0,
-			Size:          10,
-			Color:         "#1f77b4",
-			Type:          "object",
-			GoverseNodeID: addr,
-		}
-		s.pg.AddOrUpdateObject(obj)
-	}
-
-	return &inspector_pb.RegisterNodeResponse{}, nil
-}
-
-// UnregisterNode handles node unregistration
-func (s *InspectorServiceImpl) UnregisterNode(ctx context.Context, req *inspector_pb.UnregisterNodeRequest) (*inspector_pb.Empty, error) {
-	addr := req.GetAdvertiseAddress()
-	s.pg.RemoveNode(addr)
-	return &inspector_pb.Empty{}, nil
-}
-
-// AddOrUpdateObject handles object addition/update
-func (s *InspectorServiceImpl) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOrUpdateObjectRequest) (*inspector_pb.Empty, error) {
-	o := req.GetObject()
-	if o == nil || o.Id == "" {
-		return &inspector_pb.Empty{}, nil
-	}
-
-	nodeAddress := req.GetNodeAddress()
-	if !s.pg.IsNodeRegistered(nodeAddress) {
-		return nil, grpc.Errorf(5, "node not registered")
-	}
-
-	obj := models.GoverseObject{
-		ID:            o.Id,
-		Label:         o.GetClass() + " (" + o.GetId() + ")",
-		X:             0,
-		Y:             0,
-		Size:          10,
-		Color:         "#1f77b4",
-		Type:          "object",
-		GoverseNodeID: nodeAddress,
-	}
-	s.pg.AddOrUpdateObject(obj)
-	return &inspector_pb.Empty{}, nil
-}
-
-// startTestInspectorServer starts a test inspector gRPC server
+// startTestInspectorServer starts a test inspector gRPC server using the original inspector service
 func startTestInspectorServer(t *testing.T, address string) (*grpc.Server, *graph.GoverseGraph) {
 	t.Helper()
 
@@ -115,7 +24,7 @@ func startTestInspectorServer(t *testing.T, address string) (*grpc.Server, *grap
 
 	pg := graph.NewGoverseGraph()
 	grpcServer := grpc.NewServer()
-	inspector_pb.RegisterInspectorServiceServer(grpcServer, NewInspectorServiceImpl(pg))
+	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.NewService(pg))
 
 	// Start server in background
 	go func() {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
+	"github.com/xiaonanln/goverse/inspector"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,7 +16,7 @@ import (
 
 func TestInspectorService_Ping(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := NewInspectorService(pg)
+	svc := inspector.NewService(pg)
 
 	resp, err := svc.Ping(context.Background(), &inspector_pb.Empty{})
 	if err != nil {
@@ -107,7 +108,7 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pg := graph.NewGoverseGraph()
-			svc := NewInspectorService(pg)
+			svc := inspector.NewService(pg)
 
 			// Register node if needed
 			if tt.registerNode {
@@ -215,7 +216,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pg := graph.NewGoverseGraph()
-			svc := NewInspectorService(pg)
+			svc := inspector.NewService(pg)
 
 			resp, err := svc.RegisterNode(context.Background(), tt.req)
 			if (err != nil) != tt.wantErr {
@@ -242,7 +243,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 
 func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := NewInspectorService(pg)
+	svc := inspector.NewService(pg)
 
 	// First registration with obj1 and obj2
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
@@ -284,7 +285,7 @@ func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 
 func TestInspectorService_UnregisterNode(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := NewInspectorService(pg)
+	svc := inspector.NewService(pg)
 
 	// Register a node first
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
@@ -372,7 +373,7 @@ func TestCreateHTTPHandler(t *testing.T) {
 
 	t.Run("graph endpoint returns populated data", func(t *testing.T) {
 		// Add a node
-		svc := NewInspectorService(pg)
+		svc := inspector.NewService(pg)
 		_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
 			AdvertiseAddress: "localhost:47000",
 			Objects: []*inspector_pb.Object{
@@ -411,23 +412,10 @@ func TestCreateHTTPHandler(t *testing.T) {
 	})
 }
 
-func TestRandPos(t *testing.T) {
-	// Test that randPos returns values in expected range
-	for i := 0; i < 100; i++ {
-		x, y := randPos()
-		if x < 0 || x >= 200 {
-			t.Errorf("x value %d out of range [0, 200)", x)
-		}
-		if y < 0 || y >= 200 {
-			t.Errorf("y value %d out of range [0, 200)", y)
-		}
-	}
-}
-
 func TestInspectorService_Integration(t *testing.T) {
 	// Integration test covering multiple operations
 	pg := graph.NewGoverseGraph()
-	svc := NewInspectorService(pg)
+	svc := inspector.NewService(pg)
 
 	// Test ping
 	_, err := svc.Ping(context.Background(), &inspector_pb.Empty{})
