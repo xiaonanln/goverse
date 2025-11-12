@@ -122,15 +122,20 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 
 	cm.mu.Unlock()
 
-	// Store all shards in etcd first
+	// Store all shards in etcd first and update ModRevision
 	client := mgr.GetClient()
 	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
 		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
 		value := formatShardInfo(shardInfo)
-		_, err := client.Put(ctx, key, value)
+		resp, err := client.Put(ctx, key, value)
 		if err != nil {
 			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
 		}
+		// Update the in-memory ModRevision with the actual value from etcd
+		cm.mu.Lock()
+		shardInfo.ModRevision = resp.Header.Revision
+		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.mu.Unlock()
 	}
 
 	// Create objectsPerShard map
@@ -278,15 +283,20 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Store all shards in etcd first
+	// Store all shards in etcd first and update ModRevision
 	client := mgr.GetClient()
 	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
 		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
 		value := formatShardInfo(shardInfo)
-		_, err := client.Put(ctx, key, value)
+		resp, err := client.Put(ctx, key, value)
 		if err != nil {
 			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
 		}
+		// Update the in-memory ModRevision with the actual value from etcd
+		cm.mu.Lock()
+		shardInfo.ModRevision = resp.Header.Revision
+		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.mu.Unlock()
 	}
 
 	// Create objectsPerShard map with no objects for any shard
@@ -385,15 +395,21 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Store shards in etcd
+	// Store shards in etcd and update ModRevision
 	client := mgr.GetClient()
 	for _, shardID := range []int{shard1, shard2} {
-		key := prefix + "/shard/" + string(rune(shardID))
+		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
 		value := formatShardInfo(cm.state.ShardMapping.Shards[shardID])
-		_, err := client.Put(ctx, key, value)
+		resp, err := client.Put(ctx, key, value)
 		if err != nil {
 			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
 		}
+		// Update the in-memory ModRevision with the actual value from etcd
+		cm.mu.Lock()
+		shardInfo := cm.state.ShardMapping.Shards[shardID]
+		shardInfo.ModRevision = resp.Header.Revision
+		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.mu.Unlock()
 	}
 
 	// Create objectsPerShard map with no objects
@@ -413,7 +429,7 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 
 	// Verify both shards were released
 	for _, shardID := range []int{shard1, shard2} {
-		key := prefix + "/shard/" + string(rune(shardID))
+		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
 		resp, err := client.Get(ctx, key)
 		if err != nil {
 			t.Fatalf("Failed to get shard %d from etcd: %v", shardID, err)
