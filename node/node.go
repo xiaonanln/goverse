@@ -14,14 +14,8 @@ import (
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-
-	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
 type Object = object.Object
@@ -61,7 +55,7 @@ type Node struct {
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock // Per-object ID locking for create/delete/call/save coordination
-	inspectorClient       inspector_pb.InspectorServiceClient
+	inspectorManager      *InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
 	persistenceProvider   object.PersistenceProvider
@@ -81,6 +75,7 @@ func NewNode(advertiseAddress string) *Node {
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
+		inspectorManager:    NewInspectorManager(advertiseAddress),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
@@ -97,7 +92,8 @@ func (node *Node) Start(ctx context.Context) error {
 		node.StartPeriodicPersistence(ctx)
 	}
 
-	return node.connectToInspector()
+	// Start the inspector manager
+	return node.inspectorManager.Start(ctx)
 }
 
 func (node *Node) IsStarted() bool {
@@ -140,63 +136,8 @@ func (node *Node) Stop(ctx context.Context) error {
 	node.objectsMu.Unlock()
 	node.logger.Infof("Cleared %d objects from memory", objectCount)
 
-	return node.unregisterFromInspector()
-}
-
-// Connect to inspector service at localhost:8081
-func (node *Node) connectToInspector() error {
-	conn, err := grpc.NewClient("localhost:8081", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		node.logger.Warnf("Failed to connect to inspector service: %v (continuing without inspector)", err)
-		return nil
-	}
-
-	inspectorClient := inspector_pb.NewInspectorServiceClient(conn)
-	node.logger.Infof("Connected to inspector service at localhost:8081")
-	node.inspectorClient = inspectorClient
-
-	// Register this node with the inspector
-	registerReq := &inspector_pb.RegisterNodeRequest{
-		AdvertiseAddress: node.advertiseAddress,
-	}
-
-	node.objectsMu.RLock()
-	for _, obj := range node.objects {
-		registerReq.Objects = append(registerReq.Objects, &inspector_pb.Object{
-			Id:    obj.Id(),
-			Class: obj.Type(),
-		})
-	}
-	node.objectsMu.RUnlock()
-
-	_, err = inspectorClient.RegisterNode(context.Background(), registerReq)
-	if err != nil {
-		node.logger.Warnf("Failed to register node with inspector: %v (continuing without inspector)", err)
-		return nil
-	}
-
-	node.logger.Infof("Successfully registered node %s with inspector", node.advertiseAddress)
-	return nil
-}
-
-// Unregister this node from the inspector service
-func (node *Node) unregisterFromInspector() error {
-	if node.inspectorClient == nil {
-		return nil
-	}
-
-	unregisterReq := &inspector_pb.UnregisterNodeRequest{
-		AdvertiseAddress: node.advertiseAddress,
-	}
-
-	_, err := node.inspectorClient.UnregisterNode(context.Background(), unregisterReq)
-	if err != nil {
-		node.logger.Warnf("Failed to unregister node from inspector: %v", err)
-		return nil
-	}
-
-	node.logger.Infof("Successfully unregistered node %s from inspector", node.advertiseAddress)
-	return nil
+	// Stop the inspector manager and unregister from inspector
+	return node.inspectorManager.Stop()
 }
 
 // String returns a string representation of the node
@@ -531,11 +472,9 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
 
+	// Notify inspector manager about the new object
 	if node.IsStarted() {
-		err := node.registerObjectWithInspector(obj)
-		if err != nil && !errors.Is(err, context.Canceled) {
-			node.logger.Errorf("Failed to register object with inspector: %v", err)
-		}
+		node.inspectorManager.NotifyObjectAdded(id, typ)
 	}
 
 	return nil
@@ -546,6 +485,11 @@ func (node *Node) destroyObject(id string) {
 	delete(node.objects, id)
 	node.objectsMu.Unlock()
 	node.logger.Infof("Destroyed object %s", id)
+	
+	// Notify inspector manager about object removal
+	if node.IsStarted() {
+		node.inspectorManager.NotifyObjectRemoved(id)
+	}
 }
 
 // DeleteObject removes an object from the node and deletes it from persistence if configured.
@@ -609,49 +553,6 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 
 	node.destroyObject(id)
 	node.logger.Infof("Deleted object %s from node", id)
-	return nil
-}
-
-func (node *Node) registerObjectWithInspector(object Object) error {
-	if node.inspectorClient == nil {
-		return nil
-	}
-
-	req := &inspector_pb.AddOrUpdateObjectRequest{
-		Object: &inspector_pb.Object{
-			Id:    object.Id(),
-			Class: object.Type(),
-		},
-		NodeAddress: node.advertiseAddress,
-	}
-
-	_, err := node.inspectorClient.AddOrUpdateObject(context.Background(), req)
-	if err != nil {
-		// Check if the error is NotFound (node not registered with inspector)
-		st, ok := status.FromError(err)
-		if ok && st.Code() == codes.NotFound {
-			node.logger.Warnf("Node not registered with inspector (detected via object update), attempting reconnection")
-			// Attempt to reconnect and re-register
-			reconnectErr := node.connectToInspector()
-			if reconnectErr != nil {
-				node.logger.Errorf("Failed to reconnect to inspector: %v", reconnectErr)
-			} else {
-				node.logger.Infof("Successfully reconnected to inspector")
-				// Retry registering the object after reconnection
-				_, retryErr := node.inspectorClient.AddOrUpdateObject(context.Background(), req)
-				if retryErr != nil {
-					node.logger.Warnf("Failed to register object after reconnection: %v", retryErr)
-				} else {
-					node.logger.Infof("Registered object %s with inspector after reconnection", object.String())
-				}
-			}
-			return nil
-		}
-		node.logger.Warnf("Failed to register object with inspector: %v", err)
-		return nil
-	}
-
-	node.logger.Infof("Registered object %s with inspector", object.String())
 	return nil
 }
 
