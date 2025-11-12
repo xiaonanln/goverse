@@ -68,7 +68,7 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Get a shard ID that we know belongs to node1 initially
-	// We'll create an object on node1, then change the target to node2, 
+	// We'll create an object on node1, then change the target to node2,
 	// then delete the object, and verify node1 releases the shard
 	testObjectID := "TestObject-ownership-release"
 	targetShardID := sharding.GetShardID(testObjectID)
@@ -116,7 +116,7 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	etcdMgr := cluster1.GetEtcdManagerForTesting()
 	client := etcdMgr.GetClient()
 	shardKey := fmt.Sprintf("%s/shard/%d", etcdMgr.GetPrefix(), targetShardID)
-	
+
 	// Get current shard info
 	resp, err := client.Get(ctx, shardKey)
 	if err != nil {
@@ -159,7 +159,7 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	// The value should now be "localhost:52002," (target node, empty current node)
 	expectedValue := "localhost:52002,"
 	if parts != expectedValue {
-		t.Errorf("Expected shard %d to have value %s after release, got %s", 
+		t.Errorf("Expected shard %d to have value %s after release, got %s",
 			targetShardID, expectedValue, parts)
 	}
 }
@@ -221,7 +221,7 @@ func TestReleaseShardOwnership_WithObjects(t *testing.T) {
 	etcdMgr := cluster1.GetEtcdManagerForTesting()
 	client := etcdMgr.GetClient()
 	shardKey := fmt.Sprintf("%s/shard/%d", etcdMgr.GetPrefix(), targetShardID)
-	
+
 	// Update TargetNode to node2 but keep CurrentNode as node1
 	newValue := "localhost:52102,localhost:52101"
 	_, err = client.Put(ctx, shardKey, newValue)
@@ -253,7 +253,7 @@ func TestReleaseShardOwnership_WithObjects(t *testing.T) {
 	// The value should still be "localhost:52102,localhost:52101" (not released)
 	expectedValue := "localhost:52102,localhost:52101"
 	if parts != expectedValue {
-		t.Errorf("Expected shard %d to still have CurrentNode set (not released), got %s", 
+		t.Errorf("Expected shard %d to still have CurrentNode set (not released), got %s",
 			targetShardID, parts)
 	}
 }
