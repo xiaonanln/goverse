@@ -14,13 +14,18 @@ import (
 )
 
 // startTestInspectorServer starts a test inspector gRPC server using the original inspector service
-func startTestInspectorServer(t *testing.T, address string) (*grpc.Server, *graph.GoverseGraph) {
+// Returns the gRPC server, graph, and the actual address it's listening on
+func startTestInspectorServer(t *testing.T) (*grpc.Server, *graph.GoverseGraph, string) {
 	t.Helper()
 
-	listener, err := net.Listen("tcp", address)
+	// Use :0 to get a random available port
+	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to listen on %s: %v", address, err)
+		t.Fatalf("Failed to listen on random port: %v", err)
 	}
+
+	// Get the actual address assigned
+	address := listener.Addr().String()
 
 	pg := graph.NewGoverseGraph()
 	grpcServer := grpc.NewServer()
@@ -36,20 +41,29 @@ func startTestInspectorServer(t *testing.T, address string) (*grpc.Server, *grap
 	// Give server time to start
 	time.Sleep(100 * time.Millisecond)
 
-	return grpcServer, pg
+	return grpcServer, pg, address
 }
 
 // TestInspectorManager_ActualConnection tests actual gRPC connection between Node and Inspector
 func TestInspectorManager_ActualConnection(t *testing.T) {
-	// Start test inspector server on the expected port
-	grpcServer, pg := startTestInspectorServer(t, "localhost:8081")
+	// Start test inspector server on a random port
+	grpcServer, pg, inspectorAddr := startTestInspectorServer(t)
 	defer grpcServer.GracefulStop()
 
+	// Get a random port for the node
+	nodeListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node: %v", err)
+	}
+	nodeAddr := nodeListener.Addr().String()
+	nodeListener.Close()
+
 	// Create and start inspector manager
-	mgr := NewInspectorManager("localhost:47200")
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.inspectorAddress = inspectorAddr // Use the randomly assigned inspector address
 	ctx := context.Background()
 
-	err := mgr.Start(ctx)
+	err = mgr.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start inspector manager: %v", err)
 	}
@@ -72,12 +86,12 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Errorf("Expected 1 node registered, got %d", len(nodes))
 	}
-	if len(nodes) > 0 && nodes[0].AdvertiseAddr != "localhost:47200" {
-		t.Errorf("Expected node address localhost:47200, got %s", nodes[0].AdvertiseAddr)
+	if len(nodes) > 0 && nodes[0].AdvertiseAddr != nodeAddr {
+		t.Errorf("Expected node address %s, got %s", nodeAddr, nodes[0].AdvertiseAddr)
 	}
 
 	// Test direct ping
-	conn, err := grpc.NewClient("localhost:8081", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(inspectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to inspector: %v", err)
 	}
@@ -92,15 +106,24 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 
 // TestInspectorManager_ObjectNotifications tests object add/remove notifications over actual connection
 func TestInspectorManager_ObjectNotifications(t *testing.T) {
-	// Start test inspector server
-	grpcServer, pg := startTestInspectorServer(t, "localhost:8081")
+	// Start test inspector server on a random port
+	grpcServer, pg, inspectorAddr := startTestInspectorServer(t)
 	defer grpcServer.GracefulStop()
 
+	// Get a random port for the node
+	nodeListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node: %v", err)
+	}
+	nodeAddr := nodeListener.Addr().String()
+	nodeListener.Close()
+
 	// Create and start inspector manager
-	mgr := NewInspectorManager("localhost:47201")
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.inspectorAddress = inspectorAddr
 	ctx := context.Background()
 
-	err := mgr.Start(ctx)
+	err = mgr.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start inspector manager: %v", err)
 	}
@@ -151,15 +174,24 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 
 // TestInspectorManager_NodeUnregistration tests proper node unregistration
 func TestInspectorManager_NodeUnregistration(t *testing.T) {
-	// Start test inspector server
-	grpcServer, pg := startTestInspectorServer(t, "localhost:8081")
+	// Start test inspector server on a random port
+	grpcServer, pg, inspectorAddr := startTestInspectorServer(t)
 	defer grpcServer.GracefulStop()
 
+	// Get a random port for the node
+	nodeListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node: %v", err)
+	}
+	nodeAddr := nodeListener.Addr().String()
+	nodeListener.Close()
+
 	// Create and start inspector manager
-	mgr := NewInspectorManager("localhost:47202")
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.inspectorAddress = inspectorAddr
 	ctx := context.Background()
 
-	err := mgr.Start(ctx)
+	err = mgr.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start inspector manager: %v", err)
 	}
@@ -191,14 +223,23 @@ func TestInspectorManager_NodeUnregistration(t *testing.T) {
 
 // TestInspectorManager_ReconnectionLogic tests the reconnection behavior
 func TestInspectorManager_ReconnectionLogic(t *testing.T) {
-	// Start test inspector server
-	grpcServer, pg := startTestInspectorServer(t, "localhost:8081")
+	// Start test inspector server on a random port
+	grpcServer, pg, inspectorAddr := startTestInspectorServer(t)
+
+	// Get a random port for the node
+	nodeListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node: %v", err)
+	}
+	nodeAddr := nodeListener.Addr().String()
+	nodeListener.Close()
 
 	// Create and start inspector manager
-	mgr := NewInspectorManager("localhost:47203")
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.inspectorAddress = inspectorAddr
 	ctx := context.Background()
 
-	err := mgr.Start(ctx)
+	err = mgr.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start inspector manager: %v", err)
 	}
@@ -245,9 +286,24 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	// Add object while disconnected (should be queued)
 	mgr.NotifyObjectAdded("during-disconnect-obj", "DisconnectType")
 
-	// Restart the inspector server
-	grpcServer, pg = startTestInspectorServer(t, "localhost:8081")
+	// Restart the inspector server on the same address
+	listener, err := net.Listen("tcp", inspectorAddr)
+	if err != nil {
+		t.Fatalf("Failed to restart listener on %s: %v", inspectorAddr, err)
+	}
+
+	pg = graph.NewGoverseGraph()
+	grpcServer = grpc.NewServer()
+	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.NewService(pg))
+
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			t.Logf("Inspector server stopped: %v", err)
+		}
+	}()
 	defer grpcServer.GracefulStop()
+
+	time.Sleep(100 * time.Millisecond)
 
 	// Wait for reconnection (manager tries every reconnectRetryInterval = 5 seconds)
 	time.Sleep(6 * time.Second)
@@ -292,19 +348,44 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 
 // TestInspectorManager_MultipleNodesConnection tests multiple nodes connecting to same inspector
 func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
-	// Start test inspector server
-	grpcServer, pg := startTestInspectorServer(t, "localhost:8081")
+	// Start test inspector server on a random port
+	grpcServer, pg, inspectorAddr := startTestInspectorServer(t)
 	defer grpcServer.GracefulStop()
 
 	ctx := context.Background()
 
+	// Get random ports for all nodes
+	nodeListener1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node 1: %v", err)
+	}
+	nodeAddr1 := nodeListener1.Addr().String()
+	nodeListener1.Close()
+
+	nodeListener2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node 2: %v", err)
+	}
+	nodeAddr2 := nodeListener2.Addr().String()
+	nodeListener2.Close()
+
+	nodeListener3, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node 3: %v", err)
+	}
+	nodeAddr3 := nodeListener3.Addr().String()
+	nodeListener3.Close()
+
 	// Create multiple managers for different nodes
-	mgr1 := NewInspectorManager("localhost:47210")
-	mgr2 := NewInspectorManager("localhost:47211")
-	mgr3 := NewInspectorManager("localhost:47212")
+	mgr1 := NewInspectorManager(nodeAddr1)
+	mgr1.inspectorAddress = inspectorAddr
+	mgr2 := NewInspectorManager(nodeAddr2)
+	mgr2.inspectorAddress = inspectorAddr
+	mgr3 := NewInspectorManager(nodeAddr3)
+	mgr3.inspectorAddress = inspectorAddr
 
 	// Start all managers
-	err := mgr1.Start(ctx)
+	err = mgr1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start manager 1: %v", err)
 	}
@@ -351,13 +432,13 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 		objectsByNode[obj.GoverseNodeID] = append(objectsByNode[obj.GoverseNodeID], obj.ID)
 	}
 
-	if len(objectsByNode["localhost:47210"]) != 2 {
-		t.Errorf("Expected 2 objects for node1, got %d", len(objectsByNode["localhost:47210"]))
+	if len(objectsByNode[nodeAddr1]) != 2 {
+		t.Errorf("Expected 2 objects for node1, got %d", len(objectsByNode[nodeAddr1]))
 	}
-	if len(objectsByNode["localhost:47211"]) != 1 {
-		t.Errorf("Expected 1 object for node2, got %d", len(objectsByNode["localhost:47211"]))
+	if len(objectsByNode[nodeAddr2]) != 1 {
+		t.Errorf("Expected 1 object for node2, got %d", len(objectsByNode[nodeAddr2]))
 	}
-	if len(objectsByNode["localhost:47212"]) != 1 {
-		t.Errorf("Expected 1 object for node3, got %d", len(objectsByNode["localhost:47212"]))
+	if len(objectsByNode[nodeAddr3]) != 1 {
+		t.Errorf("Expected 1 object for node3, got %d", len(objectsByNode[nodeAddr3]))
 	}
 }
