@@ -75,52 +75,72 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 	return mgr, nil
 }
 
-// NewCluster creates a new cluster instance with the given etcd address and prefix.
+// NewCluster creates a new cluster instance with the given configuration.
 // It automatically connects to etcd and initializes the etcd manager and consensus manager.
 // This function assigns the created cluster to the singleton and should be called once during application initialization.
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
-func NewCluster(node *node.Node, etcdAddress string, etcdPrefix string) (*Cluster, error) {
+func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 	// Create a new cluster instance
 	c := &Cluster{
-		thisNode:         node,
-		logger:           logger.NewLogger("Cluster"),
-		clusterReadyChan: make(chan bool),
-		etcdAddress:      etcdAddress,
-		etcdPrefix:       etcdPrefix,
-		nodeConnections:  nodeconnections.New(),
+		thisNode:                  thisNode,
+		logger:                    logger.NewLogger("Cluster"),
+		clusterReadyChan:          make(chan bool),
+		etcdAddress:               cfg.EtcdAddress,
+		etcdPrefix:                cfg.EtcdPrefix,
+		minQuorum:                 cfg.MinQuorum,
+		nodeStabilityDuration:     cfg.NodeStabilityDuration,
+		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
+		nodeConnections:           nodeconnections.New(),
 	}
 
-	mgr, err := createAndConnectEtcdManager(etcdAddress, etcdPrefix)
+	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
 	if err != nil {
 		return nil, err
 	}
 
 	c.etcdManager = mgr
 	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
+	
+	// Set minQuorum on consensus manager if specified
+	if cfg.MinQuorum > 0 {
+		c.consensusManager.SetMinQuorum(cfg.MinQuorum)
+	}
 
 	return c, nil
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
+// Uses test-appropriate configuration values
 func newClusterForTesting(node *node.Node, name string) *Cluster {
+	// Use test-appropriate durations (faster than production defaults)
 	return &Cluster{
-		thisNode:         node,
-		logger:           logger.NewLogger(name),
-		clusterReadyChan: make(chan bool),
-		nodeConnections:  nodeconnections.New(),
+		thisNode:                  node,
+		logger:                    logger.NewLogger(name),
+		clusterReadyChan:          make(chan bool),
+		nodeConnections:           nodeconnections.New(),
+		minQuorum:                 1,
+		nodeStabilityDuration:     3 * time.Second,
+		shardMappingCheckInterval: 1 * time.Second,
 	}
 }
 
 // newClusterWithEtcdForTesting creates a new cluster instance for testing and initializes it with etcd
+// Uses test-appropriate configuration values (shorter durations)
 func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress string, etcdPrefix string) (*Cluster, error) {
-	c, err := NewCluster(node, etcdAddress, etcdPrefix)
+	// Create config with test values
+	cfg := Config{
+		EtcdAddress:               etcdAddress,
+		EtcdPrefix:                etcdPrefix,
+		MinQuorum:                 1,
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
+	}
+	
+	c, err := NewCluster(cfg, node)
 	if err != nil {
 		return nil, err
 	}
-	c.SetNodeStabilityDuration(3 * time.Second)
-
-	c.SetNodeStabilityDuration(3 * time.Second)
 
 	// Override logger with custom name for testing
 	c.logger = logger.NewLogger(name)
