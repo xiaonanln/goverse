@@ -171,7 +171,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	// 2. The check interval to trigger (up to 5s)
 	// 3. Cluster state to be stable (10s stability duration)
 	// Total: up to 15s + some buffer
-	waitTime := DefaultNodeStabilityDuration + ShardMappingCheckInterval + 5*time.Second
+	waitTime := testutil.WaitForShardMappingTimeout
 	t.Logf("Waiting %v for objects to be removed from old node and created on new node...", waitTime)
 	time.Sleep(waitTime)
 

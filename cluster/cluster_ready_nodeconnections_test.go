@@ -62,7 +62,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:47112", testPrefix)
 
 	// Wait for both clusters to be ready (cluster.Start already handles all initialization)
-	timeout := DefaultNodeStabilityDuration + ShardMappingCheckInterval*2 + 5*time.Second
+	timeout := testutil.WaitForShardMappingTimeout
 
 	// Wait for cluster1 (leader) to be ready
 	select {
