@@ -92,6 +92,13 @@ func (node *Node) Start(ctx context.Context) error {
 		node.StartPeriodicPersistence(ctx)
 	}
 
+	// Notify inspector manager about existing objects
+	node.objectsMu.RLock()
+	for _, obj := range node.objects {
+		node.inspectorManager.NotifyObjectAdded(obj.Id(), obj.Type())
+	}
+	node.objectsMu.RUnlock()
+
 	// Start the inspector manager
 	return node.inspectorManager.Start(ctx)
 }
