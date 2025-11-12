@@ -826,9 +826,10 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	return nil
 }
 
-// computeShardUpdates computes which shards need to be reassigned based on current nodes.
+// calcReassignShardTargetNodes computes which shards need to be reassigned based on current nodes.
 // Returns a map of shard IDs to new ShardInfo, or nil if no changes are needed.
-func (cm *ConsensusManager) computeShardUpdates() map[int]ShardInfo {
+// This only updates TargetNode fields for shards whose current target is empty or no longer in the active node list.
+func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
@@ -875,11 +876,11 @@ func (cm *ConsensusManager) computeShardUpdates() map[int]ShardInfo {
 }
 
 // ReassignShardTargetNodes reassigns shard target nodes based on the current node list.
-// This only updates TargetNode fields for shards whose current target is no longer in the active node list.
+// This only updates TargetNode fields for shards whose current target is empty or no longer in the active node list.
 // It does not modify CurrentNode fields - use ClaimShardsForNode for that.
 // Returns the number of shards successfully updated and any error encountered.
 func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, error) {
-	updateShards := cm.computeShardUpdates()
+	updateShards := cm.calcReassignShardTargetNodes()
 
 	if updateShards == nil {
 		cm.logger.Infof("No changes needed to shard mapping")
