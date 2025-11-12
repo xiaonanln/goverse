@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
+	"github.com/xiaonanln/goverse/inspector"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
@@ -52,7 +53,7 @@ func serveGRPC(pg *graph.GoverseGraph, addr string, shutdownChan chan struct{}) 
 		return err
 	}
 	g := grpc.NewServer()
-	inspector_pb.RegisterInspectorServiceServer(g, NewInspectorService(pg))
+	inspector_pb.RegisterInspectorServiceServer(g, inspector.NewService(pg))
 	reflection.Register(g)
 	log.Printf("gRPC on %s", addr)
 
