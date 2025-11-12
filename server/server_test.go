@@ -35,9 +35,11 @@ func TestValidateServerConfig_NilConfig(t *testing.T) {
 
 func TestValidateServerConfig_EmptyListenAddress(t *testing.T) {
 	config := &ServerConfig{
-		ListenAddress:       "",
-		AdvertiseAddress:    "localhost:8080",
-		ClientListenAddress: "localhost:8081",
+		ListenAddress:             "",
+		AdvertiseAddress:          "localhost:8080",
+		ClientListenAddress:       "localhost:8081",
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 	err := validateServerConfig(config)
 	if err == nil {
@@ -51,9 +53,11 @@ func TestValidateServerConfig_EmptyListenAddress(t *testing.T) {
 
 func TestValidateServerConfig_EmptyAdvertiseAddress(t *testing.T) {
 	config := &ServerConfig{
-		ListenAddress:       "localhost:8080",
-		AdvertiseAddress:    "",
-		ClientListenAddress: "localhost:8081",
+		ListenAddress:             "localhost:8080",
+		AdvertiseAddress:          "",
+		ClientListenAddress:       "localhost:8081",
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 	err := validateServerConfig(config)
 	if err == nil {
@@ -67,9 +71,11 @@ func TestValidateServerConfig_EmptyAdvertiseAddress(t *testing.T) {
 
 func TestValidateServerConfig_ValidConfig(t *testing.T) {
 	config := &ServerConfig{
-		ListenAddress:       "localhost:8080",
-		AdvertiseAddress:    "localhost:8080",
-		ClientListenAddress: "localhost:8081",
+		ListenAddress:             "localhost:8080",
+		AdvertiseAddress:          "localhost:8080",
+		ClientListenAddress:       "localhost:8081",
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 	err := validateServerConfig(config)
 	if err != nil {
@@ -84,10 +90,11 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 	// Create config with custom NodeStabilityDuration
 	customDuration := 3 * time.Second
 	config := &ServerConfig{
-		ListenAddress:         "localhost:9097",
-		AdvertiseAddress:      "localhost:9097",
-		ClientListenAddress:   "localhost:9098",
-		NodeStabilityDuration: customDuration,
+		ListenAddress:             "localhost:9097",
+		AdvertiseAddress:          "localhost:9097",
+		ClientListenAddress:       "localhost:9098",
+		NodeStabilityDuration:     customDuration,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
 	server, err := NewServer(config)
@@ -113,9 +120,10 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 
 	// Create config without custom NodeStabilityDuration
 	config := &ServerConfig{
-		ListenAddress:       "localhost:9099",
-		AdvertiseAddress:    "localhost:9099",
-		ClientListenAddress: "localhost:9100",
+		ListenAddress:             "localhost:9099",
+		AdvertiseAddress:          "localhost:9099",
+		ClientListenAddress:       "localhost:9100",
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
 	server, err := NewServer(config)
@@ -140,9 +148,11 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	resetClusterForTesting(t)
 
 	config := &ServerConfig{
-		ListenAddress:       "localhost:9090",
-		AdvertiseAddress:    "localhost:9090",
-		ClientListenAddress: "localhost:9091",
+		ListenAddress:             "localhost:9090",
+		AdvertiseAddress:          "localhost:9090",
+		ClientListenAddress:       "localhost:9091",
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
 	server, err := NewServer(config)
@@ -187,11 +197,13 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	customPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	config := &ServerConfig{
-		ListenAddress:       "localhost:9095",
-		AdvertiseAddress:    "localhost:9095",
-		ClientListenAddress: "localhost:9096",
-		EtcdAddress:         "localhost:2379",
-		EtcdPrefix:          customPrefix,
+		ListenAddress:             "localhost:9095",
+		AdvertiseAddress:          "localhost:9095",
+		ClientListenAddress:       "localhost:9096",
+		EtcdAddress:               "localhost:2379",
+		EtcdPrefix:                customPrefix,
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
 	server, err := NewServer(config)
@@ -302,11 +314,13 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Create server config with unique ports and etcd prefix
 	config := &ServerConfig{
-		ListenAddress:       "localhost:47100",
-		AdvertiseAddress:    "localhost:47100",
-		ClientListenAddress: "localhost:47101",
-		EtcdAddress:         "localhost:2379",
-		EtcdPrefix:          etcdPrefix,
+		ListenAddress:             "localhost:47100",
+		AdvertiseAddress:          "localhost:47100",
+		ClientListenAddress:       "localhost:47101",
+		EtcdAddress:               "localhost:2379",
+		EtcdPrefix:                etcdPrefix,
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
 	// Create server
@@ -426,7 +440,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	}
 
 	if len(shardMapping.Shards) != 8192 {
-		t.Fatal("Shard mapping should contain 8192 shards")
+		t.Fatal("Shard mapping should contain 8192 shards, got ", len(shardMapping.Shards))
 	}
 
 	// Verify the leader node is in the shard mapping
