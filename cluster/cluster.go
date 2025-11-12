@@ -913,21 +913,6 @@ func (c *Cluster) leaderShardMappingManagement(ctx context.Context) {
 		c.logger.Infof("Reassigned %d shards to new target nodes", reassignedCount)
 	}
 
-	// Second, assign any unassigned shards (CurrentNode empty)
-	// This assigns shards to nodes with minimal shard count
-	assignedCount, err := c.consensusManager.AssignUnassignedShards(ctx)
-	if err != nil {
-		c.logger.Errorf("Failed to assign unassigned shards: %v", err)
-		return
-	}
-
-	// If we assigned any shards, wait for cluster state to be stable again
-	// before attempting rebalancing
-	if assignedCount > 0 {
-		c.logger.Infof("Assigned %d unassigned shards, waiting for cluster to stabilize before rebalancing", assignedCount)
-		return
-	}
-
 	// Finally, if all shards are assigned and cluster is stable, check if rebalancing is needed
 	rebalanced, err := c.consensusManager.RebalanceShards(ctx)
 	if err != nil {

@@ -58,7 +58,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 	// Wait for nodes to be discovered
 	time.Sleep(200 * time.Millisecond)
 
-	// Step 1: Create initial shard mapping with all shards unassigned (CurrentNode empty)
+	// Step 1: Create initial shard mapping with all shards assigned and balanced
 	t.Run("InitialSetup", func(t *testing.T) {
 		nodesMap := map[string]bool{
 			"node1": true,
@@ -66,12 +66,14 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 			"node3": true,
 		}
 
+		// Create fully assigned shard mapping with balanced distribution
 		shards := make(map[int]ShardInfo)
 		for i := 0; i < sharding.NumShards; i++ {
 			nodeIdx := i % len(nodes)
+			assignedNode := nodes[nodeIdx]
 			shards[i] = ShardInfo{
-				TargetNode:  nodes[nodeIdx],
-				CurrentNode: "", // Initially unassigned
+				TargetNode:  assignedNode,
+				CurrentNode: assignedNode, // Fully assigned
 			}
 		}
 
@@ -79,55 +81,6 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 		// Wait for watch to propagate
 		time.Sleep(200 * time.Millisecond)
-	})
-
-	// Step 2: Assign unassigned shards
-	t.Run("AssignUnassignedShards", func(t *testing.T) {
-		assignedCount, err := cm.AssignUnassignedShards(ctx)
-		if err != nil {
-			t.Fatalf("AssignUnassignedShards failed: %v", err)
-		}
-
-		if assignedCount != sharding.NumShards {
-			t.Errorf("Expected to assign %d shards, assigned %d", sharding.NumShards, assignedCount)
-		}
-
-		// Wait for watch to propagate
-		time.Sleep(200 * time.Millisecond)
-
-		// Verify all shards are now assigned
-		mapping, err := cm.GetShardMapping()
-		if err != nil {
-			t.Fatalf("Failed to get shard mapping: %v", err)
-		}
-
-		unassignedCount := 0
-		shardCounts := make(map[string]int)
-		for _, node := range nodes {
-			shardCounts[node] = 0
-		}
-
-		for i := 0; i < sharding.NumShards; i++ {
-			shardInfo, exists := mapping.Shards[i]
-			if !exists || shardInfo.CurrentNode == "" {
-				unassignedCount++
-			} else {
-				shardCounts[shardInfo.CurrentNode]++
-			}
-		}
-
-		if unassignedCount > 0 {
-			t.Errorf("Expected all shards to be assigned, found %d unassigned", unassignedCount)
-		}
-
-		// Verify balanced distribution (should be roughly equal)
-		// With 8192 shards and 3 nodes: should be 2731, 2731, 2730
-		expectedPerNode := sharding.NumShards / len(nodes)
-		for node, count := range shardCounts {
-			if count < expectedPerNode-1 || count > expectedPerNode+1 {
-				t.Errorf("Node %s has %d shards, expected around %d", node, count, expectedPerNode)
-			}
-		}
 	})
 
 	// Step 3: Create an imbalanced scenario and test rebalancing
