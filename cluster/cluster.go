@@ -31,20 +31,21 @@ const (
 )
 
 type Cluster struct {
-	thisNode              *node.Node
-	etcdManager           *etcdmanager.EtcdManager
-	consensusManager      *consensusmanager.ConsensusManager
-	nodeConnections       *nodeconnections.NodeConnections
-	logger                *logger.Logger
-	etcdAddress           string        // etcd server address (e.g., "localhost:2379")
-	etcdPrefix            string        // etcd key prefix for this cluster
-	minQuorum             int           // minimal number of nodes required for cluster to be considered stable
-	nodeStabilityDuration time.Duration // duration to wait for cluster state to stabilize before updating shard mapping
-	shardMappingCtx       context.Context
-	shardMappingCancel    context.CancelFunc
-	shardMappingRunning   bool
-	clusterReadyChan      chan bool
-	clusterReadyOnce      sync.Once
+	thisNode                   *node.Node
+	etcdManager                *etcdmanager.EtcdManager
+	consensusManager           *consensusmanager.ConsensusManager
+	nodeConnections            *nodeconnections.NodeConnections
+	logger                     *logger.Logger
+	etcdAddress                string        // etcd server address (e.g., "localhost:2379")
+	etcdPrefix                 string        // etcd key prefix for this cluster
+	minQuorum                  int           // minimal number of nodes required for cluster to be considered stable
+	nodeStabilityDuration      time.Duration // duration to wait for cluster state to stabilize before updating shard mapping
+	shardMappingCheckInterval  time.Duration // how often to check if shard mapping needs updating
+	shardMappingCtx            context.Context
+	shardMappingCancel         context.CancelFunc
+	shardMappingRunning        bool
+	clusterReadyChan           chan bool
+	clusterReadyOnce           sync.Once
 }
 
 func SetThis(c *Cluster) {
@@ -243,6 +244,26 @@ func (c *Cluster) getEffectiveNodeStabilityDuration() time.Duration {
 	return c.nodeStabilityDuration
 }
 
+// SetShardMappingCheckInterval sets how often to check if shard mapping needs updating
+func (c *Cluster) SetShardMappingCheckInterval(duration time.Duration) {
+	c.shardMappingCheckInterval = duration
+	c.logger.Infof("Cluster shard mapping check interval set to %v", duration)
+}
+
+// GetShardMappingCheckInterval returns how often to check if shard mapping needs updating
+// If not set, returns the default ShardMappingCheckInterval (5s)
+func (c *Cluster) GetShardMappingCheckInterval() time.Duration {
+	return c.getEffectiveShardMappingCheckInterval()
+}
+
+// getEffectiveShardMappingCheckInterval returns the effective shard mapping check interval (with default of 5s)
+func (c *Cluster) getEffectiveShardMappingCheckInterval() time.Duration {
+	if c.shardMappingCheckInterval <= 0 {
+		return ShardMappingCheckInterval
+	}
+	return c.shardMappingCheckInterval
+}
+
 // ResetForTesting resets the cluster state for testing purposes
 // WARNING: This should only be used in tests
 func (c *Cluster) ResetForTesting() {
@@ -256,6 +277,7 @@ func (c *Cluster) ResetForTesting() {
 	c.etcdPrefix = ""
 	c.minQuorum = 0
 	c.nodeStabilityDuration = 0
+	c.shardMappingCheckInterval = 0
 	if c.nodeConnections != nil {
 		c.nodeConnections.Stop()
 		c.nodeConnections = nil
@@ -702,7 +724,7 @@ func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 
 	go c.shardMappingManagementLoop()
 	c.logger.Infof("Started shard mapping management (check interval: %v, stability duration: %v)",
-		ShardMappingCheckInterval, c.getEffectiveNodeStabilityDuration())
+		c.getEffectiveShardMappingCheckInterval(), c.getEffectiveNodeStabilityDuration())
 
 	return nil
 }
@@ -719,7 +741,7 @@ func (c *Cluster) stopShardMappingManagement() {
 
 // shardMappingManagementLoop is the background loop that manages shard mapping
 func (c *Cluster) shardMappingManagementLoop() {
-	ticker := time.NewTicker(ShardMappingCheckInterval)
+	ticker := time.NewTicker(c.getEffectiveShardMappingCheckInterval())
 	defer ticker.Stop()
 
 	for {
