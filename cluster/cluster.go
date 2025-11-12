@@ -117,6 +117,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 	if err != nil {
 		return nil, err
 	}
+	c.SetNodeStabilityDuration(3 * time.Second)
 
 	c.SetNodeStabilityDuration(3 * time.Second)
 
