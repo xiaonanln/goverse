@@ -175,6 +175,10 @@ func TestReleaseShardOwnership_WithObjects(t *testing.T) {
 	node1 := node.NewNode("localhost:52101")
 	node2 := node.NewNode("localhost:52102")
 
+	// Register test object type
+	node1.RegisterObjectType((*TestReleaseObject)(nil))
+	node2.RegisterObjectType((*TestReleaseObject)(nil))
+
 	// Create clusters for both nodes
 	cluster1, err := newClusterWithEtcdForTesting("Cluster1", node1, "localhost:2379", testPrefix)
 	if err != nil {
@@ -209,7 +213,7 @@ func TestReleaseShardOwnership_WithObjects(t *testing.T) {
 	fixedObjectID := "localhost:52101/" + testObjectID
 	targetShardID := sharding.GetShardID(testObjectID)
 
-	_, err = node1.CreateObject(ctx, "TestObject", fixedObjectID)
+	_, err = node1.CreateObject(ctx, "TestReleaseObject", fixedObjectID)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
