@@ -42,6 +42,10 @@ default.etcd/
 
 # etcd downloads
 etcd-*.tar.gz
-etcd-*/# Compiled binaries
+etcd-*/
+
+# Compiled example binaries
 persistence
 periodic_persistence
+custom_stability_duration
+minquorum
