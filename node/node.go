@@ -490,7 +490,7 @@ func (node *Node) destroyObject(id string) {
 	delete(node.objects, id)
 	node.objectsMu.Unlock()
 	node.logger.Infof("Destroyed object %s", id)
-	
+
 	// Notify inspector manager about object removal
 	node.inspectorManager.NotifyObjectRemoved(id)
 }
