@@ -60,23 +60,22 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 	// Step 1: Create initial shard mapping with all shards unassigned (CurrentNode empty)
 	t.Run("InitialSetup", func(t *testing.T) {
-		updateShards := make(map[int]ShardInfo)
+		nodesMap := map[string]bool{
+			"node1": true,
+			"node2": true,
+			"node3": true,
+		}
+
+		shards := make(map[int]ShardInfo)
 		for i := 0; i < sharding.NumShards; i++ {
 			nodeIdx := i % len(nodes)
-			updateShards[i] = ShardInfo{
+			shards[i] = ShardInfo{
 				TargetNode:  nodes[nodeIdx],
 				CurrentNode: "", // Initially unassigned
-				ModRevision: 0,
 			}
 		}
 
-		n, err := cm.storeShardMapping(ctx, updateShards)
-		if err != nil {
-			t.Fatalf("Failed to store initial shard mapping: %v", err)
-		}
-		if n != sharding.NumShards {
-			t.Errorf("Expected to store %d shards, stored %d", sharding.NumShards, n)
-		}
+		setupShardMapping(t, ctx, cm, mgr, nodesMap, shards)
 
 		// Wait for watch to propagate
 		time.Sleep(200 * time.Millisecond)
@@ -133,35 +132,46 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 	// Step 3: Create an imbalanced scenario and test rebalancing
 	t.Run("RebalanceImbalancedShards", func(t *testing.T) {
-		// First, get current mapping to preserve ModRevisions
+		// First, get current mapping to know which shards exist
 		mapping, err := cm.GetShardMapping()
 		if err != nil {
 			t.Fatalf("Failed to get shard mapping: %v", err)
 		}
 
-		// Create an imbalanced scenario: node1 has many, node3 has few
+		// Create an imbalanced scenario: node1 has many shards, others have few
 		// Move 2000 shards from node2 and node3 to node1
-		updateShards := make(map[int]ShardInfo)
+		// Set both TargetNode and CurrentNode to node1 to ensure they are balanced (not in migration)
+		nodesMap := map[string]bool{
+			"node1": true,
+			"node2": true,
+			"node3": true,
+		}
+
+		shards := make(map[int]ShardInfo)
 		movedCount := 0
 		targetMove := 2000
 
-		for i := 0; i < sharding.NumShards && movedCount < targetMove; i++ {
+		// Build the full shard map with imbalance
+		for i := 0; i < sharding.NumShards; i++ {
 			shardInfo := mapping.Shards[i]
-			if shardInfo.CurrentNode != "node1" {
-				updateShards[i] = ShardInfo{
-					TargetNode:  shardInfo.TargetNode,
+			if movedCount < targetMove && shardInfo.CurrentNode != "node1" {
+				// Move this shard to node1
+				shards[i] = ShardInfo{
+					TargetNode:  "node1",
 					CurrentNode: "node1",
-					ModRevision: shardInfo.ModRevision,
 				}
 				movedCount++
+			} else {
+				// Keep the shard where it is
+				shards[i] = ShardInfo{
+					TargetNode:  shardInfo.CurrentNode,
+					CurrentNode: shardInfo.CurrentNode,
+				}
 			}
 		}
 
-		n, err := cm.storeShardMapping(ctx, updateShards)
-		if err != nil {
-			t.Fatalf("Failed to create imbalanced mapping: %v", err)
-		}
-		t.Logf("Moved %d shards to create imbalance", n)
+		setupShardMapping(t, ctx, cm, mgr, nodesMap, shards)
+		t.Logf("Moved %d shards to create imbalance", movedCount)
 
 		// Wait for watch to propagate
 		time.Sleep(200 * time.Millisecond)
@@ -220,6 +230,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 			}
 		}
 
+		t.Logf("Migrated %d shards during rebalance", migrationCount)
 		if migrationCount != 1 {
 			t.Errorf("Expected exactly 1 shard to be migrating, found %d", migrationCount)
 		}
@@ -227,23 +238,28 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 	// Step 4: Test that rebalancing doesn't happen when balanced
 	t.Run("NoRebalanceWhenBalanced", func(t *testing.T) {
+		// Wait a bit for previous test's changes to propagate
+		time.Sleep(500 * time.Millisecond)
+
 		// Reset to balanced state
-		updateShards := make(map[int]ShardInfo)
+		nodesMap := map[string]bool{
+			"node1": true,
+			"node2": true,
+			"node3": true,
+		}
+
+		shards := make(map[int]ShardInfo)
 		for i := 0; i < sharding.NumShards; i++ {
 			nodeIdx := i % len(nodes)
 			node := nodes[nodeIdx]
-			updateShards[i] = ShardInfo{
+			shards[i] = ShardInfo{
 				TargetNode:  node,
 				CurrentNode: node,
-				ModRevision: 0,
 			}
 		}
 
-		n, err := cm.storeShardMapping(ctx, updateShards)
-		if err != nil {
-			t.Fatalf("Failed to create balanced mapping: %v", err)
-		}
-		t.Logf("Reset to balanced state with %d shards", n)
+		setupShardMapping(t, ctx, cm, mgr, nodesMap, shards)
+		t.Logf("Reset to balanced state with %d shards", len(shards))
 
 		// Wait for watch to propagate
 		time.Sleep(200 * time.Millisecond)
