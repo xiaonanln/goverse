@@ -15,6 +15,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/proto"
@@ -236,7 +237,15 @@ func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientServ
 	if err != nil {
 		return fmt.Errorf("failed to register client: %v", err)
 	}
-	defer server.Node.UnregisterClient(server.ctx, clientId)
+	
+	// Record client connection
+	metrics.RecordClientConnected(server.config.AdvertiseAddress, "grpc")
+	
+	defer func() {
+		server.Node.UnregisterClient(server.ctx, clientId)
+		// Record client disconnection
+		metrics.RecordClientDisconnected(server.config.AdvertiseAddress, "grpc")
+	}()
 
 	resp := client_pb.RegisterResponse{
 		ClientId: clientId,

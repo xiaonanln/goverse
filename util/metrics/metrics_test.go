@@ -193,3 +193,135 @@ func TestShardTracking(t *testing.T) {
 		t.Errorf("Expected count for shard 200 to remain 1.0, got %f", count200After)
 	}
 }
+
+func TestRecordClientConnected(t *testing.T) {
+	// Reset metrics before test
+	ClientsConnected.Reset()
+
+	// Record client connection with default type (grpc)
+	RecordClientConnected("localhost:47000", "")
+
+	// Verify the metric was recorded with default type
+	count := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if count != 1.0 {
+		t.Errorf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record another client connection with explicit type
+	RecordClientConnected("localhost:47000", "grpc")
+	count = testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if count != 2.0 {
+		t.Errorf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record client connection with different type
+	RecordClientConnected("localhost:47000", "websocket")
+	count = testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "websocket"))
+	if count != 1.0 {
+		t.Errorf("Expected count for websocket to be 1.0, got %f", count)
+	}
+}
+
+func TestRecordClientDisconnected(t *testing.T) {
+	// Reset metrics before test
+	ClientsConnected.Reset()
+
+	// Create some client connections first
+	RecordClientConnected("localhost:47000", "grpc")
+	RecordClientConnected("localhost:47000", "grpc")
+	RecordClientConnected("localhost:47000", "grpc")
+
+	// Disconnect one client
+	RecordClientDisconnected("localhost:47000", "grpc")
+
+	// Verify the metric was decremented
+	count := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if count != 2.0 {
+		t.Errorf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Disconnect with empty type (should default to grpc)
+	RecordClientDisconnected("localhost:47000", "")
+	count = testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if count != 1.0 {
+		t.Errorf("Expected count to be 1.0 after disconnect with empty type, got %f", count)
+	}
+}
+
+func TestMultipleNodesClients(t *testing.T) {
+	// Reset metrics before test
+	ClientsConnected.Reset()
+
+	// Test multiple nodes with different client types
+	RecordClientConnected("localhost:47000", "grpc")
+	RecordClientConnected("localhost:47001", "grpc")
+	RecordClientConnected("localhost:47002", "websocket")
+
+	// Verify each node has the correct count
+	count1 := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if count1 != 1.0 {
+		t.Errorf("Expected count for node 47000 to be 1.0, got %f", count1)
+	}
+
+	count2 := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47001", "grpc"))
+	if count2 != 1.0 {
+		t.Errorf("Expected count for node 47001 to be 1.0, got %f", count2)
+	}
+
+	count3 := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47002", "websocket"))
+	if count3 != 1.0 {
+		t.Errorf("Expected count for node 47002 to be 1.0, got %f", count3)
+	}
+}
+
+func TestClientTypeTracking(t *testing.T) {
+	// Reset metrics before test
+	ClientsConnected.Reset()
+
+	// Create connections with different types on the same node
+	RecordClientConnected("localhost:47000", "grpc")
+	RecordClientConnected("localhost:47000", "grpc")
+	RecordClientConnected("localhost:47000", "websocket")
+	RecordClientConnected("localhost:47000", "websocket")
+	RecordClientConnected("localhost:47000", "http")
+
+	// Verify grpc has 2 connections
+	countGrpc := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if countGrpc != 2.0 {
+		t.Errorf("Expected grpc count to be 2.0, got %f", countGrpc)
+	}
+
+	// Verify websocket has 2 connections
+	countWs := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "websocket"))
+	if countWs != 2.0 {
+		t.Errorf("Expected websocket count to be 2.0, got %f", countWs)
+	}
+
+	// Verify http has 1 connection
+	countHttp := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "http"))
+	if countHttp != 1.0 {
+		t.Errorf("Expected http count to be 1.0, got %f", countHttp)
+	}
+
+	// Disconnect one websocket client
+	RecordClientDisconnected("localhost:47000", "websocket")
+
+	// Verify websocket now has 1 connection
+	countWsAfter := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "websocket"))
+	if countWsAfter != 1.0 {
+		t.Errorf("Expected websocket count after disconnect to be 1.0, got %f", countWsAfter)
+	}
+
+	// Verify other types unchanged
+	countGrpcAfter := testutil.ToFloat64(ClientsConnected.WithLabelValues("localhost:47000", "grpc"))
+	if countGrpcAfter != 2.0 {
+		t.Errorf("Expected grpc count to remain 2.0, got %f", countGrpcAfter)
+	}
+}
+
+func TestClientMetricsRegistration(t *testing.T) {
+	// Verify that client metrics are properly registered with Prometheus
+	if ClientsConnected == nil {
+		t.Error("ClientsConnected metric should not be nil")
+	}
+}
