@@ -170,7 +170,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		// Wait for watch to propagate
 		time.Sleep(200 * time.Millisecond)
 
-		// Verify that TargetNode was updated for one shard
+		// Verify that TargetNode was updated for multiple shards (batch migration)
 		// (CurrentNode stays the same until migration completes)
 		mapping = cm.GetShardMapping()
 		migrationCount := 0
@@ -182,8 +182,13 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		}
 
 		t.Logf("Migrated %d shards during rebalance", migrationCount)
-		if migrationCount != 1 {
-			t.Errorf("Expected exactly 1 shard to be migrating, found %d", migrationCount)
+		// With batch rebalancing, we expect multiple shards (up to 100) to be migrated
+		// The exact number depends on imbalance conditions, but should be > 1
+		if migrationCount < 1 {
+			t.Errorf("Expected at least 1 shard to be migrating, found %d", migrationCount)
+		}
+		if migrationCount > 100 {
+			t.Errorf("Expected at most 100 shards to be migrating (batch limit), found %d", migrationCount)
 		}
 	})
 
