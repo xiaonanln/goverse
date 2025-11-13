@@ -14,6 +14,7 @@ import (
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -483,10 +484,22 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	// Notify inspector manager about the new object
 	node.inspectorManager.NotifyObjectAdded(id, typ)
 
+	// Record metrics
+	metrics.RecordObjectCreated(node.advertiseAddress, typ)
+
 	return nil
 }
 
 func (node *Node) destroyObject(id string) {
+	// Get object type before deletion for metrics
+	node.objectsMu.RLock()
+	obj, exists := node.objects[id]
+	var objectType string
+	if exists {
+		objectType = obj.Type()
+	}
+	node.objectsMu.RUnlock()
+
 	node.objectsMu.Lock()
 	delete(node.objects, id)
 	node.objectsMu.Unlock()
@@ -494,6 +507,11 @@ func (node *Node) destroyObject(id string) {
 
 	// Notify inspector manager about object removal
 	node.inspectorManager.NotifyObjectRemoved(id)
+
+	// Record metrics if object existed
+	if exists {
+		metrics.RecordObjectDeleted(node.advertiseAddress, objectType)
+	}
 }
 
 // DeleteObject removes an object from the node and deletes it from persistence if configured.
