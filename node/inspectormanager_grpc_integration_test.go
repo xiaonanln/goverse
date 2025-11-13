@@ -65,6 +65,7 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 	// Create and start inspector manager
 	mgr := NewInspectorManager(nodeAddr)
 	mgr.inspectorAddress = inspectorAddr // Use the randomly assigned inspector address
+	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
 	err = mgr.Start(ctx)
@@ -124,6 +125,7 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	// Create and start inspector manager
 	mgr := NewInspectorManager(nodeAddr)
 	mgr.inspectorAddress = inspectorAddr
+	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
 	err = mgr.Start(ctx)
@@ -191,6 +193,7 @@ func TestInspectorManager_NodeUnregistration(t *testing.T) {
 	// Create and start inspector manager
 	mgr := NewInspectorManager(nodeAddr)
 	mgr.inspectorAddress = inspectorAddr
+	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
 	err = mgr.Start(ctx)
@@ -239,6 +242,7 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	// Create and start inspector manager
 	mgr := NewInspectorManager(nodeAddr)
 	mgr.inspectorAddress = inspectorAddr
+	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
 	err = mgr.Start(ctx)
@@ -274,8 +278,8 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify manager detects disconnection (after next health check)
-	// This may take up to healthCheckInterval (5 seconds), so we wait a bit
-	time.Sleep(6 * time.Second)
+	// This may take up to healthCheckInterval (1 second), so we wait a bit
+	time.Sleep(2 * time.Second)
 
 	mgr.mu.RLock()
 	connected = mgr.connected
@@ -307,8 +311,8 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Wait for reconnection (manager tries every reconnectRetryInterval = 5 seconds)
-	time.Sleep(6 * time.Second)
+	// Wait for reconnection (manager tries every healthCheckInterval = 1 second)
+	time.Sleep(2 * time.Second)
 
 	// Verify manager reconnected
 	mgr.mu.RLock()
@@ -380,10 +384,13 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	// Create multiple managers for different nodes
 	mgr1 := NewInspectorManager(nodeAddr1)
 	mgr1.inspectorAddress = inspectorAddr
+	mgr1.SetHealthCheckInterval(1 * time.Second)
 	mgr2 := NewInspectorManager(nodeAddr2)
 	mgr2.inspectorAddress = inspectorAddr
+	mgr2.SetHealthCheckInterval(1 * time.Second)
 	mgr3 := NewInspectorManager(nodeAddr3)
 	mgr3.inspectorAddress = inspectorAddr
+	mgr3.SetHealthCheckInterval(1 * time.Second)
 
 	// Start all managers
 	err = mgr1.Start(ctx)

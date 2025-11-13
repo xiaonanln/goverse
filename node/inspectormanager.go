@@ -13,16 +13,17 @@ import (
 )
 
 const (
-	defaultInspectorAddress = "localhost:8081"
-	healthCheckInterval     = 5 * time.Second
+	defaultInspectorAddress    = "localhost:8081"
+	defaultHealthCheckInterval = 5 * time.Second
 )
 
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 type InspectorManager struct {
-	nodeAddress      string
-	inspectorAddress string
-	logger           *logger.Logger
+	nodeAddress         string
+	inspectorAddress    string
+	healthCheckInterval time.Duration
+	logger              *logger.Logger
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -38,11 +39,18 @@ type InspectorManager struct {
 // NewInspectorManager creates a new InspectorManager instance.
 func NewInspectorManager(nodeAddress string) *InspectorManager {
 	return &InspectorManager{
-		nodeAddress:      nodeAddress,
-		inspectorAddress: defaultInspectorAddress,
-		logger:           logger.NewLogger("InspectorManager"),
-		objects:          make(map[string]*inspector_pb.Object),
+		nodeAddress:         nodeAddress,
+		inspectorAddress:    defaultInspectorAddress,
+		healthCheckInterval: defaultHealthCheckInterval,
+		logger:              logger.NewLogger("InspectorManager"),
+		objects:             make(map[string]*inspector_pb.Object),
 	}
+}
+
+// SetHealthCheckInterval sets the health check interval for the InspectorManager.
+// This must be called before Start() to take effect.
+func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
+	im.healthCheckInterval = interval
 }
 
 // Start initializes the connection to the Inspector and starts background management.
@@ -246,7 +254,7 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string)
 func (im *InspectorManager) managementLoop() {
 	defer im.wg.Done()
 
-	ticker := time.NewTicker(healthCheckInterval)
+	ticker := time.NewTicker(im.healthCheckInterval)
 	defer ticker.Stop()
 
 	for {
