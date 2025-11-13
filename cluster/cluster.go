@@ -759,7 +759,7 @@ func (c *Cluster) handleShardMappingCheck() {
 
 	// If leader made changes to cluster state, skip other operations this cycle
 	// to allow the cluster state to stabilize before proceeding
-	stateChanged := c.leaderShardMappingManagement(ctx)
+	stateChanged := c.leaderShardManagementLogic(ctx)
 	if stateChanged {
 		c.logger.Debugf("Cluster state changed by leader, waiting for next cycle")
 		return
@@ -873,10 +873,10 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	}
 }
 
-// leaderShardMappingManagement manages shard mapping as the leader node
+// leaderShardManagementLogic manages shard mapping as the leader node
 // Returns true if the cluster state was changed (shards reassigned or rebalanced)
 // Only performs one operation per call to allow cluster state to stabilize between changes
-func (c *Cluster) leaderShardMappingManagement(ctx context.Context) bool {
+func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 	if !c.IsLeader() {
 		return false
 	}
