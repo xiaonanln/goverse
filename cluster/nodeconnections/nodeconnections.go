@@ -7,7 +7,6 @@ import (
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
-	"github.com/xiaonanln/goverse/util/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -26,7 +25,6 @@ type NodeConnections struct {
 	logger        *logger.Logger
 	ctx           context.Context
 	cancel        context.CancelFunc
-	nodeAddress   string // this node's address for metrics
 }
 
 // New creates a new NodeConnections manager
@@ -34,15 +32,6 @@ func New() *NodeConnections {
 	return &NodeConnections{
 		connections: make(map[string]*NodeConnection),
 		logger:      logger.NewLogger("NodeConnections"),
-	}
-}
-
-// NewWithAddress creates a new NodeConnections manager with node address for metrics
-func NewWithAddress(nodeAddress string) *NodeConnections {
-	return &NodeConnections{
-		connections: make(map[string]*NodeConnection),
-		logger:      logger.NewLogger("NodeConnections"),
-		nodeAddress: nodeAddress,
 	}
 }
 
@@ -106,11 +95,6 @@ func (nc *NodeConnections) connectToNode(nodeAddr string) error {
 		client:  client,
 	}
 
-	// Update metrics if node address is set
-	if nc.nodeAddress != "" {
-		metrics.SetNodeConnectionCount(nc.nodeAddress, float64(len(nc.connections)))
-	}
-
 	nc.logger.Infof("Successfully connected to node %s", nodeAddr)
 	return nil
 }
@@ -133,12 +117,6 @@ func (nc *NodeConnections) disconnectFromNode(nodeAddr string) error {
 	}
 
 	delete(nc.connections, nodeAddr)
-
-	// Update metrics if node address is set
-	if nc.nodeAddress != "" {
-		metrics.SetNodeConnectionCount(nc.nodeAddress, float64(len(nc.connections)))
-	}
-
 	nc.logger.Infof("Disconnected from node %s", nodeAddr)
 	return nil
 }

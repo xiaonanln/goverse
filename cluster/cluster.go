@@ -91,7 +91,7 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 		minQuorum:                 cfg.MinQuorum,
 		nodeStabilityDuration:     cfg.NodeStabilityDuration,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
-		nodeConnections:           nodeconnections.NewWithAddress(thisNode.GetAdvertiseAddress()),
+		nodeConnections:           nodeconnections.New(),
 	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
