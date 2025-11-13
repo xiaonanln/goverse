@@ -13,16 +13,18 @@ var serverLogger = logger.NewLogger("ChatServer")
 
 func main() {
 	var (
-		listenAddr       = flag.String("listen", "localhost:47000", "Server listen address")
-		advertiseAddr    = flag.String("advertise", "localhost:47000", "Server advertise address")
-		clientListenAddr = flag.String("client-listen", "localhost:48000", "Client listen address")
+		listenAddr        = flag.String("listen", "localhost:47000", "Server listen address")
+		advertiseAddr     = flag.String("advertise", "localhost:47000", "Server advertise address")
+		clientListenAddr  = flag.String("client-listen", "localhost:48000", "Client listen address")
+		metricsListenAddr = flag.String("metrics-listen", "localhost:9100", "Metrics listen address")
 	)
 	flag.Parse()
 
 	config := &goverseapi.ServerConfig{
-		ListenAddress:       *listenAddr,
-		AdvertiseAddress:    *advertiseAddr,
-		ClientListenAddress: *clientListenAddr,
+		ListenAddress:        *listenAddr,
+		AdvertiseAddress:     *advertiseAddr,
+		ClientListenAddress:  *clientListenAddr,
+		MetricsListenAddress: *metricsListenAddr,
 	}
 	// Create and run the server
 	server, err := goverseapi.NewServer(config)

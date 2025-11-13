@@ -338,7 +338,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 			for _, event := range watchResp.Events {
 				key := string(event.Kv.Key)
 
-				// cm.logger.Infof("Received watch event: %s %s=%s", event.Type.String(), key, event.Kv.Value)
+				cm.logger.Infof("Received watch event: %s %s=%s rev %v", event.Type.String(), key, event.Kv.Value, event.Kv.ModRevision)
 				// Handle node changes
 				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
 					cm.handleNodeEvent(event, nodesPrefix)
@@ -408,13 +408,12 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		shardInfo := parseShardInfo(event.Kv)
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
-		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
-
+		cm.logger.Infof("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		delete(cm.state.ShardMapping.Shards, shardID)
-		cm.logger.Debugf("Shard %d mapping deleted", shardID)
+		cm.logger.Infof("Shard %d mapping deleted", shardID)
 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
@@ -640,6 +639,7 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 // Uses a fixed worker pool to write multiple shards in parallel for better performance.
 // Returns the number of successfully written shards, or an error if any write fails.
 func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) (int, error) {
+	cm.logger.Infof("storing shard mapping: %v", updateShards)
 	if cm.etcdManager == nil {
 		return 0, fmt.Errorf("etcd manager not set")
 	}
@@ -688,6 +688,9 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 				return fmt.Errorf("failed to store shard %d: %w", id, err)
 			}
 
+			// Log the transaction response for diagnostics
+			cm.logger.Infof("Txn commit %s = %s for shard %d succeeded: revision=%d", key, value, id, resp.Header.Revision)
+
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
 				// Retrieve current ModRevision for diagnostics
@@ -696,7 +699,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 				if getErr == nil && len(getResp.Kvs) > 0 {
 					currentModRev = getResp.Kvs[0].ModRevision
 				}
-				cm.logger.Debugf("ModRevision mismatch for shard %d: expected %d, current %d", id, shardInfo.ModRevision, currentModRev)
+				cm.logger.Errorf("ModRevision mismatch for shard %d: expected %d, current %d", id, shardInfo.ModRevision, currentModRev)
 				return fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d, got %d)", id, shardInfo.ModRevision, currentModRev)
 			}
 
@@ -890,7 +893,6 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, 
 	updateShards := cm.calcReassignShardTargetNodes()
 
 	if updateShards == nil {
-		cm.logger.Infof("No changes needed to shard mapping")
 		return 0, nil
 	}
 
