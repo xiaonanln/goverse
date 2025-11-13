@@ -61,6 +61,7 @@ func (s *Service) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOr
 		Color:         "#1f77b4",
 		Type:          "object",
 		GoverseNodeID: nodeAddress,
+		ShardID:       int(o.ShardId),
 	}
 	s.pg.AddOrUpdateObject(obj)
 	return &inspector_pb.Empty{}, nil
@@ -111,6 +112,7 @@ func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNo
 			Color:         "#1f77b4",
 			Type:          "object",
 			GoverseNodeID: addr,
+			ShardID:       int(o.ShardId),
 		}
 		s.pg.AddOrUpdateObject(obj)
 	}

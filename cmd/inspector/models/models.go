@@ -16,12 +16,13 @@ type GoverseNode struct {
 }
 
 type GoverseObject struct {
-	ID          string  `json:"id"`
-	Label       string  `json:"label"`
-	X           int     `json:"x"`
-	Y           int     `json:"y"`
-	Size        float64 `json:"size"`
-	Color       string  `json:"color"`
-	Type        string  `json:"type"`
+	ID            string  `json:"id"`
+	Label         string  `json:"label"`
+	X             int     `json:"x"`
+	Y             int     `json:"y"`
+	Size          float64 `json:"size"`
+	Color         string  `json:"color"`
+	Type          string  `json:"type"`
 	GoverseNodeID string  `json:"goverse_node_id"`
+	ShardID       int     `json:"shard_id"`
 }
