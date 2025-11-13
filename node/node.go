@@ -492,16 +492,13 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 
 func (node *Node) destroyObject(id string) {
 	// Get object type before deletion for metrics
-	node.objectsMu.RLock()
+	node.objectsMu.Lock()
 	obj, exists := node.objects[id]
 	var objectType string
 	if exists {
 		objectType = obj.Type()
+		delete(node.objects, id)
 	}
-	node.objectsMu.RUnlock()
-
-	node.objectsMu.Lock()
-	delete(node.objects, id)
 	node.objectsMu.Unlock()
 	node.logger.Infof("Destroyed object %s", id)
 
