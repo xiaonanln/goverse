@@ -16,6 +16,15 @@ var (
 		},
 		[]string{"node", "type", "shard"},
 	)
+
+	// ShardsTotal tracks the total number of shards assigned to each node
+	ShardsTotal = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "goverse_shards_total",
+			Help: "Total number of shards assigned to each node",
+		},
+		[]string{"node"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -26,4 +35,9 @@ func RecordObjectCreated(node, objectType string, shard int) {
 // RecordObjectDeleted decrements the object count for a given node, type, and shard
 func RecordObjectDeleted(node, objectType string, shard int) {
 	ObjectCount.WithLabelValues(node, objectType, fmt.Sprintf("%d", shard)).Dec()
+}
+
+// SetShardCount sets the total number of shards for a given node
+func SetShardCount(node string, count float64) {
+	ShardsTotal.WithLabelValues(node).Set(count)
 }

@@ -85,6 +85,76 @@ func TestMetricsRegistration(t *testing.T) {
 	if ObjectCount == nil {
 		t.Error("ObjectCount metric should not be nil")
 	}
+	if ShardsTotal == nil {
+		t.Error("ShardsTotal metric should not be nil")
+	}
+}
+
+func TestSetShardCount(t *testing.T) {
+	// Reset metrics before test
+	ShardsTotal.Reset()
+
+	// Set shard count for a node
+	SetShardCount("localhost:47000", 100)
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(ShardsTotal.WithLabelValues("localhost:47000"))
+	if count != 100.0 {
+		t.Errorf("Expected shard count to be 100.0, got %f", count)
+	}
+
+	// Update shard count
+	SetShardCount("localhost:47000", 150)
+	count = testutil.ToFloat64(ShardsTotal.WithLabelValues("localhost:47000"))
+	if count != 150.0 {
+		t.Errorf("Expected shard count to be 150.0, got %f", count)
+	}
+
+	// Set shard count for another node
+	SetShardCount("localhost:47001", 50)
+	count = testutil.ToFloat64(ShardsTotal.WithLabelValues("localhost:47001"))
+	if count != 50.0 {
+		t.Errorf("Expected shard count for node 47001 to be 50.0, got %f", count)
+	}
+}
+
+func TestMultipleNodeShardCounts(t *testing.T) {
+	// Reset metrics before test
+	ShardsTotal.Reset()
+
+	// Test multiple nodes with different shard counts
+	SetShardCount("localhost:47000", 2048)
+	SetShardCount("localhost:47001", 2048)
+	SetShardCount("localhost:47002", 2048)
+	SetShardCount("localhost:47003", 2048)
+
+	// Verify each node has the correct count
+	for i := 0; i < 4; i++ {
+		node := "localhost:4700" + string(rune('0'+i))
+		count := testutil.ToFloat64(ShardsTotal.WithLabelValues(node))
+		if count != 2048.0 {
+			t.Errorf("Expected shard count for %s to be 2048.0, got %f", node, count)
+		}
+	}
+}
+
+func TestShardCountZero(t *testing.T) {
+	// Reset metrics before test
+	ShardsTotal.Reset()
+
+	// Set shard count to a non-zero value
+	SetShardCount("localhost:47000", 100)
+	count := testutil.ToFloat64(ShardsTotal.WithLabelValues("localhost:47000"))
+	if count != 100.0 {
+		t.Errorf("Expected shard count to be 100.0, got %f", count)
+	}
+
+	// Set shard count to zero (e.g., when node loses all shards)
+	SetShardCount("localhost:47000", 0)
+	count = testutil.ToFloat64(ShardsTotal.WithLabelValues("localhost:47000"))
+	if count != 0.0 {
+		t.Errorf("Expected shard count to be 0.0, got %f", count)
+	}
 }
 
 func TestShardTracking(t *testing.T) {
