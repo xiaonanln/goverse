@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
+	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -55,7 +56,7 @@ type Node struct {
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock // Per-object ID locking for create/delete/call/save coordination
-	inspectorManager      *InspectorManager
+	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
 	persistenceProvider   object.PersistenceProvider
@@ -75,7 +76,7 @@ func NewNode(advertiseAddress string) *Node {
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
-		inspectorManager:    NewInspectorManager(advertiseAddress),
+		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}

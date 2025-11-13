@@ -41,11 +41,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify existing object was registered with inspector manager
-	node.inspectorManager.mu.RLock()
-	_, tracked := node.inspectorManager.objects["pre-start-obj-1"]
-	node.inspectorManager.mu.RUnlock()
-
-	if !tracked {
+	if !node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
 		t.Error("Existing object should be tracked by inspector manager after start")
 	}
 
@@ -56,11 +52,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 
 	// Verify new object is tracked
-	node.inspectorManager.mu.RLock()
-	_, tracked = node.inspectorManager.objects["post-start-obj-1"]
-	node.inspectorManager.mu.RUnlock()
-
-	if !tracked {
+	if !node.inspectorManager.IsObjectTracked("post-start-obj-1") {
 		t.Error("New object should be tracked by inspector manager")
 	}
 
@@ -68,11 +60,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	node.destroyObject("pre-start-obj-1")
 
 	// Verify object is no longer tracked
-	node.inspectorManager.mu.RLock()
-	_, tracked = node.inspectorManager.objects["pre-start-obj-1"]
-	node.inspectorManager.mu.RUnlock()
-
-	if tracked {
+	if node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
 		t.Error("Deleted object should not be tracked by inspector manager")
 	}
 
@@ -83,11 +71,14 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 
 	// Verify manager stopped
-	select {
-	case <-node.inspectorManager.ctx.Done():
-		// Expected - context should be done
-	default:
-		t.Error("Inspector manager context should be done after stop")
+	ctx2 := node.inspectorManager.GetContext()
+	if ctx2 != nil {
+		select {
+		case <-ctx2.Done():
+			// Expected - context should be done
+		default:
+			t.Error("Inspector manager context should be done after stop")
+		}
 	}
 }
 
@@ -186,9 +177,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	}
 
 	// Verify all objects are tracked by inspector manager
-	node.inspectorManager.mu.RLock()
-	trackedCount := len(node.inspectorManager.objects)
-	node.inspectorManager.mu.RUnlock()
+	trackedCount := node.inspectorManager.GetTrackedObjectCount()
 
 	if trackedCount != numObjects {
 		t.Errorf("Expected %d tracked objects, got %d", numObjects, trackedCount)
@@ -212,9 +201,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify correct number of objects tracked
-	node.inspectorManager.mu.RLock()
-	trackedCount = len(node.inspectorManager.objects)
-	node.inspectorManager.mu.RUnlock()
+	trackedCount = node.inspectorManager.GetTrackedObjectCount()
 
 	expectedCount := numObjects - numObjects/2
 	if trackedCount != expectedCount {
