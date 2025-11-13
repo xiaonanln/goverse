@@ -22,14 +22,14 @@ import (
 )
 
 type ServerConfig struct {
-	ListenAddress              string
-	AdvertiseAddress           string
-	ClientListenAddress        string
-	EtcdAddress                string
-	EtcdPrefix                 string        // Optional: etcd key prefix for this cluster (default: "/goverse")
-	MinQuorum                  int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
-	NodeStabilityDuration      time.Duration // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
-	ShardMappingCheckInterval  time.Duration // Optional: how often to check if shard mapping needs updating (default: 5s)
+	ListenAddress             string
+	AdvertiseAddress          string
+	ClientListenAddress       string
+	EtcdAddress               string
+	EtcdPrefix                string        // Optional: etcd key prefix for this cluster (default: "/goverse")
+	MinQuorum                 int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
+	NodeStabilityDuration     time.Duration // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
+	ShardMappingCheckInterval time.Duration // Optional: how often to check if shard mapping needs updating (default: 5s)
 }
 
 type Server struct {
@@ -55,7 +55,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	clusterCfg := cluster.DefaultConfig()
 	clusterCfg.EtcdAddress = config.EtcdAddress
 	clusterCfg.EtcdPrefix = config.EtcdPrefix
-	
+
 	// Override defaults with server config values if provided
 	if config.MinQuorum > 0 {
 		clusterCfg.MinQuorum = config.MinQuorum
@@ -209,7 +209,7 @@ func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientServ
 	if err != nil {
 		return fmt.Errorf("failed to register client: %v", err)
 	}
-	defer server.Node.UnregisterClient(clientId)
+	defer server.Node.UnregisterClient(server.ctx, clientId)
 
 	resp := client_pb.RegisterResponse{
 		ClientId: clientId,

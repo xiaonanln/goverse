@@ -242,8 +242,8 @@ func (node *Node) newClientObject(ctx context.Context) (string, chan proto.Messa
 }
 
 // UnregisterClient removes a client by its ID
-func (node *Node) UnregisterClient(clientId string) {
-	node.destroyObject(clientId)
+func (node *Node) UnregisterClient(ctx context.Context, clientId string) {
+	node.DeleteObject(ctx, clientId)
 	node.logger.Infof("Unregistered client: %s", clientId)
 }
 
