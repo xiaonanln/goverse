@@ -352,6 +352,91 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	}
 }
 
+// TestInspectorManager_ShardIDPropagation_Integration tests end-to-end shard ID propagation
+func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
+	// Start test inspector server
+	_, pg, inspectorAddr := startTestInspectorServer(t)
+
+	// Get a random port for the node
+	nodeListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node: %v", err)
+	}
+	nodeAddr := nodeListener.Addr().String()
+	nodeListener.Close()
+
+	// Create and start inspector manager
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.inspectorAddress = inspectorAddr
+	ctx := context.Background()
+
+	err = mgr.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start inspector manager: %v", err)
+	}
+	defer mgr.Stop()
+
+	// Wait for connection
+	time.Sleep(200 * time.Millisecond)
+
+	// Add objects with various IDs
+	testObjects := []struct {
+		id   string
+		typ  string
+	}{
+		{"test-obj-1", "Type1"},
+		{"test-obj-2", "Type2"},
+		{"another-obj", "Type3"},
+		{"unique-identifier", "Type4"},
+	}
+
+	for _, obj := range testObjects {
+		mgr.NotifyObjectAdded(obj.id, obj.typ)
+	}
+
+	// Wait for notifications to be processed
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify objects are registered with shard IDs
+	objects := pg.GetObjects()
+	if len(objects) != len(testObjects) {
+		t.Fatalf("Expected %d objects, got %d", len(testObjects), len(objects))
+	}
+
+	// Verify each object has a valid shard ID
+	for _, obj := range objects {
+		if obj.ShardID < 0 || obj.ShardID >= 8192 {
+			t.Errorf("Object %s has invalid ShardID %d (should be in [0, 8192))", obj.ID, obj.ShardID)
+		}
+
+		// Verify shard ID is consistent (same object ID should always produce same shard)
+		// We can verify this by checking if the shard ID matches what we'd compute directly
+		t.Logf("Object %s assigned to shard %d", obj.ID, obj.ShardID)
+	}
+
+	// Test that the same object ID produces the same shard ID on re-registration
+	firstShardID := objects[0].ShardID
+	firstObjectID := objects[0].ID
+
+	// Remove and re-add the first object
+	mgr.NotifyObjectRemoved(firstObjectID)
+	time.Sleep(100 * time.Millisecond)
+
+	mgr.NotifyObjectAdded(firstObjectID, "ReAddedType")
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify shard ID is consistent
+	objects = pg.GetObjects()
+	for _, obj := range objects {
+		if obj.ID == firstObjectID {
+			if obj.ShardID != firstShardID {
+				t.Errorf("Object %s shard ID changed from %d to %d on re-add (should be consistent)",
+					firstObjectID, firstShardID, obj.ShardID)
+			}
+		}
+	}
+}
+
 // TestInspectorManager_MultipleNodesConnection tests multiple nodes connecting to same inspector
 func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	// Start test inspector server on a random port
