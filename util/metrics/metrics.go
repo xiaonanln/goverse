@@ -25,6 +25,15 @@ var (
 		},
 		[]string{"node"},
 	)
+
+	// ClientsConnected tracks the number of active client connections
+	ClientsConnected = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "goverse_clients_connected",
+			Help: "Number of active client connections in the cluster",
+		},
+		[]string{"node", "client_type"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -40,4 +49,20 @@ func RecordObjectDeleted(node, objectType string, shard int) {
 // SetAssignedShardCount sets the total number of shards for a given node
 func SetAssignedShardCount(node string, count float64) {
 	AssignedShardsTotal.WithLabelValues(node).Set(count)
+}
+
+// RecordClientConnected increments the client connection count for a given node and client type
+func RecordClientConnected(node, clientType string) {
+	if clientType == "" {
+		clientType = "grpc"
+	}
+	ClientsConnected.WithLabelValues(node, clientType).Inc()
+}
+
+// RecordClientDisconnected decrements the client connection count for a given node and client type
+func RecordClientDisconnected(node, clientType string) {
+	if clientType == "" {
+		clientType = "grpc"
+	}
+	ClientsConnected.WithLabelValues(node, clientType).Dec()
 }

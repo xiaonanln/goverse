@@ -10,11 +10,12 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects. The m
 
 ### Object Metrics
 
-**`goverse_objects_total{node, type}`** - Gauge
+**`goverse_objects_total{node, type, shard}`** - Gauge
 - Description: Total number of distributed objects in the cluster
 - Labels:
   - `node`: The node address (e.g., "localhost:47000")
   - `type`: The object type (e.g., "ChatRoom", "ChatClient")
+  - `shard`: The shard number (e.g., "0", "100")
 - Updated: Automatically incremented on object creation, decremented on deletion
 
 ### Shard Metrics
@@ -25,6 +26,14 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects. The m
   - `node`: The node address (e.g., "localhost:47000")
 - Updated: Automatically updated when shard mapping changes in the ConsensusManager
 - Note: Counts shards based on CurrentNode (actual ownership), not TargetNode (planned assignment)
+### Client Connection Metrics
+
+**`goverse_clients_connected{node, client_type}`** - Gauge
+- Description: Number of active client connections in the cluster
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+  - `client_type`: The type of client connection (e.g., "grpc", defaults to "grpc" if not specified)
+- Updated: Automatically incremented on client connection, decremented on disconnection
 
 ## Metrics Endpoint
 
@@ -60,6 +69,14 @@ goverse_shards_total{node="localhost:47000"} 2048
 goverse_shards_total{node="localhost:47001"} 2048
 goverse_shards_total{node="localhost:47002"} 2048
 goverse_shards_total{node="localhost:47003"} 2048
+goverse_objects_total{node="localhost:47000",type="ChatRoom",shard="0"} 3
+goverse_objects_total{node="localhost:47000",type="ChatClient",shard="1"} 5
+goverse_objects_total{node="localhost:47001",type="ChatRoom",shard="2"} 2
+
+# HELP goverse_clients_connected Number of active client connections in the cluster
+# TYPE goverse_clients_connected gauge
+goverse_clients_connected{node="localhost:47000",client_type="grpc"} 12
+goverse_clients_connected{node="localhost:47001",client_type="grpc"} 8
 ```
 
 ## Prometheus Configuration
@@ -101,6 +118,7 @@ The metrics integration is implemented across several packages:
 4. **`server`** - Server package
    - Exposes `/metrics` HTTP endpoint using `promhttp.Handler()`
    - Configurable via `MetricsListenAddress` in `ServerConfig`
+   - Tracks client connections/disconnections in `Register()` method
 
 ### Automatic Tracking
 
@@ -109,6 +127,8 @@ Metrics are automatically updated without requiring manual intervention:
 - **Object Creation**: When `node.createObject()` successfully creates an object, the object count is incremented
 - **Object Deletion**: When `node.destroyObject()` removes an object, the object count is decremented
 - **Shard Mapping Changes**: When `ConsensusManager` handles shard events or initializes, the shard count per node is updated
+- **Client Connection**: When a client connects via `server.Register()`, the client connection count is incremented
+- **Client Disconnection**: When a client disconnects, the client connection count is decremented
 
 ### Thread Safety
 
@@ -146,6 +166,19 @@ sum(goverse_shards_total)
 Check for unbalanced shard distribution (find max - min):
 ```promql
 max(goverse_shards_total) - min(goverse_shards_total)
+Total connected clients across all nodes:
+```promql
+sum(goverse_clients_connected)
+```
+
+Connected clients by node:
+```promql
+goverse_clients_connected{node="localhost:47000"}
+```
+
+Connected clients by type:
+```promql
+sum by (client_type) (goverse_clients_connected)
 ```
 
 ### Alerting Examples
@@ -176,6 +209,22 @@ Alert when a node has no shards but should:
   for: 5m
   annotations:
     summary: "Node {{ $labels.node }} has no shards assigned"
+Alert when client count is too high:
+```yaml
+- alert: HighClientCount
+  expr: goverse_clients_connected{node=~".+"} > 1000
+  for: 5m
+  annotations:
+    summary: "Node {{ $labels.node }} has high client connection count"
+```
+
+Alert when no clients are connected:
+```yaml
+- alert: NoClientsConnected
+  expr: sum(goverse_clients_connected) == 0
+  for: 10m
+  annotations:
+    summary: "No clients connected to any node in the cluster"
 ```
 
 ## Testing
@@ -221,3 +270,4 @@ Potential future metrics to add:
 - Client connection counts
 - Shard migration duration and frequency
 - Shard ownership transition tracking (TargetNode vs CurrentNode)
+- Client request rates and latencies
