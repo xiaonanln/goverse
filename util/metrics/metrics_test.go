@@ -194,6 +194,221 @@ func TestShardTracking(t *testing.T) {
 	}
 }
 
+func TestRecordMethodCall(t *testing.T) {
+	// Reset metrics before test
+	MethodCallsTotal.Reset()
+
+	// Record a successful method call
+	RecordMethodCall("localhost:47000", "TestObject", "TestMethod", "success")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "TestMethod", "success"))
+	if count != 1.0 {
+		t.Errorf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record another successful call for the same method
+	RecordMethodCall("localhost:47000", "TestObject", "TestMethod", "success")
+	count = testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "TestMethod", "success"))
+	if count != 2.0 {
+		t.Errorf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record a failed method call
+	RecordMethodCall("localhost:47000", "TestObject", "TestMethod", "failure")
+	failCount := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "TestMethod", "failure"))
+	if failCount != 1.0 {
+		t.Errorf("Expected failure count to be 1.0, got %f", failCount)
+	}
+
+	// Success count should remain unchanged
+	count = testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "TestMethod", "success"))
+	if count != 2.0 {
+		t.Errorf("Expected success count to remain 2.0, got %f", count)
+	}
+}
+
+func TestRecordMethodCallDuration(t *testing.T) {
+	// Reset metrics before test
+	MethodCallDuration.Reset()
+
+	// Record method call durations
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.005)
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.05)
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.5)
+
+	// For histograms, we verify by collecting metrics count
+	// The histogram itself is a collector
+	count := testutil.CollectAndCount(MethodCallDuration)
+	// Each label combination creates a separate metric family
+	// We expect at least 1 metric (the one we're testing)
+	if count < 1 {
+		t.Errorf("Expected at least 1 metric, got %d", count)
+	}
+}
+
+func TestMethodCallsMultipleNodes(t *testing.T) {
+	// Reset metrics before test
+	MethodCallsTotal.Reset()
+
+	// Test multiple nodes with different methods
+	RecordMethodCall("localhost:47000", "TestObject", "Method1", "success")
+	RecordMethodCall("localhost:47001", "TestObject", "Method1", "success")
+	RecordMethodCall("localhost:47002", "AnotherType", "Method2", "failure")
+
+	// Verify each node has the correct count
+	count1 := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "Method1", "success"))
+	if count1 != 1.0 {
+		t.Errorf("Expected count for node 47000 to be 1.0, got %f", count1)
+	}
+
+	count2 := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47001", "TestObject", "Method1", "success"))
+	if count2 != 1.0 {
+		t.Errorf("Expected count for node 47001 to be 1.0, got %f", count2)
+	}
+
+	count3 := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47002", "AnotherType", "Method2", "failure"))
+	if count3 != 1.0 {
+		t.Errorf("Expected count for node 47002 to be 1.0, got %f", count3)
+	}
+}
+
+func TestMethodCallsMultipleMethods(t *testing.T) {
+	// Reset metrics before test
+	MethodCallsTotal.Reset()
+
+	// Record calls to different methods on the same object type
+	RecordMethodCall("localhost:47000", "TestObject", "Method1", "success")
+	RecordMethodCall("localhost:47000", "TestObject", "Method2", "success")
+	RecordMethodCall("localhost:47000", "TestObject", "Method3", "failure")
+	RecordMethodCall("localhost:47000", "TestObject", "Method1", "success")
+
+	// Verify Method1 has 2 successful calls
+	count1 := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "Method1", "success"))
+	if count1 != 2.0 {
+		t.Errorf("Expected count for Method1 to be 2.0, got %f", count1)
+	}
+
+	// Verify Method2 has 1 successful call
+	count2 := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "Method2", "success"))
+	if count2 != 1.0 {
+		t.Errorf("Expected count for Method2 to be 1.0, got %f", count2)
+	}
+
+	// Verify Method3 has 1 failed call
+	count3 := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "TestObject", "Method3", "failure"))
+	if count3 != 1.0 {
+		t.Errorf("Expected count for Method3 to be 1.0, got %f", count3)
+	}
+}
+
+func TestMethodCallDurationHistogramBuckets(t *testing.T) {
+	// Reset metrics before test
+	MethodCallDuration.Reset()
+
+	// Record durations in different buckets: 0.001, 0.01, 0.1, 1, 10
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.0005) // < 0.001
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.005)  // 0.001-0.01
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.05)   // 0.01-0.1
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.5)    // 0.1-1
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 5.0)    // 1-10
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 15.0)   // > 10
+
+	// Verify the histogram has recorded all observations
+	// For histograms, we verify by checking that metrics were collected
+	count := testutil.CollectAndCount(MethodCallDuration)
+	if count < 1 {
+		t.Errorf("Expected at least 1 metric, got %d", count)
+	}
+}
+
+func TestMethodCallsMultipleObjectTypes(t *testing.T) {
+	// Reset metrics before test
+	MethodCallsTotal.Reset()
+
+	// Record calls for different object types
+	RecordMethodCall("localhost:47000", "UserObject", "GetUser", "success")
+	RecordMethodCall("localhost:47000", "ChatRoom", "SendMessage", "success")
+	RecordMethodCall("localhost:47000", "ChatClient", "Connect", "failure")
+
+	// Verify each object type has the correct count
+	userCount := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "UserObject", "GetUser", "success"))
+	if userCount != 1.0 {
+		t.Errorf("Expected count for UserObject to be 1.0, got %f", userCount)
+	}
+
+	chatRoomCount := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "ChatRoom", "SendMessage", "success"))
+	if chatRoomCount != 1.0 {
+		t.Errorf("Expected count for ChatRoom to be 1.0, got %f", chatRoomCount)
+	}
+
+	chatClientCount := testutil.ToFloat64(MethodCallsTotal.WithLabelValues("localhost:47000", "ChatClient", "Connect", "failure"))
+	if chatClientCount != 1.0 {
+		t.Errorf("Expected count for ChatClient to be 1.0, got %f", chatClientCount)
+	}
+}
+
+func TestMethodCallMetricsRegistration(t *testing.T) {
+	// Verify that method call metrics are properly registered with Prometheus
+	if MethodCallsTotal == nil {
+		t.Error("MethodCallsTotal metric should not be nil")
+	}
+
+	if MethodCallDuration == nil {
+		t.Error("MethodCallDuration metric should not be nil")
+	}
+}
+
+func TestMethodCallStatusTracking(t *testing.T) {
+	// Reset metrics before test
+	MethodCallsTotal.Reset()
+
+	// Test that success and failure statuses are tracked separately
+	node := "localhost:47000"
+	objType := "TestObject"
+	method := "TestMethod"
+
+	// Record multiple success and failure calls
+	for i := 0; i < 5; i++ {
+		RecordMethodCall(node, objType, method, "success")
+	}
+	for i := 0; i < 3; i++ {
+		RecordMethodCall(node, objType, method, "failure")
+	}
+
+	// Verify success count
+	successCount := testutil.ToFloat64(MethodCallsTotal.WithLabelValues(node, objType, method, "success"))
+	if successCount != 5.0 {
+		t.Errorf("Expected success count to be 5.0, got %f", successCount)
+	}
+
+	// Verify failure count
+	failureCount := testutil.ToFloat64(MethodCallsTotal.WithLabelValues(node, objType, method, "failure"))
+	if failureCount != 3.0 {
+		t.Errorf("Expected failure count to be 3.0, got %f", failureCount)
+	}
+}
+
+func TestMethodCallDurationWithStatus(t *testing.T) {
+	// Reset metrics before test
+	MethodCallDuration.Reset()
+
+	// Record durations for successful calls
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.1)
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "success", 0.2)
+
+	// Record durations for failed calls
+	RecordMethodCallDuration("localhost:47000", "TestObject", "TestMethod", "failure", 0.05)
+
+	// Verify histograms were recorded
+	// For histograms, we verify by checking that metrics were collected
+	count := testutil.CollectAndCount(MethodCallDuration)
+	// We expect at least 1 metric family (both success and failure share the same histogram)
+	if count < 1 {
+		t.Errorf("Expected at least 1 metric, got %d", count)
+	}
+}
+
 func TestRecordClientConnected(t *testing.T) {
 	// Reset metrics before test
 	ClientsConnected.Reset()

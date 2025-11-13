@@ -87,7 +87,7 @@ Add the following to your `prometheus.yml` to scrape GoVerse metrics from all no
 scrape_configs:
   - job_name: 'goverse'
     static_configs:
-      - targets: 
+      - targets:
           - 'localhost:9090'    # Node 1
           - 'localhost:9091'    # Node 2
           - 'localhost:9092'    # Node 3
@@ -126,6 +126,7 @@ Metrics are automatically updated without requiring manual intervention:
 
 - **Object Creation**: When `node.createObject()` successfully creates an object, the object count is incremented
 - **Object Deletion**: When `node.destroyObject()` removes an object, the object count is decremented
+- **Method Calls**: When `node.CallObject()` executes a method, both the counter and histogram are updated with the call status and duration
 - **Shard Mapping Changes**: When `ConsensusManager` handles shard events or initializes, the shard count per node is updated
 - **Client Connection**: When a client connects via `server.Register()`, the client connection count is incremented
 - **Client Disconnection**: When a client disconnects, the client connection count is decremented
@@ -137,6 +138,8 @@ All metrics operations are thread-safe and use Prometheus client library's built
 ## Usage Examples
 
 ### Querying Metrics with PromQL
+
+#### Object Metrics
 
 Total objects across all nodes:
 ```promql
@@ -151,6 +154,54 @@ sum by (type) (goverse_objects_total)
 Objects on a specific node:
 ```promql
 goverse_objects_total{node="localhost:47000"}
+```
+
+#### Method Call Metrics
+
+Total method calls across all nodes:
+```promql
+sum(goverse_method_calls_total)
+```
+
+Method calls by status (success vs failure):
+```promql
+sum by (status) (goverse_method_calls_total)
+```
+
+Success rate for a specific method:
+```promql
+sum(rate(goverse_method_calls_total{method_name="SendMessage",status="success"}[5m]))
+/
+sum(rate(goverse_method_calls_total{method_name="SendMessage"}[5m]))
+```
+
+Error rate (failures per second) for a specific object type:
+```promql
+sum(rate(goverse_method_calls_total{object_type="ChatRoom",status="failure"}[5m]))
+```
+
+#### Method Call Duration Metrics
+
+Average method call duration (seconds):
+```promql
+rate(goverse_method_call_duration_sum[5m])
+/
+rate(goverse_method_call_duration_count[5m])
+```
+
+95th percentile of method call duration:
+```promql
+histogram_quantile(0.95, rate(goverse_method_call_duration_bucket[5m]))
+```
+
+99th percentile for a specific method:
+```promql
+histogram_quantile(0.99, rate(goverse_method_call_duration_bucket{method_name="SendMessage"}[5m]))
+```
+
+Methods taking longer than 100ms (p95):
+```promql
+histogram_quantile(0.95, rate(goverse_method_call_duration_bucket[5m])) > 0.1
 ```
 
 Shard distribution across all nodes:
@@ -190,6 +241,33 @@ Alert when object count is too high:
   for: 5m
   annotations:
     summary: "Node {{ $labels.node }} has high object count"
+```
+
+Alert when method call error rate is too high:
+```yaml
+- alert: HighMethodCallErrorRate
+  expr: |
+    sum by (node, object_type, method_name) (rate(goverse_method_calls_total{status="failure"}[5m]))
+    /
+    sum by (node, object_type, method_name) (rate(goverse_method_calls_total[5m]))
+    > 0.05
+  for: 5m
+  annotations:
+    summary: "High error rate for {{ $labels.method_name }} on {{ $labels.object_type }} at {{ $labels.node }}"
+    description: "Error rate is {{ $value | humanizePercentage }}"
+```
+
+Alert when method call duration is too high:
+```yaml
+- alert: SlowMethodCalls
+  expr: |
+    histogram_quantile(0.95,
+      rate(goverse_method_call_duration_bucket[5m])
+    ) > 1.0
+  for: 5m
+  annotations:
+    summary: "Slow method calls detected on {{ $labels.node }}"
+    description: "P95 latency is {{ $value }}s for {{ $labels.method_name }}"
 ```
 
 Alert when shard distribution is unbalanced:
@@ -257,12 +335,60 @@ The following Prometheus client library dependencies were added:
 
 All dependencies have been checked for security vulnerabilities and are clean.
 
+### Method Call Metrics
+
+**`goverse_method_calls_total{node, object_type, method_name, status}`** - Counter
+- Description: Total number of method calls on distributed objects
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+  - `object_type`: The object type (e.g., "ChatRoom", "ChatClient")
+  - `method_name`: The method being called (e.g., "SendMessage", "JoinRoom")
+  - `status`: The call status - "success" or "failure"
+- Updated: Automatically incremented on each method call
+
+**`goverse_method_call_duration{node, object_type, method_name, status}`** - Histogram
+- Description: Duration of method calls on distributed objects in seconds
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+  - `object_type`: The object type (e.g., "ChatRoom", "ChatClient")
+  - `method_name`: The method being called (e.g., "SendMessage", "JoinRoom")
+  - `status`: The call status - "success" or "failure"
+- Buckets: [0.001, 0.01, 0.1, 1, 10] seconds
+- Updated: Automatically recorded for each method call
+
+## Example Output
+
+```
+# HELP goverse_objects_total Total number of distributed objects in the cluster
+# TYPE goverse_objects_total gauge
+goverse_objects_total{node="localhost:47000",type="ChatRoom",shard="100"} 3
+goverse_objects_total{node="localhost:47000",type="ChatClient",shard="200"} 5
+goverse_objects_total{node="localhost:47001",type="ChatRoom",shard="150"} 2
+
+# HELP goverse_method_calls_total Total number of method calls on distributed objects
+# TYPE goverse_method_calls_total counter
+goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 1523
+goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="failure"} 12
+goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="JoinRoom",status="success"} 245
+goverse_method_calls_total{node="localhost:47001",object_type="ChatClient",method_name="Connect",status="success"} 89
+
+# HELP goverse_method_call_duration Duration of method calls on distributed objects in seconds
+# TYPE goverse_method_call_duration histogram
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.001"} 450
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.01"} 1200
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.1"} 1500
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="1"} 1520
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="10"} 1523
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="+Inf"} 1523
+goverse_method_call_duration_sum{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 45.2
+goverse_method_call_duration_count{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 1523
+```
+
 ## Future Enhancements
 
 Potential future metrics to add:
 
 - Node connection counts
-- Object method call latency histograms
 - Object lifecycle duration histograms
 - RPC error rates
 - Persistence operation metrics

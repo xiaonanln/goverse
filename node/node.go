@@ -269,6 +269,21 @@ func (node *Node) CallClient(ctx context.Context, clientId, method string, reque
 
 // CallObject implements the Goverse gRPC service CallObject method
 func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error) {
+	// Start timing for metrics
+	startTime := time.Now()
+	var callErr error
+
+	// Defer metrics recording to ensure it happens on all return paths
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		status := "success"
+		if callErr != nil {
+			status = "failure"
+		}
+		metrics.RecordMethodCall(node.advertiseAddress, typ, method, status)
+		metrics.RecordMethodCallDuration(node.advertiseAddress, typ, method, status, duration)
+	}()
+
 	// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -276,14 +291,16 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	// Check if node is stopped after acquiring lock
 	if node.stopped.Load() {
-		return nil, fmt.Errorf("node is stopped")
+		callErr = fmt.Errorf("node is stopped")
+		return nil, callErr
 	}
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 
 	err := node.createObject(ctx, typ, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
+		callErr = fmt.Errorf("failed to auto-create object %s: %w", id, err)
+		return nil, callErr
 	}
 
 	// Now acquire per-key read lock to prevent concurrent delete during method call
@@ -297,32 +314,37 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	if !ok {
 		// Generally, this should not happen since we just created it if it didn't exist. However, in extreme cases of concurrent deletes, it might.
-		return nil, fmt.Errorf("object %s was not found [RETRY]", id)
+		callErr = fmt.Errorf("object %s was not found [RETRY]", id)
+		return nil, callErr
 	}
 
 	// Validate that the provided type matches the object's actual type
 	if obj.Type() != typ {
-		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", typ, obj.Type(), id)
+		callErr = fmt.Errorf("object type mismatch: expected %s, got %s for object %s", typ, obj.Type(), id)
+		return nil, callErr
 	}
 
 	objValue := reflect.ValueOf(obj)
 	methodValue := objValue.MethodByName(method)
 	if !methodValue.IsValid() {
-		return nil, fmt.Errorf("method not found in class %s: %s", obj.Type(), method)
+		callErr = fmt.Errorf("method not found in class %s: %s", obj.Type(), method)
+		return nil, callErr
 	}
 
 	methodType := methodValue.Type()
 	if methodType.NumIn() != 2 ||
 		!methodType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) ||
 		!isConcreteProtoMessage(methodType.In(1)) {
-		return nil, fmt.Errorf("method %s has invalid argument types (expected: context.Context, *Message; got: %s, %s)", method, methodType.In(0), methodType.In(1))
+		callErr = fmt.Errorf("method %s has invalid argument types (expected: context.Context, *Message; got: %s, %s)", method, methodType.In(0), methodType.In(1))
+		return nil, callErr
 	}
 
 	// Check method return types: (proto.Message, error)
 	if methodType.NumOut() != 2 ||
 		!isConcreteProtoMessage(methodType.Out(0)) ||
 		!methodType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return nil, fmt.Errorf("method %s has invalid return types (expected: *Message, error; got: %s, %s)", method, methodType.Out(0), methodType.Out(1))
+		callErr = fmt.Errorf("method %s has invalid return types (expected: *Message, error; got: %s, %s)", method, methodType.Out(0), methodType.Out(1))
+		return nil, callErr
 	}
 
 	// Unmarshal request to the expected concrete proto.Message type
@@ -330,7 +352,8 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	node.logger.Infof("Request value: %+v", request)
 
 	if reflect.TypeOf(request) != expectedReqType {
-		return nil, fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
+		callErr = fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
+		return nil, callErr
 	}
 
 	// Call the method with the unmarshaled request as argument
@@ -339,14 +362,16 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	results := methodValue.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
 
 	if len(results) != 2 {
-		return nil, fmt.Errorf("method %s has invalid signature", method)
+		callErr = fmt.Errorf("method %s has invalid signature", method)
+		return nil, callErr
 	}
 
 	// Return the actual result from the method
 	resp, errVal := results[0], results[1]
+	
 	if !errVal.IsNil() {
-		err := errVal.Interface().(error)
-		return nil, err
+		callErr = errVal.Interface().(error)
+		return nil, callErr
 	}
 
 	node.logger.Infof("Response type: %T, value: %+v", resp.Interface(), resp.Interface())
