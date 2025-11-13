@@ -338,7 +338,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 			for _, event := range watchResp.Events {
 				key := string(event.Kv.Key)
 
-				cm.logger.Infof("Received watch event: %s %s=%s rev %v", event.Type.String(), key, event.Kv.Value, event.Kv.ModRevision)
+				cm.logger.Debugf("Received watch event: %s %s=%s rev %v", event.Type.String(), key, event.Kv.Value, event.Kv.ModRevision)
 				// Handle node changes
 				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
 					cm.handleNodeEvent(event, nodesPrefix)
@@ -408,12 +408,12 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		shardInfo := parseShardInfo(event.Kv)
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
-		cm.logger.Infof("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
+		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		delete(cm.state.ShardMapping.Shards, shardID)
-		cm.logger.Infof("Shard %d mapping deleted", shardID)
+		cm.logger.Debugf("Shard %d mapping deleted", shardID)
 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
@@ -689,7 +689,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 			}
 
 			// Log the transaction response for diagnostics
-			cm.logger.Infof("Txn commit %s = %s for shard %d succeeded: revision=%d", key, value, id, resp.Header.Revision)
+			cm.logger.Debugf("Txn commit %s = %s for shard %d succeeded: revision=%d", key, value, id, resp.Header.Revision)
 
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
