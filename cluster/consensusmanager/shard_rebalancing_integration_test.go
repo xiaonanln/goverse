@@ -133,7 +133,8 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 			shardCounts[node] = 0
 		}
 		for i := 0; i < sharding.NumShards; i++ {
-			shardCounts[mapping.Shards[i].CurrentNode]++
+			// Count shards by TargetNode to match RebalanceShards logic (which uses TargetNode)
+			shardCounts[mapping.Shards[i].TargetNode]++
 		}
 
 		t.Logf("Before rebalance - node1: %d, node2: %d, node3: %d",
