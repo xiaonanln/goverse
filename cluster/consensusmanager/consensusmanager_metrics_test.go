@@ -16,9 +16,7 @@ func TestUpdateShardMetrics_EmptyState(t *testing.T) {
 	cm := NewConsensusManager(mgr)
 
 	// Test with no nodes and no shards
-	cm.mu.Lock()
-	cm.updateShardMetrics()
-	cm.mu.Unlock()
+	cm.UpdateShardMetrics()
 
 	// No metrics should be set
 	// Note: With no nodes, no metrics are reported
@@ -45,10 +43,10 @@ func TestUpdateShardMetrics_WithShards(t *testing.T) {
 	cm.state.ShardMapping.Shards[2] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: "localhost:47000"}
 	cm.state.ShardMapping.Shards[3] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"}
 	cm.state.ShardMapping.Shards[4] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"}
+	cm.mu.Unlock()
 
 	// Update metrics
-	cm.updateShardMetrics()
-	cm.mu.Unlock()
+	cm.UpdateShardMetrics()
 
 	// Verify metrics
 	count0 := testutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:47000"))
@@ -81,10 +79,10 @@ func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
 	// Assign all shards to only two nodes, leaving one with zero
 	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: "localhost:47000"}
 	cm.state.ShardMapping.Shards[1] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"}
+	cm.mu.Unlock()
 
 	// Update metrics
-	cm.updateShardMetrics()
-	cm.mu.Unlock()
+	cm.UpdateShardMetrics()
 
 	// Verify metrics - node with no shards should have count of 0
 	count0 := testutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:47000"))
@@ -122,10 +120,10 @@ func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
 	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: ""}
 	cm.state.ShardMapping.Shards[1] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: ""}
 	cm.state.ShardMapping.Shards[2] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"}
+	cm.mu.Unlock()
 
 	// Update metrics
-	cm.updateShardMetrics()
-	cm.mu.Unlock()
+	cm.UpdateShardMetrics()
 
 	// Verify metrics - only claimed shards (with CurrentNode) should be counted
 	count0 := testutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:47000"))
@@ -157,10 +155,10 @@ func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
 
 	// Shard 0: TargetNode is 47001, but CurrentNode is still 47000 (migration in progress)
 	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47000"}
+	cm.mu.Unlock()
 
 	// Update metrics
-	cm.updateShardMetrics()
-	cm.mu.Unlock()
+	cm.UpdateShardMetrics()
 
 	// Verify metrics - should count based on CurrentNode (actual ownership)
 	count0 := testutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:47000"))

@@ -770,6 +770,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
 	c.checkAndMarkReady()
+	c.consensusManager.UpdateShardMetrics()
 }
 
 // claimShardOwnership claims ownership of shards when cluster state is stable
