@@ -251,9 +251,6 @@ func (cm *ConsensusManager) notifyStateChanged() {
 func (cm *ConsensusManager) UpdateShardMetrics() {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	if cm.state.ShardMapping == nil {
-		return
-	}
 
 	// Count shards per node using CurrentNode (actual ownership)
 	shardCounts := make(map[string]int)
@@ -272,7 +269,7 @@ func (cm *ConsensusManager) UpdateShardMetrics() {
 
 	// Update metrics for each node
 	for node, count := range shardCounts {
-		metrics.SetShardCount(node, float64(count))
+		metrics.SetAssignedShardCount(node, float64(count))
 	}
 }
 
