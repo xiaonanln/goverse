@@ -38,9 +38,6 @@ func TestShardMetricsIntegration(t *testing.T) {
 		t.Fatalf("Shard mapping should be initialized by leader")
 	}
 
-	// Wait a bit more for metrics to be updated
-	time.Sleep(testutil.WaitForShardMappingTimeout)
-
 	// Verify metrics are updated for both nodes
 	// Get expected shard count per node
 	node1Count := 0
