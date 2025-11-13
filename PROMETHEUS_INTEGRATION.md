@@ -4,7 +4,7 @@ This document describes the Prometheus metrics integration added to GoVerse.
 
 ## Overview
 
-GoVerse now exposes Prometheus metrics for monitoring distributed objects and node connections. The metrics are automatically tracked and can be scraped by Prometheus for observability.
+GoVerse now exposes Prometheus metrics for monitoring distributed objects. The metrics are automatically tracked and can be scraped by Prometheus for observability.
 
 ## Available Metrics
 
@@ -16,14 +16,6 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects and no
   - `node`: The node address (e.g., "localhost:47000")
   - `type`: The object type (e.g., "ChatRoom", "ChatClient")
 - Updated: Automatically incremented on object creation, decremented on deletion
-
-### Node Connection Metrics
-
-**`goverse_node_connections_total{node}`** - Gauge
-- Description: Total number of connections between nodes in the cluster
-- Labels:
-  - `node`: The node address (e.g., "localhost:47000")
-- Updated: Automatically updated when connections are established or closed
 
 ## Metrics Endpoint
 
@@ -43,11 +35,6 @@ By default, the inspector runs on port 8080. The endpoint returns metrics in Pro
 goverse_objects_total{node="localhost:47000",type="ChatRoom"} 3
 goverse_objects_total{node="localhost:47000",type="ChatClient"} 5
 goverse_objects_total{node="localhost:47001",type="ChatRoom"} 2
-
-# HELP goverse_node_connections_total Total number of connections between nodes in the cluster
-# TYPE goverse_node_connections_total gauge
-goverse_node_connections_total{node="localhost:47000"} 2
-goverse_node_connections_total{node="localhost:47001"} 2
 ```
 
 ## Prometheus Configuration
@@ -76,11 +63,7 @@ The metrics integration is implemented across several packages:
    - Tracks object creation in `createObject()`
    - Tracks object deletion in `destroyObject()`
 
-3. **`cluster/nodeconnections`** - Node connections integration
-   - Tracks connection establishment in `connectToNode()`
-   - Tracks connection closure in `disconnectFromNode()`
-
-4. **`cmd/inspector`** - Inspector HTTP server
+3. **`cmd/inspector`** - Inspector HTTP server
    - Exposes `/metrics` endpoint using `promhttp.Handler()`
 
 ### Automatic Tracking
@@ -89,8 +72,6 @@ Metrics are automatically updated without requiring manual intervention:
 
 - **Object Creation**: When `node.createObject()` successfully creates an object, the object count is incremented
 - **Object Deletion**: When `node.destroyObject()` removes an object, the object count is decremented
-- **Connection Established**: When a node connection is established, the connection count is updated
-- **Connection Closed**: When a node connection is closed, the connection count is updated
 
 ### Thread Safety
 
@@ -115,21 +96,7 @@ Objects on a specific node:
 goverse_objects_total{node="localhost:47000"}
 ```
 
-Total connections across all nodes:
-```promql
-sum(goverse_node_connections_total)
-```
-
 ### Alerting Examples
-
-Alert when a node loses all connections:
-```yaml
-- alert: NodeDisconnected
-  expr: goverse_node_connections_total == 0
-  for: 1m
-  annotations:
-    summary: "Node {{ $labels.node }} has no connections"
-```
 
 Alert when object count is too high:
 ```yaml
@@ -174,6 +141,7 @@ All dependencies have been checked for security vulnerabilities and are clean.
 
 Potential future metrics to add:
 
+- Node connection counts
 - Object method call latency histograms
 - Object lifecycle duration histograms
 - RPC error rates

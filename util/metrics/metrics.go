@@ -14,15 +14,6 @@ var (
 		},
 		[]string{"node", "type"},
 	)
-
-	// NodeConnectionCount tracks the number of connections between nodes
-	NodeConnectionCount = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "goverse_node_connections_total",
-			Help: "Total number of connections between nodes in the cluster",
-		},
-		[]string{"node"},
-	)
 )
 
 // RecordObjectCreated increments the object count for a given node and type
@@ -33,9 +24,4 @@ func RecordObjectCreated(node, objectType string) {
 // RecordObjectDeleted decrements the object count for a given node and type
 func RecordObjectDeleted(node, objectType string) {
 	ObjectCount.WithLabelValues(node, objectType).Dec()
-}
-
-// SetNodeConnectionCount sets the connection count for a given node
-func SetNodeConnectionCount(node string, count float64) {
-	NodeConnectionCount.WithLabelValues(node).Set(count)
 }
