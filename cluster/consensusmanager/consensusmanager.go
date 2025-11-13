@@ -639,7 +639,7 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 // Uses a fixed worker pool to write multiple shards in parallel for better performance.
 // Returns the number of successfully written shards, or an error if any write fails.
 func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards map[int]ShardInfo) (int, error) {
-	cm.logger.Infof("storing shard mapping: %v", updateShards)
+	cm.logger.Infof("storing %d shard mapping", len(updateShards))
 	if cm.etcdManager == nil {
 		return 0, fmt.Errorf("etcd manager not set")
 	}
