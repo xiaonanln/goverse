@@ -71,7 +71,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 
 	// Verify manager stopped
-	ctx2 := node.inspectorManager.GetContext()
+	ctx2 := node.inspectorManager.GetContextForTesting()
 	if ctx2 != nil {
 		select {
 		case <-ctx2.Done():
@@ -177,7 +177,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	}
 
 	// Verify all objects are tracked by inspector manager
-	trackedCount := node.inspectorManager.GetTrackedObjectCount()
+	trackedCount := node.inspectorManager.ObjectCount()
 
 	if trackedCount != numObjects {
 		t.Errorf("Expected %d tracked objects, got %d", numObjects, trackedCount)
@@ -201,7 +201,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify correct number of objects tracked
-	trackedCount = node.inspectorManager.GetTrackedObjectCount()
+	trackedCount = node.inspectorManager.ObjectCount()
 
 	expectedCount := numObjects - numObjects/2
 	if trackedCount != expectedCount {
