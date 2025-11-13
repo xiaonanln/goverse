@@ -903,7 +903,7 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, 
 }
 
 // RebalanceShards checks if all shards are assigned and rebalances if there's significant imbalance.
-// If all shards are assigned, finds the node with max shards (a) and min shards (b).
+// If all shards are assigned, finds the node with max shards (a) and min shards (b) based on TargetNode.
 // If a >= b + 2 and a > 2*b, migrates one shard from max node to min node by updating its TargetNode.
 // Returns true if a rebalance operation was performed, false otherwise, and any error encountered.
 func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
@@ -924,7 +924,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	// Sort nodes for deterministic selection
 	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
 
-	// Count current shards per node and check if all shards are assigned
+	// Count target shards per node and check if all shards are assigned
 	shardCounts := make(map[string]int)
 	shardsPerNode := make(map[string][]int) // Track which shards each node has
 	for _, node := range nodes {
@@ -935,15 +935,15 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	allAssigned := true
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
 		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
-		if !exists || shardInfo.CurrentNode == "" {
+		if !exists || shardInfo.TargetNode == "" {
 			allAssigned = false
 			break
 		}
 
-		// Count this shard for its current node
-		if _, nodeExists := shardCounts[shardInfo.CurrentNode]; nodeExists {
-			shardCounts[shardInfo.CurrentNode]++
-			shardsPerNode[shardInfo.CurrentNode] = append(shardsPerNode[shardInfo.CurrentNode], shardID)
+		// Count this shard for its target node
+		if _, nodeExists := shardCounts[shardInfo.TargetNode]; nodeExists {
+			shardCounts[shardInfo.TargetNode]++
+			shardsPerNode[shardInfo.TargetNode] = append(shardsPerNode[shardInfo.TargetNode], shardID)
 		}
 	}
 
