@@ -131,14 +131,17 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
 }
 
 // NotifyObjectRemoved notifies the Inspector that an object has been removed.
-// Note: Current Inspector protocol doesn't have a RemoveObject RPC, so we just
-// remove from our local tracking. When we reconnect, the object won't be re-registered.
-// TODO: Add RemoveObject RPC to Inspector protocol for proper object cleanup
 func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
+	// Remove from local tracking
 	delete(im.objects, objectID)
+
+	// If connected, send the removal notification immediately
+	if im.connected && im.client != nil {
+		im.removeObjectLocked(objectID)
+	}
 }
 
 // connectLocked attempts to connect to the Inspector service.
@@ -257,6 +260,30 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string)
 	}
 
 	im.logger.Infof("Registered object %s with inspector", objectID)
+}
+
+// removeObjectLocked sends a RemoveObject RPC to the Inspector.
+// Must be called with im.mu held.
+func (im *InspectorManager) removeObjectLocked(objectID string) {
+	if im.client == nil {
+		return
+	}
+
+	req := &inspector_pb.RemoveObjectRequest{
+		ObjectId:    objectID,
+		NodeAddress: im.nodeAddress,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := im.client.RemoveObject(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to remove object %s from inspector: %v", objectID, err)
+		return
+	}
+
+	im.logger.Infof("Removed object %s from inspector", objectID)
 }
 
 // managementLoop runs in the background to handle health checks and reconnection.

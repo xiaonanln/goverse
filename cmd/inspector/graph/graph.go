@@ -67,6 +67,13 @@ func (pg *GoverseGraph) IsNodeRegistered(nodeAddress string) bool {
 	return exists
 }
 
+// RemoveObject removes a specific object by ID.
+func (pg *GoverseGraph) RemoveObject(objectID string) {
+	pg.mu.Lock()
+	defer pg.mu.Unlock()
+	delete(pg.objects, objectID)
+}
+
 func (pg *GoverseGraph) RemoveNode(goverseNodeID string) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()

@@ -67,6 +67,24 @@ func (s *Service) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOr
 	return &inspector_pb.Empty{}, nil
 }
 
+// RemoveObject handles object removal requests
+func (s *Service) RemoveObject(ctx context.Context, req *inspector_pb.RemoveObjectRequest) (*inspector_pb.Empty, error) {
+	objectID := req.GetObjectId()
+	if objectID == "" {
+		return &inspector_pb.Empty{}, nil
+	}
+
+	// Check if the node is registered
+	nodeAddress := req.GetNodeAddress()
+	if !s.pg.IsNodeRegistered(nodeAddress) {
+		return nil, status.Errorf(codes.NotFound, "node not registered")
+	}
+
+	s.pg.RemoveObject(objectID)
+	log.Printf("Object removed: object_id=%s, node=%s", objectID, nodeAddress)
+	return &inspector_pb.Empty{}, nil
+}
+
 // RegisterNode handles node registration requests
 func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRequest) (*inspector_pb.RegisterNodeResponse, error) {
 	addr := req.GetAdvertiseAddress()
