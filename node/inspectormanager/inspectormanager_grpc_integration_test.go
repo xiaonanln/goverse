@@ -450,3 +450,116 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 		t.Errorf("Expected 1 object for node3, got %d", len(objectsByNode[nodeAddr3]))
 	}
 }
+
+// TestInspectorManager_ConnectFailureAndRetry tests behavior when initial connection fails
+// and manager retries in background
+func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
+	// Get an unused port by listening and then closing immediately
+	tempListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port: %v", err)
+	}
+	inspectorAddr := tempListener.Addr().String()
+	tempListener.Close() // Close immediately so the port is free but nothing is listening
+
+	// Get a random port for the node
+	nodeListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get random port for node: %v", err)
+	}
+	nodeAddr := nodeListener.Addr().String()
+	nodeListener.Close()
+
+	// Create manager with inspector address pointing to unused port
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.inspectorAddress = inspectorAddr
+	ctx := context.Background()
+
+	// Start should not return error even though connection fails
+	err = mgr.Start(ctx)
+	if err != nil {
+		t.Fatalf("Start should not return error even when initial connection fails, got: %v", err)
+	}
+	defer mgr.Stop()
+
+	// Verify connected remains false after initial connection attempt
+	mgr.mu.RLock()
+	initialConnected := mgr.connected
+	mgr.mu.RUnlock()
+
+	if initialConnected {
+		t.Error("Manager should not be connected when inspector is not available")
+	}
+
+	// Start test inspector server on that address
+	listener, err := net.Listen("tcp", inspectorAddr)
+	if err != nil {
+		t.Fatalf("Failed to start listener on %s: %v", inspectorAddr, err)
+	}
+
+	pg := graph.NewGoverseGraph()
+	grpcServer := grpc.NewServer()
+	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.NewService(pg))
+
+	// Start server in background
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			t.Logf("Inspector server stopped: %v", err)
+		}
+	}()
+	defer grpcServer.GracefulStop()
+
+	// Wait for server to be ready
+	time.Sleep(100 * time.Millisecond)
+
+	// Poll with timeout to check if manager reconnects
+	// The health check interval is 5 seconds, so we need to wait at least that long
+	// We'll poll every 500ms for up to 10 seconds to give it enough time
+	maxWait := 10 * time.Second
+	pollInterval := 500 * time.Millisecond
+	deadline := time.Now().Add(maxWait)
+
+	connected := false
+	for time.Now().Before(deadline) {
+		mgr.mu.RLock()
+		connected = mgr.connected
+		mgr.mu.RUnlock()
+
+		if connected {
+			break
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	if !connected {
+		t.Errorf("Manager should reconnect after server starts (waited %v)", maxWait)
+	}
+
+	// Poll to verify node is registered in the graph
+	nodeRegistered := false
+	deadline = time.Now().Add(5 * time.Second)
+
+	for time.Now().Before(deadline) {
+		nodes := pg.GetNodes()
+		if len(nodes) > 0 {
+			for _, node := range nodes {
+				if node.AdvertiseAddr == nodeAddr {
+					nodeRegistered = true
+					break
+				}
+			}
+		}
+
+		if nodeRegistered {
+			break
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	if !nodeRegistered {
+		nodes := pg.GetNodes()
+		t.Errorf("Node should be registered after reconnection. Found %d nodes", len(nodes))
+	}
+}
