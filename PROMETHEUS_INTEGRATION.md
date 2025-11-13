@@ -15,8 +15,30 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects. The m
 - Labels:
   - `node`: The node address (e.g., "localhost:47000")
   - `type`: The object type (e.g., "ChatRoom", "ChatClient")
+  - `shard`: The shard number (e.g., "100", "200")
   - `shard`: The shard number (e.g., "0", "100")
 - Updated: Automatically incremented on object creation, decremented on deletion
+
+### Method Call Metrics
+
+**`goverse_method_calls_total{node, object_type, method_name, status}`** - Counter
+- Description: Total number of method calls on distributed objects
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+  - `object_type`: The object type (e.g., "ChatRoom", "ChatClient")
+  - `method_name`: The method being called (e.g., "SendMessage", "JoinRoom")
+  - `status`: The call status - "success" or "failure"
+- Updated: Automatically incremented on each method call
+
+**`goverse_method_call_duration{node, object_type, method_name, status}`** - Histogram
+- Description: Duration of method calls on distributed objects in seconds
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+  - `object_type`: The object type (e.g., "ChatRoom", "ChatClient")
+  - `method_name`: The method being called (e.g., "SendMessage", "JoinRoom")
+  - `status`: The call status - "success" or "failure"
+- Buckets: [0.001, 0.01, 0.1, 1, 10] seconds
+- Updated: Automatically recorded for each method call
 
 ### Shard Metrics
 
@@ -59,9 +81,27 @@ http://<node-address>:9090/metrics
 ```
 # HELP goverse_objects_total Total number of distributed objects in the cluster
 # TYPE goverse_objects_total gauge
-goverse_objects_total{node="localhost:47000",type="ChatRoom"} 3
-goverse_objects_total{node="localhost:47000",type="ChatClient"} 5
-goverse_objects_total{node="localhost:47001",type="ChatRoom"} 2
+goverse_objects_total{node="localhost:47000",type="ChatRoom",shard="100"} 3
+goverse_objects_total{node="localhost:47000",type="ChatClient",shard="200"} 5
+goverse_objects_total{node="localhost:47001",type="ChatRoom",shard="150"} 2
+
+# HELP goverse_method_calls_total Total number of method calls on distributed objects
+# TYPE goverse_method_calls_total counter
+goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 1523
+goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="failure"} 12
+goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="JoinRoom",status="success"} 245
+goverse_method_calls_total{node="localhost:47001",object_type="ChatClient",method_name="Connect",status="success"} 89
+
+# HELP goverse_method_call_duration Duration of method calls on distributed objects in seconds
+# TYPE goverse_method_call_duration histogram
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.001"} 450
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.01"} 1200
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.1"} 1500
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="1"} 1520
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="10"} 1523
+goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="+Inf"} 1523
+goverse_method_call_duration_sum{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 45.2
+goverse_method_call_duration_count{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 1523
 
 # HELP goverse_shards_total Total number of shards assigned to each node
 # TYPE goverse_shards_total gauge
@@ -334,55 +374,6 @@ The following Prometheus client library dependencies were added:
 - `github.com/prometheus/procfs v0.16.1`
 
 All dependencies have been checked for security vulnerabilities and are clean.
-
-### Method Call Metrics
-
-**`goverse_method_calls_total{node, object_type, method_name, status}`** - Counter
-- Description: Total number of method calls on distributed objects
-- Labels:
-  - `node`: The node address (e.g., "localhost:47000")
-  - `object_type`: The object type (e.g., "ChatRoom", "ChatClient")
-  - `method_name`: The method being called (e.g., "SendMessage", "JoinRoom")
-  - `status`: The call status - "success" or "failure"
-- Updated: Automatically incremented on each method call
-
-**`goverse_method_call_duration{node, object_type, method_name, status}`** - Histogram
-- Description: Duration of method calls on distributed objects in seconds
-- Labels:
-  - `node`: The node address (e.g., "localhost:47000")
-  - `object_type`: The object type (e.g., "ChatRoom", "ChatClient")
-  - `method_name`: The method being called (e.g., "SendMessage", "JoinRoom")
-  - `status`: The call status - "success" or "failure"
-- Buckets: [0.001, 0.01, 0.1, 1, 10] seconds
-- Updated: Automatically recorded for each method call
-
-## Example Output
-
-```
-# HELP goverse_objects_total Total number of distributed objects in the cluster
-# TYPE goverse_objects_total gauge
-goverse_objects_total{node="localhost:47000",type="ChatRoom",shard="100"} 3
-goverse_objects_total{node="localhost:47000",type="ChatClient",shard="200"} 5
-goverse_objects_total{node="localhost:47001",type="ChatRoom",shard="150"} 2
-
-# HELP goverse_method_calls_total Total number of method calls on distributed objects
-# TYPE goverse_method_calls_total counter
-goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 1523
-goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="failure"} 12
-goverse_method_calls_total{node="localhost:47000",object_type="ChatRoom",method_name="JoinRoom",status="success"} 245
-goverse_method_calls_total{node="localhost:47001",object_type="ChatClient",method_name="Connect",status="success"} 89
-
-# HELP goverse_method_call_duration Duration of method calls on distributed objects in seconds
-# TYPE goverse_method_call_duration histogram
-goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.001"} 450
-goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.01"} 1200
-goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="0.1"} 1500
-goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="1"} 1520
-goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="10"} 1523
-goverse_method_call_duration_bucket{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success",le="+Inf"} 1523
-goverse_method_call_duration_sum{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 45.2
-goverse_method_call_duration_count{node="localhost:47000",object_type="ChatRoom",method_name="SendMessage",status="success"} 1523
-```
 
 ## Future Enhancements
 
