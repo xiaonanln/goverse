@@ -86,26 +86,28 @@ jobs:
           POSTGRES_DB: postgres
 
       - name: Run etcd restart tests
-        run: go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ ./...
+        run: go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ -coverprofile=coverage-etcd-restart.out -covermode=atomic ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
 
-      - name: Calculate coverage percentage
-        id: coverage
-        run: |
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-          echo "Coverage: $COVERAGE"
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.out
+          files: ./coverage.out
           flags: unittests
           name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload etcd restart tests coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-etcd-restart.out
+          flags: etcd_restart
+          name: codecov-etcd-restart
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -175,7 +177,15 @@ jobs:
           done
 
       - name: Run tests with race detector
-        run: go test -v -p 1 -failfast -race ./...
+        run: go test -v -failfast -race ./...
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+
+      - name: Run etcd restart tests with race detector
+        run: go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ -race ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
