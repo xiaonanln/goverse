@@ -39,7 +39,7 @@ func TestShardMetricsIntegration(t *testing.T) {
 	}
 
 	// Wait a bit more for metrics to be updated
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify metrics are updated for both nodes
 	// Get expected shard count per node
