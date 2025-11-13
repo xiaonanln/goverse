@@ -17,6 +17,15 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects. The m
   - `type`: The object type (e.g., "ChatRoom", "ChatClient")
 - Updated: Automatically incremented on object creation, decremented on deletion
 
+### Shard Metrics
+
+**`goverse_shards_total{node}`** - Gauge
+- Description: Total number of shards assigned to each node
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+- Updated: Automatically updated when shard mapping changes in the ConsensusManager
+- Note: Counts shards based on CurrentNode (actual ownership), not TargetNode (planned assignment)
+
 ## Metrics Endpoint
 
 The metrics are exposed via HTTP by each GoVerse server/node. Configure the metrics endpoint address using the `MetricsListenAddress` field in `ServerConfig`:
@@ -44,6 +53,13 @@ http://<node-address>:9090/metrics
 goverse_objects_total{node="localhost:47000",type="ChatRoom"} 3
 goverse_objects_total{node="localhost:47000",type="ChatClient"} 5
 goverse_objects_total{node="localhost:47001",type="ChatRoom"} 2
+
+# HELP goverse_shards_total Total number of shards assigned to each node
+# TYPE goverse_shards_total gauge
+goverse_shards_total{node="localhost:47000"} 2048
+goverse_shards_total{node="localhost:47001"} 2048
+goverse_shards_total{node="localhost:47002"} 2048
+goverse_shards_total{node="localhost:47003"} 2048
 ```
 
 ## Prometheus Configuration
@@ -77,7 +93,12 @@ The metrics integration is implemented across several packages:
    - Tracks object creation in `createObject()`
    - Tracks object deletion in `destroyObject()`
 
-3. **`server`** - Server package
+3. **`cluster/consensusmanager`** - ConsensusManager integration
+   - Tracks shard assignments in `handleShardEvent()`
+   - Updates metrics when shard mapping changes
+   - Counts shards per node based on CurrentNode (actual ownership)
+
+4. **`server`** - Server package
    - Exposes `/metrics` HTTP endpoint using `promhttp.Handler()`
    - Configurable via `MetricsListenAddress` in `ServerConfig`
 
@@ -87,6 +108,7 @@ Metrics are automatically updated without requiring manual intervention:
 
 - **Object Creation**: When `node.createObject()` successfully creates an object, the object count is incremented
 - **Object Deletion**: When `node.destroyObject()` removes an object, the object count is decremented
+- **Shard Mapping Changes**: When `ConsensusManager` handles shard events or initializes, the shard count per node is updated
 
 ### Thread Safety
 
@@ -111,6 +133,21 @@ Objects on a specific node:
 goverse_objects_total{node="localhost:47000"}
 ```
 
+Shard distribution across all nodes:
+```promql
+sum(goverse_shards_total) by (node)
+```
+
+Total shards in the cluster:
+```promql
+sum(goverse_shards_total)
+```
+
+Check for unbalanced shard distribution (find max - min):
+```promql
+max(goverse_shards_total) - min(goverse_shards_total)
+```
+
 ### Alerting Examples
 
 Alert when object count is too high:
@@ -120,6 +157,25 @@ Alert when object count is too high:
   for: 5m
   annotations:
     summary: "Node {{ $labels.node }} has high object count"
+```
+
+Alert when shard distribution is unbalanced:
+```yaml
+- alert: UnbalancedShardDistribution
+  expr: (max(goverse_shards_total) - min(goverse_shards_total)) > 500
+  for: 10m
+  annotations:
+    summary: "Shard distribution is unbalanced (difference > 500)"
+    description: "Max shards: {{ $value }}, consider rebalancing"
+```
+
+Alert when a node has no shards but should:
+```yaml
+- alert: NodeWithoutShards
+  expr: goverse_shards_total{node=~".+"} == 0
+  for: 5m
+  annotations:
+    summary: "Node {{ $labels.node }} has no shards assigned"
 ```
 
 ## Testing
@@ -163,3 +219,5 @@ Potential future metrics to add:
 - Persistence operation metrics
 - Shard mapping change frequency
 - Client connection counts
+- Shard migration duration and frequency
+- Shard ownership transition tracking (TargetNode vs CurrentNode)

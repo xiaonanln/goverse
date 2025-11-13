@@ -13,6 +13,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/workerpool"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -246,6 +247,34 @@ func (cm *ConsensusManager) notifyStateChanged() {
 	}
 }
 
+// updateShardMetrics updates the Prometheus metrics for shard counts per node
+// This method must be called with the read lock held
+func (cm *ConsensusManager) updateShardMetrics() {
+	if cm.state.ShardMapping == nil {
+		return
+	}
+
+	// Count shards per node using CurrentNode (actual ownership)
+	shardCounts := make(map[string]int)
+
+	// Initialize counts for all known nodes to ensure we set metrics even for nodes with 0 shards
+	for node := range cm.state.Nodes {
+		shardCounts[node] = 0
+	}
+
+	// Count shards based on CurrentNode (actual ownership)
+	for _, shardInfo := range cm.state.ShardMapping.Shards {
+		if shardInfo.CurrentNode != "" {
+			shardCounts[shardInfo.CurrentNode]++
+		}
+	}
+
+	// Update metrics for each node
+	for node, count := range shardCounts {
+		metrics.SetShardCount(node, float64(count))
+	}
+}
+
 // Initialize loads initial state from etcd
 func (cm *ConsensusManager) Initialize(ctx context.Context) error {
 	if cm.etcdManager == nil {
@@ -262,6 +291,8 @@ func (cm *ConsensusManager) Initialize(ctx context.Context) error {
 
 	cm.mu.Lock()
 	cm.state = state
+	// Update shard metrics after loading initial state
+	cm.updateShardMetrics()
 	cm.mu.Unlock()
 
 	cm.logger.Infof("Loaded cluster state: %d nodes, revision %d",
@@ -409,12 +440,15 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
+		// Update shard metrics after state change
+		cm.updateShardMetrics()
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
-
+		// Update shard metrics after state change
+		cm.updateShardMetrics()
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	}
