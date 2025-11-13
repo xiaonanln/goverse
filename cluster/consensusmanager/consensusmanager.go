@@ -247,9 +247,10 @@ func (cm *ConsensusManager) notifyStateChanged() {
 	}
 }
 
-// updateShardMetrics updates the Prometheus metrics for shard counts per node
-// This method must be called with the read lock held
-func (cm *ConsensusManager) updateShardMetrics() {
+// UpdateShardMetrics updates the Prometheus metrics for shard counts per node
+func (cm *ConsensusManager) UpdateShardMetrics() {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 	if cm.state.ShardMapping == nil {
 		return
 	}
@@ -291,8 +292,6 @@ func (cm *ConsensusManager) Initialize(ctx context.Context) error {
 
 	cm.mu.Lock()
 	cm.state = state
-	// Update shard metrics after loading initial state
-	cm.updateShardMetrics()
 	cm.mu.Unlock()
 
 	cm.logger.Infof("Loaded cluster state: %d nodes, revision %d",
@@ -440,15 +439,11 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = shardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
-		// Update shard metrics after state change
-		cm.updateShardMetrics()
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
-		// Update shard metrics after state change
-		cm.updateShardMetrics()
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	}
