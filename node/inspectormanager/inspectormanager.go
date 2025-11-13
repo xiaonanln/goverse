@@ -309,8 +309,8 @@ func (im *InspectorManager) healthCheck() {
 	}
 }
 
-// GetContext returns the context for testing purposes.
-func (im *InspectorManager) GetContext() context.Context {
+// GetContextForTesting returns the context for testing purposes.
+func (im *InspectorManager) GetContextForTesting() context.Context {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return im.ctx
@@ -324,8 +324,8 @@ func (im *InspectorManager) IsObjectTracked(objectID string) bool {
 	return exists
 }
 
-// GetTrackedObjectCount returns the number of objects being tracked.
-func (im *InspectorManager) GetTrackedObjectCount() int {
+// ObjectCount returns the number of objects being tracked.
+func (im *InspectorManager) ObjectCount() int {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return len(im.objects)
