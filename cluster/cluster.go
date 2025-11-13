@@ -749,6 +749,7 @@ func (c *Cluster) shardMappingManagementLoop() {
 			return
 		case <-ticker.C:
 			c.handleShardMappingCheck()
+			c.updateMetrics()
 		}
 	}
 }
@@ -758,10 +759,14 @@ func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.shardMappingCtx
 
 	// If leader made changes to cluster state, skip other operations this cycle
-	// to allow the cluster state to stabilize before proceeding
+	// to allow the cluster state to stabilize before proceeding. Always update
+	// shard metrics so monitoring reflects the latest assignment even during
+	// transient state changes.
 	stateChanged := c.leaderShardManagementLogic(ctx)
 	if stateChanged {
 		c.logger.Debugf("Cluster state changed by leader, waiting for next cycle")
+		// Ensure metrics are updated even when leader changed state to keep
+		// Prometheus/monitoring in sync with the in-memory state.
 		return
 	}
 
@@ -770,6 +775,9 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
 	c.checkAndMarkReady()
+}
+
+func (c *Cluster) updateMetrics() {
 	c.consensusManager.UpdateShardMetrics()
 }
 
