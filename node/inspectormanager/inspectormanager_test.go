@@ -292,3 +292,31 @@ func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 		t.Errorf("Stop failed: %v", err)
 	}
 }
+
+func TestInspectorManager_ShardIDComputation(t *testing.T) {
+	t.Parallel()
+	
+	mgr := NewInspectorManager("localhost:47000")
+	
+	// Add an object
+	objectID := "test-object-with-shard"
+	objectType := "TestObject"
+	
+	mgr.NotifyObjectAdded(objectID, objectType)
+	
+	// Verify object was stored with shard ID
+	mgr.mu.RLock()
+	obj, exists := mgr.objects[objectID]
+	mgr.mu.RUnlock()
+	
+	if !exists {
+		t.Fatal("Object should be stored in manager")
+	}
+	
+	// The shard ID should be set (computed by sharding.GetShardID)
+	// Note: ShardID can be 0, which is a valid shard, so we just verify it's in range
+	
+	if obj.ShardId < 0 || obj.ShardId >= 8192 {
+		t.Errorf("ShardId should be in range [0, 8192), got %d", obj.ShardId)
+	}
+}

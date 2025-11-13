@@ -9,6 +9,7 @@ message Empty {}
 message Object {
   string class=1;
   string id = 2;
+  int32 shard_id = 3;
 }
 
 message AddOrUpdateObjectRequest { 

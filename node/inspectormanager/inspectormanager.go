@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -113,10 +114,14 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
+	// Compute shard ID for the object
+	shardID := sharding.GetShardID(objectID)
+
 	// Store object info for re-registration on reconnect
 	im.objects[objectID] = &inspector_pb.Object{
-		Id:    objectID,
-		Class: objectType,
+		Id:      objectID,
+		Class:   objectType,
+		ShardId: int32(shardID),
 	}
 
 	// If connected, send the notification immediately
@@ -230,10 +235,14 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string)
 		return
 	}
 
+	// Compute shard ID for the object
+	shardID := sharding.GetShardID(objectID)
+
 	req := &inspector_pb.AddOrUpdateObjectRequest{
 		Object: &inspector_pb.Object{
-			Id:    objectID,
-			Class: objectType,
+			Id:      objectID,
+			Class:   objectType,
+			ShardId: int32(shardID),
 		},
 		NodeAddress: im.nodeAddress,
 	}

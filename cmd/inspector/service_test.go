@@ -492,3 +492,84 @@ func TestInspectorService_Integration(t *testing.T) {
 		t.Errorf("Expected remaining object to be obj3, got %s", objects[0].ID)
 	}
 }
+
+func TestInspectorService_ShardIDPropagation(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	svc := inspector.NewService(pg)
+
+	// Register a node
+	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
+		AdvertiseAddress: "node1:47000",
+		Objects:          []*inspector_pb.Object{},
+	})
+	if err != nil {
+		t.Fatalf("RegisterNode() error = %v", err)
+	}
+
+	// Add an object with a specific shard ID
+	testShardID := int32(1234)
+	_, err = svc.AddOrUpdateObject(context.Background(), &inspector_pb.AddOrUpdateObjectRequest{
+		Object: &inspector_pb.Object{
+			Id:      "test-object-1",
+			Class:   "TestClass",
+			ShardId: testShardID,
+		},
+		NodeAddress: "node1:47000",
+	})
+	if err != nil {
+		t.Fatalf("AddOrUpdateObject() error = %v", err)
+	}
+
+	// Verify the object was added with the correct shard ID
+	objects := pg.GetObjects()
+	if len(objects) != 1 {
+		t.Fatalf("Expected 1 object, got %d", len(objects))
+	}
+
+	if objects[0].ShardID != int(testShardID) {
+		t.Errorf("Expected ShardID %d, got %d", testShardID, objects[0].ShardID)
+	}
+
+	if objects[0].ID != "test-object-1" {
+		t.Errorf("Expected object ID test-object-1, got %s", objects[0].ID)
+	}
+}
+
+func TestInspectorService_RegisterNode_WithShardIDs(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	svc := inspector.NewService(pg)
+
+	// Register a node with objects that have shard IDs
+	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
+		AdvertiseAddress: "localhost:47000",
+		Objects: []*inspector_pb.Object{
+			{Id: "obj1", Class: "Class1", ShardId: 100},
+			{Id: "obj2", Class: "Class2", ShardId: 200},
+			{Id: "obj3", Class: "Class3", ShardId: 300},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RegisterNode() error = %v", err)
+	}
+
+	objects := pg.GetObjects()
+	if len(objects) != 3 {
+		t.Fatalf("Expected 3 objects, got %d", len(objects))
+	}
+
+	// Verify shard IDs are correctly stored
+	shardIDMap := make(map[string]int)
+	for _, obj := range objects {
+		shardIDMap[obj.ID] = obj.ShardID
+	}
+
+	if shardIDMap["obj1"] != 100 {
+		t.Errorf("Expected obj1 ShardID 100, got %d", shardIDMap["obj1"])
+	}
+	if shardIDMap["obj2"] != 200 {
+		t.Errorf("Expected obj2 ShardID 200, got %d", shardIDMap["obj2"])
+	}
+	if shardIDMap["obj3"] != 300 {
+		t.Errorf("Expected obj3 ShardID 300, got %d", shardIDMap["obj3"])
+	}
+}
