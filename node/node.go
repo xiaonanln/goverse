@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/client"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/keylock"
@@ -484,8 +485,9 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	// Notify inspector manager about the new object
 	node.inspectorManager.NotifyObjectAdded(id, typ)
 
-	// Record metrics
-	metrics.RecordObjectCreated(node.advertiseAddress, typ)
+	// Record metrics with shard information
+	shard := sharding.GetShardID(id)
+	metrics.RecordObjectCreated(node.advertiseAddress, typ, shard)
 
 	return nil
 }
@@ -507,7 +509,8 @@ func (node *Node) destroyObject(id string) {
 
 	// Record metrics if object existed
 	if exists {
-		metrics.RecordObjectDeleted(node.advertiseAddress, objectType)
+		shard := sharding.GetShardID(id)
+		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shard)
 	}
 }
 
