@@ -19,13 +19,22 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects. The m
 
 ## Metrics Endpoint
 
-The metrics are exposed via HTTP at:
+The metrics are exposed via HTTP by each GoVerse server/node. Configure the metrics endpoint address using the `MetricsListenAddress` field in `ServerConfig`:
 
-```
-http://<inspector-address>:8080/metrics
+```go
+config := &goverseapi.ServerConfig{
+    ListenAddress:        "localhost:47000",
+    AdvertiseAddress:     "localhost:47000",
+    ClientListenAddress:  "localhost:48000",
+    MetricsListenAddress: ":9090",  // Metrics HTTP endpoint
+    EtcdAddress:          "localhost:2379",
+}
 ```
 
-By default, the inspector runs on port 8080. The endpoint returns metrics in Prometheus text format.
+The endpoint returns metrics in Prometheus text format at:
+```
+http://<node-address>:9090/metrics
+```
 
 ## Example Output
 
@@ -39,15 +48,20 @@ goverse_objects_total{node="localhost:47001",type="ChatRoom"} 2
 
 ## Prometheus Configuration
 
-Add the following to your `prometheus.yml` to scrape GoVerse metrics:
+Add the following to your `prometheus.yml` to scrape GoVerse metrics from all nodes:
 
 ```yaml
 scrape_configs:
   - job_name: 'goverse'
     static_configs:
-      - targets: ['localhost:8080']
+      - targets: 
+          - 'localhost:9090'    # Node 1
+          - 'localhost:9091'    # Node 2
+          - 'localhost:9092'    # Node 3
     metrics_path: '/metrics'
 ```
+
+For dynamic discovery, you can use Prometheus service discovery mechanisms based on your infrastructure (e.g., DNS, Consul, Kubernetes).
 
 ## Implementation Details
 
@@ -63,8 +77,9 @@ The metrics integration is implemented across several packages:
    - Tracks object creation in `createObject()`
    - Tracks object deletion in `destroyObject()`
 
-3. **`cmd/inspector`** - Inspector HTTP server
-   - Exposes `/metrics` endpoint using `promhttp.Handler()`
+3. **`server`** - Server package
+   - Exposes `/metrics` HTTP endpoint using `promhttp.Handler()`
+   - Configurable via `MetricsListenAddress` in `ServerConfig`
 
 ### Automatic Tracking
 

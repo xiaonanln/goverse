@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	client_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
@@ -25,6 +27,7 @@ type ServerConfig struct {
 	ListenAddress             string
 	AdvertiseAddress          string
 	ClientListenAddress       string
+	MetricsListenAddress      string        // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress               string
 	EtcdPrefix                string        // Optional: etcd key prefix for this cluster (default: "/goverse")
 	MinQuorum                 int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
@@ -144,17 +147,41 @@ func (server *Server) Run() error {
 	// Set this node on the cluster, and start cluster services
 	server.cluster.Start(server.ctx, server.Node)
 
+	// Start metrics HTTP server if configured
+	var metricsServer *http.Server
+	if server.config.MetricsListenAddress != "" {
+		metricsServer = &http.Server{
+			Addr:              server.config.MetricsListenAddress,
+			Handler:           promhttp.Handler(),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		go func() {
+			server.logger.Infof("Metrics HTTP server listening on %s", server.config.MetricsListenAddress)
+			if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				server.logger.Errorf("Metrics HTTP server error: %v", err)
+			}
+			server.logger.Infof("Metrics HTTP server stopped")
+		}()
+	}
+
 	// Handle both signals and context cancellation for graceful shutdown
 	clientGrpcServer := grpc.NewServer()
 	go func() {
 		select {
 		case <-sigChan:
-			server.logger.Infof("Received shutdown signal, stopping gRPC servers...")
+			server.logger.Infof("Received shutdown signal, stopping servers...")
 		case <-server.ctx.Done():
-			server.logger.Infof("Context cancelled, stopping gRPC servers...")
+			server.logger.Infof("Context cancelled, stopping servers...")
 		}
 		grpcServer.GracefulStop()
 		clientGrpcServer.GracefulStop()
+		if metricsServer != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+				server.logger.Errorf("Metrics server shutdown error: %v", err)
+			}
+		}
 	}()
 
 	go func() {
