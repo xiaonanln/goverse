@@ -1,4 +1,4 @@
-package node
+package inspectormanager
 
 import (
 	"context"

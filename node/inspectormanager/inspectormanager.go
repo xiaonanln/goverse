@@ -1,4 +1,4 @@
-package node
+package inspectormanager
 
 import (
 	"context"
@@ -307,4 +307,26 @@ func (im *InspectorManager) healthCheck() {
 			}
 		}
 	}
+}
+
+// GetContext returns the context for testing purposes.
+func (im *InspectorManager) GetContext() context.Context {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.ctx
+}
+
+// IsObjectTracked returns true if the object is being tracked by the inspector manager.
+func (im *InspectorManager) IsObjectTracked(objectID string) bool {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	_, exists := im.objects[objectID]
+	return exists
+}
+
+// GetTrackedObjectCount returns the number of objects being tracked.
+func (im *InspectorManager) GetTrackedObjectCount() int {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return len(im.objects)
 }
