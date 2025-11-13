@@ -16,7 +16,7 @@ import (
 func TestShardMetricsIntegration(t *testing.T) {
 	t.Parallel()
 	// Reset metrics before test
-	metrics.ShardsTotal.Reset()
+	metrics.AssignedShardsTotal.Reset()
 
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
@@ -56,8 +56,8 @@ func TestShardMetricsIntegration(t *testing.T) {
 	t.Logf("Expected shard counts: node1=%d, node2=%d", node1Count, node2Count)
 
 	// Verify metrics match actual shard distribution
-	metric1 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50021"))
-	metric2 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50022"))
+	metric1 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50021"))
+	metric2 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50022"))
 
 	if int(metric1) != node1Count {
 		t.Errorf("Metric for localhost:50021 should be %d, got %f", node1Count, metric1)
@@ -81,7 +81,7 @@ func TestShardMetricsIntegration(t *testing.T) {
 func TestShardMetricsAfterNodeJoin(t *testing.T) {
 	t.Parallel()
 	// Reset metrics before test
-	metrics.ShardsTotal.Reset()
+	metrics.AssignedShardsTotal.Reset()
 
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
@@ -98,8 +98,8 @@ func TestShardMetricsAfterNodeJoin(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Verify initial metrics
-	initialMetric1 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50031"))
-	initialMetric2 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50032"))
+	initialMetric1 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50031"))
+	initialMetric2 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50032"))
 	initialTotal := int(initialMetric1) + int(initialMetric2)
 
 	t.Logf("Initial shard distribution: node1=%f, node2=%f, total=%d", initialMetric1, initialMetric2, initialTotal)
@@ -117,12 +117,12 @@ func TestShardMetricsAfterNodeJoin(t *testing.T) {
 	time.Sleep(testutil.WaitForShardMappingTimeout + 5*time.Second)
 
 	// Verify metrics are updated with the new node
-	finalMetric1 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50031"))
-	finalMetric2 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50032"))
-	finalMetric3 := promtestutil.ToFloat64(metrics.ShardsTotal.WithLabelValues("localhost:50033"))
+	finalMetric1 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50031"))
+	finalMetric2 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50032"))
+	finalMetric3 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50033"))
 	finalTotal := int(finalMetric1) + int(finalMetric2) + int(finalMetric3)
 
-	t.Logf("Final shard distribution: node1=%f, node2=%f, node3=%f, total=%d", 
+	t.Logf("Final shard distribution: node1=%f, node2=%f, node3=%f, total=%d",
 		finalMetric1, finalMetric2, finalMetric3, finalTotal)
 
 	// Verify total shards still equals NumShards
