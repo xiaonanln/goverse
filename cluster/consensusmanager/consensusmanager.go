@@ -904,7 +904,9 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, 
 
 // RebalanceShards checks if all shards are assigned and rebalances if there's significant imbalance.
 // If all shards are assigned, finds the node with max shards (a) and min shards (b).
-// If a >= b + 2 and a > 2*b, migrates one shard from max node to min node by updating its TargetNode.
+// If a >= b + 2 and a > 2*b, migrates shards from overloaded nodes to underloaded nodes.
+// The function batches up to 100 shard migrations per call, checking imbalance conditions after each
+// selection to avoid over-migrating. All collected shards are updated in a single storeShardMapping call.
 // Returns true if a rebalance operation was performed, false otherwise, and any error encountered.
 func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	cm.mu.RLock()
@@ -954,66 +956,101 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	// Find max and min shard counts
-	maxNode := nodes[0]
-	maxCount := shardCounts[maxNode]
-	minNode := nodes[0]
-	minCount := shardCounts[minNode]
+	// Collect shards to migrate (up to 100 per batch)
+	const maxBatchSize = 100
+	updateShards := make(map[int]ShardInfo)
 
-	for _, node := range nodes {
-		count := shardCounts[node]
-		if count > maxCount {
-			maxNode = node
-			maxCount = count
+	// Keep track of which shards we've already selected for migration
+	selectedShards := make(map[int]bool)
+
+	// Iterate up to maxBatchSize times to collect shards
+	for batchCount := 0; batchCount < maxBatchSize; batchCount++ {
+		// Find max and min shard counts based on current state
+		var maxNode, minNode string
+		maxCount := -1
+		minCount := sharding.NumShards + 1
+
+		for _, node := range nodes {
+			count := shardCounts[node]
+			if maxCount == -1 || count > maxCount {
+				maxNode = node
+				maxCount = count
+			}
+			if count < minCount {
+				minNode = node
+				minCount = count
+			}
 		}
-		if count < minCount {
-			minNode = node
-			minCount = count
+
+		// Check rebalance conditions: a >= b + 2 and a > 2*b
+		if maxCount < minCount+2 || maxCount <= 2*minCount {
+			// No more imbalance to fix
+			break
 		}
-	}
 
-	// Check rebalance conditions: a >= b + 2 and a > 2*b
-	if maxCount < minCount+2 || maxCount <= 2*minCount {
-		cm.mu.RUnlock()
-		cm.logger.Debugf("Cluster is balanced: max=%d (node=%s), min=%d (node=%s)",
-			maxCount, maxNode, minCount, minNode)
-		return false, nil
-	}
+		// Find available shards to migrate from maxNode (excluding already selected ones)
+		var shardToMigrate int
+		found := false
+		for _, shardID := range shardsPerNode[maxNode] {
+			if !selectedShards[shardID] {
+				shardToMigrate = shardID
+				found = true
+				break
+			}
+		}
 
-	// Find one shard to migrate from maxNode
-	shardsToMigrate := shardsPerNode[maxNode]
-	if len(shardsToMigrate) == 0 {
-		cm.mu.RUnlock()
-		cm.logger.Warnf("No shards found on max node %s, cannot rebalance", maxNode)
-		return false, nil
-	}
+		if !found {
+			// No more shards available to migrate from maxNode
+			break
+		}
 
-	// Select the first shard to migrate
-	shardToMigrate := shardsToMigrate[0]
-	existingInfo := cm.state.ShardMapping.Shards[shardToMigrate]
+		// Get the existing shard info
+		existingInfo := cm.state.ShardMapping.Shards[shardToMigrate]
 
-	cm.mu.RUnlock()
-
-	// Update the shard's TargetNode (CurrentNode stays the same until migration completes)
-	updateShards := map[int]ShardInfo{
-		shardToMigrate: {
+		// Add this shard to the batch
+		updateShards[shardToMigrate] = ShardInfo{
 			TargetNode:  minNode,
 			CurrentNode: existingInfo.CurrentNode,
 			ModRevision: existingInfo.ModRevision,
-		},
+		}
+
+		// Mark this shard as selected
+		selectedShards[shardToMigrate] = true
+
+		// Update local counts to reflect this migration
+		shardCounts[maxNode]--
+		shardCounts[minNode]++
+
+		// Update shardsPerNode to reflect the change
+		// Remove from maxNode's list
+		for i, sid := range shardsPerNode[maxNode] {
+			if sid == shardToMigrate {
+				shardsPerNode[maxNode] = append(shardsPerNode[maxNode][:i], shardsPerNode[maxNode][i+1:]...)
+				break
+			}
+		}
+		// Add to minNode's list
+		shardsPerNode[minNode] = append(shardsPerNode[minNode], shardToMigrate)
 	}
 
-	cm.logger.Infof("Rebalancing: migrating shard %d from %s (count=%d) to %s (count=%d)",
-		shardToMigrate, maxNode, maxCount, minNode, minCount)
+	cm.mu.RUnlock()
+
+	// If no shards were selected, cluster is balanced
+	if len(updateShards) == 0 {
+		cm.logger.Debugf("Cluster is balanced, no shards to migrate")
+		return false, nil
+	}
+
+	cm.logger.Infof("Rebalancing: migrating %d shards in batch", len(updateShards))
 
 	n, err := cm.storeShardMapping(ctx, updateShards)
 	if err != nil {
-		cm.logger.Errorf("Failed to rebalance shard: %v", err)
+		cm.logger.Errorf("Failed to rebalance shards: %v", err)
 		return false, err
 	}
 
 	if n > 0 {
-		cm.logger.Infof("Successfully initiated rebalance for shard %d", shardToMigrate)
+		cm.logger.Infof("Successfully initiated rebalance for %d shards", n)
 		return true, nil
 	}
 
