@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 )
@@ -29,6 +30,9 @@ func CreateHTTPHandler(pg *graph.GoverseGraph, staticDir string) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
 	})
+
+	// Expose Prometheus metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux
 }
