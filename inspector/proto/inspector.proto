@@ -29,8 +29,14 @@ message UnregisterNodeRequest {
   string advertise_address = 1;  // e.g. "localhost:47000"
 }
 
+message RemoveObjectRequest {
+  string object_id = 1;
+  string node_address = 2; // e.g. "localhost:47000"
+}
+
 service InspectorService {
   rpc AddOrUpdateObject(AddOrUpdateObjectRequest) returns (Empty);
+  rpc RemoveObject(RemoveObjectRequest) returns (Empty);
   rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
   rpc UnregisterNode(UnregisterNodeRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);

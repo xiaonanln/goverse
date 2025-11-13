@@ -230,6 +230,81 @@ func TestAddOrUpdateNode_Update(t *testing.T) {
 	}
 }
 
+// TestRemoveObject tests removing a specific object
+func TestRemoveObject(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	obj := models.GoverseObject{ID: "obj1", Label: "Object 1", GoverseNodeID: "node1"}
+	pg.AddOrUpdateObject(obj)
+
+	// Verify object exists
+	objects := pg.GetObjects()
+	if len(objects) != 1 {
+		t.Fatalf("Expected 1 object before removal, got %d", len(objects))
+	}
+
+	// Remove the object
+	pg.RemoveObject("obj1")
+
+	// Verify object was removed
+	objects = pg.GetObjects()
+	if len(objects) != 0 {
+		t.Errorf("Expected 0 objects after removal, got %d", len(objects))
+	}
+}
+
+// TestRemoveObject_NonExistent tests removing a non-existent object
+func TestRemoveObject_NonExistent(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Should not panic when removing non-existent object
+	pg.RemoveObject("non-existent-object")
+
+	objects := pg.GetObjects()
+	if len(objects) != 0 {
+		t.Errorf("Expected 0 objects, got %d", len(objects))
+	}
+}
+
+// TestRemoveObject_MultipleObjects tests removing one object from many
+func TestRemoveObject_MultipleObjects(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	obj1 := models.GoverseObject{ID: "obj1", Label: "Object 1", GoverseNodeID: "node1"}
+	obj2 := models.GoverseObject{ID: "obj2", Label: "Object 2", GoverseNodeID: "node1"}
+	obj3 := models.GoverseObject{ID: "obj3", Label: "Object 3", GoverseNodeID: "node2"}
+
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
+	pg.AddOrUpdateObject(obj3)
+
+	// Remove obj2
+	pg.RemoveObject("obj2")
+
+	// Verify only obj2 was removed
+	objects := pg.GetObjects()
+	if len(objects) != 2 {
+		t.Fatalf("Expected 2 objects after removal, got %d", len(objects))
+	}
+
+	objIDs := make(map[string]bool)
+	for _, obj := range objects {
+		objIDs[obj.ID] = true
+	}
+
+	if !objIDs["obj1"] {
+		t.Error("obj1 should still exist")
+	}
+
+	if objIDs["obj2"] {
+		t.Error("obj2 should have been removed")
+	}
+
+	if !objIDs["obj3"] {
+		t.Error("obj3 should still exist")
+	}
+}
+
 // TestRemoveNode tests removing a node
 func TestRemoveNode(t *testing.T) {
 	pg := NewGoverseGraph()

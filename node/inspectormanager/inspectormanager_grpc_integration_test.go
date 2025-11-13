@@ -164,8 +164,11 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 		t.Errorf("Expected 3 objects registered, got %d", len(objects))
 	}
 
-	// Remove an object (note: removal tracking is local only)
+	// Remove an object
 	mgr.NotifyObjectRemoved("test-obj-2")
+
+	// Wait for removal notification to be processed
+	time.Sleep(100 * time.Millisecond)
 
 	// Verify it's removed from manager's tracking
 	mgr.mu.RLock()
@@ -174,6 +177,19 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 
 	if tracked {
 		t.Error("Object test-obj-2 should not be tracked after removal")
+	}
+
+	// Verify object was removed from the inspector graph
+	objects = pg.GetObjects()
+	if len(objects) != 2 {
+		t.Errorf("Expected 2 objects in inspector graph after removal, got %d", len(objects))
+	}
+
+	// Verify test-obj-2 is not in the graph
+	for _, obj := range objects {
+		if obj.ID == "test-obj-2" {
+			t.Error("Object test-obj-2 should be removed from inspector graph")
+		}
 	}
 }
 
