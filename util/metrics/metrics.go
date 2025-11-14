@@ -53,6 +53,41 @@ var (
 		},
 		[]string{"node", "client_type"},
 	)
+
+	// ShardClaimsTotal tracks the total number of shard ownership claims by node
+	ShardClaimsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_shard_claims_total",
+			Help: "Total number of shard ownership claims by node",
+		},
+		[]string{"node"},
+	)
+
+	// ShardReleasesTotal tracks the total number of shard ownership releases by node
+	ShardReleasesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_shard_releases_total",
+			Help: "Total number of shard ownership releases by node",
+		},
+		[]string{"node"},
+	)
+
+	// ShardMigrationsTotal tracks the total number of completed shard migrations
+	ShardMigrationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_shard_migrations_total",
+			Help: "Total number of completed shard migrations (ownership transfers between nodes)",
+		},
+		[]string{"from_node", "to_node"},
+	)
+
+	// ShardsMigrating tracks the number of shards currently in migration state
+	ShardsMigrating = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "goverse_shards_migrating",
+			Help: "Number of shards currently in migration state (TargetNode != CurrentNode)",
+		},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -94,4 +129,30 @@ func RecordClientDisconnected(node, clientType string) {
 		clientType = "grpc"
 	}
 	ClientsConnected.WithLabelValues(node, clientType).Dec()
+}
+
+// RecordShardClaim increments the shard claim counter for a given node
+func RecordShardClaim(node string, count int) {
+	if count > 0 {
+		ShardClaimsTotal.WithLabelValues(node).Add(float64(count))
+	}
+}
+
+// RecordShardRelease increments the shard release counter for a given node
+func RecordShardRelease(node string, count int) {
+	if count > 0 {
+		ShardReleasesTotal.WithLabelValues(node).Add(float64(count))
+	}
+}
+
+// RecordShardMigration increments the shard migration counter when ownership transfers between nodes
+func RecordShardMigration(fromNode, toNode string) {
+	if fromNode != "" && toNode != "" && fromNode != toNode {
+		ShardMigrationsTotal.WithLabelValues(fromNode, toNode).Inc()
+	}
+}
+
+// SetShardsMigrating sets the number of shards currently in migration state
+func SetShardsMigrating(count float64) {
+	ShardsMigrating.Set(count)
 }

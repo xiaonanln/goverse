@@ -254,16 +254,23 @@ func (cm *ConsensusManager) UpdateShardMetrics() {
 
 	// Count shards per node using CurrentNode (actual ownership)
 	shardCounts := make(map[string]int)
+	migratingCount := 0
 
 	// Initialize counts for all known nodes to ensure we set metrics even for nodes with 0 shards
 	for node := range cm.state.Nodes {
 		shardCounts[node] = 0
 	}
 
-	// Count shards based on CurrentNode (actual ownership)
+	// Count shards based on CurrentNode (actual ownership) and detect migrations
 	for _, shardInfo := range cm.state.ShardMapping.Shards {
 		if shardInfo.CurrentNode != "" {
 			shardCounts[shardInfo.CurrentNode]++
+		}
+		
+		// Count shards in migration state (TargetNode != CurrentNode)
+		if shardInfo.TargetNode != "" && shardInfo.CurrentNode != "" && 
+			shardInfo.TargetNode != shardInfo.CurrentNode {
+			migratingCount++
 		}
 	}
 
@@ -271,6 +278,9 @@ func (cm *ConsensusManager) UpdateShardMetrics() {
 	for node, count := range shardCounts {
 		metrics.SetAssignedShardCount(node, float64(count))
 	}
+	
+	// Update shards migrating gauge
+	metrics.SetShardsMigrating(float64(migratingCount))
 }
 
 // Initialize loads initial state from etcd
@@ -432,10 +442,20 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	defer cm.mu.Unlock()
 
 	if event.Type == clientv3.EventTypePut {
-		shardInfo := parseShardInfo(event.Kv)
+		newShardInfo := parseShardInfo(event.Kv)
+		
+		// Check if this is a migration completion (CurrentNode changed from one node to another)
+		oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" && 
+			oldShardInfo.CurrentNode != newShardInfo.CurrentNode {
+			// Migration completed: CurrentNode changed from one node to another
+			cm.logger.Infof("Shard %d migration completed: %s -> %s", shardID, oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
+			metrics.RecordShardMigration(oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
+		}
+		
 		// Update state in memory while holding lock
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
-		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
+		cm.state.ShardMapping.Shards[shardID] = newShardInfo
+		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, newShardInfo.TargetNode, newShardInfo.CurrentNode)
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
@@ -798,10 +818,16 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
 	if err != nil {
 		cm.logger.Warnf("Failed to claim some shards: claimed %d/%d, error: %v", successCount, len(shardsToUpdate), err)
+		// Record successful claims even if there was a partial failure
+		if successCount > 0 {
+			metrics.RecordShardClaim(localNode, successCount)
+		}
 		return err
 	}
 
 	cm.logger.Infof("Successfully claimed ownership of %d shards", successCount)
+	// Record successful shard claims
+	metrics.RecordShardClaim(localNode, successCount)
 	return nil
 }
 
@@ -855,10 +881,16 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
 	if err != nil {
 		cm.logger.Warnf("Failed to release some shards: released %d/%d, error: %v", successCount, len(shardsToUpdate), err)
+		// Record successful releases even if there was a partial failure
+		if successCount > 0 {
+			metrics.RecordShardRelease(localNode, successCount)
+		}
 		return err
 	}
 
 	cm.logger.Infof("Successfully released ownership of %d shards", successCount)
+	// Record successful shard releases
+	metrics.RecordShardRelease(localNode, successCount)
 	return nil
 }
 

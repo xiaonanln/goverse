@@ -183,4 +183,77 @@ func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
 	if count1 != 0.0 {
 		t.Errorf("Expected shard count for localhost:47001 (target) to be 0.0, got %f", count1)
 	}
+	
+	// Verify migrating shards count
+	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
+	if migratingCount != 1.0 {
+		t.Errorf("Expected migrating shards count to be 1.0, got %f", migratingCount)
+	}
+}
+
+func TestUpdateShardMetrics_NoMigrations(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
+	testutilpkg.LockMetrics(t)
+
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set up test state with shards where TargetNode == CurrentNode (no migrations)
+	cm.mu.Lock()
+	cm.state.Nodes["localhost:47000"] = true
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+
+	// All shards have matching TargetNode and CurrentNode (stable state)
+	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: "localhost:47000"}
+	cm.state.ShardMapping.Shards[1] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: "localhost:47000"}
+	cm.state.ShardMapping.Shards[2] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"}
+	cm.mu.Unlock()
+
+	// Update metrics
+	cm.UpdateShardMetrics()
+
+	// Verify no shards are migrating
+	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
+	if migratingCount != 0.0 {
+		t.Errorf("Expected migrating shards count to be 0.0, got %f", migratingCount)
+	}
+}
+
+func TestUpdateShardMetrics_MultipleMigrations(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
+	testutilpkg.LockMetrics(t)
+
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr)
+
+	// Set up test state with multiple shards in migration
+	cm.mu.Lock()
+	cm.state.Nodes["localhost:47000"] = true
+	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes["localhost:47002"] = true
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+
+	// Multiple shards in migration state
+	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47000"} // migrating
+	cm.state.ShardMapping.Shards[1] = ShardInfo{TargetNode: "localhost:47002", CurrentNode: "localhost:47000"} // migrating
+	cm.state.ShardMapping.Shards[2] = ShardInfo{TargetNode: "localhost:47002", CurrentNode: "localhost:47001"} // migrating
+	cm.state.ShardMapping.Shards[3] = ShardInfo{TargetNode: "localhost:47000", CurrentNode: "localhost:47000"} // stable
+	cm.state.ShardMapping.Shards[4] = ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"} // stable
+	cm.mu.Unlock()
+
+	// Update metrics
+	cm.UpdateShardMetrics()
+
+	// Verify 3 shards are migrating
+	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
+	if migratingCount != 3.0 {
+		t.Errorf("Expected migrating shards count to be 3.0, got %f", migratingCount)
+	}
 }
