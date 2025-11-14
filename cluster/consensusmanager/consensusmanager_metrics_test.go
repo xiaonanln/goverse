@@ -6,9 +6,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/util/metrics"
+	testutilpkg "github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestUpdateShardMetrics_EmptyState(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+	
 	// Reset metrics before test
 	metrics.AssignedShardsTotal.Reset()
 
@@ -30,6 +34,9 @@ func TestUpdateShardMetrics_EmptyState(t *testing.T) {
 }
 
 func TestUpdateShardMetrics_WithShards(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+	
 	// Reset metrics before test
 	metrics.AssignedShardsTotal.Reset()
 
@@ -68,6 +75,9 @@ func TestUpdateShardMetrics_WithShards(t *testing.T) {
 }
 
 func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+	
 	// Reset metrics before test
 	metrics.AssignedShardsTotal.Reset()
 
@@ -109,6 +119,9 @@ func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
 }
 
 func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+	
 	// Reset metrics before test
 	metrics.AssignedShardsTotal.Reset()
 
@@ -145,6 +158,9 @@ func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
 }
 
 func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+	
 	// Reset metrics before test
 	metrics.AssignedShardsTotal.Reset()
 
