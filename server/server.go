@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	client_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
@@ -325,6 +326,19 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
 		if targetNode != thisNodeAddr {
 			return nil, fmt.Errorf("object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
+		}
+
+		// Additional validation: Check shard mapping to prevent creation during shard transition
+		// This mitigates the race condition where CreateObject arrives during shard release
+		shardID := sharding.GetShardID(req.GetId())
+		shardMapping := clusterInstance.GetShardMapping(ctx)
+		if shardMapping != nil && shardMapping.Shards != nil {
+			if shardInfo, exists := shardMapping.Shards[shardID]; exists {
+				// Only check if TargetNode is explicitly set (not empty)
+				if shardInfo.TargetNode != "" && shardInfo.TargetNode != thisNodeAddr {
+					return nil, fmt.Errorf("object %s shard is targeted to node %s, not this node %s", req.GetId(), shardInfo.TargetNode, thisNodeAddr)
+				}
+			}
 		}
 	}
 
