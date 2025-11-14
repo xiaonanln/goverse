@@ -831,28 +831,22 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	return nil
 }
 
-// ReleaseShardsForNode checks all shards and releases ownership for shards where:
+// calcReleaseShardsForNode calculates which shards need to be released based on:
 // - CurrentNode is the given localNode
 // - TargetNode is not empty and not this node (another node should own it)
 // - There are no objects on this node for that shard (localObjectsPerShard map)
-func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, localObjectsPerShard map[int]int) error {
-	if localNode == "" {
-		return fmt.Errorf("localNode cannot be empty")
-	}
-
-	// Clone the cluster state to avoid race conditions
+// Returns a map of shard IDs to new ShardInfo, or nil if no changes are needed.
+func (cm *ConsensusManager) calcReleaseShardsForNode(localNode string, localObjectsPerShard map[int]int) map[int]ShardInfo {
 	cm.mu.RLock()
-	clusterState := cm.state.Clone()
-	cm.mu.RUnlock()
+	defer cm.mu.RUnlock()
 
-	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
-		cm.logger.Debugf("No shard mapping available, skipping shard release")
+	if cm.state.ShardMapping == nil || len(cm.state.ShardMapping.Shards) == 0 {
 		return nil
 	}
 
 	// Collect shards that need to be released
 	shardsToUpdate := make(map[int]ShardInfo)
-	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
+	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
 		// Release shard if:
 		// 1. CurrentNode is this node
 		// 2. TargetNode is not empty and not this node (it's another node)
@@ -871,6 +865,24 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	}
 
 	if len(shardsToUpdate) == 0 {
+		return nil
+	}
+
+	return shardsToUpdate
+}
+
+// ReleaseShardsForNode checks all shards and releases ownership for shards where:
+// - CurrentNode is the given localNode
+// - TargetNode is not empty and not this node (another node should own it)
+// - There are no objects on this node for that shard (localObjectsPerShard map)
+func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, localObjectsPerShard map[int]int) error {
+	if localNode == "" {
+		return fmt.Errorf("localNode cannot be empty")
+	}
+
+	shardsToUpdate := cm.calcReleaseShardsForNode(localNode, localObjectsPerShard)
+
+	if shardsToUpdate == nil {
 		cm.logger.Debugf("No shards to release for node %s", localNode)
 		return nil
 	}
