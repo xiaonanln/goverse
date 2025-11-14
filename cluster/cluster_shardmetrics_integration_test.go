@@ -14,7 +14,6 @@ import (
 // TestShardMetricsIntegration tests that shard metrics are properly updated when cluster state changes
 // This test requires a running etcd instance at localhost:2379
 func TestShardMetricsIntegration(t *testing.T) {
-	t.Parallel()
 	// Reset metrics before test
 	metrics.AssignedShardsTotal.Reset()
 
