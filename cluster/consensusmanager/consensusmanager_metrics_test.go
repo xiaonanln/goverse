@@ -11,10 +11,8 @@ import (
 
 func TestUpdateShardMetrics_EmptyState(t *testing.T) {
 	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
 	testutilpkg.LockMetrics(t)
-	
-	// Reset metrics before test
-	metrics.AssignedShardsTotal.Reset()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
@@ -35,10 +33,8 @@ func TestUpdateShardMetrics_EmptyState(t *testing.T) {
 
 func TestUpdateShardMetrics_WithShards(t *testing.T) {
 	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
 	testutilpkg.LockMetrics(t)
-	
-	// Reset metrics before test
-	metrics.AssignedShardsTotal.Reset()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
@@ -76,10 +72,8 @@ func TestUpdateShardMetrics_WithShards(t *testing.T) {
 
 func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
 	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
 	testutilpkg.LockMetrics(t)
-	
-	// Reset metrics before test
-	metrics.AssignedShardsTotal.Reset()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
@@ -120,10 +114,8 @@ func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
 
 func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
 	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
 	testutilpkg.LockMetrics(t)
-	
-	// Reset metrics before test
-	metrics.AssignedShardsTotal.Reset()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
@@ -159,10 +151,8 @@ func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
 
 func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
 	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
 	testutilpkg.LockMetrics(t)
-	
-	// Reset metrics before test
-	metrics.AssignedShardsTotal.Reset()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)

@@ -3,26 +3,31 @@ package testutil
 import (
 	"sync"
 	"testing"
+
+	"github.com/xiaonanln/goverse/util/metrics"
 )
 
 // Global mutex for metrics-related tests to prevent parallel execution
 // This ensures that tests accessing global Prometheus metrics don't interfere with each other
 var metricsTestMutex sync.Mutex
 
-// LockMetrics acquires a global lock for metrics-related tests.
+// LockMetrics acquires a global lock for metrics-related tests and resets all metrics.
 // This prevents multiple metrics tests from running in parallel, which would cause
 // race conditions on global Prometheus metric registries.
 //
 // The lock is automatically released via t.Cleanup when the test completes.
+//
+// All global metrics are reset to ensure a clean state for the test:
+// - metrics.AssignedShardsTotal
+// - metrics.ObjectCount
+// - metrics.ClientsConnected
 //
 // Usage example:
 //
 //	func TestMyMetrics(t *testing.T) {
 //	    testutil.LockMetrics(t)
 //
-//	    // Reset metrics - safe because we have exclusive access
-//	    metrics.AssignedShardsTotal.Reset()
-//
+//	    // Metrics are already reset, start testing
 //	    // ... rest of test
 //	}
 //
@@ -41,10 +46,15 @@ func LockMetrics(t *testing.T) {
 	// Acquire the global metrics test lock
 	metricsTestMutex.Lock()
 
+	// Reset all global metrics to ensure clean state
+	metrics.AssignedShardsTotal.Reset()
+	metrics.ObjectCount.Reset()
+	metrics.ClientsConnected.Reset()
+
 	// Register cleanup to release the lock when test completes
 	t.Cleanup(func() {
 		metricsTestMutex.Unlock()
 	})
 
-	t.Logf("Acquired global metrics test lock")
+	t.Logf("Acquired global metrics test lock and reset all metrics")
 }
