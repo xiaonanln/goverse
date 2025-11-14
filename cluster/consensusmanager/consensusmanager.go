@@ -1115,19 +1115,6 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// nodesEqual checks if two sorted node lists are equal
-func nodesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // IsStateStable returns true if the node list has not changed for the specified duration
 // and has at least the minimum required number of nodes
 func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
