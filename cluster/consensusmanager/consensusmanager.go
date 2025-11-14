@@ -148,6 +148,9 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager) *ConsensusManager {
 		logger:      logger.NewLogger("ConsensusManager"),
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
+			ShardMapping: &ShardMapping{
+				Shards: make(map[int]ShardInfo),
+			},
 			// LastChange and Revision are zero initially, set when loading from etcd
 		},
 		listeners: make([]StateChangeListener, 0),
@@ -448,15 +451,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 			return
 		}
 
-		// Check if this is a migration completion (CurrentNode changed from one node to another)
-		oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
-		if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" &&
-			oldShardInfo.CurrentNode != newShardInfo.CurrentNode {
-			// Migration completed: CurrentNode changed from one node to another
-			cm.logger.Debugf("Shard %d migration completed: %s -> %s", shardID, oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
-			metrics.RecordShardMigration(oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
-		}
-
+		cm.recordShardMigrationLocked(shardID, newShardInfo)
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = newShardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, newShardInfo.TargetNode, newShardInfo.CurrentNode)
@@ -470,6 +465,17 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
+	}
+}
+
+func (cm *ConsensusManager) recordShardMigrationLocked(shardID int, newShardInfo ShardInfo) {
+	// Check if this is a migration completion (CurrentNode changed from one node to another)
+	oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+	if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" &&
+		oldShardInfo.CurrentNode != newShardInfo.CurrentNode {
+		// Migration completed: CurrentNode changed from one node to another
+		cm.logger.Debugf("Shard %d migration completed: %s -> %s", shardID, oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
+		metrics.RecordShardMigration(oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
 	}
 }
 
@@ -755,8 +761,9 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 				cm.logger.Errorf("ModRevision mismatch for shard %d: expected %d, current %d", id, shardInfo.ModRevision, currentModRev)
 				return fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d, got %d)", id, shardInfo.ModRevision, currentModRev)
 			} else {
-				// Update in-memory state under lock
+				// Update in-memory state under lock. This allows us to keep ModRevision in sync before the watch event arrives.
 				cm.mu.Lock()
+				cm.recordShardMigrationLocked(id, shardInfo)
 				if cm.state.ShardMapping.Shards[id].ModRevision < resp.Header.Revision {
 					cm.state.ShardMapping.Shards[id] = ShardInfo{
 						TargetNode:  shardInfo.TargetNode,
