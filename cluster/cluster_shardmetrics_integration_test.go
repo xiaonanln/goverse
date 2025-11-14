@@ -15,10 +15,8 @@ import (
 // This test requires a running etcd instance at localhost:2379
 func TestShardMetricsIntegration(t *testing.T) {
 	// Lock metrics to prevent parallel execution with other metrics tests
+	// This also resets all metrics to ensure clean state
 	testutil.LockMetrics(t)
-	
-	// Reset metrics before test
-	metrics.AssignedShardsTotal.Reset()
 
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")

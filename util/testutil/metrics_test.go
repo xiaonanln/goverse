@@ -4,6 +4,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/xiaonanln/goverse/util/metrics"
 )
 
 // TestLockMetrics_Sequential verifies that LockMetrics allows sequential execution
@@ -92,4 +95,39 @@ func TestLockMetrics_Cleanup(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Error("Lock was not released by cleanup within expected time")
 	}
+}
+
+// TestLockMetrics_ResetsMetrics verifies that LockMetrics resets all metrics
+func TestLockMetrics_ResetsMetrics(t *testing.T) {
+	// Set up some metric values
+	metrics.AssignedShardsTotal.WithLabelValues("test-node-1").Set(10)
+	metrics.ObjectCount.WithLabelValues("test-node-2", "TestObject", "5").Set(20)
+	metrics.ClientsConnected.WithLabelValues("test-node-3", "grpc").Set(5)
+	
+	// Verify metrics are set
+	if promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("test-node-1")) != 10 {
+		t.Fatal("Test setup failed: AssignedShardsTotal not set correctly")
+	}
+	if promtestutil.ToFloat64(metrics.ObjectCount.WithLabelValues("test-node-2", "TestObject", "5")) != 20 {
+		t.Fatal("Test setup failed: ObjectCount not set correctly")
+	}
+	if promtestutil.ToFloat64(metrics.ClientsConnected.WithLabelValues("test-node-3", "grpc")) != 5 {
+		t.Fatal("Test setup failed: ClientsConnected not set correctly")
+	}
+	
+	// Run a sub-test that calls LockMetrics
+	t.Run("SubTest", func(t *testing.T) {
+		LockMetrics(t)
+		
+		// Verify all metrics are reset to 0
+		if promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("test-node-1")) != 0 {
+			t.Error("AssignedShardsTotal was not reset by LockMetrics")
+		}
+		if promtestutil.ToFloat64(metrics.ObjectCount.WithLabelValues("test-node-2", "TestObject", "5")) != 0 {
+			t.Error("ObjectCount was not reset by LockMetrics")
+		}
+		if promtestutil.ToFloat64(metrics.ClientsConnected.WithLabelValues("test-node-3", "grpc")) != 0 {
+			t.Error("ClientsConnected was not reset by LockMetrics")
+		}
+	})
 }
