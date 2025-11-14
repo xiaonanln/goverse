@@ -195,8 +195,8 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 		t.Errorf("Expected %d shards reassigned (creating initial mapping), got %d", sharding.NumShards, n)
 	}
 
-	if cm.state.ShardMapping != nil {
-		t.Fatal("Mapping should be nil because ReassignShardTargetNodes does not set it directly")
+	if len(cm.state.ShardMapping.Shards) != 8192 {
+		t.Fatalf("Expected shard mapping to have %d shards, got %d", sharding.NumShards, len(cm.state.ShardMapping.Shards))
 	}
 }
 
