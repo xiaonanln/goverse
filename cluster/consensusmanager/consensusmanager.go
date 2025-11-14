@@ -444,6 +444,10 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	if event.Type == clientv3.EventTypePut {
 		newShardInfo := parseShardInfo(event.Kv)
 
+		if newShardInfo.ModRevision <= cm.state.ShardMapping.Shards[shardID].ModRevision {
+			return
+		}
+
 		// Check if this is a migration completion (CurrentNode changed from one node to another)
 		oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
 		if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" &&
@@ -459,6 +463,9 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
+		if event.Kv.ModRevision <= cm.state.ShardMapping.Shards[shardID].ModRevision {
+			return
+		}
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
 		// Asynchronously notify listeners to prevent deadlocks
@@ -747,6 +754,17 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 				}
 				cm.logger.Errorf("ModRevision mismatch for shard %d: expected %d, current %d", id, shardInfo.ModRevision, currentModRev)
 				return fmt.Errorf("failed to store shard %d: ModRevision mismatch (expected %d, got %d)", id, shardInfo.ModRevision, currentModRev)
+			} else {
+				// Update in-memory state under lock
+				cm.mu.Lock()
+				if cm.state.ShardMapping.Shards[id].ModRevision < resp.Header.Revision {
+					cm.state.ShardMapping.Shards[id] = ShardInfo{
+						TargetNode:  shardInfo.TargetNode,
+						CurrentNode: shardInfo.CurrentNode,
+						ModRevision: resp.Header.Revision,
+					}
+				}
+				cm.mu.Unlock()
 			}
 
 			return nil
