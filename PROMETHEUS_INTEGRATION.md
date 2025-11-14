@@ -48,6 +48,33 @@ GoVerse now exposes Prometheus metrics for monitoring distributed objects. The m
   - `node`: The node address (e.g., "localhost:47000")
 - Updated: Automatically updated when shard mapping changes in the ConsensusManager
 - Note: Counts shards based on CurrentNode (actual ownership), not TargetNode (planned assignment)
+
+### Shard Migration Metrics
+
+**`goverse_shard_claims_total{node}`** - Counter
+- Description: Total number of shard ownership claims by node
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+- Updated: Automatically incremented when a node successfully claims ownership of shards via ClaimShardsForNode
+
+**`goverse_shard_releases_total{node}`** - Counter
+- Description: Total number of shard ownership releases by node
+- Labels:
+  - `node`: The node address (e.g., "localhost:47000")
+- Updated: Automatically incremented when a node successfully releases ownership of shards via ReleaseShardsForNode
+
+**`goverse_shard_migrations_total{from_node, to_node}`** - Counter
+- Description: Total number of completed shard migrations (ownership transfers between nodes)
+- Labels:
+  - `from_node`: The node that previously owned the shard (e.g., "localhost:47000")
+  - `to_node`: The node that now owns the shard (e.g., "localhost:47001")
+- Updated: Automatically incremented when a shard's CurrentNode changes from one node to another
+
+**`goverse_shards_migrating`** - Gauge
+- Description: Number of shards currently in migration state (TargetNode != CurrentNode)
+- Updated: Automatically updated when shard metrics are refreshed via UpdateShardMetrics
+- Note: A shard is considered migrating when its TargetNode differs from its CurrentNode
+
 ### Client Connection Metrics
 
 **`goverse_clients_connected{node, client_type}`** - Gauge
@@ -112,6 +139,27 @@ goverse_shards_total{node="localhost:47003"} 2048
 goverse_objects_total{node="localhost:47000",type="ChatRoom",shard="0"} 3
 goverse_objects_total{node="localhost:47000",type="ChatClient",shard="1"} 5
 goverse_objects_total{node="localhost:47001",type="ChatRoom",shard="2"} 2
+
+# HELP goverse_shard_claims_total Total number of shard ownership claims by node
+# TYPE goverse_shard_claims_total counter
+goverse_shard_claims_total{node="localhost:47000"} 2048
+goverse_shard_claims_total{node="localhost:47001"} 2048
+goverse_shard_claims_total{node="localhost:47002"} 2048
+
+# HELP goverse_shard_releases_total Total number of shard ownership releases by node
+# TYPE goverse_shard_releases_total counter
+goverse_shard_releases_total{node="localhost:47000"} 15
+goverse_shard_releases_total{node="localhost:47001"} 12
+
+# HELP goverse_shard_migrations_total Total number of completed shard migrations (ownership transfers between nodes)
+# TYPE goverse_shard_migrations_total counter
+goverse_shard_migrations_total{from_node="localhost:47000",to_node="localhost:47001"} 8
+goverse_shard_migrations_total{from_node="localhost:47000",to_node="localhost:47002"} 7
+goverse_shard_migrations_total{from_node="localhost:47001",to_node="localhost:47002"} 5
+
+# HELP goverse_shards_migrating Number of shards currently in migration state (TargetNode != CurrentNode)
+# TYPE goverse_shards_migrating gauge
+goverse_shards_migrating 3
 
 # HELP goverse_clients_connected Number of active client connections in the cluster
 # TYPE goverse_clients_connected gauge
@@ -272,6 +320,63 @@ Connected clients by type:
 sum by (client_type) (goverse_clients_connected)
 ```
 
+#### Shard Migration Metrics
+
+Total shard claims by node:
+```promql
+sum by (node) (goverse_shard_claims_total)
+```
+
+Total shard releases by node:
+```promql
+sum by (node) (goverse_shard_releases_total)
+```
+
+Shard claim rate (claims per second over 5 minutes):
+```promql
+rate(goverse_shard_claims_total[5m])
+```
+
+Shard release rate (releases per second over 5 minutes):
+```promql
+rate(goverse_shard_releases_total[5m])
+```
+
+Total completed migrations across all nodes:
+```promql
+sum(goverse_shard_migrations_total)
+```
+
+Migration rate (migrations per second over 5 minutes):
+```promql
+sum(rate(goverse_shard_migrations_total[5m]))
+```
+
+Migrations by direction (from_node to to_node):
+```promql
+goverse_shard_migrations_total{from_node="localhost:47000",to_node="localhost:47001"}
+```
+
+Most active migration paths:
+```promql
+topk(5, sum by (from_node, to_node) (goverse_shard_migrations_total))
+```
+
+Current number of shards in migration:
+```promql
+goverse_shards_migrating
+```
+
+Percentage of shards currently migrating:
+```promql
+goverse_shards_migrating / 8192 * 100
+```
+
+Net shard churn per node (claims - releases):
+```promql
+sum by (node) (goverse_shard_claims_total) - sum by (node) (goverse_shard_releases_total)
+```
+
 ### Alerting Examples
 
 Alert when object count is too high:
@@ -345,6 +450,60 @@ Alert when no clients are connected:
     summary: "No clients connected to any node in the cluster"
 ```
 
+Alert when too many shards are migrating:
+```yaml
+- alert: HighShardMigrationActivity
+  expr: goverse_shards_migrating > 100
+  for: 15m
+  annotations:
+    summary: "High number of shards in migration state"
+    description: "{{ $value }} shards are currently migrating (TargetNode != CurrentNode)"
+```
+
+Alert when shard migration rate is too high:
+```yaml
+- alert: HighShardMigrationRate
+  expr: sum(rate(goverse_shard_migrations_total[5m])) > 10
+  for: 10m
+  annotations:
+    summary: "High shard migration rate detected"
+    description: "Shard migrations are happening at {{ $value }} per second"
+```
+
+Alert when shard migrations are stuck:
+```yaml
+- alert: StuckShardMigrations
+  expr: goverse_shards_migrating > 0 and rate(goverse_shard_migrations_total[15m]) == 0
+  for: 30m
+  annotations:
+    summary: "Shard migrations appear to be stuck"
+    description: "{{ $value }} shards have been in migration state for over 30 minutes with no completions"
+```
+
+Alert when shard churn is imbalanced (one node claiming more than releasing):
+```yaml
+- alert: ImbalancedShardChurn
+  expr: |
+    abs(
+      sum by (node) (increase(goverse_shard_claims_total[1h])) - 
+      sum by (node) (increase(goverse_shard_releases_total[1h]))
+    ) > 200
+  for: 15m
+  annotations:
+    summary: "Imbalanced shard churn on {{ $labels.node }}"
+    description: "Node has a net difference of {{ $value }} shards claimed vs released in the last hour"
+```
+
+Alert when a node is constantly releasing shards (possible node degradation):
+```yaml
+- alert: NodeLosingShards
+  expr: rate(goverse_shard_releases_total[10m]) > rate(goverse_shard_claims_total[10m])
+  for: 30m
+  annotations:
+    summary: "Node {{ $labels.node }} is consistently losing shards"
+    description: "Node may be degraded - releasing more shards than claiming"
+```
+
 ## Testing
 
 The metrics package includes comprehensive unit tests:
@@ -383,8 +542,7 @@ Potential future metrics to add:
 - Object lifecycle duration histograms
 - RPC error rates
 - Persistence operation metrics
-- Shard mapping change frequency
-- Client connection counts
-- Shard migration duration and frequency
-- Shard ownership transition tracking (TargetNode vs CurrentNode)
+- Shard migration duration histograms
 - Client request rates and latencies
+- Object creation/deletion rates per shard
+- gRPC connection pool metrics
