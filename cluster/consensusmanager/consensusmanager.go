@@ -1226,12 +1226,12 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 
 		// Check if this shard belongs to this node
 		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
-		if !exists {
-			continue
-		}
-
-		// If CurrentNode is this node but TargetNode is different, mark for eviction
-		if shardInfo.CurrentNode == localAddr && shardInfo.TargetNode != localAddr {
+		
+		// Evict objects in the following cases:
+		// 1. Shard does not exist in the mapping (orphaned shard)
+		// 2. CurrentNode is not this node (object belongs to another node)
+		// 3. TargetNode is not this node (object should migrate to another node)
+		if !exists || shardInfo.CurrentNode != localAddr || shardInfo.TargetNode != localAddr {
 			objectsToEvict = append(objectsToEvict, objectID)
 		}
 	}
