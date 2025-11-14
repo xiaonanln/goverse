@@ -16,14 +16,16 @@ It lets you build systems around **stateful entities with identity and methods**
 - **Virtual Actor Lifecycle:** Objects are activated on demand, deactivated when idle, and reactivated seamlessly.
 - **Object Persistence:** Optional PostgreSQL persistence with JSONB storage for durable state.
 - **Client Service:** Client connection management and method routing through server-side client objects.
-- **Sharding & Rebalancing:** Fixed shard model with automatic remapping via etcd.
+- **Push Messaging:** Real-time server-to-client message delivery via bidirectional gRPC streams.
+- **Sharding & Rebalancing:** Fixed 8192-shard model with automatic assignment, claiming, and rebalancing via etcd.
 - **Cluster Quorum:** Configure minimum node requirements to ensure cluster stability before accepting traffic.
 - **Fault-Tolerance:** Lease + epoch fencing prevent split-brain; safe recovery after node failures.
+- **Prometheus Metrics:** Built-in observability with metrics for objects, method calls, shards, and migrations.
 - **Call Semantics:** At-least-once delivery with idempotency hooks; optional at-most-once.
 - **Concurrency Modes:** Sequential, concurrent, or read-only execution strategies.
 - **gRPC Transport:** Efficient remote calls, client proxies, and bidirectional streaming.
 - **Inspector UI:** Visualize nodes, objects, and their relationships in real time.
-- **Sample Apps:** Includes a distributed chat system with multiple chat rooms.
+- **Sample Apps:** Includes a distributed chat system with multiple chat rooms and real-time messaging.
 
 ---
 
@@ -80,13 +82,20 @@ clientID := regResp.(*client_pb.RegisterResponse).ClientId
 - Server routes calls to the appropriate client object's methods
 - Client objects can then call other distributed objects using `CallObject()`
 
+**5. Push Messaging**
+- Server can push messages to clients in real-time via the registration stream
+- Use `PushMessageToClient()` to send messages from distributed objects to specific clients
+- Enables real-time notifications, chat messages, and event delivery
+
 ### Client Connection Flow:
 
 1. **Registration**: Client connects and calls `Register()` streaming RPC
 2. **ID Assignment**: Server creates a client object with unique ID
-3. **Method Invocation**: Client calls methods through `Call()` RPC
-4. **Object Orchestration**: Client object methods orchestrate calls to distributed objects
-5. **Graceful Cleanup**: Client objects cleaned up on disconnect
+3. **Bidirectional Communication**: Client can call methods AND receive pushed messages
+4. **Method Invocation**: Client calls methods through `Call()` RPC
+5. **Object Orchestration**: Client object methods orchestrate calls to distributed objects
+6. **Real-time Updates**: Server pushes messages to clients as events occur
+7. **Graceful Cleanup**: Client objects cleaned up on disconnect
 
 ### Usage Example:
 ```go
@@ -148,7 +157,7 @@ server, err := goverseapi.NewServer(config)
 - **High Availability**: Prevent operations until sufficient nodes are available
 - **Rolling Updates**: Coordinate cluster startup during deployments
 
-See the [minnodes example](examples/minquorum/) for a complete demonstration.
+See the [minquorum example](examples/minquorum/) for a complete demonstration.
 
 ### Node Stability Duration
 
@@ -163,12 +172,6 @@ config := &goverseapi.ServerConfig{
     EtcdPrefix:              "/goverse",
     MinQuorum:               1,
     NodeStabilityDuration:   5 * time.Second, // Wait 5s for stability (default: 10s)
-}
-```
-
-#### Default Configuration Values
-
-- **Default**: If not set, `NodeStabilityDuration` defaults to 10 seconds (see `cluster.DefaultNodeStabilityDuration`)
 }
 
 server, err := goverseapi.NewServer(config)
@@ -312,21 +315,56 @@ client.Call(ctx, &client_pb.CallRequest{
 
 ---
 
-## 💬 Chat Message Retrieval
+## 💬 Chat Messaging Architecture
 
-The chat system provides message management through distributed ChatRoom objects:
+The chat system provides real-time message delivery through distributed ChatRoom objects:
 
-- **Polling-based Updates**: Clients can poll for recent messages using `GetRecentMessages()`
+- **Push-based Delivery**: Messages are pushed to clients in real-time via bidirectional gRPC streams
+- **Polling Support**: Clients can also poll for recent messages using `GetRecentMessages()`
 - **Timestamp Tracking**: Messages include microsecond timestamps for ordering and filtering
 - **Message Persistence**: Chat history stored in distributed ChatRoom objects
 - **Multi-room Support**: Each room is an independent distributed object with its own state
 - **Client-side Orchestration**: ChatClient objects on the server coordinate operations
 
 ### Architecture Benefits:
+- **Real-time Delivery**: Messages pushed instantly to all room participants
 - **Distributed State**: Each ChatRoom maintains its own message history
 - **Client Abstraction**: ChatClient objects provide a clean interface for clients
 - **Object Isolation**: Chat rooms are independent distributed objects
-- **Simple Protocol**: Standard RPC calls using protobuf messages
+- **Simple Protocol**: Standard RPC calls and push notifications using protobuf messages
+
+See [PUSH_MESSAGING.md](docs/PUSH_MESSAGING.md) for implementation details.
+
+---
+
+## 📊 Prometheus Metrics
+
+GoVerse includes built-in Prometheus metrics for comprehensive observability:
+
+### Available Metrics
+
+- **`goverse_objects_total`**: Total number of distributed objects by node, type, and shard
+- **`goverse_method_calls_total`**: Method call count by node, object type, method, and status
+- **`goverse_method_call_duration`**: Method call duration histogram with configurable buckets
+- **`goverse_shards_total`**: Number of shards assigned to each node
+- **`goverse_shards_migrating`**: Number of shards currently being migrated
+- **`goverse_shard_claims_total`**: Counter for shard ownership claims
+- **`goverse_shard_releases_total`**: Counter for shard ownership releases
+- **`goverse_shard_migrations_total`**: Counter for completed shard migrations between nodes
+- **`goverse_clients_total`**: Number of connected clients per node
+
+### Usage
+
+Metrics are automatically tracked and exposed on the standard Prometheus endpoint. Configure your Prometheus server to scrape the GoVerse nodes:
+
+```yaml
+scrape_configs:
+  - job_name: 'goverse'
+    static_configs:
+      - targets: ['localhost:47000', 'localhost:47001', 'localhost:47002']
+```
+
+See [PROMETHEUS_INTEGRATION.md](PROMETHEUS_INTEGRATION.md) for detailed metric descriptions and usage examples.
 
 ---
 
@@ -497,10 +535,12 @@ This script is used in CI/CD but can also be run locally for testing.
 
 ## 📚 Documentation
 
+- [Push Messaging](docs/PUSH_MESSAGING.md): Real-time server-to-client message delivery.
+- [Prometheus Integration](PROMETHEUS_INTEGRATION.md): Metrics for monitoring and observability.
 - [PostgreSQL Setup](docs/postgres-setup.md): Guide for setting up object persistence with PostgreSQL.
 - [Persistence Example](examples/persistence/): Complete example of using PostgreSQL persistence.
 - [Inspector UI](inspector/web/index.html): Visualize cluster state and objects.
-- [Chat Sample](samples/chat/): Example distributed chat with multiple rooms.
+- [Chat Sample](samples/chat/): Example distributed chat with multiple rooms and real-time messaging.
 - [Client Service](client/): Client connection management and RPC routing.
 - [API Reference](proto/): Protocol buffer definitions.
 
