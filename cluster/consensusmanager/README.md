@@ -201,9 +201,52 @@ mapping, _ := c.GetShardMapping(ctx)  // no etcd call
 
 ### Thread Safety
 
-Uses `sync.RWMutex` for:
+Uses `sync.RWMutex` for cluster state:
 - Read operations (GetNodes, GetLeaderNode, etc.) use `RLock()`
 - Write operations (state updates from watch) use `Lock()`
+
+### Shard-Level Locking
+
+**NEW**: Added in v2 to prevent race conditions during shard ownership transitions.
+
+Uses `util/keylock.KeyLock` for per-shard locking:
+
+**Write Locks (Exclusive)**: Acquired during shard ownership transitions
+- `ReleaseShardsForNode()` - Acquires write locks on shards being released
+- `ClaimShardsForNode()` - Acquires write locks on shards being claimed
+
+**Read Locks (Shared)**: Acquired during object operations
+- `AcquireShardReadLock(objectID)` - Returns unlock function
+- Used by `cluster.CreateObject()` and `cluster.CallObject()` before validation
+
+**Benefits**:
+- **Prevents race conditions**: Object operations block while shard ownership is being transferred
+- **Concurrent operations**: Multiple read operations can proceed on stable shards
+- **Per-shard granularity**: Operations on different shards don't block each other
+- **Efficient**: Fixed node addresses (client objects with "/") skip locking entirely
+
+**Example scenario prevented**:
+```go
+// Without locking (race condition):
+goroutine 1: ReleaseShardsForNode reads state, decides to release shard 42
+goroutine 2: CreateObject(on shard 42) validates ownership, starts creating object
+goroutine 1: ReleaseShardsForNode updates etcd, releases shard 42
+// Result: Object created on shard that's being released!
+
+// With locking (safe):
+goroutine 1: ReleaseShardsForNode acquires write lock on shard 42
+goroutine 2: CreateObject tries to acquire read lock, blocks...
+goroutine 1: Updates etcd, releases lock
+goroutine 2: Now acquires read lock, sees updated state, routes correctly
+// Result: Object routed to correct node
+```
+
+**Testing**:
+See `consensusmanager_shardlock_test.go` for comprehensive tests:
+- Write locks block read locks
+- Multiple read locks are concurrent
+- Different shards don't block each other
+- Fixed node addresses skip locking
 
 ### Notification Pattern
 
