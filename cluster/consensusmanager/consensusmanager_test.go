@@ -238,11 +238,8 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 		t.Error("Expected some shards to be reassigned after adding a new node")
 	}
 
-	// Note: Version tracking happens in ClusterState when storeShardMapping is called
-	// Just verify the mapping is valid
-	// The updated mapping is not reflected in cm.state.ShardMapping directly
-	if len(cm.state.ShardMapping.Shards) != sharding.NumShards/2 {
-		t.Errorf("Expected %d shards in updated mapping, got %d", sharding.NumShards/2, len(cm.state.ShardMapping.Shards))
+	if len(cm.state.ShardMapping.Shards) != sharding.NumShards {
+		t.Errorf("Expected %d shards in updated mapping, got %d", sharding.NumShards, len(cm.state.ShardMapping.Shards))
 	}
 }
 
