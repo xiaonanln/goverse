@@ -3,6 +3,8 @@ package metrics
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
@@ -538,5 +540,270 @@ func TestClientMetricsRegistration(t *testing.T) {
 	// Verify that client metrics are properly registered with Prometheus
 	if ClientsConnected == nil {
 		t.Error("ClientsConnected metric should not be nil")
+	}
+}
+
+func TestRecordShardClaim(t *testing.T) {
+	// Reset metrics before test
+	ShardClaimsTotal.Reset()
+
+	// Record shard claims for a node
+	RecordShardClaim("localhost:47000", 3)
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(ShardClaimsTotal.WithLabelValues("localhost:47000"))
+	if count != 3.0 {
+		t.Errorf("Expected count to be 3.0, got %f", count)
+	}
+
+	// Record more shard claims for the same node
+	RecordShardClaim("localhost:47000", 2)
+	count = testutil.ToFloat64(ShardClaimsTotal.WithLabelValues("localhost:47000"))
+	if count != 5.0 {
+		t.Errorf("Expected count to be 5.0, got %f", count)
+	}
+
+	// Record shard claims for another node
+	RecordShardClaim("localhost:47001", 4)
+	count = testutil.ToFloat64(ShardClaimsTotal.WithLabelValues("localhost:47001"))
+	if count != 4.0 {
+		t.Errorf("Expected count for node 47001 to be 4.0, got %f", count)
+	}
+}
+
+func TestRecordShardClaimZero(t *testing.T) {
+	// Reset metrics before test
+	ShardClaimsTotal.Reset()
+
+	// Record zero claims (should not increment)
+	RecordShardClaim("localhost:47000", 0)
+
+	// Verify the metric was not recorded
+	count := testutil.ToFloat64(ShardClaimsTotal.WithLabelValues("localhost:47000"))
+	if count != 0.0 {
+		t.Errorf("Expected count to be 0.0, got %f", count)
+	}
+}
+
+func TestRecordShardRelease(t *testing.T) {
+	// Reset metrics before test
+	ShardReleasesTotal.Reset()
+
+	// Record shard releases for a node
+	RecordShardRelease("localhost:47000", 2)
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(ShardReleasesTotal.WithLabelValues("localhost:47000"))
+	if count != 2.0 {
+		t.Errorf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record more shard releases for the same node
+	RecordShardRelease("localhost:47000", 3)
+	count = testutil.ToFloat64(ShardReleasesTotal.WithLabelValues("localhost:47000"))
+	if count != 5.0 {
+		t.Errorf("Expected count to be 5.0, got %f", count)
+	}
+
+	// Record shard releases for another node
+	RecordShardRelease("localhost:47001", 1)
+	count = testutil.ToFloat64(ShardReleasesTotal.WithLabelValues("localhost:47001"))
+	if count != 1.0 {
+		t.Errorf("Expected count for node 47001 to be 1.0, got %f", count)
+	}
+}
+
+func TestRecordShardReleaseZero(t *testing.T) {
+	// Reset metrics before test
+	ShardReleasesTotal.Reset()
+
+	// Record zero releases (should not increment)
+	RecordShardRelease("localhost:47000", 0)
+
+	// Verify the metric was not recorded
+	count := testutil.ToFloat64(ShardReleasesTotal.WithLabelValues("localhost:47000"))
+	if count != 0.0 {
+		t.Errorf("Expected count to be 0.0, got %f", count)
+	}
+}
+
+func TestRecordShardMigration(t *testing.T) {
+	// Reset metrics before test
+	ShardMigrationsTotal.Reset()
+
+	// Record a shard migration
+	RecordShardMigration("localhost:47000", "localhost:47001")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", "localhost:47001"))
+	if count != 1.0 {
+		t.Errorf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record another migration with same direction
+	RecordShardMigration("localhost:47000", "localhost:47001")
+	count = testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", "localhost:47001"))
+	if count != 2.0 {
+		t.Errorf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record migration in opposite direction (should be tracked separately)
+	RecordShardMigration("localhost:47001", "localhost:47000")
+	count = testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47001", "localhost:47000"))
+	if count != 1.0 {
+		t.Errorf("Expected count for reverse migration to be 1.0, got %f", count)
+	}
+
+	// Original direction should remain unchanged
+	count = testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", "localhost:47001"))
+	if count != 2.0 {
+		t.Errorf("Expected count for original direction to remain 2.0, got %f", count)
+	}
+}
+
+func TestRecordShardMigrationInvalid(t *testing.T) {
+	// Reset metrics before test
+	ShardMigrationsTotal.Reset()
+
+	// Test with empty fromNode (should not record)
+	RecordShardMigration("", "localhost:47001")
+	count := testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("", "localhost:47001"))
+	if count != 0.0 {
+		t.Errorf("Expected count to be 0.0 for empty fromNode, got %f", count)
+	}
+
+	// Test with empty toNode (should not record)
+	RecordShardMigration("localhost:47000", "")
+	count = testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", ""))
+	if count != 0.0 {
+		t.Errorf("Expected count to be 0.0 for empty toNode, got %f", count)
+	}
+
+	// Test with same node (should not record - not a migration)
+	RecordShardMigration("localhost:47000", "localhost:47000")
+	count = testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", "localhost:47000"))
+	if count != 0.0 {
+		t.Errorf("Expected count to be 0.0 for same node, got %f", count)
+	}
+}
+
+func TestSetShardsMigrating(t *testing.T) {
+	// Reset metrics before test
+	ShardsMigrating = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "goverse_shards_migrating_test",
+			Help: "Test gauge for shards migrating",
+		},
+	)
+
+	// Set the number of shards migrating
+	SetShardsMigrating(5.0)
+
+	// Verify the metric was set
+	count := testutil.ToFloat64(ShardsMigrating)
+	if count != 5.0 {
+		t.Errorf("Expected count to be 5.0, got %f", count)
+	}
+
+	// Update the count
+	SetShardsMigrating(10.0)
+	count = testutil.ToFloat64(ShardsMigrating)
+	if count != 10.0 {
+		t.Errorf("Expected count to be 10.0, got %f", count)
+	}
+
+	// Set to zero
+	SetShardsMigrating(0.0)
+	count = testutil.ToFloat64(ShardsMigrating)
+	if count != 0.0 {
+		t.Errorf("Expected count to be 0.0, got %f", count)
+	}
+}
+
+func TestShardMigrationMetricsRegistration(t *testing.T) {
+	// Verify that shard migration metrics are properly registered with Prometheus
+	if ShardClaimsTotal == nil {
+		t.Error("ShardClaimsTotal metric should not be nil")
+	}
+
+	if ShardReleasesTotal == nil {
+		t.Error("ShardReleasesTotal metric should not be nil")
+	}
+
+	if ShardMigrationsTotal == nil {
+		t.Error("ShardMigrationsTotal metric should not be nil")
+	}
+
+	if ShardsMigrating == nil {
+		t.Error("ShardsMigrating metric should not be nil")
+	}
+}
+
+func TestMultipleNodeShardMigrations(t *testing.T) {
+	// Reset metrics before test
+	ShardMigrationsTotal.Reset()
+
+	// Test migrations between multiple nodes
+	RecordShardMigration("localhost:47000", "localhost:47001")
+	RecordShardMigration("localhost:47000", "localhost:47002")
+	RecordShardMigration("localhost:47001", "localhost:47002")
+	RecordShardMigration("localhost:47002", "localhost:47000")
+
+	// Verify each migration direction has correct count
+	count1 := testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", "localhost:47001"))
+	if count1 != 1.0 {
+		t.Errorf("Expected count for 47000->47001 to be 1.0, got %f", count1)
+	}
+
+	count2 := testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47000", "localhost:47002"))
+	if count2 != 1.0 {
+		t.Errorf("Expected count for 47000->47002 to be 1.0, got %f", count2)
+	}
+
+	count3 := testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47001", "localhost:47002"))
+	if count3 != 1.0 {
+		t.Errorf("Expected count for 47001->47002 to be 1.0, got %f", count3)
+	}
+
+	count4 := testutil.ToFloat64(ShardMigrationsTotal.WithLabelValues("localhost:47002", "localhost:47000"))
+	if count4 != 1.0 {
+		t.Errorf("Expected count for 47002->47000 to be 1.0, got %f", count4)
+	}
+}
+
+func TestShardClaimAndReleaseSequence(t *testing.T) {
+	// Reset metrics before test
+	ShardClaimsTotal.Reset()
+	ShardReleasesTotal.Reset()
+
+	// Simulate a sequence of claims and releases
+	node := "localhost:47000"
+
+	// Initial claims
+	RecordShardClaim(node, 10)
+	claimCount := testutil.ToFloat64(ShardClaimsTotal.WithLabelValues(node))
+	if claimCount != 10.0 {
+		t.Errorf("Expected claim count to be 10.0, got %f", claimCount)
+	}
+
+	// Release some shards
+	RecordShardRelease(node, 3)
+	releaseCount := testutil.ToFloat64(ShardReleasesTotal.WithLabelValues(node))
+	if releaseCount != 3.0 {
+		t.Errorf("Expected release count to be 3.0, got %f", releaseCount)
+	}
+
+	// Claim more
+	RecordShardClaim(node, 5)
+	claimCount = testutil.ToFloat64(ShardClaimsTotal.WithLabelValues(node))
+	if claimCount != 15.0 {
+		t.Errorf("Expected claim count to be 15.0, got %f", claimCount)
+	}
+
+	// Release more
+	RecordShardRelease(node, 7)
+	releaseCount = testutil.ToFloat64(ShardReleasesTotal.WithLabelValues(node))
+	if releaseCount != 10.0 {
+		t.Errorf("Expected release count to be 10.0, got %f", releaseCount)
 	}
 }
