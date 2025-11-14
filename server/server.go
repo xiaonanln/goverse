@@ -231,6 +231,42 @@ func sendMessageToStream(stream client_pb.ClientService_RegisterServer, msg prot
 	return nil
 }
 
+// validateObjectShardOwnership validates that an object should be on this node
+// by checking both the routing result and the shard mapping's TargetNode.
+// This prevents race conditions where operations arrive during shard transitions.
+func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID string) error {
+	clusterInstance := cluster.This()
+	if clusterInstance == nil || clusterInstance.GetThisNode() == nil {
+		return nil // No cluster configured, allow operation
+	}
+
+	// Check with cluster that this ID is sharded to this node
+	targetNode, err := clusterInstance.GetNodeForObject(ctx, objectID)
+	if err != nil {
+		return fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
+	}
+
+	thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
+	if targetNode != thisNodeAddr {
+		return fmt.Errorf("object %s is sharded to node %s, not this node %s", objectID, targetNode, thisNodeAddr)
+	}
+
+	// Additional validation: Check shard mapping to prevent creation during shard transition
+	// This mitigates the race condition where operations arrive during shard release
+	shardID := sharding.GetShardID(objectID)
+	shardMapping := clusterInstance.GetShardMapping(ctx)
+	if shardMapping != nil && shardMapping.Shards != nil {
+		if shardInfo, exists := shardMapping.Shards[shardID]; exists {
+			// Only check if TargetNode is explicitly set (not empty)
+			if shardInfo.TargetNode != "" && shardInfo.TargetNode != thisNodeAddr {
+				return fmt.Errorf("object %s shard is targeted to node %s, not this node %s", objectID, shardInfo.TargetNode, thisNodeAddr)
+			}
+		}
+	}
+
+	return nil
+}
+
 // Register implements the ClientService Register method for client registration
 func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientService_RegisterServer) error {
 	server.logRPC("Register", req)
@@ -281,6 +317,11 @@ func (server *Server) Call(ctx context.Context, req *client_pb.CallRequest) (*cl
 func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
 	server.logRPC("CallObject", req)
 
+	// Validate that this object should be on this node
+	if err := server.validateObjectShardOwnership(ctx, req.GetId()); err != nil {
+		return nil, err
+	}
+
 	// Unmarshal the Any request to concrete proto.Message
 	var requestMsg proto.Message
 	var err error
@@ -315,31 +356,9 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		return nil, fmt.Errorf("object ID must be specified in CreateObject request")
 	}
 
-	// Check with cluster that this ID is sharded to this node
-	clusterInstance := cluster.This()
-	if clusterInstance != nil && clusterInstance.GetThisNode() != nil {
-		targetNode, err := clusterInstance.GetNodeForObject(ctx, req.GetId())
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine target node for object %s: %w", req.GetId(), err)
-		}
-
-		thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
-		if targetNode != thisNodeAddr {
-			return nil, fmt.Errorf("object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
-		}
-
-		// Additional validation: Check shard mapping to prevent creation during shard transition
-		// This mitigates the race condition where CreateObject arrives during shard release
-		shardID := sharding.GetShardID(req.GetId())
-		shardMapping := clusterInstance.GetShardMapping(ctx)
-		if shardMapping != nil && shardMapping.Shards != nil {
-			if shardInfo, exists := shardMapping.Shards[shardID]; exists {
-				// Only check if TargetNode is explicitly set (not empty)
-				if shardInfo.TargetNode != "" && shardInfo.TargetNode != thisNodeAddr {
-					return nil, fmt.Errorf("object %s shard is targeted to node %s, not this node %s", req.GetId(), shardInfo.TargetNode, thisNodeAddr)
-				}
-			}
-		}
+	// Validate that this object should be on this node
+	if err := server.validateObjectShardOwnership(ctx, req.GetId()); err != nil {
+		return nil, err
 	}
 
 	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId())
