@@ -121,7 +121,7 @@ UnregisterNode() / Close()
 ### Unit Tests
 ```bash
 cd cluster/etcdmanager
-go test -v -run "TestKeepAlive"
+go test -v -p 1 -run "TestKeepAlive"
 ```
 
 ### Manual Testing

@@ -90,5 +90,5 @@ The package includes comprehensive tests covering:
 
 Run tests with:
 ```bash
-go test ./util/keylock/
+go test -p 1 ./util/keylock/
 ```

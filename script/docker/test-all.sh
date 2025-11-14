@@ -16,7 +16,7 @@ echo "Running Go unit tests..."
 echo
 
 # run all go tests (no caching) and fail fast on errors
-if ! go test -v ./... -count=1; then
+if ! go test -v -p 1 ./... -count=1; then
     echo "✗ Go unit tests failed"
     exit 1
 fi

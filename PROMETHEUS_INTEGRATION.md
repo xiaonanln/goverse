@@ -509,7 +509,7 @@ Alert when a node is constantly releasing shards (possible node degradation):
 The metrics package includes comprehensive unit tests:
 
 ```bash
-go test -v ./util/metrics/...
+go test -v -p 1 ./util/metrics/...
 ```
 
 To verify metrics are exposed:

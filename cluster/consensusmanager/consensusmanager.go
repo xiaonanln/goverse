@@ -266,9 +266,9 @@ func (cm *ConsensusManager) UpdateShardMetrics() {
 		if shardInfo.CurrentNode != "" {
 			shardCounts[shardInfo.CurrentNode]++
 		}
-		
+
 		// Count shards in migration state (TargetNode != CurrentNode)
-		if shardInfo.TargetNode != "" && shardInfo.CurrentNode != "" && 
+		if shardInfo.TargetNode != "" && shardInfo.CurrentNode != "" &&
 			shardInfo.TargetNode != shardInfo.CurrentNode {
 			migratingCount++
 		}
@@ -278,7 +278,7 @@ func (cm *ConsensusManager) UpdateShardMetrics() {
 	for node, count := range shardCounts {
 		metrics.SetAssignedShardCount(node, float64(count))
 	}
-	
+
 	// Update shards migrating gauge
 	metrics.SetShardsMigrating(float64(migratingCount))
 }
@@ -443,16 +443,16 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 
 	if event.Type == clientv3.EventTypePut {
 		newShardInfo := parseShardInfo(event.Kv)
-		
+
 		// Check if this is a migration completion (CurrentNode changed from one node to another)
 		oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
-		if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" && 
+		if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" &&
 			oldShardInfo.CurrentNode != newShardInfo.CurrentNode {
 			// Migration completed: CurrentNode changed from one node to another
-			cm.logger.Infof("Shard %d migration completed: %s -> %s", shardID, oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
+			cm.logger.Debugf("Shard %d migration completed: %s -> %s", shardID, oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
 			metrics.RecordShardMigration(oldShardInfo.CurrentNode, newShardInfo.CurrentNode)
 		}
-		
+
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = newShardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, newShardInfo.TargetNode, newShardInfo.CurrentNode)
