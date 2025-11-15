@@ -216,7 +216,7 @@ Uses `util/keylock.KeyLock` for per-shard locking:
 - `ClaimShardsForNode()` - Acquires write locks on shards being claimed
 
 **Read Locks (Shared)**: Acquired during object operations
-- `AcquireShardReadLock(objectID)` - Returns unlock function
+- `shardlock.AcquireRead(objectID)` - Package-level function that returns unlock function
 - Used by `cluster.CreateObject()` and `cluster.CallObject()` before validation
 
 **Benefits**:

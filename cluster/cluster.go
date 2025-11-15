@@ -159,12 +159,6 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
-	// Set the consensus manager as the shard locker for the node
-	// This enables shard-level locking in node operations
-	if c.consensusManager != nil {
-		c.thisNode.SetShardLocker(c.consensusManager)
-	}
-
 	// Register this node with etcd
 	if err := c.registerNode(ctx); err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
