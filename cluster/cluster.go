@@ -11,6 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -35,6 +36,7 @@ type Cluster struct {
 	etcdManager               *etcdmanager.EtcdManager
 	consensusManager          *consensusmanager.ConsensusManager
 	nodeConnections           *nodeconnections.NodeConnections
+	shardLock                 *shardlock.ShardLock
 	logger                    *logger.Logger
 	etcdAddress               string        // etcd server address (e.g., "localhost:2379")
 	etcdPrefix                string        // etcd key prefix for this cluster
@@ -81,7 +83,7 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
 func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
-	// Create a new cluster instance
+	// Create a new cluster instance with its own ShardLock to ensure per-cluster isolation
 	c := &Cluster{
 		thisNode:                  thisNode,
 		logger:                    logger.NewLogger("Cluster"),
@@ -92,6 +94,12 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 		nodeStabilityDuration:     cfg.NodeStabilityDuration,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
+		shardLock:                 shardlock.NewShardLock(),
+	}
+
+	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
+	if thisNode != nil {
+		thisNode.SetShardLock(c.shardLock)
 	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
@@ -100,7 +108,7 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 	}
 
 	c.etcdManager = mgr
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr)
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock)
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
@@ -122,6 +130,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		minQuorum:                 1,
 		nodeStabilityDuration:     3 * time.Second,
 		shardMappingCheckInterval: 1 * time.Second,
+		shardLock:                 shardlock.NewShardLock(),
 	}
 }
 
@@ -148,17 +157,23 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 	return c, nil
 }
 
-// Start initializes and starts the cluster with the given node.Add a comment on line R154Add diff commentMarkdown input:  edit mode selected.WritePreviewAdd a suggestionHeadingBoldItalicQuoteCodeLinkUnordered listNumbered listTask listMentionReferenceSaved repliesAdd FilesPaste, drop, or click to add filesCancelCommentStart a reviewReturn to code
+// Start initializes and starts the cluster with the given node.
 // It performs the following operations in sequence:
 // 1. Sets the node on the cluster
-// 2. Registers the node with etcd
-// 3. Starts watching cluster state changes
-// 4. Starts node connections
-// 5. Starts shard mapping management
+// 2. Sets the cluster's ShardLock on the node
+// 3. Registers the node with etcd
+// 4. Starts watching cluster state changes
+// 5. Starts node connections
+// 6. Starts shard mapping management
 //
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
+	// Set the cluster's ShardLock on the node for per-cluster isolation
+	if c.thisNode != nil {
+		c.thisNode.SetShardLock(c.shardLock)
+	}
+
 	// Register this node with etcd
 	if err := c.registerNode(ctx); err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
@@ -297,6 +312,11 @@ func (c *Cluster) ResetForTesting() {
 
 func (c *Cluster) GetThisNode() *node.Node {
 	return c.thisNode
+}
+
+// GetShardLock returns the cluster's ShardLock instance
+func (c *Cluster) GetShardLock() *shardlock.ShardLock {
+	return c.shardLock
 }
 
 // ClusterReady returns a channel that will be closed when the cluster is ready.
