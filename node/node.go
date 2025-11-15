@@ -59,8 +59,7 @@ type Node struct {
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock // Per-object ID locking for create/delete/call/save coordination
-	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster)
-	shardLockMu           sync.RWMutex // Protects shardLock field
+	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
@@ -164,18 +163,9 @@ func (node *Node) GetAdvertiseAddress() string {
 }
 
 // SetShardLock sets the cluster's ShardLock instance for this node
-// This should be called by the cluster after initialization
+// This must be called during initialization before the node is used concurrently
 func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
-	node.shardLockMu.Lock()
-	defer node.shardLockMu.Unlock()
 	node.shardLock = sl
-}
-
-// getShardLock safely retrieves the ShardLock instance
-func (node *Node) getShardLock() *shardlock.ShardLock {
-	node.shardLockMu.RLock()
-	defer node.shardLockMu.RUnlock()
-	return node.shardLock
 }
 
 func (node *Node) RegisterClientType(clientObj ClientObject) {
@@ -429,9 +419,8 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	// Acquire shard read lock to prevent concurrent ownership transitions
 	// This ensures the shard mapping remains stable during object creation
 	// Lock ordering: shard RLock → per-key Lock → objectsMu
-	sl := node.getShardLock()
-	if sl != nil {
-		unlockShard := sl.AcquireRead(id)
+	if node.shardLock != nil {
+		unlockShard := node.shardLock.AcquireRead(id)
 		defer unlockShard()
 	}
 
