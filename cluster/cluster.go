@@ -159,6 +159,12 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
+	// Set the consensus manager as the shard locker for the node
+	// This enables shard-level locking in node operations
+	if c.consensusManager != nil {
+		c.thisNode.SetShardLocker(c.consensusManager)
+	}
+
 	// Register this node with etcd
 	if err := c.registerNode(ctx); err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
@@ -373,11 +379,6 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("ThisNode is not set")
 	}
 
-	// Acquire shard read lock to prevent concurrent ownership transitions
-	// This ensures the shard mapping remains stable during validation and processing
-	unlockShard := c.consensusManager.AcquireShardReadLock(id)
-	defer unlockShard()
-
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
@@ -447,11 +448,6 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	if objID == "" {
 		objID = objType + "-" + uniqueid.UniqueId()
 	}
-
-	// Acquire shard read lock to prevent concurrent ownership transitions
-	// This ensures the shard mapping remains stable during validation and creation
-	unlockShard := c.consensusManager.AcquireShardReadLock(objID)
-	defer unlockShard()
 
 	// Determine which node should host this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, objID)
