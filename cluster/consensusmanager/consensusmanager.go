@@ -12,7 +12,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
-	"github.com/xiaonanln/goverse/util/keylock"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/workerpool"
@@ -129,9 +129,6 @@ type ConsensusManager struct {
 	mu    sync.RWMutex
 	state *ClusterState
 
-	// Shard-level locking to prevent race conditions during ownership transitions
-	shardLock *keylock.KeyLock
-
 	// Configuration
 	minQuorum int // minimal number of nodes required for cluster to be considered stable
 
@@ -157,7 +154,6 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager) *ConsensusManager {
 			},
 			// LastChange and Revision are zero initially, set when loading from etcd
 		},
-		shardLock: keylock.NewKeyLock(),
 		listeners: make([]StateChangeListener, 0),
 	}
 }
@@ -701,20 +697,6 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 	return shardInfo.CurrentNode, nil
 }
 
-// AcquireShardReadLock acquires a read lock on the shard for the given object ID.
-// This prevents concurrent shard ownership transitions during object operations.
-// Returns an unlock function that MUST be called to release the lock.
-// For objects with fixed node addresses (containing "/"), no lock is acquired.
-func (cm *ConsensusManager) AcquireShardReadLock(objectID string) func() {
-	// Skip locking for fixed node addresses
-	if strings.Contains(objectID, "/") {
-		return func() {} // No-op unlock
-	}
-
-	shardID := sharding.GetShardID(objectID)
-	return cm.shardLock.RLock(shardLockKey(shardID))
-}
-
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
 // Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
 // The function uses conditional puts based on ModRevision to ensure consistency.
@@ -866,7 +848,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	// This ensures no CreateObject/CallObject can proceed while we're claiming ownership
 	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
-		unlock := cm.shardLock.Lock(shardLockKey(shardID))
+		unlock := shardlock.AcquireWrite(shardID)
 		unlockFuncs = append(unlockFuncs, unlock)
 	}
 	// Release all locks when done
@@ -955,7 +937,7 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	// This ensures no CreateObject/CallObject can proceed while we're transferring ownership
 	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
-		unlock := cm.shardLock.Lock(shardLockKey(shardID))
+		unlock := shardlock.AcquireWrite(shardID)
 		unlockFuncs = append(unlockFuncs, unlock)
 	}
 	// Release all locks when done
@@ -1288,9 +1270,4 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 	}
 
 	return objectsToEvict
-}
-
-// shardLockKey converts a shard ID to a lock key for shard-level locking
-func shardLockKey(shardID int) string {
-	return strconv.Itoa(shardID)
 }
