@@ -764,6 +764,7 @@ func (c *Cluster) shardMappingManagementLoop() {
 			return
 		case <-ticker.C:
 			c.handleShardMappingCheck()
+			c.checkAndMarkReady()
 			c.updateMetrics()
 		}
 	}
@@ -789,7 +790,6 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.removeObjectsNotBelongingToThisNode(ctx)
 	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
-	c.checkAndMarkReady()
 }
 
 func (c *Cluster) updateMetrics() {
