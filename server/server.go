@@ -13,7 +13,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	client_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
@@ -251,18 +250,8 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 		return fmt.Errorf("object %s is sharded to node %s, not this node %s", objectID, targetNode, thisNodeAddr)
 	}
 
-	// Additional validation: Check shard mapping to prevent creation during shard transition
-	// This mitigates the race condition where operations arrive during shard release
-	shardID := sharding.GetShardID(objectID)
-	shardMapping := clusterInstance.GetShardMapping(ctx)
-	if shardMapping != nil && shardMapping.Shards != nil {
-		if shardInfo, exists := shardMapping.Shards[shardID]; exists {
-			// Only check if TargetNode is explicitly set (not empty)
-			if shardInfo.TargetNode != "" && shardInfo.TargetNode != thisNodeAddr {
-				return fmt.Errorf("object %s shard is targeted to node %s, not this node %s", objectID, shardInfo.TargetNode, thisNodeAddr)
-			}
-		}
-	}
+	// GetCurrentNodeForObject already validates that shards are not in migration state
+	// (i.e., TargetNode == CurrentNode), so no additional validation needed here
 
 	return nil
 }

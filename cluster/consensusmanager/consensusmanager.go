@@ -656,6 +656,11 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 		return "", fmt.Errorf("current node %s for shard %d is not in active node list", shardInfo.CurrentNode, shardID)
 	}
 
+	// Fail if TargetNode differs from CurrentNode (shard is in migration state)
+	if shardInfo.TargetNode != "" && shardInfo.TargetNode != shardInfo.CurrentNode {
+		return "", fmt.Errorf("shard %d is in migration from %s to %s", shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
+	}
+
 	return shardInfo.CurrentNode, nil
 }
 
