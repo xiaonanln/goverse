@@ -624,7 +624,6 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 		if len(parts) >= 1 && parts[0] != "" {
 			// Fixed node address specified (first part before /)
 			nodeAddr := parts[0]
-			cm.logger.Debugf("Object %s pinned to node %s", objectID, nodeAddr)
 			return nodeAddr, nil
 		}
 	}
@@ -1231,7 +1230,7 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 
 		// Check if this shard belongs to this node
 		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
-		
+
 		// Evict objects in the following cases:
 		// 1. Shard does not exist in the mapping (orphaned shard)
 		// 2. CurrentNode is not this node (object belongs to another node)

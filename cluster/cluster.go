@@ -687,6 +687,13 @@ func (c *Cluster) GetShardMapping(ctx context.Context) *consensusmanager.ShardMa
 // the part before the first "/" is treated as a fixed node address and returned directly.
 // Otherwise, the object is assigned to a node based on shard mapping.
 func (c *Cluster) GetCurrentNodeForObject(ctx context.Context, objectID string) (string, error) {
+	if strings.Contains(objectID, "/") {
+		parts := strings.SplitN(objectID, "/", 2)
+		// Fixed node address specified (first part before /)
+		nodeAddr := parts[0]
+		return nodeAddr, nil
+	}
+
 	return c.consensusManager.GetCurrentNodeForObject(objectID)
 }
 
