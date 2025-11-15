@@ -848,8 +848,15 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 
 	// Acquire write locks on all shards being claimed to prevent concurrent operations
 	// This ensures no CreateObject/CallObject can proceed while we're claiming ownership
-	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
+	// Sort shard IDs to acquire locks in consistent order to prevent deadlock
+	shardIDs := make([]int, 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
+		shardIDs = append(shardIDs, shardID)
+	}
+	slices.Sort(shardIDs)
+
+	unlockFuncs := make([]func(), 0, len(shardIDs))
+	for _, shardID := range shardIDs {
 		unlock := cm.shardLock.AcquireWrite(shardID)
 		unlockFuncs = append(unlockFuncs, unlock)
 	}
@@ -937,8 +944,15 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 
 	// Acquire write locks on all shards being released to prevent concurrent operations
 	// This ensures no CreateObject/CallObject can proceed while we're transferring ownership
-	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
+	// Sort shard IDs to acquire locks in consistent order to prevent deadlock
+	shardIDs := make([]int, 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
+		shardIDs = append(shardIDs, shardID)
+	}
+	slices.Sort(shardIDs)
+
+	unlockFuncs := make([]func(), 0, len(shardIDs))
+	for _, shardID := range shardIDs {
 		unlock := cm.shardLock.AcquireWrite(shardID)
 		unlockFuncs = append(unlockFuncs, unlock)
 	}
