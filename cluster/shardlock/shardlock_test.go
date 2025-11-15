@@ -258,3 +258,69 @@ func TestShardLock_MultipleInstances(t *testing.T) {
 		t.Errorf("Multiple ShardLock instances interfered: took %v (expected ~50ms)", duration)
 	}
 }
+
+func TestShardLock_AcquireWriteMultiple(t *testing.T) {
+	sl := NewShardLock()
+
+	// Test empty slice
+	unlock := sl.AcquireWriteMultiple([]int{})
+	unlock() // Should be no-op
+
+	// Test single shard
+	unlock = sl.AcquireWriteMultiple([]int{5})
+	unlock()
+
+	// Test multiple shards
+	shardIDs := []int{3, 1, 5, 2, 4}
+	unlock = sl.AcquireWriteMultiple(shardIDs)
+	
+	// Verify original slice wasn't modified
+	if shardIDs[0] != 3 {
+		t.Errorf("Original slice was modified")
+	}
+	
+	unlock()
+}
+
+func TestShardLock_AcquireWriteMultiple_PreventDeadlock(t *testing.T) {
+	sl := NewShardLock()
+
+	// Test that two goroutines acquiring the same shards in different order
+	// don't deadlock when using AcquireWriteMultiple
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Goroutine 1: acquires shards [1, 2, 3]
+	go func() {
+		defer wg.Done()
+		unlock := sl.AcquireWriteMultiple([]int{1, 2, 3})
+		time.Sleep(50 * time.Millisecond)
+		unlock()
+	}()
+
+	// Small delay to ensure first goroutine acquires some locks
+	time.Sleep(10 * time.Millisecond)
+
+	// Goroutine 2: tries to acquire shards [3, 2, 1] (reversed order)
+	// This would deadlock without sorting, but should work fine with sorting
+	go func() {
+		defer wg.Done()
+		unlock := sl.AcquireWriteMultiple([]int{3, 2, 1})
+		time.Sleep(50 * time.Millisecond)
+		unlock()
+	}()
+
+	// Wait with timeout to detect deadlock
+	done := make(chan bool)
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success - no deadlock
+	case <-time.After(5 * time.Second):
+		t.Fatal("Deadlock detected - test timed out")
+	}
+}
