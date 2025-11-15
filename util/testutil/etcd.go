@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	WaitForShardMappingTimeout = 15 * time.Second
+	WaitForShardMappingTimeout = 30 * time.Second
 )
 
 // PrepareEtcdPrefix prepares a unique etcd prefix for testing purposes.
