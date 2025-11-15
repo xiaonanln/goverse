@@ -846,6 +846,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 
 	// Acquire write locks on all shards being claimed to prevent concurrent operations
 	// This ensures no CreateObject/CallObject can proceed while we're claiming ownership
+	lockStartTime := time.Now()
 	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
 		unlock := shardlock.AcquireWrite(shardID)
@@ -857,6 +858,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 			unlock()
 		}
 	}()
+	cm.logger.Infof("Acquired write locks for %d shards in %d ms", len(shardsToUpdate), time.Since(lockStartTime).Milliseconds())
 
 	// Store all updated shards at once
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
@@ -935,6 +937,7 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 
 	// Acquire write locks on all shards being released to prevent concurrent operations
 	// This ensures no CreateObject/CallObject can proceed while we're transferring ownership
+	lockStartTime := time.Now()
 	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
 		unlock := shardlock.AcquireWrite(shardID)
@@ -946,6 +949,7 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 			unlock()
 		}
 	}()
+	cm.logger.Infof("Acquired write locks for %d shards in %d ms", len(shardsToUpdate), time.Since(lockStartTime).Milliseconds())
 
 	// Store all updated shards at once
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
