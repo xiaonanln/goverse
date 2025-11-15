@@ -16,7 +16,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
-	// The object ID format "nodeAddress/objectID" causes GetNodeForObject
+	// The object ID format "nodeAddress/objectID" causes GetCurrentNodeForObject
 	// to return the node address directly without consulting shard mapping
 
 	// Register a simple object type for testing

@@ -84,9 +84,9 @@ func TestDistributedCreateObject(t *testing.T) {
 			} else {
 				creatorCluster = cluster1
 			}
-			targetNode, err := creatorCluster.GetNodeForObject(ctx, objID)
+			targetNode, err := creatorCluster.GetCurrentNodeForObject(ctx, objID)
 			if err != nil {
-				t.Fatalf("GetNodeForObject failed for %s: %v", objID, err)
+				t.Fatalf("GetCurrentNodeForObject failed for %s: %v", objID, err)
 			}
 			t.Logf("Creating object %s from %s, expect target node %s", objID, creatorCluster.GetThisNode().GetAdvertiseAddress(), targetNode)
 
@@ -135,9 +135,9 @@ func TestDistributedCreateObject(t *testing.T) {
 		}
 
 		// Get the target node to verify object count later
-		targetNode, err := cluster1.GetNodeForObject(ctx, objID)
+		targetNode, err := cluster1.GetCurrentNodeForObject(ctx, objID)
 		if err != nil {
-			t.Fatalf("GetNodeForObject failed: %v", err)
+			t.Fatalf("GetCurrentNodeForObject failed: %v", err)
 		}
 
 		var objectNode *node.Node
@@ -194,7 +194,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	ctx := context.Background()
 
 	// Create 3 clusters using mustNewCluster
-	// Note: No object registration needed since this test only calls GetNodeForObject
+	// Note: No object registration needed since this test only calls GetCurrentNodeForObject
 	clusters := []*Cluster{
 		mustNewCluster(ctx, t, "localhost:47011", testPrefix),
 		mustNewCluster(ctx, t, "localhost:47012", testPrefix),
@@ -236,9 +236,9 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	// (We test the routing logic without actually creating on remote nodes)
 	shardCounts := make(map[string]int)
 	for _, objID := range createdObjectIDs {
-		targetNode, err := clusters[0].GetNodeForObject(ctx, objID)
+		targetNode, err := clusters[0].GetCurrentNodeForObject(ctx, objID)
 		if err != nil {
-			t.Fatalf("GetNodeForObject failed: %v", err)
+			t.Fatalf("GetCurrentNodeForObject failed: %v", err)
 		}
 		shardCounts[targetNode]++
 	}

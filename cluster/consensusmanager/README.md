@@ -79,7 +79,7 @@ All queries are served from in-memory state (no etcd round-trip):
 - `GetNodes()` - List of registered nodes
 - `GetLeaderNode()` - Current leader (lexicographically smallest node)
 - `GetShardMapping()` - Current shard assignments
-- `GetNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode only; fails if not set or not alive)
+- `GetCurrentNodeForObject(objectID)` - Which node currently handles this object (uses CurrentNode only; fails if not set or not alive)
 - `GetNodeForShard(shardID)` - Which node currently owns this shard (uses CurrentNode only; fails if not set or not alive)
 
 ### State Modifications (Leader only)
@@ -96,7 +96,7 @@ Each shard has two node references:
 - **TargetNode**: The node that should handle this shard (desired state) - used for planning/migration only
 - **CurrentNode**: The node that currently handles this shard (actual state) - used for object routing
 
-**Important**: `GetNodeForObject` and `GetNodeForShard` use **only** `CurrentNode` for routing. They never fall back to `TargetNode`. This ensures:
+**Important**: `GetCurrentNodeForObject` and `GetNodeForShard` use **only** `CurrentNode` for routing. They never fall back to `TargetNode`. This ensures:
 
 1. **Correct routing**: Objects are always routed to where they actually exist
 2. **Fail-fast on unclaimed shards**: If `CurrentNode` is not set, the lookup fails immediately
@@ -160,7 +160,7 @@ if leader == myNodeAddress {
 }
 
 // Find which node handles an object
-node, _ := cm.GetNodeForObject("user-12345")
+node, _ := cm.GetCurrentNodeForObject("user-12345")
 
 // Cleanup
 cm.StopWatch()

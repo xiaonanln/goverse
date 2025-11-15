@@ -374,7 +374,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Determine which node hosts this object
-	nodeAddr, err := c.GetNodeForObject(ctx, id)
+	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
@@ -444,7 +444,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	}
 
 	// Determine which node should host this object
-	nodeAddr, err := c.GetNodeForObject(ctx, objID)
+	nodeAddr, err := c.GetCurrentNodeForObject(ctx, objID)
 	if err != nil {
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
@@ -493,7 +493,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	}
 
 	// Determine which node hosts this object
-	nodeAddr, err := c.GetNodeForObject(ctx, objID)
+	nodeAddr, err := c.GetCurrentNodeForObject(ctx, objID)
 	if err != nil {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
@@ -682,11 +682,11 @@ func (c *Cluster) GetShardMapping(ctx context.Context) *consensusmanager.ShardMa
 	return c.consensusManager.GetShardMapping()
 }
 
-// GetNodeForObject returns the node address that should handle the given object ID
+// GetCurrentNodeForObject returns the node address that should handle the given object ID
 // If the object ID contains a "/" separator (e.g., "localhost:7001/object-123"),
 // the part before the first "/" is treated as a fixed node address and returned directly.
 // Otherwise, the object is assigned to a node based on shard mapping.
-func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string, error) {
+func (c *Cluster) GetCurrentNodeForObject(ctx context.Context, objectID string) (string, error) {
 	// Check if object ID specifies a fixed node address
 	// Format: nodeAddress/actualObjectID (e.g., "localhost:7001/object-123")
 	// This doesn't require consensus manager
@@ -699,7 +699,7 @@ func (c *Cluster) GetNodeForObject(ctx context.Context, objectID string) (string
 	}
 
 	// For standard shard-based routing, use consensus manager
-	return c.consensusManager.GetNodeForObject(objectID)
+	return c.consensusManager.GetCurrentNodeForObject(objectID)
 }
 
 // GetNodeForShard returns the node address that owns the given shard

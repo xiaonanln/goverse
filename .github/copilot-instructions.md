@@ -652,9 +652,9 @@ When testing that objects are created on the correct nodes:
 
 ```go
 // Get target node for an object based on shard mapping
-targetNode, err := cluster.GetNodeForObject(ctx, objID)
+targetNode, err := cluster.GetCurrentNodeForObject(ctx, objID)
 if err != nil {
-    t.Fatalf("GetNodeForObject failed: %v", err)
+    t.Fatalf("GetCurrentNodeForObject failed: %v", err)
 }
 
 // Create the object (will be routed to target node)
@@ -754,7 +754,7 @@ if err != nil {
 defer c.StopShardMappingManagement()
 
 // Get node for an object (any node can call this)
-node, err := c.GetNodeForObject(ctx, "object-123")
+node, err := c.GetCurrentNodeForObject(ctx, "object-123")
 if err != nil {
     log.Fatal(err)
 }

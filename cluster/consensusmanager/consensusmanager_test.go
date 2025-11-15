@@ -447,17 +447,17 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 	}
 }
 
-func TestGetNodeForObject_NoMapping(t *testing.T) {
+func TestGetCurrentNodeForObject_NoMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	_, err := cm.GetNodeForObject("test-object")
+	_, err := cm.GetCurrentNodeForObject("test-object")
 	if err == nil {
 		t.Error("Expected error when no shard mapping available")
 	}
 }
 
-func TestGetNodeForObject_WithMapping(t *testing.T) {
+func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
@@ -479,7 +479,7 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Get node for an object
-	node, err := cm.GetNodeForObject("test-object-123")
+	node, err := cm.GetCurrentNodeForObject("test-object-123")
 	if err != nil {
 		t.Fatalf("Failed to get node for object: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestGetNodeForObject_WithMapping(t *testing.T) {
 	}
 }
 
-func TestGetNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
+func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
@@ -508,7 +508,7 @@ func TestGetNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Should fail because CurrentNode is not set
-	_, err := cm.GetNodeForObject("test-object-123")
+	_, err := cm.GetCurrentNodeForObject("test-object-123")
 	if err == nil {
 		t.Error("Expected error when CurrentNode is empty")
 	}
@@ -518,7 +518,7 @@ func TestGetNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	}
 }
 
-func TestGetNodeForObject_PrefersCurrentNode(t *testing.T) {
+func TestGetCurrentNodeForObject_PrefersCurrentNode(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
@@ -540,7 +540,7 @@ func TestGetNodeForObject_PrefersCurrentNode(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Get node for an object - should return CurrentNode
-	node, err := cm.GetNodeForObject("test-object-123")
+	node, err := cm.GetCurrentNodeForObject("test-object-123")
 	if err != nil {
 		t.Fatalf("Failed to get node for object: %v", err)
 	}
@@ -551,7 +551,7 @@ func TestGetNodeForObject_PrefersCurrentNode(t *testing.T) {
 	}
 
 	// Test with a different object to ensure it works for different shards
-	node2, err := cm.GetNodeForObject("another-object-456")
+	node2, err := cm.GetCurrentNodeForObject("another-object-456")
 	if err != nil {
 		t.Fatalf("Failed to get node for object: %v", err)
 	}
@@ -588,7 +588,7 @@ func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	}
 }
 
-func TestGetNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
+func TestGetCurrentNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
@@ -609,7 +609,7 @@ func TestGetNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Should fail because CurrentNode is not in the active node list
-	_, err := cm.GetNodeForObject("test-object-123")
+	_, err := cm.GetCurrentNodeForObject("test-object-123")
 	if err == nil {
 		t.Error("Expected error when CurrentNode is not in active node list")
 	}

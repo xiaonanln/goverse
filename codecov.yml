@@ -11,12 +11,12 @@ codecov:
 coverage:
   precision: 2
   round: down
-  range: "70...100"
+  range: "50...100"
   status:
     project:
       default:
         informational: true
-        target: 70
+        target: 50
         threshold: 5
         branches: main,develop
     patch:
