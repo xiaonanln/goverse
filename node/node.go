@@ -50,6 +50,11 @@ type ClientObject = client.ClientObject
 // - Calls and saves can proceed concurrently on the same object
 // - Deletes wait for all calls/saves to complete before removing object
 // - Creates prevent any calls/saves/deletes until object is fully initialized
+// ShardLocker provides shard-level locking to prevent concurrent ownership transitions
+type ShardLocker interface {
+	AcquireShardReadLock(objectID string) func()
+}
+
 type Node struct {
 	advertiseAddress      string
 	objectTypes           map[string]reflect.Type
@@ -58,6 +63,7 @@ type Node struct {
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock // Per-object ID locking for create/delete/call/save coordination
+	shardLocker           ShardLocker      // Optional shard-level locker for cluster coordination
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
@@ -368,7 +374,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	// Return the actual result from the method
 	resp, errVal := results[0], results[1]
-	
+
 	if !errVal.IsNil() {
 		callErr = errVal.Interface().(error)
 		return nil, callErr
@@ -380,6 +386,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 // CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string) (string, error) {
+	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
@@ -406,6 +413,12 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	if id == "" {
 		return fmt.Errorf("object ID must be specified")
 	}
+
+	// Acquire shard read lock to prevent concurrent ownership transitions
+	// This ensures the shard mapping remains stable during object creation
+	// Lock ordering: shard RLock → per-key Lock → objectsMu
+	unlockShard := node.acquireShardReadLock(id)
+	defer unlockShard()
 
 	// Check if object already exists first (with just objectsMu read lock)
 	node.objectsMu.RLock()
@@ -844,4 +857,23 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// SetShardLocker sets the shard locker for cluster coordination
+// This should be called by the cluster during initialization
+func (node *Node) SetShardLocker(locker ShardLocker) {
+	node.shardLocker = locker
+}
+
+// acquireShardReadLock acquires a read lock on the shard for the given object ID.
+// This prevents concurrent shard ownership transitions during object operations.
+// Returns an unlock function that MUST be called to release the lock.
+// If no shard locker is configured, returns a no-op unlock function.
+func (node *Node) acquireShardReadLock(objectID string) func() {
+	if node.shardLocker == nil {
+		// No shard locker configured, return no-op
+		return func() {}
+	}
+
+	return node.shardLocker.AcquireShardReadLock(objectID)
 }
