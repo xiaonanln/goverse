@@ -349,17 +349,17 @@ func (c *Cluster) checkAndMarkReady() {
 
 	// Check if shard mapping is available
 	if c.consensusManager == nil {
-		c.logger.Debugf("Cannot mark cluster ready: consensus manager not initialized")
+		c.logger.Infof("Cannot mark cluster ready: consensus manager not initialized")
 		return
 	}
 
 	if !c.consensusManager.IsReady() {
-		c.logger.Debugf("Cannot mark cluster ready: consensus manager not ready")
+		c.logger.Infof("Cannot mark cluster ready: consensus manager not ready")
 		return
 	}
 
 	if !c.consensusManager.IsStateStable(c.getEffectiveNodeStabilityDuration()) {
-		c.logger.Debugf("Cannot mark cluster ready: cluster state not stable yet, will check again later")
+		c.logger.Infof("Cannot mark cluster ready: cluster state not stable yet, will check again later")
 		return
 	}
 
@@ -744,6 +744,7 @@ func (c *Cluster) shardMappingManagementLoop() {
 			return
 		case <-ticker.C:
 			c.handleShardMappingCheck()
+			c.checkAndMarkReady()
 			c.updateMetrics()
 		}
 	}
@@ -769,7 +770,6 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.removeObjectsNotBelongingToThisNode(ctx)
 	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
-	c.checkAndMarkReady()
 }
 
 func (c *Cluster) updateMetrics() {
