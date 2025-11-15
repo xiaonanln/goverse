@@ -518,11 +518,11 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	}
 }
 
-func TestGetCurrentNodeForObject_PrefersCurrentNode(t *testing.T) {
+func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr)
 
-	// Set a complete mapping where some shards have CurrentNode set
+	// Set a complete mapping where shards are in migration state
 	cm.mu.Lock()
 	// Add nodes to the state so CurrentNode validation passes
 	cm.state.Nodes["localhost:47001"] = true
@@ -531,6 +531,7 @@ func TestGetCurrentNodeForObject_PrefersCurrentNode(t *testing.T) {
 		Shards: make(map[int]ShardInfo),
 	}
 	// For all shards, set TargetNode to localhost:47001 but CurrentNode to localhost:47002
+	// This simulates a migration in progress
 	for i := 0; i < sharding.NumShards; i++ {
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  "localhost:47001",
@@ -539,25 +540,22 @@ func TestGetCurrentNodeForObject_PrefersCurrentNode(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Get node for an object - should return CurrentNode
+	// Get node for an object - should fail because shard is in migration
 	node, err := cm.GetCurrentNodeForObject("test-object-123")
-	if err != nil {
-		t.Fatalf("Failed to get node for object: %v", err)
+	if err == nil {
+		t.Fatalf("Expected error when shard is in migration, but got node: %s", node)
 	}
 
-	// Should return CurrentNode (localhost:47002) not TargetNode (localhost:47001)
-	if node != "localhost:47002" {
-		t.Errorf("Expected CurrentNode localhost:47002, got %s", node)
+	// Verify error message mentions migration
+	expectedMsg := "is in migration"
+	if !strings.Contains(err.Error(), expectedMsg) {
+		t.Errorf("Expected error message to contain '%s', got: %v", expectedMsg, err)
 	}
 
-	// Test with a different object to ensure it works for different shards
+	// Test with a different object to ensure it consistently fails during migration
 	node2, err := cm.GetCurrentNodeForObject("another-object-456")
-	if err != nil {
-		t.Fatalf("Failed to get node for object: %v", err)
-	}
-
-	if node2 != "localhost:47002" {
-		t.Errorf("Expected CurrentNode localhost:47002 for second object, got %s", node2)
+	if err == nil {
+		t.Fatalf("Expected error when shard is in migration, but got node: %s", node2)
 	}
 }
 
