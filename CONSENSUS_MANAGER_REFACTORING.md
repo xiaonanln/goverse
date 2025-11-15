@@ -33,7 +33,7 @@ This refactoring introduces a new `ConsensusManager` component that centralizes 
   - `GetNodes()` - now delegates to ConsensusManager
   - `GetLeaderNode()` - now delegates to ConsensusManager
   - `GetShardMapping()` - now reads from ConsensusManager in-memory state
-  - `GetNodeForObject()` - no etcd call needed
+  - `GetCurrentNodeForObject()` - no etcd call needed
   - `GetNodeForShard()` - instant lookup from memory
   - `WatchNodes()` - initializes and starts ConsensusManager watch
 

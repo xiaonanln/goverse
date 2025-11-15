@@ -35,7 +35,7 @@ All methods that previously checked `if c.etcdManager == nil` or `if c.consensus
 - `InitializeShardMapping()`
 - `UpdateShardMapping()`
 - `GetShardMapping()`
-- `GetNodeForObject()` (for shard-based routing)
+- `GetCurrentNodeForObject()` (for shard-based routing)
 - `GetNodeForShard()`
 - `StartShardMappingManagement()`
 

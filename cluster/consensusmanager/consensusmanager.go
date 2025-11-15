@@ -611,12 +611,12 @@ func (cm *ConsensusManager) GetShardMapping() *ShardMapping {
 	return &ShardMapping{Shards: shardsCopy}
 }
 
-// GetNodeForObject returns the node that should handle the given object ID
+// GetCurrentNodeForObject returns the node that should handle the given object ID
 // If the object ID contains a "/" separator (e.g., "localhost:7001/object-123"),
 // the part before the first "/" is treated as a fixed node address and returned directly.
 // This allows objects to be pinned to specific nodes, similar to client IDs.
 // Otherwise, the object is assigned to a node based on consistent hashing.
-func (cm *ConsensusManager) GetNodeForObject(objectID string) (string, error) {
+func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, error) {
 	// Check if object ID specifies a fixed node address
 	// Format: nodeAddress/actualObjectID (e.g., "localhost:7001/object-123")
 	if strings.Contains(objectID, "/") {

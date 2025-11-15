@@ -39,7 +39,7 @@ if err != nil {
 }
 
 // Get node for an object
-node, err := mapper.GetNodeForObject(ctx, "object-123")
+node, err := mapper.GetCurrentNodeForObject(ctx, "object-123")
 if err != nil {
     log.Fatal(err)
 }
@@ -70,7 +70,7 @@ if c.IsLeader() {
 }
 
 // Get node for an object (any node can call this)
-node, err := c.GetNodeForObject(ctx, "object-123")
+node, err := c.GetCurrentNodeForObject(ctx, "object-123")
 if err != nil {
     log.Fatal(err)
 }
@@ -140,7 +140,7 @@ The cluster leader (node with smallest address) is responsible for:
 
 - Local caching: Mappings are cached in memory after first read
 - Cache invalidation: Use `InvalidateCache()` to force reload from etcd
-- Lookup complexity: O(1) for both GetNodeForShard and GetNodeForObject
+- Lookup complexity: O(1) for both GetNodeForShard and GetCurrentNodeForObject
 
 ## Testing
 

@@ -29,7 +29,7 @@ type ServerConfig struct {
 	ListenAddress             string
 	AdvertiseAddress          string
 	ClientListenAddress       string
-	MetricsListenAddress      string        // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
+	MetricsListenAddress      string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress               string
 	EtcdPrefix                string        // Optional: etcd key prefix for this cluster (default: "/goverse")
 	MinQuorum                 int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
@@ -241,7 +241,7 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 	}
 
 	// Check with cluster that this ID is sharded to this node
-	targetNode, err := clusterInstance.GetNodeForObject(ctx, objectID)
+	targetNode, err := clusterInstance.GetCurrentNodeForObject(ctx, objectID)
 	if err != nil {
 		return fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
 	}
@@ -274,10 +274,10 @@ func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientServ
 	if err != nil {
 		return fmt.Errorf("failed to register client: %v", err)
 	}
-	
+
 	// Record client connection
 	metrics.RecordClientConnected(server.config.AdvertiseAddress, "grpc")
-	
+
 	defer func() {
 		server.Node.UnregisterClient(server.ctx, clientId)
 		// Record client disconnection
@@ -383,7 +383,7 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 	// Check with cluster that this ID is sharded to this node
 	clusterInstance := cluster.This()
 	if clusterInstance != nil && clusterInstance.GetThisNode() != nil {
-		targetNode, err := clusterInstance.GetNodeForObject(ctx, req.GetId())
+		targetNode, err := clusterInstance.GetCurrentNodeForObject(ctx, req.GetId())
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine target node for object %s: %w", req.GetId(), err)
 		}

@@ -47,8 +47,8 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 		}
 	})
 
-	// Test GetNodeForObject
-	t.Run("GetNodeForObject", func(t *testing.T) {
+	// Test GetCurrentNodeForObject
+	t.Run("GetCurrentNodeForObject", func(t *testing.T) {
 		testCases := []string{
 			"object1",
 			"object2",
@@ -58,15 +58,15 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 
 		for _, objectID := range testCases {
 			// Both clusters should agree on which node owns the object
-			node1, err := cluster1.GetNodeForObject(ctx, objectID)
+			node1, err := cluster1.GetCurrentNodeForObject(ctx, objectID)
 			if err != nil {
-				t.Errorf("cluster1.GetNodeForObject(%s) error: %v", objectID, err)
+				t.Errorf("cluster1.GetCurrentNodeForObject(%s) error: %v", objectID, err)
 				continue
 			}
 
-			node2, err := cluster2.GetNodeForObject(ctx, objectID)
+			node2, err := cluster2.GetCurrentNodeForObject(ctx, objectID)
 			if err != nil {
-				t.Errorf("cluster2.GetNodeForObject(%s) error: %v", objectID, err)
+				t.Errorf("cluster2.GetCurrentNodeForObject(%s) error: %v", objectID, err)
 				continue
 			}
 
@@ -75,9 +75,9 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 			}
 
 			// Verify consistency
-			node1b, _ := cluster1.GetNodeForObject(ctx, objectID)
+			node1b, _ := cluster1.GetCurrentNodeForObject(ctx, objectID)
 			if node1 != node1b {
-				t.Errorf("GetNodeForObject(%s) not consistent: %s vs %s", objectID, node1, node1b)
+				t.Errorf("GetCurrentNodeForObject(%s) not consistent: %s vs %s", objectID, node1, node1b)
 			}
 		}
 	})
