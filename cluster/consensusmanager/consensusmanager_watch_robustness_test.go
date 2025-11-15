@@ -10,6 +10,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/util/testutil"
+"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // canEtcdRestart checks if etcd can be restarted in the current environment
@@ -39,7 +40,7 @@ func TestWatchReconnection(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Initialize and start watch
 	err = cm.Initialize(ctx)

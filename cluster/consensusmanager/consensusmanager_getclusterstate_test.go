@@ -5,12 +5,13 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestGetClusterState_Empty tests GetClusterState with empty state
 func TestGetClusterState_Empty(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Call GetClusterState - should return a cloned state
 	state := cm.GetClusterState()
@@ -31,7 +32,7 @@ func TestGetClusterState_Empty(t *testing.T) {
 // TestGetClusterState_WithData tests GetClusterState with populated state
 func TestGetClusterState_WithData(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -78,7 +79,7 @@ func TestGetClusterState_WithData(t *testing.T) {
 // TestGetClusterState_IsIndependent tests that the cloned state is independent
 func TestGetClusterState_IsIndependent(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -108,7 +109,7 @@ func TestGetClusterState_IsIndependent(t *testing.T) {
 // TestGetClusterState_FullShardMapping tests GetClusterState with full 8192 shard mapping
 func TestGetClusterState_FullShardMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Add nodes to internal state
 	cm.mu.Lock()
