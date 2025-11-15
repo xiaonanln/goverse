@@ -1292,5 +1292,5 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 
 // shardLockKey converts a shard ID to a lock key for shard-level locking
 func shardLockKey(shardID int) string {
-	return fmt.Sprintf("shard-%d", shardID)
+	return strconv.Itoa(shardID)
 }
