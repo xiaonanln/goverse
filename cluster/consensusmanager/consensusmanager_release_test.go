@@ -9,6 +9,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/testutil"
+"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // setupShardMapping is a helper function that sets up shard mapping in both ConsensusManager
@@ -74,7 +75,7 @@ func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 
 	// Create a consensus manager without connecting to etcd
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
@@ -91,7 +92,7 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 	t.Parallel()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
@@ -125,7 +126,7 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Set up test nodes
 	thisNodeAddr := "localhost:47001"
@@ -297,7 +298,7 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Set up test nodes
 	thisNodeAddr := "localhost:47001"
@@ -387,7 +388,7 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Set up test nodes
 	thisNodeAddr := "localhost:47001"

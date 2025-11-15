@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
+"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestGetObjectsToEvict tests the GetObjectsToEvict method
 func TestGetObjectsToEvict(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock())
 
 	// Set up a test cluster state with nodes
 	cm.mu.Lock()
@@ -92,7 +93,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock())
 
 	objectIDs := []string{"TestObject-123"}
 	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
@@ -106,7 +107,7 @@ func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
 func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock())
 
 	// Set up cluster state with nodes
 	cm.mu.Lock()
@@ -146,7 +147,7 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock())
 
 	// Set up cluster state with nodes but incomplete shard mapping
 	cm.mu.Lock()
@@ -213,7 +214,7 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock())
 
 	// Set up cluster state with nodes
 	cm.mu.Lock()
@@ -293,7 +294,7 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock())
 
 	// Set up cluster state with nodes
 	cm.mu.Lock()

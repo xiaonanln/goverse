@@ -7,28 +7,37 @@ import (
 	"github.com/xiaonanln/goverse/util/keylock"
 )
 
-// Global KeyLock instance for shard-level locking
-var globalKeyLock = keylock.NewKeyLock()
+// ShardLock provides per-cluster shard-level locking to prevent lock collisions between clusters
+type ShardLock struct {
+	keyLock *keylock.KeyLock
+}
+
+// NewShardLock creates a new ShardLock instance for a cluster
+func NewShardLock() *ShardLock {
+	return &ShardLock{
+		keyLock: keylock.NewKeyLock(),
+	}
+}
 
 // AcquireRead acquires a read lock on the shard for the given object ID.
 // This prevents concurrent shard ownership transitions during object operations.
 // Returns an unlock function that MUST be called to release the lock.
 // For objects with fixed node addresses (containing "/"), no lock is acquired.
-func AcquireRead(objectID string) func() {
+func (sl *ShardLock) AcquireRead(objectID string) func() {
 	// Skip locking for fixed node addresses (e.g., client objects with format "node/id")
 	if containsSlash(objectID) {
 		return func() {} // No-op unlock
 	}
 
 	shardID := sharding.GetShardID(objectID)
-	return globalKeyLock.RLock(shardLockKey(shardID))
+	return sl.keyLock.RLock(shardLockKey(shardID))
 }
 
 // AcquireWrite acquires a write lock on the given shard ID.
 // This prevents concurrent object operations during shard ownership transitions.
 // Returns an unlock function that MUST be called to release the lock.
-func AcquireWrite(shardID int) func() {
-	return globalKeyLock.Lock(shardLockKey(shardID))
+func (sl *ShardLock) AcquireWrite(shardID int) func() {
+	return sl.keyLock.Lock(shardLockKey(shardID))
 }
 
 // shardLockKey converts a shard ID to a lock key for shard-level locking

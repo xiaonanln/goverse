@@ -7,8 +7,9 @@ import (
 )
 
 func TestAcquireRead_NormalObject(t *testing.T) {
+	sl := NewShardLock()
 	// Acquire read lock for a normal object
-	unlock := AcquireRead("test-object-123")
+	unlock := sl.AcquireRead("test-object-123")
 	if unlock == nil {
 		t.Fatal("AcquireRead returned nil unlock function")
 	}
@@ -18,8 +19,9 @@ func TestAcquireRead_NormalObject(t *testing.T) {
 }
 
 func TestAcquireRead_FixedNodeAddress(t *testing.T) {
+	sl := NewShardLock()
 	// Acquire read lock for a fixed node address (contains "/")
-	unlock := AcquireRead("localhost:7001/client-123")
+	unlock := sl.AcquireRead("localhost:7001/client-123")
 	if unlock == nil {
 		t.Fatal("AcquireRead returned nil unlock function")
 	}
@@ -29,8 +31,9 @@ func TestAcquireRead_FixedNodeAddress(t *testing.T) {
 }
 
 func TestAcquireWrite(t *testing.T) {
+	sl := NewShardLock()
 	// Acquire write lock for shard 0
-	unlock := AcquireWrite(0)
+	unlock := sl.AcquireWrite(0)
 	if unlock == nil {
 		t.Fatal("AcquireWrite returned nil unlock function")
 	}
@@ -40,6 +43,7 @@ func TestAcquireWrite(t *testing.T) {
 }
 
 func TestShardLock_ReadWriteExclusion(t *testing.T) {
+	sl := NewShardLock()
 	writeLockReleased := false
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -47,7 +51,7 @@ func TestShardLock_ReadWriteExclusion(t *testing.T) {
 	// Goroutine 1: Acquire write lock on shard 0
 	go func() {
 		defer wg.Done()
-		unlock := AcquireWrite(0)
+		unlock := sl.AcquireWrite(0)
 		time.Sleep(100 * time.Millisecond)
 		writeLockReleased = true
 		unlock()
@@ -59,7 +63,7 @@ func TestShardLock_ReadWriteExclusion(t *testing.T) {
 	// Goroutine 2: Try to acquire another write lock on shard 0 (should block)
 	go func() {
 		defer wg.Done()
-		unlock := AcquireWrite(0)
+		unlock := sl.AcquireWrite(0)
 
 		// By the time we get here, first write lock should have been released
 		if !writeLockReleased {
@@ -72,6 +76,7 @@ func TestShardLock_ReadWriteExclusion(t *testing.T) {
 }
 
 func TestShardLock_ConcurrentReads(t *testing.T) {
+	sl := NewShardLock()
 	// Multiple read locks should be able to coexist
 	// Use a simple object ID - doesn't matter which shard it maps to
 	objectID := "concurrent-test-object"
@@ -84,7 +89,7 @@ func TestShardLock_ConcurrentReads(t *testing.T) {
 	for i := 0; i < readers; i++ {
 		go func() {
 			defer wg.Done()
-			unlock := AcquireRead(objectID)
+			unlock := sl.AcquireRead(objectID)
 			defer unlock()
 			time.Sleep(50 * time.Millisecond)
 		}()
@@ -101,6 +106,7 @@ func TestShardLock_ConcurrentReads(t *testing.T) {
 }
 
 func TestShardLock_WriteExclusivity(t *testing.T) {
+	sl := NewShardLock()
 	// Multiple write locks should be serialized
 	var wg sync.WaitGroup
 	writers := 5
@@ -112,7 +118,7 @@ func TestShardLock_WriteExclusivity(t *testing.T) {
 	for i := 0; i < writers; i++ {
 		go func() {
 			defer wg.Done()
-			unlock := AcquireWrite(0)
+			unlock := sl.AcquireWrite(0)
 			defer unlock()
 
 			// Critical section
@@ -137,6 +143,7 @@ func TestShardLock_WriteExclusivity(t *testing.T) {
 }
 
 func TestShardLock_DifferentShards(t *testing.T) {
+	sl := NewShardLock()
 	// Locks on different shards should not interfere
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -149,7 +156,7 @@ func TestShardLock_DifferentShards(t *testing.T) {
 	// Lock shard 0
 	go func() {
 		defer wg.Done()
-		unlock := AcquireWrite(0)
+		unlock := sl.AcquireWrite(0)
 		defer unlock()
 		time.Sleep(50 * time.Millisecond)
 		shard0Done = true
@@ -158,7 +165,7 @@ func TestShardLock_DifferentShards(t *testing.T) {
 	// Lock shard 1
 	go func() {
 		defer wg.Done()
-		unlock := AcquireWrite(1)
+		unlock := sl.AcquireWrite(1)
 		defer unlock()
 		time.Sleep(50 * time.Millisecond)
 		shard1Done = true
@@ -214,5 +221,40 @@ func TestShardLockKey(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("shardLockKey(%d) = %q, expected %q", tt.shardID, result, tt.expected)
 		}
+	}
+}
+
+func TestShardLock_MultipleInstances(t *testing.T) {
+	// Test that different ShardLock instances don't interfere with each other
+	// This is the key test for the per-cluster isolation fix
+	sl1 := NewShardLock()
+	sl2 := NewShardLock()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	start := time.Now()
+
+	// Both instances should be able to lock the same shard ID independently
+	go func() {
+		defer wg.Done()
+		unlock := sl1.AcquireWrite(0)
+		defer unlock()
+		time.Sleep(50 * time.Millisecond)
+	}()
+
+	go func() {
+		defer wg.Done()
+		unlock := sl2.AcquireWrite(0)
+		defer unlock()
+		time.Sleep(50 * time.Millisecond)
+	}()
+
+	wg.Wait()
+	duration := time.Since(start)
+
+	// Should take ~50ms if truly independent, ~100ms if they interfere
+	if duration > 80*time.Millisecond {
+		t.Errorf("Multiple ShardLock instances interfered: took %v (expected ~50ms)", duration)
 	}
 }

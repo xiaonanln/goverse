@@ -9,6 +9,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
+"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestStorageFormat verifies that shards are stored in individual keys
@@ -29,7 +30,7 @@ func TestStorageFormat(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Set up some nodes
 	cm.mu.Lock()
@@ -138,7 +139,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Set up nodes
 	cm.mu.Lock()
@@ -198,7 +199,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 	ctx := context.Background()
 
 	// Test 1: Store new shards with ModRevision=0 (should succeed)

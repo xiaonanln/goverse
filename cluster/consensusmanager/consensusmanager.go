@@ -124,6 +124,7 @@ type StateChangeListener interface {
 type ConsensusManager struct {
 	etcdManager *etcdmanager.EtcdManager
 	logger      *logger.Logger
+	shardLock   *shardlock.ShardLock
 
 	// In-memory state
 	mu    sync.RWMutex
@@ -143,10 +144,11 @@ type ConsensusManager struct {
 }
 
 // NewConsensusManager creates a new consensus manager
-func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager) *ConsensusManager {
+func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock) *ConsensusManager {
 	return &ConsensusManager{
 		etcdManager: etcdMgr,
 		logger:      logger.NewLogger("ConsensusManager"),
+		shardLock:   shardLock,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -848,7 +850,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	// This ensures no CreateObject/CallObject can proceed while we're claiming ownership
 	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
-		unlock := shardlock.AcquireWrite(shardID)
+		unlock := cm.shardLock.AcquireWrite(shardID)
 		unlockFuncs = append(unlockFuncs, unlock)
 	}
 	// Release all locks when done
@@ -937,7 +939,7 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	// This ensures no CreateObject/CallObject can proceed while we're transferring ownership
 	unlockFuncs := make([]func(), 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
-		unlock := shardlock.AcquireWrite(shardID)
+		unlock := cm.shardLock.AcquireWrite(shardID)
 		unlockFuncs = append(unlockFuncs, unlock)
 	}
 	// Release all locks when done

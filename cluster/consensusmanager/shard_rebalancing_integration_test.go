@@ -8,6 +8,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/testutil"
+"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestShardAssignmentAndRebalancing_Integration tests the full shard assignment and rebalancing flow with etcd
@@ -30,7 +31,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	cm := NewConsensusManager(mgr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
 	// Initialize and start watching
 	err = cm.Initialize(ctx)

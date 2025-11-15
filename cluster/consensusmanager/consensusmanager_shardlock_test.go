@@ -18,6 +18,8 @@ func shardLockKey(shardID int) string {
 
 // TestShardLocking_ReadWriteExclusion tests that write locks block read locks
 func TestShardLocking_ReadWriteExclusion(t *testing.T) {
+	sl := shardlock.NewShardLock()
+
 	// Test object ID that maps to a specific shard
 	objectID := "test-object-123"
 	shardID := sharding.GetShardID(objectID)
@@ -36,7 +38,7 @@ func TestShardLocking_ReadWriteExclusion(t *testing.T) {
 	writeLockAcquired := make(chan bool)
 	writeLockReleased := make(chan bool)
 	go func() {
-		unlock := shardlock.AcquireWrite(shardID)
+		unlock := sl.AcquireWrite(shardID)
 		recordOp("write-acquired")
 		close(writeLockAcquired)
 		time.Sleep(100 * time.Millisecond) // Hold lock briefly
@@ -52,7 +54,7 @@ func TestShardLocking_ReadWriteExclusion(t *testing.T) {
 	readLockAcquired := make(chan bool)
 	go func() {
 		time.Sleep(10 * time.Millisecond) // Ensure we try after write lock is held
-		unlock := shardlock.AcquireRead(objectID)
+		unlock := sl.AcquireRead(objectID)
 		recordOp("read-acquired")
 		close(readLockAcquired)
 		unlock()
@@ -86,6 +88,7 @@ func TestShardLocking_ReadWriteExclusion(t *testing.T) {
 
 // TestShardLocking_MultipleReadLocks tests that multiple read locks can be held concurrently
 func TestShardLocking_MultipleReadLocks(t *testing.T) {
+	sl := shardlock.NewShardLock()
 	objectID := "test-object-456"
 
 	// Counter for concurrent readers
@@ -100,7 +103,7 @@ func TestShardLocking_MultipleReadLocks(t *testing.T) {
 	for i := 0; i < numReaders; i++ {
 		go func() {
 			defer wg.Done()
-			unlock := shardlock.AcquireRead(objectID)
+			unlock := sl.AcquireRead(objectID)
 			defer unlock()
 
 			// Track concurrent readers
@@ -130,6 +133,7 @@ func TestShardLocking_MultipleReadLocks(t *testing.T) {
 
 // TestShardLocking_ReleaseBlocksCreate simulates the race condition scenario
 func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
+	sl := shardlock.NewShardLock()
 	objectID := "test-object-789"
 	shardID := sharding.GetShardID(objectID)
 
@@ -139,7 +143,7 @@ func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
 	var releaseTime time.Time
 
 	go func() {
-		unlock := shardlock.AcquireWrite(shardID)
+		unlock := sl.AcquireWrite(shardID)
 		close(releaseStarted)
 		time.Sleep(100 * time.Millisecond) // Simulate etcd operations
 		releaseTime = time.Now()
@@ -157,7 +161,7 @@ func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
 
 	go func() {
 		close(createStarted)
-		unlock := shardlock.AcquireRead(objectID)
+		unlock := sl.AcquireRead(objectID)
 		createTime = time.Now()
 		close(createAcquiredLock)
 		unlock()
@@ -179,6 +183,8 @@ func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
 
 // TestShardLocking_DifferentShardsNoBlocking tests that operations on different shards don't block
 func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
+	sl := shardlock.NewShardLock()
+
 	// Use object IDs that map to different shards
 	objectID1 := "test-object-1"
 	objectID2 := "test-object-2"
@@ -205,7 +211,7 @@ func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
 	// Operation on shard 1 (write lock)
 	go func() {
 		defer wg.Done()
-		unlock := shardlock.AcquireWrite(shardID1)
+		unlock := sl.AcquireWrite(shardID1)
 		defer unlock()
 
 		current := concurrentOps.Add(1)
@@ -224,7 +230,7 @@ func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(10 * time.Millisecond) // Start slightly after first one
-		unlock := shardlock.AcquireWrite(shardID2)
+		unlock := sl.AcquireWrite(shardID2)
 		defer unlock()
 
 		current := concurrentOps.Add(1)
@@ -250,11 +256,13 @@ func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
 
 // TestAcquireShardReadLock_FixedNodeAddress tests that fixed node addresses don't acquire locks
 func TestAcquireShardReadLock_FixedNodeAddress(t *testing.T) {
+	sl := shardlock.NewShardLock()
+
 	// Object with fixed node address (contains "/")
 	objectID := "localhost:7000/test-object"
 
 	// Acquire read lock - should be a no-op (returns immediately)
-	unlock := shardlock.AcquireRead(objectID)
+	unlock := sl.AcquireRead(objectID)
 	unlock()
 
 	// For fixed node addresses, the lock acquisition is a no-op
@@ -263,10 +271,11 @@ func TestAcquireShardReadLock_FixedNodeAddress(t *testing.T) {
 
 // TestAcquireShardReadLock_NormalObject tests that normal objects do acquire locks
 func TestAcquireShardReadLock_NormalObject(t *testing.T) {
+	sl := shardlock.NewShardLock()
 	objectID := "test-object-normal"
 
 	// Acquire read lock
-	unlock := shardlock.AcquireRead(objectID)
+	unlock := sl.AcquireRead(objectID)
 
 	// Verify we can acquire and release the lock without errors
 	// (if there's a problem, the test will hang or panic)
