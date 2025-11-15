@@ -1,6 +1,7 @@
 package shardlock
 
 import (
+	"slices"
 	"strconv"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
@@ -38,6 +39,36 @@ func (sl *ShardLock) AcquireRead(objectID string) func() {
 // Returns an unlock function that MUST be called to release the lock.
 func (sl *ShardLock) AcquireWrite(shardID int) func() {
 	return sl.keyLock.Lock(shardLockKey(shardID))
+}
+
+// AcquireWriteMultiple acquires write locks on multiple shard IDs in sorted order.
+// This prevents concurrent object operations during shard ownership transitions.
+// Locks are acquired in ascending shard ID order to prevent deadlock.
+// Returns a single unlock function that releases all locks when called.
+// The unlock function MUST be called to release all locks.
+func (sl *ShardLock) AcquireWriteMultiple(shardIDs []int) func() {
+	if len(shardIDs) == 0 {
+		return func() {} // No-op unlock
+	}
+
+	// Create a sorted copy to avoid modifying the caller's slice
+	sortedIDs := make([]int, len(shardIDs))
+	copy(sortedIDs, shardIDs)
+	slices.Sort(sortedIDs)
+
+	// Acquire all locks in sorted order
+	unlockFuncs := make([]func(), 0, len(sortedIDs))
+	for _, shardID := range sortedIDs {
+		unlock := sl.keyLock.Lock(shardLockKey(shardID))
+		unlockFuncs = append(unlockFuncs, unlock)
+	}
+
+	// Return a function that releases all locks
+	return func() {
+		for _, unlock := range unlockFuncs {
+			unlock()
+		}
+	}
 }
 
 // shardLockKey converts a shard ID to a lock key for shard-level locking

@@ -848,24 +848,14 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 
 	// Acquire write locks on all shards being claimed to prevent concurrent operations
 	// This ensures no CreateObject/CallObject can proceed while we're claiming ownership
-	// Sort shard IDs to acquire locks in consistent order to prevent deadlock
 	shardIDs := make([]int, 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
 		shardIDs = append(shardIDs, shardID)
 	}
-	slices.Sort(shardIDs)
-
-	unlockFuncs := make([]func(), 0, len(shardIDs))
-	for _, shardID := range shardIDs {
-		unlock := cm.shardLock.AcquireWrite(shardID)
-		unlockFuncs = append(unlockFuncs, unlock)
-	}
-	// Release all locks when done
-	defer func() {
-		for _, unlock := range unlockFuncs {
-			unlock()
-		}
-	}()
+	
+	// Acquire all locks in sorted order (handled by AcquireWriteMultiple)
+	unlockAll := cm.shardLock.AcquireWriteMultiple(shardIDs)
+	defer unlockAll()
 
 	// Store all updated shards at once
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
@@ -944,24 +934,14 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 
 	// Acquire write locks on all shards being released to prevent concurrent operations
 	// This ensures no CreateObject/CallObject can proceed while we're transferring ownership
-	// Sort shard IDs to acquire locks in consistent order to prevent deadlock
 	shardIDs := make([]int, 0, len(shardsToUpdate))
 	for shardID := range shardsToUpdate {
 		shardIDs = append(shardIDs, shardID)
 	}
-	slices.Sort(shardIDs)
-
-	unlockFuncs := make([]func(), 0, len(shardIDs))
-	for _, shardID := range shardIDs {
-		unlock := cm.shardLock.AcquireWrite(shardID)
-		unlockFuncs = append(unlockFuncs, unlock)
-	}
-	// Release all locks when done
-	defer func() {
-		for _, unlock := range unlockFuncs {
-			unlock()
-		}
-	}()
+	
+	// Acquire all locks in sorted order (handled by AcquireWriteMultiple)
+	unlockAll := cm.shardLock.AcquireWriteMultiple(shardIDs)
+	defer unlockAll()
 
 	// Store all updated shards at once
 	successCount, err := cm.storeShardMapping(ctx, shardsToUpdate)
