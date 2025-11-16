@@ -25,6 +25,8 @@ const (
 	// This value balances parallelism with avoiding overwhelming etcd.
 	// With 8192 shards and 20 workers, each worker handles ~410 shards sequentially.
 	shardStorageWorkers = 20
+	// defaultClusterStateStabilityDuration is the default duration to consider the cluster state stable
+	defaultClusterStateStabilityDuration = 10 * time.Second
 )
 
 // ShardInfo contains information about a shard's node assignment
@@ -133,9 +135,9 @@ type ConsensusManager struct {
 	state *ClusterState
 
 	// Configuration
-	minQuorum             int           // minimal number of nodes required for cluster to be considered stable
-	nodeStabilityDuration time.Duration // duration to wait for cluster state to stabilize
-	localNodeAddress      string        // local node address for this consensus manager
+	minQuorum                     int           // minimal number of nodes required for cluster to be considered stable
+	clusterStateStabilityDuration time.Duration // duration to wait for cluster state to stabilize
+	localNodeAddress              string        // local node address for this consensus manager
 
 	// Watch management
 	watchCtx     context.Context
@@ -148,13 +150,16 @@ type ConsensusManager struct {
 }
 
 // NewConsensusManager creates a new consensus manager
-func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, nodeStabilityDuration time.Duration, localNodeAddress string) *ConsensusManager {
+func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string) *ConsensusManager {
+	if clusterStateStabilityDuration <= 0 {
+		clusterStateStabilityDuration = defaultClusterStateStabilityDuration
+	}
 	return &ConsensusManager{
-		etcdManager:           etcdMgr,
-		logger:                logger.NewLogger("ConsensusManager"),
-		shardLock:             shardLock,
-		nodeStabilityDuration: nodeStabilityDuration,
-		localNodeAddress:      localNodeAddress,
+		etcdManager:                   etcdMgr,
+		logger:                        logger.NewLogger("ConsensusManager"),
+		shardLock:                     shardLock,
+		clusterStateStabilityDuration: clusterStateStabilityDuration,
+		localNodeAddress:              localNodeAddress,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -822,23 +827,14 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 	// Lock cluster state to avoid race conditions
 	clusterState, unlock := cm.LockClusterState()
 
-	// Access stored configuration while holding the lock
-	localNode := cm.localNodeAddress
-	nodeStabilityDuration := cm.nodeStabilityDuration
-	if nodeStabilityDuration <= 0 {
-		nodeStabilityDuration = 10 * time.Second // Default value
-	}
-
-	if localNode == "" {
-		unlock()
-		return fmt.Errorf("localNode cannot be empty")
-	}
-
 	// Only claim shards when cluster state is stable
-	if !clusterState.IsStable(nodeStabilityDuration) {
+	if !clusterState.IsStable(cm.clusterStateStabilityDuration) {
 		unlock()
 		return nil
 	}
+
+	// Access stored configuration while holding the lock
+	localNode := cm.localNodeAddress
 
 	if !clusterState.HasNode(localNode) {
 		// This node is not yet in the cluster state
@@ -1233,13 +1229,7 @@ func (cm *ConsensusManager) IsStateStable() bool {
 		return false
 	}
 
-	// Get effective duration with default fallback
-	duration := cm.nodeStabilityDuration
-	if duration <= 0 {
-		duration = 10 * time.Second // Default value
-	}
-
-	if !cm.state.IsStable(duration) {
+	if !cm.state.IsStable(cm.clusterStateStabilityDuration) {
 		return false
 	}
 
