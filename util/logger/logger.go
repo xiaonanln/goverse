@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"sync"
 	"time"
 )
 
@@ -39,6 +40,7 @@ func (l LogLevel) String() string {
 
 // Logger represents a logger with configurable log level
 type Logger struct {
+	mu     sync.RWMutex
 	level  LogLevel
 	prefix string
 	logger *log.Logger
@@ -55,22 +57,45 @@ func NewLogger(prefix string) *Logger {
 
 // SetLevel sets the logging level
 func (l *Logger) SetLevel(level LogLevel) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.level = level
 }
 
 // GetLevel returns the current logging level
 func (l *Logger) GetLevel() LogLevel {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	return l.level
+}
+
+// SetPrefix sets the logging prefix
+func (l *Logger) SetPrefix(prefix string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.prefix = prefix
+}
+
+// GetPrefix returns the current logging prefix
+func (l *Logger) GetPrefix() string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.prefix
 }
 
 // log is the internal logging method
 func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
-	if level < l.level {
+	l.mu.RLock()
+	currentLevel := l.level
+	currentPrefix := l.prefix
+	l.mu.RUnlock()
+
+	if level < currentLevel {
 		return
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	prefix := fmt.Sprintf("[%s] [%s] [%s] ", timestamp, level.String(), l.prefix)
+	prefix := fmt.Sprintf("[%s] [%s] [%s] ", timestamp, level.String(), currentPrefix)
 
 	message := fmt.Sprintf(format, args...)
 	l.logger.Print(prefix + message)
