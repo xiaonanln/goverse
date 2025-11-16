@@ -16,33 +16,32 @@ func TestGetObjectsToEvict(t *testing.T) {
 	// Set up a test cluster state with nodes
 	cm.mu.Lock()
 	cm.state = &ClusterState{
-		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-			"localhost:50003": true,
-		},
+		Nodes: newCowMap[string, bool](),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
+			Shards: newCowMap[int, ShardInfo](),
 		},
 	}
+	cm.state.Nodes.set("localhost:50001", true)
+	cm.state.Nodes.set("localhost:50002", true)
+	cm.state.Nodes.set("localhost:50003", true)
 
 	// Shard 0: CurrentNode is node1, TargetNode is node2 (should be evicted from node1)
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:50002",
 		CurrentNode: "localhost:50001",
-	}
+	})
 
 	// Shard 1: CurrentNode is node1, TargetNode is also node1 (should NOT be evicted)
-	cm.state.ShardMapping.Shards[1] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(1, ShardInfo{
 		TargetNode:  "localhost:50001",
 		CurrentNode: "localhost:50001",
-	}
+	})
 
 	// Shard 2: CurrentNode is node1, TargetNode is node3 (should be evicted from node1)
-	cm.state.ShardMapping.Shards[2] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(2, ShardInfo{
 		TargetNode:  "localhost:50003",
 		CurrentNode: "localhost:50001",
-	}
+	})
 	cm.mu.Unlock()
 
 	// Find object IDs that map to our test shards
@@ -112,21 +111,20 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	// Set up cluster state with nodes
 	cm.mu.Lock()
 	cm.state = &ClusterState{
-		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-		},
+		Nodes: newCowMap[string, bool](),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
+			Shards: newCowMap[int, ShardInfo](),
 		},
 	}
+	cm.state.Nodes.set("localhost:50001", true)
+	cm.state.Nodes.set("localhost:50002", true)
 
 	// Set up all shards to need eviction
 	for i := 0; i < sharding.NumShards; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  "localhost:50002",
 			CurrentNode: "localhost:50001",
-		}
+		})
 	}
 	cm.mu.Unlock()
 
@@ -152,20 +150,19 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	// Set up cluster state with nodes but incomplete shard mapping
 	cm.mu.Lock()
 	cm.state = &ClusterState{
-		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-		},
+		Nodes: newCowMap[string, bool](),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
+			Shards: newCowMap[int, ShardInfo](),
 		},
 	}
+	cm.state.Nodes.set("localhost:50001", true)
+	cm.state.Nodes.set("localhost:50002", true)
 
 	// Only set up shard 0, leave shard 1 and 2 unmapped
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:50001",
 		CurrentNode: "localhost:50001",
-	}
+	})
 	cm.mu.Unlock()
 
 	// Find object IDs that map to shards 0, 1, and 2
@@ -219,33 +216,32 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	// Set up cluster state with nodes
 	cm.mu.Lock()
 	cm.state = &ClusterState{
-		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-		},
+		Nodes: newCowMap[string, bool](),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
+			Shards: newCowMap[int, ShardInfo](),
 		},
 	}
+	cm.state.Nodes.set("localhost:50001", true)
+	cm.state.Nodes.set("localhost:50002", true)
 
 	// Shard 0: Both TargetNode and CurrentNode are node2, but we're checking on node1
 	// This object should be evicted from node1
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:50002",
 		CurrentNode: "localhost:50002",
-	}
+	})
 
 	// Shard 1: Both TargetNode and CurrentNode are node1 (should NOT be evicted)
-	cm.state.ShardMapping.Shards[1] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(1, ShardInfo{
 		TargetNode:  "localhost:50001",
 		CurrentNode: "localhost:50001",
-	}
+	})
 
 	// Shard 2: TargetNode is node1 but CurrentNode is node2 (should be evicted)
-	cm.state.ShardMapping.Shards[2] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(2, ShardInfo{
 		TargetNode:  "localhost:50001",
 		CurrentNode: "localhost:50002",
-	}
+	})
 	cm.mu.Unlock()
 
 	// Find object IDs that map to our test shards
@@ -299,32 +295,31 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	// Set up cluster state with nodes
 	cm.mu.Lock()
 	cm.state = &ClusterState{
-		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-		},
+		Nodes: newCowMap[string, bool](),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
+			Shards: newCowMap[int, ShardInfo](),
 		},
 	}
+	cm.state.Nodes.set("localhost:50001", true)
+	cm.state.Nodes.set("localhost:50002", true)
 
 	// Shard 0: CurrentNode is node1, TargetNode is node2 (should be evicted - migration target is different)
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:50002",
 		CurrentNode: "localhost:50001",
-	}
+	})
 
 	// Shard 1: Both TargetNode and CurrentNode are node1 (should NOT be evicted)
-	cm.state.ShardMapping.Shards[1] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(1, ShardInfo{
 		TargetNode:  "localhost:50001",
 		CurrentNode: "localhost:50001",
-	}
+	})
 
 	// Shard 2: CurrentNode is empty but TargetNode is node2 (should be evicted - target is different)
-	cm.state.ShardMapping.Shards[2] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(2, ShardInfo{
 		TargetNode:  "localhost:50002",
 		CurrentNode: "",
-	}
+	})
 	cm.mu.Unlock()
 
 	// Find object IDs that map to our test shards

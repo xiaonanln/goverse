@@ -44,16 +44,16 @@ type ShardInfo struct {
 // Note: Nodes and Version fields have been moved to ClusterState in consensusmanager
 type ShardMapping struct {
 	// Map from shard ID to shard info (target and current node)
-	Shards map[int]ShardInfo `json:"shards"`
+	Shards *cowMap[int, ShardInfo]
 }
 
 func (sm *ShardMapping) IsComplete() bool {
-	return len(sm.Shards) == sharding.NumShards
+	return sm.Shards.len() == sharding.NumShards
 }
 
 // ClusterState represents the current state of the cluster
 type ClusterState struct {
-	Nodes        map[string]bool
+	Nodes        *cowMap[string, bool]
 	ShardMapping *ShardMapping
 	Revision     int64
 	LastChange   time.Time
@@ -64,7 +64,7 @@ func (cs *ClusterState) HasNode(nodeAddr string) bool {
 	if cs == nil {
 		return false
 	}
-	_, ok := cs.Nodes[nodeAddr]
+	_, ok := cs.Nodes.get(nodeAddr)
 	return ok
 }
 
@@ -75,7 +75,7 @@ func (cs *ClusterState) IsStable(duration time.Duration) bool {
 	if cs.LastChange.IsZero() {
 		return false
 	}
-	if len(cs.Nodes) == 0 {
+	if cs.Nodes.len() == 0 {
 		return false
 	}
 	return time.Since(cs.LastChange) >= duration
@@ -86,31 +86,42 @@ func (cs *ClusterState) Clone() *ClusterState {
 		return nil
 	}
 
-	// Copy basic fields
+	// Create clone with shallow copies of cowMaps (reference counting)
 	cscp := &ClusterState{
-		Nodes: make(map[string]bool, len(cs.Nodes)),
-		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
-		},
+		Nodes:      cs.Nodes.clone(),
 		Revision:   cs.Revision,
 		LastChange: cs.LastChange,
 	}
 
-	// Copy nodes map
-	for n, v := range cs.Nodes {
-		cscp.Nodes[n] = v
-	}
-
-	// Deep copy shard mapping
+	// Clone shard mapping
 	// Note: cs.ShardMapping could be nil if Clone is called before Initialize
-	// but cscp.ShardMapping is always initialized above
 	if cs.ShardMapping != nil {
-		for sid, info := range cs.ShardMapping.Shards {
-			cscp.ShardMapping.Shards[sid] = info
+		cscp.ShardMapping = &ShardMapping{
+			Shards: cs.ShardMapping.Shards.clone(),
+		}
+	} else {
+		// Initialize ShardMapping even if source is nil to maintain consistency
+		cscp.ShardMapping = &ShardMapping{
+			Shards: newCowMap[int, ShardInfo](),
 		}
 	}
 
 	return cscp
+}
+
+// AddNode adds a node to the cluster state (triggers COW if data is shared)
+func (cs *ClusterState) AddNode(node string) {
+	cs.Nodes.set(node, true)
+}
+
+// RemoveNode removes a node from the cluster state (triggers COW if data is shared)
+func (cs *ClusterState) RemoveNode(node string) {
+	cs.Nodes.delete(node)
+}
+
+// SetShard sets a shard's info in the cluster state (triggers COW if data is shared)
+func (cs *ClusterState) SetShard(shardID int, info ShardInfo) {
+	cs.ShardMapping.Shards.set(shardID, info)
 }
 
 // StateChangeListener is the interface for components that want to be notified of state changes
@@ -150,9 +161,9 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		logger:      logger.NewLogger("ConsensusManager"),
 		shardLock:   shardLock,
 		state: &ClusterState{
-			Nodes: make(map[string]bool),
+			Nodes: newCowMap[string, bool](),
 			ShardMapping: &ShardMapping{
-				Shards: make(map[int]ShardInfo),
+				Shards: newCowMap[int, ShardInfo](),
 			},
 			// LastChange and Revision are zero initially, set when loading from etcd
 		},
@@ -195,15 +206,15 @@ func (cm *ConsensusManager) IsReady() bool {
 		return false
 	}
 
-	if len(cm.state.Nodes) == 0 {
+	if cm.state.Nodes.len() == 0 {
 		cm.logger.Warnf("ConsensusManager not ready: No nodes available")
 		return false
 	}
 
 	// Check if we have the minimum required nodes
 	minQuorum := cm.getEffectiveMinQuorum()
-	if len(cm.state.Nodes) < minQuorum {
-		cm.logger.Warnf("ConsensusManager not ready: Only %d nodes available, minimum quorum required is %d", len(cm.state.Nodes), minQuorum)
+	if cm.state.Nodes.len() < minQuorum {
+		cm.logger.Warnf("ConsensusManager not ready: Only %d nodes available, minimum quorum required is %d", cm.state.Nodes.len(), minQuorum)
 		return false
 	}
 
@@ -263,12 +274,16 @@ func (cm *ConsensusManager) UpdateShardMetrics() {
 	migratingCount := 0
 
 	// Initialize counts for all known nodes to ensure we set metrics even for nodes with 0 shards
-	for node := range cm.state.Nodes {
+	nodes := make(map[string]bool)
+	cm.state.Nodes.copyTo(nodes)
+	for node := range nodes {
 		shardCounts[node] = 0
 	}
 
 	// Count shards based on CurrentNode (actual ownership) and detect migrations
-	for _, shardInfo := range cm.state.ShardMapping.Shards {
+	shards := make(map[int]ShardInfo)
+	cm.state.ShardMapping.Shards.copyTo(shards)
+	for _, shardInfo := range shards {
 		if shardInfo.CurrentNode != "" {
 			shardCounts[shardInfo.CurrentNode]++
 		}
@@ -308,7 +323,7 @@ func (cm *ConsensusManager) Initialize(ctx context.Context) error {
 	cm.mu.Unlock()
 
 	cm.logger.Infof("Loaded cluster state: %d nodes, revision %d",
-		len(state.Nodes), state.Revision)
+		state.Nodes.len(), state.Revision)
 
 	return nil
 }
@@ -401,7 +416,7 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 	switch event.Type {
 	case clientv3.EventTypePut:
 		nodeAddress := string(event.Kv.Value)
-		cm.state.Nodes[nodeAddress] = true
+		cm.state.Nodes.set(nodeAddress, true)
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Node added: %s", nodeAddress)
 		cm.mu.Unlock()
@@ -414,7 +429,7 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		// Extract node address from the key
 		key := string(event.Kv.Key)
 		nodeAddress := key[len(nodesPrefix):]
-		delete(cm.state.Nodes, nodeAddress)
+		cm.state.Nodes.delete(nodeAddress)
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Node removed: %s", nodeAddress)
 		cm.mu.Unlock()
@@ -450,21 +465,23 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	if event.Type == clientv3.EventTypePut {
 		newShardInfo := parseShardInfo(event.Kv)
 
-		if newShardInfo.ModRevision <= cm.state.ShardMapping.Shards[shardID].ModRevision {
+		oldShardInfo, _ := cm.state.ShardMapping.Shards.get(shardID)
+		if newShardInfo.ModRevision <= oldShardInfo.ModRevision {
 			return
 		}
 
 		cm.recordShardMigrationLocked(shardID, newShardInfo)
 		// Update state in memory while holding lock
-		cm.state.ShardMapping.Shards[shardID] = newShardInfo
+		cm.state.ShardMapping.Shards.set(shardID, newShardInfo)
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, newShardInfo.TargetNode, newShardInfo.CurrentNode)
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
-		if event.Kv.ModRevision <= cm.state.ShardMapping.Shards[shardID].ModRevision {
+		oldShardInfo, _ := cm.state.ShardMapping.Shards.get(shardID)
+		if event.Kv.ModRevision <= oldShardInfo.ModRevision {
 			return
 		}
-		delete(cm.state.ShardMapping.Shards, shardID)
+		cm.state.ShardMapping.Shards.delete(shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
 		// Asynchronously notify listeners to prevent deadlocks
 		go cm.notifyStateChanged()
@@ -473,7 +490,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 
 func (cm *ConsensusManager) recordShardMigrationLocked(shardID int, newShardInfo ShardInfo) {
 	// Check if this is a migration completion (CurrentNode changed from one node to another)
-	oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+	oldShardInfo, exists := cm.state.ShardMapping.Shards.get(shardID)
 	if exists && oldShardInfo.CurrentNode != "" && newShardInfo.CurrentNode != "" &&
 		oldShardInfo.CurrentNode != newShardInfo.CurrentNode {
 		// Migration completed: CurrentNode changed from one node to another
@@ -525,9 +542,9 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	}
 
 	state := &ClusterState{
-		Nodes: make(map[string]bool),
+		Nodes: newCowMap[string, bool](),
 		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
+			Shards: newCowMap[int, ShardInfo](),
 		},
 		Revision:   resp.Header.Revision,
 		LastChange: time.Now(),
@@ -539,7 +556,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		if strings.HasPrefix(key, nodesPrefix) {
-			state.Nodes[string(kv.Value)] = true
+			state.Nodes.set(string(kv.Value), true)
 		} else if strings.HasPrefix(key, shardPrefix) {
 			// Parse shard ID from key
 			shardIDStr := key[len(shardPrefix):]
@@ -554,11 +571,11 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 				continue
 			}
 
-			state.ShardMapping.Shards[shardID] = parseShardInfo(kv)
+			state.ShardMapping.Shards.set(shardID, parseShardInfo(kv))
 		}
 	}
 
-	cm.logger.Infof("Loaded %d nodes and %d shards from etcd", len(state.Nodes), len(state.ShardMapping.Shards))
+	cm.logger.Infof("Loaded %d nodes and %d shards from etcd", state.Nodes.len(), state.ShardMapping.Shards.len())
 
 	return state, nil
 }
@@ -568,8 +585,10 @@ func (cm *ConsensusManager) GetNodes() []string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	nodes := make([]string, 0, len(cm.state.Nodes))
-	for node := range cm.state.Nodes {
+	nodesMap := make(map[string]bool)
+	cm.state.Nodes.copyTo(nodesMap)
+	nodes := make([]string, 0, len(nodesMap))
+	for node := range nodesMap {
 		nodes = append(nodes, node)
 	}
 	return nodes
@@ -581,13 +600,15 @@ func (cm *ConsensusManager) GetLeaderNode() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	if len(cm.state.Nodes) == 0 {
+	if cm.state.Nodes.len() == 0 {
 		return ""
 	}
 
 	// Find the smallest address (leader)
+	nodesMap := make(map[string]bool)
+	cm.state.Nodes.copyTo(nodesMap)
 	var leader string
-	for node := range cm.state.Nodes {
+	for node := range nodesMap {
 		if leader == "" || node < leader {
 			leader = node
 		}
@@ -601,14 +622,17 @@ func (cm *ConsensusManager) GetShardMapping() *ShardMapping {
 	defer cm.mu.RUnlock()
 
 	if cm.state.ShardMapping == nil {
-		return &ShardMapping{Shards: make(map[int]ShardInfo)}
+		return &ShardMapping{Shards: newCowMap[int, ShardInfo]()}
 	}
 
 	// Return a deep copy to prevent data races when caller iterates over the map
 	// while concurrent updates may be happening via watch events
-	shardsCopy := make(map[int]ShardInfo, len(cm.state.ShardMapping.Shards))
-	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
-		shardsCopy[shardID] = shardInfo
+	// Create a new ShardMapping with a new cowMap containing the copied data
+	shardsCopy := newCowMap[int, ShardInfo]()
+	shardsMap := make(map[int]ShardInfo)
+	cm.state.ShardMapping.Shards.copyTo(shardsMap)
+	for shardID, shardInfo := range shardsMap {
+		shardsCopy.set(shardID, shardInfo)
 	}
 
 	return &ShardMapping{Shards: shardsCopy}
@@ -642,7 +666,7 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 		return "", fmt.Errorf("shard mapping not available")
 	}
 
-	shardInfo, ok := cm.state.ShardMapping.Shards[shardID]
+	shardInfo, ok := cm.state.ShardMapping.Shards.get(shardID)
 	if !ok {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
@@ -680,7 +704,7 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 		return "", fmt.Errorf("shard mapping not available")
 	}
 
-	shardInfo, ok := cm.state.ShardMapping.Shards[shardID]
+	shardInfo, ok := cm.state.ShardMapping.Shards.get(shardID)
 	if !ok {
 		return "", fmt.Errorf("no node assigned to shard %d", shardID)
 	}
@@ -771,12 +795,13 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 				// Update in-memory state under lock. This allows us to keep ModRevision in sync before the watch event arrives.
 				cm.mu.Lock()
 				cm.recordShardMigrationLocked(id, shardInfo)
-				if cm.state.ShardMapping.Shards[id].ModRevision < resp.Header.Revision {
-					cm.state.ShardMapping.Shards[id] = ShardInfo{
+				existingInfo, _ := cm.state.ShardMapping.Shards.get(id)
+				if existingInfo.ModRevision < resp.Header.Revision {
+					cm.state.ShardMapping.Shards.set(id, ShardInfo{
 						TargetNode:  shardInfo.TargetNode,
 						CurrentNode: shardInfo.CurrentNode,
 						ModRevision: resp.Header.Revision,
-					}
+					})
 				}
 				cm.mu.Unlock()
 			}
@@ -821,14 +846,16 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	clusterState := cm.state.Clone()
 	cm.mu.RUnlock()
 
-	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
+	if clusterState == nil || clusterState.ShardMapping.Shards.len() == 0 {
 		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
 		return nil
 	}
 
 	// Collect shards that need to be claimed
 	shardsToUpdate := make(map[int]ShardInfo)
-	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
+	shardsMap := make(map[int]ShardInfo)
+	clusterState.ShardMapping.Shards.copyTo(shardsMap)
+	for shardID, shardInfo := range shardsMap {
 		// Claim shard if: TargetNode is this node AND (CurrentNode is empty or not alive)
 		if shardInfo.TargetNode == localNode && (shardInfo.CurrentNode == "" || !clusterState.HasNode(shardInfo.CurrentNode)) {
 			shardsToUpdate[shardID] = ShardInfo{
@@ -883,13 +910,15 @@ func (cm *ConsensusManager) calcReleaseShardsForNode(localNode string, localObje
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	if cm.state.ShardMapping == nil || len(cm.state.ShardMapping.Shards) == 0 {
+	if cm.state.ShardMapping == nil || cm.state.ShardMapping.Shards.len() == 0 {
 		return nil
 	}
 
 	// Collect shards that need to be released
 	shardsToUpdate := make(map[int]ShardInfo)
-	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
+	shardsMap := make(map[int]ShardInfo)
+	cm.state.ShardMapping.Shards.copyTo(shardsMap)
+	for shardID, shardInfo := range shardsMap {
 		// Release shard if:
 		// 1. CurrentNode is this node
 		// 2. TargetNode is not empty and not this node (it's another node)
@@ -967,12 +996,14 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	if len(cm.state.Nodes) == 0 {
+	if cm.state.Nodes.len() == 0 {
 		return nil
 	}
 
 	// Sort nodes for deterministic assignment
-	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
+	nodesMap := make(map[string]bool)
+	cm.state.Nodes.copyTo(nodesMap)
+	nodes := slices.Sorted(maps.Keys(nodesMap))
 	nodeSet := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
 		nodeSet[n] = true
@@ -982,7 +1013,8 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 	updateShards := make(map[int]ShardInfo)
 	var currentShards map[int]ShardInfo
 	if cm.state.ShardMapping != nil {
-		currentShards = cm.state.ShardMapping.Shards
+		currentShards = make(map[int]ShardInfo)
+		cm.state.ShardMapping.Shards.copyTo(currentShards)
 	} else {
 		// ShardMapping can be nil if ReassignShardTargetNodes is called before Initialize
 		currentShards = make(map[int]ShardInfo)
@@ -1035,7 +1067,7 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, 
 func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	cm.mu.RLock()
 
-	if len(cm.state.Nodes) == 0 {
+	if cm.state.Nodes.len() == 0 {
 		cm.mu.RUnlock()
 		cm.logger.Debugf("No nodes available for rebalancing")
 		return false, nil
@@ -1048,7 +1080,9 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	}
 
 	// Sort nodes for deterministic selection
-	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
+	nodesMap := make(map[string]bool)
+	cm.state.Nodes.copyTo(nodesMap)
+	nodes := slices.Sorted(maps.Keys(nodesMap))
 
 	// Count target shards per node (use TargetNode for rebalance decisions)
 	shardCounts := make(map[string]int)
@@ -1058,9 +1092,11 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		shardsPerNode[node] = []int{}
 	}
 
+	shardsMap := make(map[int]ShardInfo)
+	cm.state.ShardMapping.Shards.copyTo(shardsMap)
 	allAssigned := true
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
-		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		shardInfo, exists := shardsMap[shardID]
 		// Require TargetNode to be assigned for all shards for rebalance to proceed
 		if !exists || shardInfo.TargetNode == "" {
 			allAssigned = false
@@ -1129,7 +1165,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		}
 
 		// Get the existing shard info
-		existingInfo := cm.state.ShardMapping.Shards[shardToMigrate]
+		existingInfo := shardsMap[shardToMigrate]
 
 		// Add this shard to the batch
 		updateShards[shardToMigrate] = ShardInfo{
@@ -1193,8 +1229,8 @@ func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
 
 	// Check if we have the minimum required nodes
 	minQuorum := cm.getEffectiveMinQuorum()
-	if len(cm.state.Nodes) < minQuorum {
-		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum quorum required is %d", len(cm.state.Nodes), minQuorum)
+	if cm.state.Nodes.len() < minQuorum {
+		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum quorum required is %d", cm.state.Nodes.len(), minQuorum)
 		return false
 	}
 
@@ -1238,7 +1274,7 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 	}
 
 	// Check if this node is in the cluster
-	if _, hasNode := cm.state.Nodes[localAddr]; !hasNode {
+	if _, hasNode := cm.state.Nodes.get(localAddr); !hasNode {
 		return nil
 	}
 
@@ -1254,7 +1290,7 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 		shardID := sharding.GetShardID(objectID)
 
 		// Check if this shard belongs to this node
-		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		shardInfo, exists := cm.state.ShardMapping.Shards.get(shardID)
 
 		// Evict objects in the following cases:
 		// 1. Shard does not exist in the mapping (orphaned shard)

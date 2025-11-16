@@ -36,15 +36,12 @@ func TestGetClusterState_WithData(t *testing.T) {
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
-	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
-	}
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:47001",
 		CurrentNode: "localhost:47001",
-	}
+	})
 	cm.state.Revision = 123
 	cm.mu.Unlock()
 
@@ -55,11 +52,11 @@ func TestGetClusterState_WithData(t *testing.T) {
 		t.Fatal("GetClusterState returned nil")
 	}
 	
-	if len(state.Nodes) != 2 {
-		t.Errorf("Expected 2 nodes in cloned state, got %d", len(state.Nodes))
+	if state.Nodes.len() != 2 {
+		t.Errorf("Expected 2 nodes in cloned state, got %d", state.Nodes.len())
 	}
 	
-	if !state.Nodes["localhost:47001"] || !state.Nodes["localhost:47002"] {
+	if !state.HasNode("localhost:47001") || !state.HasNode("localhost:47002") {
 		t.Error("Cloned state should contain the correct nodes")
 	}
 	
@@ -71,8 +68,8 @@ func TestGetClusterState_WithData(t *testing.T) {
 		t.Fatal("Cloned state should have shard mapping")
 	}
 	
-	if len(state.ShardMapping.Shards) != 1 {
-		t.Errorf("Expected 1 shard in cloned state, got %d", len(state.ShardMapping.Shards))
+	if state.ShardMapping.Shards.len() != 1 {
+		t.Errorf("Expected 1 shard in cloned state, got %d", state.ShardMapping.Shards.len())
 	}
 }
 
@@ -83,25 +80,25 @@ func TestGetClusterState_IsIndependent(t *testing.T) {
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes.set("localhost:47001", true)
 	cm.mu.Unlock()
 
 	// Get cloned state
 	state1 := cm.GetClusterState()
 	
 	// Modify the cloned state
-	state1.Nodes["localhost:47002"] = true
+	state1.AddNode("localhost:47002")
 	
 	// Get another cloned state
 	state2 := cm.GetClusterState()
 	
 	// Verify state2 doesn't have the modification from state1
-	if _, exists := state2.Nodes["localhost:47002"]; exists {
+	if state2.HasNode("localhost:47002") {
 		t.Error("Cloned states should be independent - modification in one shouldn't affect others")
 	}
 	
 	// Verify state2 has the original node
-	if !state2.Nodes["localhost:47001"] {
+	if !state2.HasNode("localhost:47001") {
 		t.Error("Cloned state should have the original node")
 	}
 }
@@ -121,21 +118,16 @@ func TestGetClusterState_FullShardMapping(t *testing.T) {
 		"localhost:47005",
 	}
 	for _, addr := range nodeAddrs {
-		cm.state.Nodes[addr] = true
-	}
-
-	// Initialize full shard mapping with all 8192 shards
-	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		cm.state.Nodes.set(addr, true)
 	}
 
 	// Populate all shards with round-robin assignment to nodes
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % len(nodeAddrs)
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  nodeAddrs[nodeIdx],
 			CurrentNode: nodeAddrs[nodeIdx],
-		}
+		})
 	}
 	cm.state.Revision = 456
 	cm.mu.Unlock()
@@ -147,16 +139,16 @@ func TestGetClusterState_FullShardMapping(t *testing.T) {
 		t.Fatal("GetClusterState returned nil")
 	}
 
-	if len(state.Nodes) != len(nodeAddrs) {
-		t.Errorf("Expected %d nodes in cloned state, got %d", len(nodeAddrs), len(state.Nodes))
+	if state.Nodes.len() != len(nodeAddrs) {
+		t.Errorf("Expected %d nodes in cloned state, got %d", len(nodeAddrs), state.Nodes.len())
 	}
 
 	if state.ShardMapping == nil {
 		t.Fatal("Cloned state should have shard mapping")
 	}
 
-	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in cloned state, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+	if state.ShardMapping.Shards.len() != sharding.NumShards {
+		t.Errorf("Expected %d shards in cloned state, got %d", sharding.NumShards, state.ShardMapping.Shards.len())
 	}
 
 	if state.Revision != 456 {
@@ -165,7 +157,7 @@ func TestGetClusterState_FullShardMapping(t *testing.T) {
 
 	// Verify a few sample shards are correctly cloned
 	for i := 0; i < 10; i++ {
-		shard, exists := state.ShardMapping.Shards[i]
+		shard, exists := state.ShardMapping.Shards.get(i)
 		if !exists {
 			t.Errorf("Shard %d should exist in cloned state", i)
 			continue
@@ -180,16 +172,17 @@ func TestGetClusterState_FullShardMapping(t *testing.T) {
 	}
 
 	// Verify the clone is independent by modifying it
-	state.ShardMapping.Shards[0] = ShardInfo{
+	state.SetShard(0, ShardInfo{
 		TargetNode:  "localhost:47099",
 		CurrentNode: "localhost:47099",
-	}
+	})
 
 	// Get another clone and verify it wasn't affected
 	state2 := cm.GetClusterState()
-	if state2.ShardMapping.Shards[0].TargetNode == "localhost:47099" {
+	shard0, _ := state2.ShardMapping.Shards.get(0)
+	if shard0.TargetNode == "localhost:47099" {
 		t.Error("Cloned states should be independent - modification in one shouldn't affect others")
 	}
 
-	t.Logf("Successfully cloned state with %d nodes and %d shards", len(state.Nodes), len(state.ShardMapping.Shards))
+	t.Logf("Successfully cloned state with %d nodes and %d shards", state.Nodes.len(), state.ShardMapping.Shards.len())
 }
