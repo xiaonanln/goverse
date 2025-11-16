@@ -8,8 +8,8 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
-"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // setupShardMapping is a helper function that sets up shard mapping in both ConsensusManager

@@ -6,7 +6,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
-"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestRebalanceShards_BatchMigration tests that RebalanceShards can migrate multiple shards in a single call
@@ -110,43 +110,43 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 
 	// Create a test scenario with varying degrees of imbalance
 	testCases := []struct {
-		name           string
-		node1Count     int
-		node2Count     int
-		node3Count     int
-		expectedBatch  int // Minimum expected batch size
+		name            string
+		node1Count      int
+		node2Count      int
+		node3Count      int
+		expectedBatch   int // Minimum expected batch size
 		shouldRebalance bool
 	}{
 		{
-			name:           "Severe imbalance - should migrate many shards",
-			node1Count:     6000,
-			node2Count:     1096,
-			node3Count:     1096,
-			expectedBatch:  50, // Should migrate many shards
+			name:            "Severe imbalance - should migrate many shards",
+			node1Count:      6000,
+			node2Count:      1096,
+			node3Count:      1096,
+			expectedBatch:   50, // Should migrate many shards
 			shouldRebalance: true,
 		},
 		{
-			name:           "Moderate imbalance - should migrate some shards",
-			node1Count:     4000,
-			node2Count:     1996,
-			node3Count:     2196,
-			expectedBatch:  1, // Should migrate at least a few shards
+			name:            "Moderate imbalance - should migrate some shards",
+			node1Count:      4000,
+			node2Count:      1996,
+			node3Count:      2196,
+			expectedBatch:   1, // Should migrate at least a few shards
 			shouldRebalance: true,
 		},
 		{
-			name:           "Balanced - should not rebalance",
-			node1Count:     2731,
-			node2Count:     2731,
-			node3Count:     2730,
-			expectedBatch:  0, // Should not rebalance
+			name:            "Balanced - should not rebalance",
+			node1Count:      2731,
+			node2Count:      2731,
+			node3Count:      2730,
+			expectedBatch:   0, // Should not rebalance
 			shouldRebalance: false,
 		},
 		{
-			name:           "Small imbalance - should not rebalance",
-			node1Count:     2733,
-			node2Count:     2730,
-			node3Count:     2729,
-			expectedBatch:  0, // a=2733, b=2729, a < b+2, so no rebalance
+			name:            "Small imbalance - should not rebalance",
+			node1Count:      2733,
+			node2Count:      2730,
+			node3Count:      2729,
+			expectedBatch:   0, // a=2733, b=2729, a < b+2, so no rebalance
 			shouldRebalance: false,
 		},
 	}

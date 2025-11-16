@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
-"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // canEtcdRestart checks if etcd can be restarted in the current environment

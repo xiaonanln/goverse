@@ -36,7 +36,7 @@ func TestGetShardID_DifferentInputs(t *testing.T) {
 	// Test that different object IDs can produce different shard IDs
 	id1 := "object1"
 	id2 := "object2"
-	
+
 	shardID1 := GetShardID(id1)
 	shardID2 := GetShardID(id2)
 
@@ -53,7 +53,7 @@ func TestGetShardID_DifferentInputs(t *testing.T) {
 func TestGetShardID_EmptyString(t *testing.T) {
 	// Test with empty string
 	shardID := GetShardID("")
-	
+
 	if shardID < 0 || shardID >= NumShards {
 		t.Errorf("GetShardID(\"\") = %d, want value in range [0, %d)", shardID, NumShards)
 	}
@@ -88,11 +88,11 @@ func TestGetShardID_Distribution(t *testing.T) {
 	for i := 0; i < numTests; i++ {
 		objectID := fmt.Sprintf("object-%d", i)
 		shardID := GetShardID(objectID)
-		
+
 		if shardID < 0 || shardID >= NumShards {
 			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
 		}
-		
+
 		shardCounts[shardID]++
 	}
 
@@ -141,7 +141,7 @@ func TestGetShardID_KnownValues(t *testing.T) {
 
 func BenchmarkGetShardID(b *testing.B) {
 	objectID := "benchmark-test-object-12345"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		GetShardID(objectID)

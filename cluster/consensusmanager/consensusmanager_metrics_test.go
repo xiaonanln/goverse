@@ -5,9 +5,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/metrics"
 	testutilpkg "github.com/xiaonanln/goverse/util/testutil"
-"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 func TestUpdateShardMetrics_EmptyState(t *testing.T) {
@@ -184,7 +184,7 @@ func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
 	if count1 != 0.0 {
 		t.Errorf("Expected shard count for localhost:47001 (target) to be 0.0, got %f", count1)
 	}
-	
+
 	// Verify migrating shards count
 	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
 	if migratingCount != 1.0 {

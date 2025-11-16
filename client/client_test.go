@@ -29,7 +29,7 @@ func TestBaseClient_MessageChan(t *testing.T) {
 func TestBaseClient_OnCreated(t *testing.T) {
 	client := &TestClient{}
 	client.OnInit(client, "test-client-id")
-	
+
 	// Before OnCreated, messageChan should be nil
 	if client.messageChan != nil {
 		t.Error("messageChan should be nil before OnCreated")
@@ -103,12 +103,12 @@ func TestMessageChan_BufferCapacity(t *testing.T) {
 	client.OnCreated()
 
 	messageChan := client.MessageChan()
-	
+
 	// The channel is buffered (capacity 10), so we can send messages without blocking
 	if messageChan == nil {
 		t.Error("messageChan should not be nil after OnCreated")
 	}
-	
+
 	// Verify we have a buffer capacity > 0
 	if cap(messageChan) == 0 {
 		t.Error("messageChan should have buffer capacity > 0")
@@ -122,7 +122,7 @@ func TestClientObject_ProtoMessageChannel(t *testing.T) {
 
 	// Test that MessageChan returns a channel that accepts proto.Message
 	messageChan := client.MessageChan()
-	
+
 	// Verify the channel type
 	var _ chan proto.Message = messageChan
 }

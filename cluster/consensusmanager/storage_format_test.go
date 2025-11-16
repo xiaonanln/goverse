@@ -7,9 +7,9 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
-"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestStorageFormat verifies that shards are stored in individual keys

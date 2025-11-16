@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
-"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestGetObjectsToEvict tests the GetObjectsToEvict method
@@ -48,7 +48,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 	// Find object IDs that map to our test shards
 	objectIDs := []string{}
 	objToShard := make(map[string]int)
-	
+
 	for i := 0; i < 100000 && len(objectIDs) < 4; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
 		shardID := sharding.GetShardID(testID)
@@ -59,7 +59,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 			}
 		}
 	}
-	
+
 	// Add client object
 	objectIDs = append(objectIDs, "localhost:50001/client-123")
 
@@ -171,7 +171,7 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	// Find object IDs that map to shards 0, 1, and 2
 	objectIDs := []string{}
 	objToShard := make(map[string]int)
-	
+
 	for i := 0; i < 100000 && len(objToShard) < 3; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
 		shardID := sharding.GetShardID(testID)
@@ -251,7 +251,7 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	// Find object IDs that map to our test shards
 	objectIDs := []string{}
 	objToShard := make(map[string]int)
-	
+
 	for i := 0; i < 100000 && len(objToShard) < 3; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
 		shardID := sharding.GetShardID(testID)
@@ -330,7 +330,7 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	// Find object IDs that map to our test shards
 	objectIDs := []string{}
 	objToShard := make(map[string]int)
-	
+
 	for i := 0; i < 100000 && len(objToShard) < 3; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
 		shardID := sharding.GetShardID(testID)

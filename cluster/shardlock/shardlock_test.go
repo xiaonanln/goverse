@@ -273,12 +273,12 @@ func TestShardLock_AcquireWriteMultiple(t *testing.T) {
 	// Test multiple shards
 	shardIDs := []int{3, 1, 5, 2, 4}
 	unlock = sl.AcquireWriteMultiple(shardIDs)
-	
+
 	// Verify original slice wasn't modified
 	if shardIDs[0] != 3 {
 		t.Errorf("Original slice was modified")
 	}
-	
+
 	unlock()
 }
 

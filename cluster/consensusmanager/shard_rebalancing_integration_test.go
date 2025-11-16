@@ -7,8 +7,8 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
-"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // TestShardAssignmentAndRebalancing_Integration tests the full shard assignment and rebalancing flow with etcd
