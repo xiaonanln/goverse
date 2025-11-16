@@ -837,10 +837,10 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 	ctx := context.Background()
 
-	// Don't set this node's address
-
-	// Add a shard
+	// Set up a stable cluster state with other nodes (but not this node)
 	cm.mu.Lock()
+	cm.state.Nodes["localhost:47002"] = true                // Add a different node
+	cm.state.LastChange = time.Now().Add(-11 * time.Second) // Make cluster stable
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
@@ -851,10 +851,14 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Call ClaimShardsForNode with empty string - should return error
+	// Call ClaimShardsForNode with empty localNode - should return error
 	err := cm.ClaimShardsForNode(ctx)
 	if err == nil {
-		t.Error("ClaimShardsForNode should return error when localNode is empty")
+		t.Error("ClaimShardsForNode should return error when localNode is not in cluster")
+	}
+	// Accept either "not stable" (from IsStateStable check) or "not in cluster state" error
+	if err != nil && !strings.Contains(err.Error(), "not stable") && !strings.Contains(err.Error(), "not in cluster state") {
+		t.Errorf("Expected error about cluster not stable or node not in cluster, got: %v", err)
 	}
 
 	// Verify the shard wasn't modified
@@ -1052,10 +1056,13 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		}
 		cm.mu.Unlock()
 
-		// Try to claim with 10s stability requirement - should not claim
+		// Try to claim with 10s stability requirement - should return error
 		err := cm.ClaimShardsForNode(ctx)
-		if err != nil {
-			t.Errorf("ClaimShardsForNode should not error on unstable cluster: %v", err)
+		if err == nil {
+			t.Error("ClaimShardsForNode should return error when cluster is unstable")
+		}
+		if err != nil && !strings.Contains(err.Error(), "not stable") {
+			t.Errorf("Expected error about cluster not stable, got: %v", err)
 		}
 
 		// Verify the shard was not claimed
@@ -1092,8 +1099,6 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 	})
 
 	t.Run("Node not in cluster - no claim", func(t *testing.T) {
-		otherNodeAddr := "localhost:47999"
-
 		// Setup: stable cluster but thisNode not in cluster
 		cm.mu.Lock()
 		cm.state.Nodes = map[string]bool{
@@ -1103,7 +1108,7 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		cm.state.ShardMapping = &ShardMapping{
 			Shards: map[int]ShardInfo{
 				2: {
-					TargetNode:  otherNodeAddr,
+					TargetNode:  "localhost:47002",
 					CurrentNode: "",
 					ModRevision: 0,
 				},
@@ -1113,8 +1118,12 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 
 		// Try to claim (will use thisNodeAddr from constructor which is not in the cluster)
 		err := cm.ClaimShardsForNode(ctx)
-		if err != nil {
-			t.Errorf("ClaimShardsForNode should not error when node not in cluster: %v", err)
+		if err == nil {
+			t.Error("ClaimShardsForNode should return error when node not in cluster")
+		}
+		// Accept either "not stable" (from IsStateStable check) or "not in cluster state" error
+		if err != nil && !strings.Contains(err.Error(), "not stable") && !strings.Contains(err.Error(), "not in cluster state") {
+			t.Errorf("Expected error about cluster not stable or node not in cluster, got: %v", err)
 		}
 
 		// Verify the shard was not claimed
