@@ -42,10 +42,9 @@ func TestSetAndGetLevel(t *testing.T) {
 // --- Level-based logging behavior ---
 func TestLoggerLevels(t *testing.T) {
 	var buf bytes.Buffer
-	l := &Logger{
-		level:  DEBUG,
-		logger: log.New(&buf, "", 0),
-	}
+	l := NewLogger("")
+	l.logger = log.New(&buf, "", 0)
+	l.SetLevel(DEBUG)
 
 	l.Debugf("debug msg")
 	l.Infof("info msg")
@@ -63,10 +62,9 @@ func TestLoggerLevels(t *testing.T) {
 // --- Level filtering ---
 func TestLoggerLevelFiltering(t *testing.T) {
 	var buf bytes.Buffer
-	l := &Logger{
-		level:  WARN,
-		logger: log.New(&buf, "", 0),
-	}
+	l := NewLogger("")
+	l.logger = log.New(&buf, "", 0)
+	l.SetLevel(WARN)
 
 	l.Debugf("debug msg")
 	l.Infof("info msg")
@@ -126,11 +124,9 @@ func TestSetAndGetPrefix(t *testing.T) {
 // --- Test prefix in log output ---
 func TestPrefixInLogOutput(t *testing.T) {
 	var buf bytes.Buffer
-	l := &Logger{
-		level:  INFO,
-		prefix: "test-prefix",
-		logger: log.New(&buf, "", 0),
-	}
+	l := NewLogger("test-prefix")
+	l.logger = log.New(&buf, "", 0)
+	l.SetLevel(INFO)
 	
 	l.Infof("test message")
 	
@@ -187,11 +183,9 @@ func TestConcurrentPrefixChanges(t *testing.T) {
 // --- Concurrency test for level and prefix together ---
 func TestConcurrentLevelAndPrefixChanges(t *testing.T) {
 	var buf bytes.Buffer
-	l := &Logger{
-		level:  INFO,
-		prefix: "initial",
-		logger: log.New(&buf, "", 0),
-	}
+	l := NewLogger("initial")
+	l.logger = log.New(&buf, "", 0)
+	l.SetLevel(INFO)
 	
 	const goroutines = 50
 	const operations = 100
@@ -230,11 +224,9 @@ func TestConcurrentLevelAndPrefixChanges(t *testing.T) {
 // --- Concurrency test for logging while changing prefix ---
 func TestConcurrentLoggingAndPrefixChanges(t *testing.T) {
 	var buf bytes.Buffer
-	l := &Logger{
-		level:  INFO,
-		prefix: "initial",
-		logger: log.New(&buf, "", 0),
-	}
+	l := NewLogger("initial")
+	l.logger = log.New(&buf, "", 0)
+	l.SetLevel(INFO)
 	
 	const goroutines = 50
 	const operations = 100
