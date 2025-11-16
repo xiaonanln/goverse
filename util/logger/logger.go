@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,55 +40,45 @@ func (l LogLevel) String() string {
 
 // Logger represents a logger with configurable log level
 type Logger struct {
-	mu     sync.RWMutex
-	level  LogLevel
-	prefix string
+	level  atomic.Value // stores LogLevel
+	prefix atomic.Value // stores string
 	logger *log.Logger
 }
 
 // NewLogger creates a new Logger instance with default INFO level
 func NewLogger(prefix string) *Logger {
-	return &Logger{
-		level:  INFO,
-		prefix: prefix,
+	l := &Logger{
 		logger: log.New(os.Stdout, "", 0),
 	}
+	l.level.Store(INFO)
+	l.prefix.Store(prefix)
+	return l
 }
 
 // SetLevel sets the logging level
 func (l *Logger) SetLevel(level LogLevel) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.level = level
+	l.level.Store(level)
 }
 
 // GetLevel returns the current logging level
 func (l *Logger) GetLevel() LogLevel {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.level
+	return l.level.Load().(LogLevel)
 }
 
 // SetPrefix sets the logging prefix
 func (l *Logger) SetPrefix(prefix string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.prefix = prefix
+	l.prefix.Store(prefix)
 }
 
 // GetPrefix returns the current logging prefix
 func (l *Logger) GetPrefix() string {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.prefix
+	return l.prefix.Load().(string)
 }
 
 // log is the internal logging method
 func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
-	l.mu.RLock()
-	currentLevel := l.level
-	currentPrefix := l.prefix
-	l.mu.RUnlock()
+	currentLevel := l.level.Load().(LogLevel)
+	currentPrefix := l.prefix.Load().(string)
 
 	if level < currentLevel {
 		return
