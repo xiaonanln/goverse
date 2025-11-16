@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run chat integration tests inside Docker container
-# This script is meant to be run inside the goverse-dev container
+# This script is meant to be run inside the xiaonanln/goverse:dev container
 
 set -euo pipefail
 

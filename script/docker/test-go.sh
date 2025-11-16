@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run Go unit tests inside Docker container
-# This script is meant to be run inside the goverse-dev container
+# This script is meant to be run inside the xiaonanln/goverse:dev container
 # Usage: ./script/docker/test-go.sh [-race] [-etcd-restart] [-etcd-restart-only]
 
 set -euo pipefail
