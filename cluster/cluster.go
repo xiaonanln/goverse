@@ -120,15 +120,17 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 // Uses test-appropriate configuration values
 func newClusterForTesting(node *node.Node, name string) *Cluster {
 	// Use test-appropriate durations (faster than production defaults)
+	shardLock := shardlock.NewShardLock()
 	return &Cluster{
 		thisNode:                  node,
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
+		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock),
 		minQuorum:                 1,
 		nodeStabilityDuration:     3 * time.Second,
 		shardMappingCheckInterval: 1 * time.Second,
-		shardLock:                 shardlock.NewShardLock(),
+		shardLock:                 shardLock,
 	}
 }
 
@@ -278,16 +280,10 @@ func (c *Cluster) GetThisNode() *node.Node {
 // String returns a string representation of the cluster
 // Format: Cluster<local-node-address,leader|member,quorum=%d>
 func (c *Cluster) String() string {
-	var nodeAddr string
-	if c.thisNode != nil {
-		nodeAddr = c.thisNode.GetAdvertiseAddress()
-	} else {
-		nodeAddr = "unknown"
-	}
+	nodeAddr := c.thisNode.GetAdvertiseAddress()
 
 	var role string
-	// Check if consensusManager is initialized before calling IsLeader
-	if c.consensusManager != nil && c.IsLeader() {
+	if c.IsLeader() {
 		role = "leader"
 	} else {
 		role = "member"

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
@@ -210,27 +209,6 @@ func TestClusterString(t *testing.T) {
 	}
 	if !strings.HasSuffix(str, ">") {
 		t.Errorf("String() should end with '>', got: %s", str)
-	}
-}
-
-func TestClusterString_NoNode(t *testing.T) {
-	// Test String() when node is not set
-	cluster := &Cluster{
-		logger:    logger.NewLogger("TestCluster"),
-		minQuorum: 3,
-	}
-
-	str := cluster.String()
-	t.Logf("Cluster string (no node): %s", str)
-
-	// Should contain "unknown" when node is not set
-	if !strings.Contains(str, "unknown") {
-		t.Errorf("String() should contain 'unknown' when node not set, got: %s", str)
-	}
-
-	// Should contain quorum information
-	if !strings.Contains(str, "quorum=3") {
-		t.Errorf("String() should contain 'quorum=3', got: %s", str)
 	}
 }
 
