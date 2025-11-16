@@ -49,8 +49,17 @@ type ShardMapping struct {
 	Shards map[int]ShardInfo `json:"shards"`
 }
 
-func (sm *ShardMapping) IsComplete() bool {
-	return len(sm.Shards) == sharding.NumShards
+func (sm *ShardMapping) IsFullyAssignedAndClaimed() bool {
+	if len(sm.Shards) != sharding.NumShards {
+		return false
+	}
+	// Check that all shards have both TargetNode and CurrentNode set
+	for _, shardInfo := range sm.Shards {
+		if shardInfo.TargetNode == "" || shardInfo.CurrentNode == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // ClusterState represents the current state of the cluster
@@ -218,8 +227,8 @@ func (cm *ConsensusManager) IsReady() bool {
 		return false
 	}
 
-	if cm.state.ShardMapping == nil || !cm.state.ShardMapping.IsComplete() {
-		cm.logger.Warnf("ConsensusManager not ready: Shard mapping incomplete")
+	if cm.state.ShardMapping == nil || !cm.state.ShardMapping.IsFullyAssignedAndClaimed() {
+		cm.logger.Warnf("ConsensusManager not ready: Shard mapping not fully assigned and claimed")
 		return false
 	}
 
