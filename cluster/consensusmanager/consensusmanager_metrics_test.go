@@ -16,7 +16,7 @@ func TestUpdateShardMetrics_EmptyState(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Initialize empty ShardMapping to prevent nil pointer
 	cm.mu.Lock()
@@ -38,7 +38,7 @@ func TestUpdateShardMetrics_WithShards(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Set up test state with nodes and shards
 	cm.mu.Lock()
@@ -77,7 +77,7 @@ func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Set up test state with nodes but no shards assigned to one node
 	cm.mu.Lock()
@@ -119,7 +119,7 @@ func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Set up test state with shards that have TargetNode but no CurrentNode (unclaimed)
 	cm.mu.Lock()
@@ -156,7 +156,7 @@ func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Set up test state simulating a shard migration scenario
 	// Shard is being migrated from node 47000 to 47001
@@ -198,7 +198,7 @@ func TestUpdateShardMetrics_NoMigrations(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Set up test state with shards where TargetNode == CurrentNode (no migrations)
 	cm.mu.Lock()
@@ -230,7 +230,7 @@ func TestUpdateShardMetrics_MultipleMigrations(t *testing.T) {
 	testutilpkg.LockMetrics(t)
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Set up test state with multiple shards in migration
 	cm.mu.Lock()

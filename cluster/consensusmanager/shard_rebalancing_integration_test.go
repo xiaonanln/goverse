@@ -31,7 +31,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Initialize and start watching
 	err = cm.Initialize(ctx)

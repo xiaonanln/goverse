@@ -106,7 +106,19 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 	}
 
 	c.etcdManager = mgr
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock)
+
+	// Get local node address
+	localNodeAddr := ""
+	if thisNode != nil {
+		localNodeAddr = thisNode.GetAdvertiseAddress()
+	}
+
+	// Create consensus manager with node stability duration and local node address
+	nodeStabilityDuration := cfg.NodeStabilityDuration
+	if nodeStabilityDuration <= 0 {
+		nodeStabilityDuration = DefaultNodeStabilityDuration
+	}
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, nodeStabilityDuration, localNodeAddr)
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
@@ -353,9 +365,8 @@ func (c *Cluster) checkAndMarkReady() {
 		return
 	}
 
-	localAddr := c.thisNode.GetAdvertiseAddress()
-	if !c.consensusManager.IsStateStable(localAddr, c.getEffectiveNodeStabilityDuration()) {
-		c.logger.Infof("%s - Cannot mark cluster ready: cluster state not stable yet, will check again later", c)
+	if !c.consensusManager.IsStateStable() {
+		c.logger.Infof("Cannot mark cluster ready: cluster state not stable yet, will check again later")
 		return
 	}
 
@@ -740,11 +751,9 @@ func (c *Cluster) updateMetrics() {
 
 // claimShardOwnership claims ownership of shards when cluster state is stable
 func (c *Cluster) claimShardOwnership(ctx context.Context) {
-	localAddr := c.thisNode.GetAdvertiseAddress()
-
 	// Claim ownership of shards where this node is the target
 	// The stability check is now performed inside ClaimShardsForNode
-	err := c.consensusManager.ClaimShardsForNode(ctx, localAddr, c.getEffectiveNodeStabilityDuration())
+	err := c.consensusManager.ClaimShardsForNode(ctx)
 	if err != nil {
 		c.logger.Warnf("%s - Failed to claim shard ownership: %v", c, err)
 	}
@@ -755,8 +764,6 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 // - TargetNode is another node (not empty and not this node)
 // - No objects exist on this node for that shard
 func (c *Cluster) releaseShardOwnership(ctx context.Context) {
-	localAddr := c.thisNode.GetAdvertiseAddress()
-
 	// Count objects per shard on this node
 	objectIDs := c.thisNode.ListObjectIDs()
 	localObjectsPerShard := make(map[int]int)
@@ -770,8 +777,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 	}
 
 	// Release ownership of shards where this node is no longer needed
-	// Pass the node stability duration to the consensus manager
-	err := c.consensusManager.ReleaseShardsForNode(ctx, localAddr, localObjectsPerShard, c.getEffectiveNodeStabilityDuration())
+	err := c.consensusManager.ReleaseShardsForNode(ctx, localObjectsPerShard)
 	if err != nil {
 		c.logger.Warnf("%s - Failed to release shard ownership: %v", c, err)
 	}
@@ -782,7 +788,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
 	// Check if cluster state is stable without cloning
-	if !c.consensusManager.IsStateStable(localAddr, c.getEffectiveNodeStabilityDuration()) {
+	if !c.consensusManager.IsStateStable() {
 		c.logger.Debugf("%s - Skipping object removal: cluster state is not stable yet", c)
 		return
 	}
@@ -820,9 +826,8 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 
 	c.logger.Infof("%s - ACTING AS LEADER!", c)
 
-	localAddr := c.thisNode.GetAdvertiseAddress()
-	if !c.consensusManager.IsStateStable(localAddr, c.getEffectiveNodeStabilityDuration()) {
-		c.logger.Warnf("%s - Cluster state not yet stable for this node, waiting before updating shard mapping", c)
+	if !c.consensusManager.IsStateStable() {
+		c.logger.Warnf("Cluster state not yet stable for this node, waiting before updating shard mapping")
 		return false
 	}
 
