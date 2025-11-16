@@ -883,3 +883,7 @@ func (c *Cluster) updateNodeConnections() {
 func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 	return c.nodeConnections
 }
+
+func (c *Cluster) GetClusterStateStabilityDurationForTesting() time.Duration {
+	return c.consensusManager.GetClusterStateStabilityDurationForTesting()
+}

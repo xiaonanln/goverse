@@ -12,8 +12,6 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-
-
 func TestValidateServerConfig_NilConfig(t *testing.T) {
 	err := validateServerConfig(nil)
 	if err == nil {
@@ -97,9 +95,9 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 	}
 
 	// Verify the cluster has the custom NodeStabilityDuration
-	if server.cluster.GetNodeStabilityDuration() != customDuration {
+	if server.cluster.GetClusterStateStabilityDurationForTesting() != customDuration {
 		t.Errorf("Expected cluster NodeStabilityDuration to be %v, got %v",
-			customDuration, server.cluster.GetNodeStabilityDuration())
+			customDuration, server.cluster.GetClusterStateStabilityDurationForTesting())
 	}
 }
 
@@ -123,9 +121,9 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 	}
 
 	// Verify the cluster uses the default DefaultNodeStabilityDuration
-	if server.cluster.GetNodeStabilityDuration() != cluster.DefaultNodeStabilityDuration {
+	if server.cluster.GetClusterStateStabilityDurationForTesting() != cluster.DefaultNodeStabilityDuration {
 		t.Errorf("Expected cluster NodeStabilityDuration to be default %v, got %v",
-			cluster.DefaultNodeStabilityDuration, server.cluster.GetNodeStabilityDuration())
+			cluster.DefaultNodeStabilityDuration, server.cluster.GetClusterStateStabilityDurationForTesting())
 	}
 }
 
