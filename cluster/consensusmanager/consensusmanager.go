@@ -1014,10 +1014,18 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
 		currentInfo := currentShards[shardID]
 		if !nodeSet[currentInfo.TargetNode] {
-			// Assign to a new node using round-robin
-			nodeIdx := shardID % len(nodes)
+			// If TargetNode is empty but CurrentNode is already set to a valid node,
+			// respect the existing assignment and set TargetNode to CurrentNode
+			var targetNode string
+			if currentInfo.TargetNode == "" && currentInfo.CurrentNode != "" && nodeSet[currentInfo.CurrentNode] {
+				targetNode = currentInfo.CurrentNode
+			} else {
+				// Assign to a new node using round-robin
+				nodeIdx := shardID % len(nodes)
+				targetNode = nodes[nodeIdx]
+			}
 			newInfo := ShardInfo{
-				TargetNode:  nodes[nodeIdx],
+				TargetNode:  targetNode,
 				CurrentNode: currentInfo.CurrentNode,
 				ModRevision: currentInfo.ModRevision,
 			}

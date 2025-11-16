@@ -1136,3 +1136,102 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		}
 	})
 }
+
+// TestReassignShardTargetNodes_RespectsCurrentNode tests the edge case where TargetNode is empty
+// but CurrentNode is already set to a valid node. The leader should respect the existing assignment
+// and set TargetNode to match CurrentNode instead of using round-robin assignment.
+func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+
+	node1 := "localhost:47001"
+	node2 := "localhost:47002"
+
+	// Set up cluster state with two nodes
+	cm.mu.Lock()
+	cm.state.Nodes = map[string]bool{
+		node1: true,
+		node2: true,
+	}
+
+	// Create a scenario where:
+	// - Shard 0: TargetNode is empty, CurrentNode is node1
+	// - Shard 1: TargetNode is empty, CurrentNode is node2
+	// - Shard 2: TargetNode is empty, CurrentNode is empty (should use round-robin)
+	// Note: All shards need to be initialized since calcReassignShardTargetNodes checks all 8192 shards
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	
+	// Initialize all shards with valid TargetNode (so they don't need reassignment)
+	for i := 0; i < sharding.NumShards; i++ {
+		cm.state.ShardMapping.Shards[i] = ShardInfo{
+			TargetNode:  node1, // All have valid target
+			CurrentNode: "",
+			ModRevision: 0,
+		}
+	}
+	
+	// Override our test cases
+	cm.state.ShardMapping.Shards[0] = ShardInfo{
+		TargetNode:  "",
+		CurrentNode: node1,
+		ModRevision: 0,
+	}
+	cm.state.ShardMapping.Shards[1] = ShardInfo{
+		TargetNode:  "",
+		CurrentNode: node2,
+		ModRevision: 0,
+	}
+	cm.state.ShardMapping.Shards[2] = ShardInfo{
+		TargetNode:  "",
+		CurrentNode: "",
+		ModRevision: 0,
+	}
+	cm.mu.Unlock()
+
+	// Calculate reassignments
+	updateShards := cm.calcReassignShardTargetNodes()
+
+	// Verify we have 3 shards to update
+	if len(updateShards) != 3 {
+		t.Fatalf("Expected 3 shards to update, got %d", len(updateShards))
+	}
+
+	// Verify shard 0: TargetNode should be set to node1 (respecting CurrentNode)
+	if shard0, ok := updateShards[0]; !ok {
+		t.Error("Shard 0 should be in update list")
+	} else {
+		if shard0.TargetNode != node1 {
+			t.Errorf("Shard 0: Expected TargetNode to be %s (respecting CurrentNode), got %s", node1, shard0.TargetNode)
+		}
+		if shard0.CurrentNode != node1 {
+			t.Errorf("Shard 0: Expected CurrentNode to remain %s, got %s", node1, shard0.CurrentNode)
+		}
+	}
+
+	// Verify shard 1: TargetNode should be set to node2 (respecting CurrentNode)
+	if shard1, ok := updateShards[1]; !ok {
+		t.Error("Shard 1 should be in update list")
+	} else {
+		if shard1.TargetNode != node2 {
+			t.Errorf("Shard 1: Expected TargetNode to be %s (respecting CurrentNode), got %s", node2, shard1.TargetNode)
+		}
+		if shard1.CurrentNode != node2 {
+			t.Errorf("Shard 1: Expected CurrentNode to remain %s, got %s", node2, shard1.CurrentNode)
+		}
+	}
+
+	// Verify shard 2: TargetNode should be assigned via round-robin (shard 2 % 2 = 0 -> node1)
+	if shard2, ok := updateShards[2]; !ok {
+		t.Error("Shard 2 should be in update list")
+	} else {
+		expectedTarget := node1 // shard 2 % 2 nodes = 0, so first node in sorted list
+		if shard2.TargetNode != expectedTarget {
+			t.Errorf("Shard 2: Expected TargetNode to be %s (round-robin), got %s", expectedTarget, shard2.TargetNode)
+		}
+		if shard2.CurrentNode != "" {
+			t.Errorf("Shard 2: Expected CurrentNode to remain empty, got %s", shard2.CurrentNode)
+		}
+	}
+}
