@@ -22,6 +22,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
       - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
@@ -36,3 +43,9 @@ jobs:
       - name: Run tests in Docker container
         run: |
           docker run --rm goverse-dev:latest bash /app/script/docker/test-all.sh
+      
+      - name: Push Docker image to Docker Hub
+        if: github.event_name != 'pull_request'
+        run: |
+          docker tag goverse-dev:latest xiaonanln/goverse:dev
+          docker push xiaonanln/goverse:dev
