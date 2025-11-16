@@ -188,8 +188,8 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 	t.Logf("Successfully accessed state with %d nodes and %d shards", len(state.Nodes), len(state.ShardMapping.Shards))
 }
 
-// TestGetClusterState_ReturnsDirectReference tests that GetClusterState returns the state directly
-func TestGetClusterState_ReturnsDirectReference(t *testing.T) {
+// TestGetClusterStateForTesting_ReturnsClonedState tests that GetClusterStateForTesting returns a cloned copy
+func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
@@ -198,11 +198,11 @@ func TestGetClusterState_ReturnsDirectReference(t *testing.T) {
 	cm.state.Nodes["localhost:47001"] = true
 	cm.mu.Unlock()
 
-	// Get state
-	state := cm.GetClusterState()
+	// Get state copy
+	state := cm.GetClusterStateForTesting()
 
 	if state == nil {
-		t.Fatal("GetClusterState returned nil")
+		t.Fatal("GetClusterStateForTesting returned nil")
 	}
 
 	if !state.Nodes["localhost:47001"] {

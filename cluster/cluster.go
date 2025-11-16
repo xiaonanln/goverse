@@ -802,18 +802,22 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 		return
 	}
 
-	clusterState := c.consensusManager.GetClusterState()
+	clusterState, unlock := c.consensusManager.LockClusterState()
 
 	// Only claim shards when cluster state is stable
 	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
+		unlock()
 		return
 	}
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 	if !clusterState.HasNode(localAddr) {
 		// This node is not yet in the cluster state
+		unlock()
 		return
 	}
+
+	unlock()
 
 	// Claim ownership of shards where this node is the target
 	err := c.consensusManager.ClaimShardsForNode(ctx, localAddr)
@@ -831,12 +835,14 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 		return
 	}
 
-	clusterState := c.consensusManager.GetClusterState()
+	clusterState, unlock := c.consensusManager.LockClusterState()
 
 	// Only release shards when cluster state is stable
 	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
+		unlock()
 		return
 	}
+	unlock()
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
@@ -905,7 +911,8 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 		return false
 	}
 
-	clusterState := c.consensusManager.GetClusterState()
+	clusterState, unlock := c.consensusManager.LockClusterState()
+
 	minQuorum := c.getEffectiveMinQuorum()
 
 	c.logger.Infof("Acting as leader: %s; nodes: %d (min quorum: %d), sharding map: %d, revision: %d",
@@ -917,26 +924,32 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 	}
 
 	if len(clusterState.Nodes) == 0 {
+		unlock()
 		c.logger.Warnf("No nodes available, skipping shard mapping update")
 		return false
 	}
 
 	// Check if we have the minimum required nodes
 	if len(clusterState.Nodes) < minQuorum {
+		unlock()
 		c.logger.Warnf("Cluster has %d nodes but requires minimum quorum of %d nodes - waiting for more nodes to join", len(clusterState.Nodes), minQuorum)
 		return false
 	}
 
 	if c.thisNode == nil {
+		unlock()
 		c.logger.Warnf("ThisNode not set; leader cannot ensure self registration")
 		return false
 	}
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 	if !clusterState.HasNode(localAddr) {
+		unlock()
 		c.logger.Infof("This node %s not present in cluster state", localAddr)
 		return false
 	}
+
+	unlock()
 
 	// First priority: reassign shards whose target nodes are no longer in the cluster
 	// This handles node failures and ensures all shards have valid target nodes
