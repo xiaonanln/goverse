@@ -215,9 +215,7 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	c.stopShardMappingManagement()
 
 	// Stop watching cluster state (must stop before closing etcd)
-	if c.consensusManager != nil {
-		c.consensusManager.StopWatch()
-	}
+	c.consensusManager.StopWatch()
 
 	// Unregister from etcd
 	if err := c.unregisterNode(ctx); err != nil {
@@ -337,11 +335,6 @@ func (c *Cluster) checkAndMarkReady() {
 	}
 
 	// Check if shard mapping is available
-	if c.consensusManager == nil {
-		c.logger.Infof("Cannot mark cluster ready: consensus manager not initialized")
-		return
-	}
-
 	if !c.consensusManager.IsReady() {
 		c.logger.Infof("Cannot mark cluster ready: consensus manager not ready")
 		return
@@ -607,10 +600,6 @@ func (c *Cluster) registerNode(ctx context.Context) error {
 
 // unregisterNode unregisters this node from etcd using the shared lease API
 func (c *Cluster) unregisterNode(ctx context.Context) error {
-	if c.etcdManager == nil {
-		// No-op if etcd manager is not set
-		return nil
-	}
 	if c.thisNode == nil {
 		return fmt.Errorf("thisNode not set")
 	}
@@ -622,9 +611,6 @@ func (c *Cluster) unregisterNode(ctx context.Context) error {
 
 // closeEtcd closes the etcd connection
 func (c *Cluster) closeEtcd() error {
-	if c.etcdManager == nil {
-		return nil
-	}
 	return c.etcdManager.Close()
 }
 
