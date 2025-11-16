@@ -813,13 +813,26 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 // ClaimShardsForNode checks all shards and claims ownership for shards
 // where the given localNode is the target AND CurrentNode is empty or not alive
-func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode string) error {
+// Only claims shards when cluster state is stable for the given duration
+func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode string, nodeStabilityDuration time.Duration) error {
 	if localNode == "" {
 		return fmt.Errorf("localNode cannot be empty")
 	}
 
 	// Lock cluster state to avoid race conditions
 	clusterState, unlock := cm.LockClusterState()
+
+	// Only claim shards when cluster state is stable
+	if !clusterState.IsStable(nodeStabilityDuration) {
+		unlock()
+		return nil
+	}
+
+	if !clusterState.HasNode(localNode) {
+		// This node is not yet in the cluster state
+		unlock()
+		return nil
+	}
 
 	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
 		unlock()
