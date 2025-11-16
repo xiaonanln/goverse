@@ -277,38 +277,7 @@ func (c *Cluster) getEffectiveShardMappingCheckInterval() time.Duration {
 	return c.shardMappingCheckInterval
 }
 
-// ResetForTesting resets the cluster state for testing purposes
-// WARNING: This should only be used in tests
-func (c *Cluster) ResetForTesting() {
-	if c == nil {
-		return
-	}
-	c.thisNode = nil
-	c.etcdManager = nil
-	c.consensusManager = nil
-	c.etcdAddress = ""
-	c.etcdPrefix = ""
-	c.minQuorum = 0
-	c.nodeStabilityDuration = 0
-	c.shardMappingCheckInterval = 0
-	if c.nodeConnections != nil {
-		c.nodeConnections.Stop()
-		c.nodeConnections = nil
-	}
-	if c.shardMappingCancel != nil {
-		c.shardMappingCancel()
-	}
-	c.shardMappingCtx = nil
-	c.shardMappingCancel = nil
-	c.shardMappingRunning = false
-	c.clusterReadyChan = make(chan bool)
-	c.clusterReadyOnce = sync.Once{}
 
-	// Reset the singleton to a fresh instance
-	if c == thisCluster {
-		thisCluster = nil
-	}
-}
 
 func (c *Cluster) GetThisNode() *node.Node {
 	return c.thisNode
@@ -983,10 +952,6 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 // startNodeConnections initializes and starts the node connections manager
 // This should be called after StartWatching is started
 func (c *Cluster) startNodeConnections(ctx context.Context) error {
-	if c.nodeConnections == nil {
-		return fmt.Errorf("nodeConnections is nil - cluster not properly initialized")
-	}
-
 	err := c.nodeConnections.Start(ctx)
 	if err != nil {
 		return err

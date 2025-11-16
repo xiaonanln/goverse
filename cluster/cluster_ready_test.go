@@ -85,41 +85,4 @@ func TestMarkClusterReadyIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestResetForTestingCreatesNewChannel(t *testing.T) {
-	ctx := context.Background()
-	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
-	c := newClusterForTesting(testNode, "TestResetForTestingCreatesNewChannel")
 
-	// Get the initial channel
-	firstChan := c.ClusterReady()
-
-	// Mark cluster as ready
-	c.markClusterReady()
-
-	// Verify channel is closed
-	select {
-	case <-firstChan:
-		// Expected: channel is closed
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Channel should be closed after markClusterReady")
-	}
-
-	// Reset for testing
-	c.ResetForTesting()
-
-	// Get the new channel
-	secondChan := c.ClusterReady()
-
-	// Verify we have a new channel (not the same as before)
-	if firstChan == secondChan {
-		t.Error("ResetForTesting should create a new channel")
-	}
-
-	// New channel should be open (not closed)
-	select {
-	case <-secondChan:
-		t.Error("New channel should not be closed after ResetForTesting")
-	case <-time.After(100 * time.Millisecond):
-		// Expected: channel is still open
-	}
-}
