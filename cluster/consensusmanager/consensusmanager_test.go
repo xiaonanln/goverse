@@ -1142,7 +1142,7 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 // and set TargetNode to match CurrentNode instead of using round-robin assignment.
 func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	node1 := "localhost:47001"
 	node2 := "localhost:47002"
@@ -1162,7 +1162,7 @@ func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
-	
+
 	// Initialize all shards with valid TargetNode (so they don't need reassignment)
 	for i := 0; i < sharding.NumShards; i++ {
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
@@ -1171,7 +1171,7 @@ func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
 			ModRevision: 0,
 		}
 	}
-	
+
 	// Override our test cases
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
 		TargetNode:  "",
