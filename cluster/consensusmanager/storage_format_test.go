@@ -34,13 +34,13 @@ func TestStorageFormat(t *testing.T) {
 
 	// Set up some nodes
 	cm.mu.Lock()
-	cm.state.Nodes["node1"] = true
-	cm.state.Nodes["node2"] = true
+	cm.state.Nodes.set("node1", true)
+	cm.state.Nodes.set("node2", true)
 	cm.mu.Unlock()
 
 	// Create a small shard mapping for testing (not all 8192)
 	mapping := &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	for i := 0; i < 10; i++ {
 		if i%2 == 0 {
@@ -102,14 +102,14 @@ func TestStorageFormat(t *testing.T) {
 		t.Fatal("ShardMapping should not be nil")
 	}
 
-	if len(state.ShardMapping.Shards) != 10 {
-		t.Errorf("Expected 10 shards in loaded mapping, got %d", len(state.ShardMapping.Shards))
+	if state.ShardMapping.Shards.len() != 10 {
+		t.Errorf("Expected 10 shards in loaded mapping, got %d", state.ShardMapping.Shards.len())
 	}
 
 	// Verify all shards match
 	for shardID := 0; shardID < 10; shardID++ {
-		expectedInfo := mapping.Shards[shardID]
-		actualInfo := state.ShardMapping.Shards[shardID]
+		expectedInfo, _ := mapping.Shards.get(shardID)
+		actualInfo, _ := state.ShardMapping.Shards.get(shardID)
 		if actualInfo.TargetNode != expectedInfo.TargetNode {
 			t.Errorf("Shard %d: expected target node %s, got %s", shardID, expectedInfo.TargetNode, actualInfo.TargetNode)
 		}
@@ -143,8 +143,8 @@ func TestStorageFormatFullMapping(t *testing.T) {
 
 	// Set up nodes
 	cm.mu.Lock()
-	cm.state.Nodes["node1"] = true
-	cm.state.Nodes["node2"] = true
+	cm.state.Nodes.set("node1", true)
+	cm.state.Nodes.set("node2", true)
 	cm.mu.Unlock()
 
 	// Create full shard mapping
@@ -174,8 +174,8 @@ func TestStorageFormatFullMapping(t *testing.T) {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
-	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in loaded mapping, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+	if state.ShardMapping.Shards.len() != sharding.NumShards {
+		t.Errorf("Expected %d shards in loaded mapping, got %d", sharding.NumShards, state.ShardMapping.Shards.len())
 	}
 
 	t.Logf("Successfully stored and loaded all %d shards as individual keys", sharding.NumShards)

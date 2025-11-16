@@ -24,8 +24,8 @@ func TestGetClusterState_Empty(t *testing.T) {
 		t.Error("Cloned state should have initialized nodes map")
 	}
 	
-	if len(state.Nodes) != 0 {
-		t.Errorf("Expected empty nodes in cloned state, got %d", len(state.Nodes))
+	if state.Nodes.len() != 0 {
+		t.Errorf("Expected empty nodes in cloned state, got %d", state.Nodes.len())
 	}
 }
 

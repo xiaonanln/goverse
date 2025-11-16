@@ -22,9 +22,9 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 
 	// Set up nodes in ConsensusManager state
 	cm.mu.Lock()
-	cm.state.Nodes = make(map[string]bool)
+	cm.state.Nodes = newCowMap[string, bool]()
 	for _, node := range nodes {
-		cm.state.Nodes[node] = true
+		cm.state.Nodes.set(node, true)
 	}
 
 	// Create highly imbalanced shard mapping:
@@ -32,32 +32,32 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 	// node2: 1096 shards  (8192 / 3 = 2730, so 1096 is significantly less)
 	// node3: 1096 shards
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 
 	// Assign first 6000 shards to node1
 	for i := 0; i < 6000; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  "node1",
 			CurrentNode: "node1",
 			ModRevision: 0,
-		}
+		})
 	}
 
 	// Assign next shards to node2 and node3
 	for i := 6000; i < sharding.NumShards; i++ {
 		if i%2 == 0 {
-			cm.state.ShardMapping.Shards[i] = ShardInfo{
+			cm.state.ShardMapping.Shards.set(i, ShardInfo{
 				TargetNode:  "node2",
 				CurrentNode: "node2",
 				ModRevision: 0,
-			}
+			})
 		} else {
-			cm.state.ShardMapping.Shards[i] = ShardInfo{
+			cm.state.ShardMapping.Shards.set(i, ShardInfo{
 				TargetNode:  "node3",
 				CurrentNode: "node3",
 				ModRevision: 0,
-			}
+			})
 		}
 	}
 	cm.mu.Unlock()
@@ -65,7 +65,9 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 	// Count initial distribution
 	initialCounts := make(map[string]int)
 	cm.mu.RLock()
-	for _, shardInfo := range cm.state.ShardMapping.Shards {
+	shardsMap := make(map[int]ShardInfo)
+	cm.state.ShardMapping.Shards.copyTo(shardsMap)
+	for _, shardInfo := range shardsMap {
 		initialCounts[shardInfo.TargetNode]++
 	}
 	cm.mu.RUnlock()
@@ -163,39 +165,39 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 			nodes := []string{"node1", "node2", "node3"}
 
 			cm.mu.Lock()
-			cm.state.Nodes = make(map[string]bool)
+			cm.state.Nodes = newCowMap[string, bool]()
 			for _, node := range nodes {
-				cm.state.Nodes[node] = true
+				cm.state.Nodes.set(node, true)
 			}
 
 			// Create shard mapping according to test case
 			cm.state.ShardMapping = &ShardMapping{
-				Shards: make(map[int]ShardInfo),
+				Shards: newCowMap[int, ShardInfo](),
 			}
 
 			shardID := 0
 			for i := 0; i < tc.node1Count; i++ {
-				cm.state.ShardMapping.Shards[shardID] = ShardInfo{
+				cm.state.ShardMapping.Shards.set(shardID, ShardInfo{
 					TargetNode:  "node1",
 					CurrentNode: "node1",
 					ModRevision: 0,
-				}
+				})
 				shardID++
 			}
 			for i := 0; i < tc.node2Count; i++ {
-				cm.state.ShardMapping.Shards[shardID] = ShardInfo{
+				cm.state.ShardMapping.Shards.set(shardID, ShardInfo{
 					TargetNode:  "node2",
 					CurrentNode: "node2",
 					ModRevision: 0,
-				}
+				})
 				shardID++
 			}
 			for i := 0; i < tc.node3Count; i++ {
-				cm.state.ShardMapping.Shards[shardID] = ShardInfo{
+				cm.state.ShardMapping.Shards.set(shardID, ShardInfo{
 					TargetNode:  "node3",
 					CurrentNode: "node3",
 					ModRevision: 0,
-				}
+				})
 				shardID++
 			}
 			cm.mu.Unlock()

@@ -104,7 +104,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 		// Build the full shard map with imbalance
 		for i := 0; i < sharding.NumShards; i++ {
-			shardInfo := mapping.Shards[i]
+			shardInfo, _ := mapping.Shards.get(i)
 			if movedCount < targetMove && shardInfo.CurrentNode != "node1" {
 				// Move this shard to node1
 				shards[i] = ShardInfo{
@@ -135,7 +135,8 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		}
 		for i := 0; i < sharding.NumShards; i++ {
 			// Count shards by TargetNode to match RebalanceShards logic (which uses TargetNode)
-			shardCounts[mapping.Shards[i].TargetNode]++
+			shardInfo, _ := mapping.Shards.get(i)
+			shardCounts[shardInfo.TargetNode]++
 		}
 
 		t.Logf("Before rebalance - node1: %d, node2: %d, node3: %d",
@@ -176,7 +177,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		mapping = cm.GetShardMapping()
 		migrationCount := 0
 		for i := 0; i < sharding.NumShards; i++ {
-			shardInfo := mapping.Shards[i]
+			shardInfo, _ := mapping.Shards.get(i)
 			if shardInfo.TargetNode != shardInfo.CurrentNode {
 				migrationCount++
 			}

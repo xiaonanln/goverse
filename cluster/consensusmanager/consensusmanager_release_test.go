@@ -37,18 +37,18 @@ func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, 
 
 	// Set up nodes and shard mapping in ConsensusManager state
 	cm.mu.Lock()
-	cm.state.Nodes = make(map[string]bool)
+	cm.state.Nodes = newCowMap[string, bool]()
 	for node, active := range nodes {
-		cm.state.Nodes[node] = active
+		cm.state.Nodes.set(node, active)
 	}
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	cm.state.LastChange = time.Now().Add(-20 * time.Second) // Mark as stable
 
 	// Set up shards in in-memory state
 	for shardID, shardInfo := range shards {
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.state.ShardMapping.Shards.set(shardID, shardInfo)
 	}
 	cm.mu.Unlock()
 
@@ -64,7 +64,7 @@ func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, 
 		// Update the in-memory ModRevision with the actual value from etcd
 		cm.mu.Lock()
 		shardInfo.ModRevision = resp.Header.Revision
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.state.ShardMapping.Shards.set(shardID, shardInfo)
 		cm.mu.Unlock()
 	}
 }
