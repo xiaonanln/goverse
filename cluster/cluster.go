@@ -42,9 +42,9 @@ type Cluster struct {
 	etcdPrefix                string        // etcd key prefix for this cluster
 	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
 	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
-	shardMappingCtx           context.Context
-	shardMappingCancel        context.CancelFunc
-	shardMappingRunning       bool
+	clusterManagementCtx      context.Context
+	clusterManagementCancel   context.CancelFunc
+	clusterManagementRunning  bool
 	clusterReadyChan          chan bool
 	clusterReadyOnce          sync.Once
 }
@@ -192,7 +192,7 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 	}
 
 	// Start shard mapping management
-	if err := c.startShardMappingManagement(ctx); err != nil {
+	if err := c.startClusterManagement(ctx); err != nil {
 		return fmt.Errorf("failed to start shard mapping management: %w", err)
 	}
 
@@ -658,20 +658,20 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 	return c.consensusManager.GetNodeForShard(shardID)
 }
 
-// startShardMappingManagement starts a background goroutine that periodically manages shard mapping
+// startClusterManagement starts a background goroutine that periodically manages shard mapping
 // If this node is the leader and the node list has been stable for the configured node stability duration,
 // it will update/initialize the shard mapping.
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
-func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
-	if c.shardMappingRunning {
+func (c *Cluster) startClusterManagement(ctx context.Context) error {
+	if c.clusterManagementRunning {
 		c.logger.Warnf("%s - Shard mapping management already running", c)
 		return nil
 	}
 
-	c.shardMappingCtx, c.shardMappingCancel = context.WithCancel(ctx)
-	c.shardMappingRunning = true
+	c.clusterManagementCtx, c.clusterManagementCancel = context.WithCancel(ctx)
+	c.clusterManagementRunning = true
 
-	go c.shardMappingManagementLoop()
+	go c.clusterManagementLoop()
 	c.logger.Infof("%s - Started shard mapping management (check interval: %v)", c,
 		c.getEffectiveShardMappingCheckInterval())
 
@@ -680,35 +680,40 @@ func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 
 // stopShardMappingManagement stops the shard mapping management background task
 func (c *Cluster) stopShardMappingManagement() {
-	if c.shardMappingCancel != nil {
-		c.shardMappingCancel()
-		c.shardMappingCancel = nil
+	if c.clusterManagementCancel != nil {
+		c.clusterManagementCancel()
+		c.clusterManagementCancel = nil
 	}
-	c.shardMappingRunning = false
+	c.clusterManagementRunning = false
 	c.logger.Infof("%s - Stopped shard mapping management", c)
 }
 
-// shardMappingManagementLoop is the background loop that manages shard mapping
-func (c *Cluster) shardMappingManagementLoop() {
+// clusterManagementLoop is the background loop that manages shard mapping
+func (c *Cluster) clusterManagementLoop() {
 	ticker := time.NewTicker(c.getEffectiveShardMappingCheckInterval())
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-c.shardMappingCtx.Done():
+		case <-c.clusterManagementCtx.Done():
 			c.logger.Debugf("%s - Shard mapping management loop stopped", c)
 			return
 		case <-ticker.C:
-			c.handleShardMappingCheck()
-			c.checkAndMarkReady()
-			c.updateMetrics()
+			c.clusterManagementTick()
 		}
 	}
 }
 
+// clusterManagementTick performs a single tick of shard mapping management
+func (c *Cluster) clusterManagementTick() {
+	c.handleShardMappingCheck()
+	c.checkAndMarkReady()
+	c.updateMetrics()
+}
+
 // handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
 func (c *Cluster) handleShardMappingCheck() {
-	ctx := c.shardMappingCtx
+	ctx := c.clusterManagementCtx
 
 	// If leader made changes to cluster state, skip other operations this cycle
 	// to allow the cluster state to stabilize before proceeding. Always update
