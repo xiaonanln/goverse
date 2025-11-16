@@ -835,15 +835,6 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 		return
 	}
 
-	clusterState, unlock := c.consensusManager.LockClusterState()
-
-	// Only release shards when cluster state is stable
-	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
-		unlock()
-		return
-	}
-	unlock()
-
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
 	// Count objects per shard on this node
@@ -859,7 +850,8 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 	}
 
 	// Release ownership of shards where this node is no longer needed
-	err := c.consensusManager.ReleaseShardsForNode(ctx, localAddr, localObjectsPerShard)
+	// Pass the node stability duration to the consensus manager
+	err := c.consensusManager.ReleaseShardsForNode(ctx, localAddr, localObjectsPerShard, c.getEffectiveNodeStabilityDuration())
 	if err != nil {
 		c.logger.Warnf("Failed to release shard ownership: %v", err)
 	}

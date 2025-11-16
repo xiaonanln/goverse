@@ -81,7 +81,7 @@ func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 	objectsPerShard := make(map[int]int)
 
 	// Call ReleaseShardsForNode with empty string - should return error
-	err := cm.ReleaseShardsForNode(ctx, "", objectsPerShard)
+	err := cm.ReleaseShardsForNode(ctx, "", objectsPerShard, 1*time.Second)
 	if err == nil {
 		t.Error("ReleaseShardsForNode should return error for empty localNode")
 	}
@@ -98,7 +98,7 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 	objectsPerShard := make(map[int]int)
 
 	// Call with valid node but no shard mapping - should not error
-	err := cm.ReleaseShardsForNode(ctx, "localhost:47001", objectsPerShard)
+	err := cm.ReleaseShardsForNode(ctx, "localhost:47001", objectsPerShard, 1*time.Second)
 	if err != nil {
 		t.Errorf("ReleaseShardsForNode should not error when no mapping exists: %v", err)
 	}
@@ -188,8 +188,8 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 		4: 0, // No objects for shard 4
 	}
 
-	// Call ReleaseShardsForNode
-	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard)
+	// Call ReleaseShardsForNode with stability duration
+	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard, 1*time.Second)
 	if err != nil {
 		t.Fatalf("ReleaseShardsForNode failed: %v", err)
 	}
@@ -336,8 +336,8 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 		4: 0,
 	}
 
-	// Call ReleaseShardsForNode
-	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard)
+	// Call ReleaseShardsForNode with stability duration
+	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard, 1*time.Second)
 	if err != nil {
 		t.Fatalf("ReleaseShardsForNode failed: %v", err)
 	}
@@ -433,8 +433,8 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 		shard2: 0,
 	}
 
-	// Call ReleaseShardsForNode
-	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard)
+	// Call ReleaseShardsForNode with stability duration
+	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard, 1*time.Second)
 	if err != nil {
 		t.Fatalf("ReleaseShardsForNode failed: %v", err)
 	}

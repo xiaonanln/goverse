@@ -921,9 +921,16 @@ func (cm *ConsensusManager) calcReleaseShardsForNode(localNode string, localObje
 // - CurrentNode is the given localNode
 // - TargetNode is not empty and not this node (another node should own it)
 // - There are no objects on this node for that shard (localObjectsPerShard map)
-func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, localObjectsPerShard map[int]int) error {
+// It only releases shards when the cluster state is stable for the given nodeStabilityDuration.
+func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode string, localObjectsPerShard map[int]int, nodeStabilityDuration time.Duration) error {
 	if localNode == "" {
 		return fmt.Errorf("localNode cannot be empty")
+	}
+
+	// Check if cluster state is stable before releasing shards
+	if !cm.IsStateStable(nodeStabilityDuration) {
+		cm.logger.Debugf("Cluster state not stable, skipping shard release for node %s", localNode)
+		return nil
 	}
 
 	shardsToUpdate := cm.calcReleaseShardsForNode(localNode, localObjectsPerShard)
