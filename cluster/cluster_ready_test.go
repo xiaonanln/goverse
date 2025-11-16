@@ -84,5 +84,3 @@ func TestMarkClusterReadyIsIdempotent(t *testing.T) {
 		t.Error("Channel should be closed after markClusterReady")
 	}
 }
-
-

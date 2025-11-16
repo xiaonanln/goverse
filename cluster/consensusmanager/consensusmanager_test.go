@@ -8,9 +8,9 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"go.etcd.io/etcd/api/v3/mvccpb"
-"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
 // mockListener implements StateChangeListener for testing
@@ -290,8 +290,10 @@ func TestIsStateStable(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
+	localAddr := "localhost:47001"
+
 	// Not stable when lastNodeChange is zero
-	if cm.IsStateStable(time.Second) {
+	if cm.IsStateStable(localAddr, time.Second) {
 		t.Error("Should not be stable when lastNodeChange is zero")
 	}
 
@@ -300,9 +302,9 @@ func TestIsStateStable(t *testing.T) {
 	cm.state.LastChange = time.Now()
 	cm.mu.Unlock()
 
-	// Should not be stable for longer duration
-	if cm.IsStateStable(10 * time.Second) {
-		t.Error("Should not be stable for 10 seconds")
+	// Should not be stable for longer duration (no nodes yet)
+	if cm.IsStateStable(localAddr, 10*time.Second) {
+		t.Error("Should not be stable for 10 seconds when local node not in cluster")
 	}
 
 	// Set lastNodeChange to past but nodes list is empty
@@ -311,17 +313,17 @@ func TestIsStateStable(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Should NOT be stable when nodes list is empty
-	if cm.IsStateStable(10 * time.Second) {
+	if cm.IsStateStable(localAddr, 10*time.Second) {
 		t.Error("Should not be stable when nodes list is empty")
 	}
 
 	// Add nodes to the state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes[localAddr] = true
 	cm.mu.Unlock()
 
 	// Should be stable now with nodes and old lastNodeChange
-	if !cm.IsStateStable(10 * time.Second) {
+	if !cm.IsStateStable(localAddr, 10*time.Second) {
 		t.Error("Should be stable after 10 seconds with nodes present")
 	}
 }
