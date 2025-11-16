@@ -820,7 +820,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 
 	// Lock cluster state to avoid race conditions
 	clusterState, unlock := cm.LockClusterState()
-	
+
 	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
 		unlock()
 		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
@@ -839,7 +839,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 			}
 		}
 	}
-	
+
 	unlock()
 
 	if len(shardsToUpdate) == 0 {
@@ -855,7 +855,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 	for shardID := range shardsToUpdate {
 		shardIDs = append(shardIDs, shardID)
 	}
-	
+
 	// Acquire all locks in sorted order (handled by AcquireWriteMultiple)
 	unlockAll := cm.shardLock.AcquireWriteMultiple(shardIDs)
 	defer unlockAll()
@@ -941,7 +941,7 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	for shardID := range shardsToUpdate {
 		shardIDs = append(shardIDs, shardID)
 	}
-	
+
 	// Acquire all locks in sorted order (handled by AcquireWriteMultiple)
 	unlockAll := cm.shardLock.AcquireWriteMultiple(shardIDs)
 	defer unlockAll()
@@ -1222,20 +1222,15 @@ func (cm *ConsensusManager) SetMappingForTesting(mapping *ShardMapping) {
 // LockClusterState acquires a read lock on the cluster state and returns the state and an unlock function.
 // The caller must call the unlock function when done accessing the state.
 // Usage:
-//   state, unlock := cm.LockClusterState()
-//   defer unlock()
-//   // Access state safely here
+//
+//	state, unlock := cm.LockClusterState()
+//	defer unlock()
+//	// Access state safely here
 func (cm *ConsensusManager) LockClusterState() (*ClusterState, func()) {
 	cm.mu.RLock()
 	return cm.state, func() {
 		cm.mu.RUnlock()
 	}
-}
-
-func (cm *ConsensusManager) GetClusterState() *ClusterState {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.state
 }
 
 // GetClusterStateForTesting returns a cloned copy of the cluster state.
