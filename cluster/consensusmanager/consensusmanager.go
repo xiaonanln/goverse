@@ -81,7 +81,39 @@ func (cs *ClusterState) IsStable(duration time.Duration) bool {
 	return time.Since(cs.LastChange) >= duration
 }
 
+// CloneForTesting creates a deep copy of the cluster state.
+// This method should only be used in tests.
+func (cs *ClusterState) CloneForTesting() *ClusterState {
+	if cs == nil {
+		return nil
+	}
 
+	// Copy basic fields
+	cscp := &ClusterState{
+		Nodes: make(map[string]bool, len(cs.Nodes)),
+		ShardMapping: &ShardMapping{
+			Shards: make(map[int]ShardInfo),
+		},
+		Revision:   cs.Revision,
+		LastChange: cs.LastChange,
+	}
+
+	// Copy nodes map
+	for n, v := range cs.Nodes {
+		cscp.Nodes[n] = v
+	}
+
+	// Deep copy shard mapping
+	// Note: cs.ShardMapping could be nil if CloneForTesting is called before Initialize
+	// but cscp.ShardMapping is always initialized above
+	if cs.ShardMapping != nil {
+		for sid, info := range cs.ShardMapping.Shards {
+			cscp.ShardMapping.Shards[sid] = info
+		}
+	}
+
+	return cscp
+}
 
 // StateChangeListener is the interface for components that want to be notified of state changes
 type StateChangeListener interface {
@@ -1204,6 +1236,19 @@ func (cm *ConsensusManager) GetClusterState() *ClusterState {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return cm.state
+}
+
+// GetClusterStateForTesting returns a cloned copy of the cluster state.
+// This method should only be used in tests to get an independent copy that won't be affected by concurrent changes.
+func (cm *ConsensusManager) GetClusterStateForTesting() *ClusterState {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	startTime := time.Now()
+	clonedState := cm.state.CloneForTesting()
+	cm.logger.Infof("GetClusterStateForTesting Clone operation took %d us", time.Since(startTime).Microseconds())
+
+	return clonedState
 }
 
 // GetObjectsToEvict returns the list of object IDs that should be evicted from the given node
