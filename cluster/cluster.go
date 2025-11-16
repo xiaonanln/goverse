@@ -706,9 +706,11 @@ func (c *Cluster) clusterManagementLoop() {
 
 // clusterManagementTick performs a single tick of shard mapping management
 func (c *Cluster) clusterManagementTick() {
+	startTime := time.Now()
 	c.handleShardMappingCheck()
 	c.checkAndMarkReady()
 	c.updateMetrics()
+	c.logger.Infof("%s - Cluster management tick took %d ms", c, time.Since(startTime).Milliseconds())
 }
 
 // handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
