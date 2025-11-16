@@ -1026,3 +1026,104 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 		}
 	}
 }
+
+// TestClaimShardsForNode_StabilityCheck tests that ClaimShardsForNode
+// respects the cluster stability duration and node presence check
+func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	ctx := context.Background()
+
+	thisNodeAddr := "localhost:47001"
+
+	t.Run("Unstable cluster - no claim", func(t *testing.T) {
+		// Setup: cluster state changed recently (unstable)
+		cm.mu.Lock()
+		cm.state.Nodes[thisNodeAddr] = true
+		cm.state.LastChange = time.Now().Add(-5 * time.Second) // Only 5s ago
+		cm.state.ShardMapping = &ShardMapping{
+			Shards: map[int]ShardInfo{
+				0: {
+					TargetNode:  thisNodeAddr,
+					CurrentNode: "",
+					ModRevision: 0,
+				},
+			},
+		}
+		cm.mu.Unlock()
+
+		// Try to claim with 10s stability requirement - should not claim
+		err := cm.ClaimShardsForNode(ctx, thisNodeAddr, 10*time.Second)
+		if err != nil {
+			t.Errorf("ClaimShardsForNode should not error on unstable cluster: %v", err)
+		}
+
+		// Verify the shard was not claimed
+		cm.mu.RLock()
+		shard0 := cm.state.ShardMapping.Shards[0]
+		cm.mu.RUnlock()
+
+		if shard0.CurrentNode != "" {
+			t.Errorf("Shard should not be claimed when cluster is unstable, got CurrentNode: %s", shard0.CurrentNode)
+		}
+	})
+
+	t.Run("Stable cluster - should claim", func(t *testing.T) {
+		// Setup: cluster state is stable
+		cm.mu.Lock()
+		cm.state.Nodes[thisNodeAddr] = true
+		cm.state.LastChange = time.Now().Add(-11 * time.Second) // 11s ago - stable
+		cm.state.ShardMapping = &ShardMapping{
+			Shards: map[int]ShardInfo{
+				1: {
+					TargetNode:  thisNodeAddr,
+					CurrentNode: "",
+					ModRevision: 0,
+				},
+			},
+		}
+		cm.mu.Unlock()
+
+		// Try to claim with 10s stability requirement - should claim
+		// Note: This will try to write to etcd which may fail if etcd is not available
+		// But we can at least verify the method doesn't return early
+		_ = cm.ClaimShardsForNode(ctx, thisNodeAddr, 10*time.Second)
+		// We can't verify the claim succeeded without etcd, but we verified the method was called
+	})
+
+	t.Run("Node not in cluster - no claim", func(t *testing.T) {
+		otherNodeAddr := "localhost:47999"
+
+		// Setup: stable cluster but thisNode not in cluster
+		cm.mu.Lock()
+		cm.state.Nodes = map[string]bool{
+			"localhost:47002": true, // Only other nodes, not thisNodeAddr
+		}
+		cm.state.LastChange = time.Now().Add(-11 * time.Second) // Stable
+		cm.state.ShardMapping = &ShardMapping{
+			Shards: map[int]ShardInfo{
+				2: {
+					TargetNode:  otherNodeAddr,
+					CurrentNode: "",
+					ModRevision: 0,
+				},
+			},
+		}
+		cm.mu.Unlock()
+
+		// Try to claim for a node not in the cluster
+		err := cm.ClaimShardsForNode(ctx, otherNodeAddr, 10*time.Second)
+		if err != nil {
+			t.Errorf("ClaimShardsForNode should not error when node not in cluster: %v", err)
+		}
+
+		// Verify the shard was not claimed
+		cm.mu.RLock()
+		shard2 := cm.state.ShardMapping.Shards[2]
+		cm.mu.RUnlock()
+
+		if shard2.CurrentNode != "" {
+			t.Errorf("Shard should not be claimed when node not in cluster, got CurrentNode: %s", shard2.CurrentNode)
+		}
+	})
+}
