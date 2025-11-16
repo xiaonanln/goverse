@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,38 +40,52 @@ func (l LogLevel) String() string {
 
 // Logger represents a logger with configurable log level
 type Logger struct {
-	level  LogLevel
-	prefix string
+	level  atomic.Value // stores LogLevel
+	prefix atomic.Value // stores string
 	logger *log.Logger
 }
 
 // NewLogger creates a new Logger instance with default INFO level
 func NewLogger(prefix string) *Logger {
-	return &Logger{
-		level:  INFO,
-		prefix: prefix,
+	l := &Logger{
 		logger: log.New(os.Stdout, "", 0),
 	}
+	l.level.Store(INFO)
+	l.prefix.Store(prefix)
+	return l
 }
 
 // SetLevel sets the logging level
 func (l *Logger) SetLevel(level LogLevel) {
-	l.level = level
+	l.level.Store(level)
 }
 
 // GetLevel returns the current logging level
 func (l *Logger) GetLevel() LogLevel {
-	return l.level
+	return l.level.Load().(LogLevel)
+}
+
+// SetPrefix sets the logging prefix
+func (l *Logger) SetPrefix(prefix string) {
+	l.prefix.Store(prefix)
+}
+
+// GetPrefix returns the current logging prefix
+func (l *Logger) GetPrefix() string {
+	return l.prefix.Load().(string)
 }
 
 // log is the internal logging method
 func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
-	if level < l.level {
+	currentLevel := l.level.Load().(LogLevel)
+	currentPrefix := l.prefix.Load().(string)
+
+	if level < currentLevel {
 		return
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	prefix := fmt.Sprintf("[%s] [%s] [%s] ", timestamp, level.String(), l.prefix)
+	prefix := fmt.Sprintf("[%s] [%s] [%s] ", timestamp, level.String(), currentPrefix)
 
 	message := fmt.Sprintf(format, args...)
 	l.logger.Print(prefix + message)
