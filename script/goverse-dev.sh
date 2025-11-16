@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper script to run commands in the goverse-dev Docker container
+# Wrapper script to run commands in the xiaonanln/goverse:dev Docker container
 # Usage: ./script/goverse-dev.sh <command> [args...]
 # Example: ./script/goverse-dev.sh go test ./cluster
 
@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Docker image name
-IMAGE_NAME="goverse-dev"
+IMAGE_NAME="xiaonanln/goverse:dev"
 
 # Check if Docker is available
 if ! command -v docker >/dev/null 2>&1; then
@@ -21,8 +21,10 @@ fi
 # Check if the image exists
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
     echo "Error: Docker image '$IMAGE_NAME' not found" >&2
-    echo "Please build it first with:" >&2
-    echo "  docker build -f docker/Dockerfile.dev -t goverse-dev ." >&2
+    echo "Please pull it first with:" >&2
+    echo "  docker pull xiaonanln/goverse:dev" >&2
+    echo "Or build it locally with:" >&2
+    echo "  docker build -f docker/Dockerfile.dev -t xiaonanln/goverse:dev ." >&2
     exit 1
 fi
 
@@ -31,7 +33,7 @@ if [ $# -eq 0 ]; then
     cat <<EOF
 Usage: $0 <command> [args...]
 
-Runs commands inside the goverse-dev Docker container with the current directory mounted.
+Runs commands inside the xiaonanln/goverse:dev Docker container with the current directory mounted.
 
 Examples:
   $0 go test ./cluster

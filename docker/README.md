@@ -12,17 +12,30 @@ The `Dockerfile.dev` provides a complete development environment with all depend
 - PostgreSQL (relational database for persistence)
 - Python 3 and required packages for testing
 
-### Building the Image
+### Using the Pre-built Image
+
+The recommended way is to use the pre-built image from Docker Hub:
 
 ```bash
-docker build -f docker/Dockerfile.dev -t goverse-dev .
+docker pull xiaonanln/goverse:dev
+docker run -it --rm xiaonanln/goverse:dev
 ```
 
-### Running the Container
+### Building the Image Locally
+
+If you need to build the image locally:
 
 ```bash
-docker run -it --rm goverse-dev
+docker build -f docker/Dockerfile.dev -t xiaonanln/goverse:dev .
 ```
+
+Or use the provided build script:
+
+```bash
+./script/docker-build-dev.sh
+```
+
+Note: The build script creates a local `goverse-dev` image for testing purposes.
 
 ### Automatic Service Management
 
@@ -37,7 +50,7 @@ You don't need to manually start etcd or PostgreSQL - they're ready to use immed
 To run a specific command with services auto-started:
 
 ```bash
-docker run -it --rm goverse-dev go test ./...
+docker run -it --rm xiaonanln/goverse:dev go test ./...
 ```
 
 ## PostgreSQL Setup
@@ -129,14 +142,23 @@ etcd &
 
 ## Development Workflow
 
-1. Build the Docker image:
+1. Pull or build the Docker image:
    ```bash
-   docker build -f docker/Dockerfile.dev -t goverse-dev .
+   # Option 1: Pull pre-built image (recommended)
+   docker pull xiaonanln/goverse:dev
+   
+   # Option 2: Build locally
+   docker build -f docker/Dockerfile.dev -t xiaonanln/goverse:dev .
    ```
 
 2. Run the container:
    ```bash
-   docker run -it --rm -v $(pwd):/app goverse-dev
+   docker run -it --rm -v $(pwd):/app xiaonanln/goverse:dev
+   ```
+   
+   Or use the convenience wrapper script:
+   ```bash
+   ./script/goverse-dev.sh bash
    ```
 
 3. Inside the container, you can:

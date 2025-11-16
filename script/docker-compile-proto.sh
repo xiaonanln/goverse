@@ -2,7 +2,7 @@
 
 # Compile protobuf files using Docker
 echo "Compiling protobuf files..."
-docker run -it --rm -v "$(pwd):/app" goverse-dev ./script/compile-proto.sh
+docker run -it --rm -v "$(pwd):/app" xiaonanln/goverse:dev ./script/compile-proto.sh
 
 if [ $? -eq 0 ]; then
     echo "Protobuf compilation completed successfully."

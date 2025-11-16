@@ -107,7 +107,7 @@ All scripts use `set -euo pipefail` for robust error handling:
 
 ### Environment
 
-These scripts are designed to run inside the `goverse-dev` Docker container where:
+These scripts are designed to run inside the `xiaonanln/goverse:dev` Docker container where:
 - etcd is available in PATH
 - PostgreSQL is installed and configured
 - The postgres user exists for running PostgreSQL commands
