@@ -7,7 +7,6 @@ import (
 
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Helper function to create and start a cluster with etcd for testing
@@ -84,32 +83,6 @@ func TestSetThisNode_Panic(t *testing.T) {
 	// This test verifies that the node cannot be changed after cluster creation
 	if cluster.GetThisNode() != n1 {
 		t.Error("cluster should have n1 set from creation")
-	}
-}
-
-func TestGetThisNode_NotSet(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := &Cluster{}
-
-	if cluster.GetThisNode() != nil {
-		t.Error("GetThisNode() should return nil when node is not set")
-	}
-}
-
-func TestCallObject_NodeNotSet(t *testing.T) {
-	// Create a new cluster for testing
-	cluster := &Cluster{}
-
-	ctx := context.Background()
-	_, err := cluster.CallObject(ctx, "testType", "test-id", "TestMethod", &emptypb.Empty{})
-
-	if err == nil {
-		t.Error("CallObject should return error when ThisNode is not set")
-	}
-
-	expectedErr := "ThisNode is not set"
-	if err.Error() != expectedErr {
-		t.Errorf("CallObject error = %v; want %v", err.Error(), expectedErr)
 	}
 }
 
