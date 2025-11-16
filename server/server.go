@@ -65,7 +65,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		clusterCfg.MinQuorum = config.MinQuorum
 	}
 	if config.NodeStabilityDuration > 0 {
-		clusterCfg.NodeStabilityDuration = config.NodeStabilityDuration
+		clusterCfg.ClusterStateStabilityDuration = config.NodeStabilityDuration
 	}
 	if config.ShardMappingCheckInterval > 0 {
 		clusterCfg.ShardMappingCheckInterval = config.ShardMappingCheckInterval
