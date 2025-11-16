@@ -12,15 +12,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// resetClusterForTesting resets the cluster singleton state between tests
-// This is necessary because cluster.This() returns a singleton and tests may interfere with each other
-func resetClusterForTesting(t *testing.T) {
-	if cluster.This() == nil {
-		return
-	}
-	cluster.This().ResetForTesting()
-	t.Logf("Cluster state reset for testing")
-}
+
 
 func TestValidateServerConfig_NilConfig(t *testing.T) {
 	err := validateServerConfig(nil)
@@ -84,9 +76,6 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 }
 
 func TestServerConfig_NodeStabilityDuration(t *testing.T) {
-	// Reset cluster state before this test
-	resetClusterForTesting(t)
-
 	// Create config with custom NodeStabilityDuration
 	customDuration := 3 * time.Second
 	config := &ServerConfig{
@@ -115,9 +104,6 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 }
 
 func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
-	// Reset cluster state before this test
-	resetClusterForTesting(t)
-
 	// Create config without custom NodeStabilityDuration
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9099",
@@ -144,9 +130,6 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 }
 
 func TestNewServer_ValidConfig(t *testing.T) {
-	// Reset cluster state before this test
-	resetClusterForTesting(t)
-
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9090",
 		AdvertiseAddress:          "localhost:9090",
@@ -190,9 +173,6 @@ func TestNewServer_ValidConfig(t *testing.T) {
 }
 
 func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
-	// Reset cluster state before this test
-	resetClusterForTesting(t)
-
 	// Use a custom etcd prefix for testing
 	customPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -306,9 +286,6 @@ func TestNode_ListObjects(t *testing.T) {
 // 2. Register its node address to etcd
 // 3. Become the sole leader
 func TestServerStartupWithEtcd(t *testing.T) {
-	// Reset cluster state before this test
-	resetClusterForTesting(t)
-
 	// Use PrepareEtcdPrefix to get a unique prefix for test isolation
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 

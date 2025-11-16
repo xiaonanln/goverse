@@ -11,9 +11,6 @@ import (
 )
 
 func TestServerDeleteObject_Success(t *testing.T) {
-	// Reset cluster state to ensure no interference from other tests
-	resetClusterForTesting(t)
-
 	// Create a node directly without using cluster
 	n := node.NewNode("localhost:47000")
 	n.RegisterObjectType((*TestObject)(nil))
@@ -63,9 +60,6 @@ func TestServerDeleteObject_Success(t *testing.T) {
 }
 
 func TestServerDeleteObject_RequiresID(t *testing.T) {
-	// Reset cluster state to ensure no interference from other tests
-	resetClusterForTesting(t)
-
 	// Create a node
 	n := node.NewNode("localhost:47000")
 
@@ -103,9 +97,6 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 }
 
 func TestServerDeleteObject_NotFound(t *testing.T) {
-	// Reset cluster state to ensure no interference from other tests
-	resetClusterForTesting(t)
-
 	// Create a node
 	n := node.NewNode("localhost:47000")
 	n.RegisterObjectType((*TestObject)(nil))

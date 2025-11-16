@@ -21,9 +21,6 @@ func (obj *TestObject) OnCreated() {
 
 // TestServerCreateObject_RequiresID tests that Server.CreateObject requires a non-empty ID
 func TestServerCreateObject_RequiresID(t *testing.T) {
-	// Reset cluster state before this test
-	resetClusterForTesting(t)
-
 	// Use PrepareEtcdPrefix to get a unique prefix for test isolation
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
