@@ -13,14 +13,14 @@ import (
 func TestLockMetrics_Sequential(t *testing.T) {
 	// This test verifies that the LockMetrics function can be called without panicking
 	// The actual locking behavior is tested in TestLockMetrics_Parallel
-	
+
 	// Verify the function doesn't panic when called
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("LockMetrics panicked: %v", r)
 		}
 	}()
-	
+
 	// Call LockMetrics in a sub-test so cleanup works properly
 	t.Run("SubTest", func(t *testing.T) {
 		LockMetrics(t)
@@ -33,31 +33,31 @@ func TestLockMetrics_Parallel(t *testing.T) {
 	// Track execution order
 	var executionOrder []int
 	var mu sync.Mutex
-	
+
 	// This test verifies that when multiple test goroutines call LockMetrics,
 	// they execute sequentially, not in parallel
-	
+
 	for i := 0; i < 3; i++ {
 		i := i // capture loop variable
 		t.Run("", func(t *testing.T) {
 			t.Parallel() // Try to run in parallel
-			
+
 			LockMetrics(t) // This should serialize execution
-			
+
 			// Record that we started
 			mu.Lock()
 			executionOrder = append(executionOrder, i)
 			startCount := len(executionOrder)
 			mu.Unlock()
-			
+
 			// Simulate some work
 			time.Sleep(10 * time.Millisecond)
-			
+
 			// Verify no other test has started while we're running
 			mu.Lock()
 			endCount := len(executionOrder)
 			mu.Unlock()
-			
+
 			// If tests are truly sequential, endCount should equal startCount
 			// (no other test should have started while we were sleeping)
 			if endCount != startCount {
@@ -71,7 +71,7 @@ func TestLockMetrics_Parallel(t *testing.T) {
 func TestLockMetrics_Cleanup(t *testing.T) {
 	// Create a channel to signal when the lock is released
 	done := make(chan bool, 1)
-	
+
 	// Start a goroutine that tries to acquire the lock after a short delay
 	go func() {
 		time.Sleep(50 * time.Millisecond)
@@ -79,7 +79,7 @@ func TestLockMetrics_Cleanup(t *testing.T) {
 		metricsTestMutex.Unlock()
 		done <- true
 	}()
-	
+
 	// Run a sub-test that acquires the lock
 	t.Run("SubTest", func(t *testing.T) {
 		LockMetrics(t)
@@ -87,7 +87,7 @@ func TestLockMetrics_Cleanup(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 		// Lock will be released by t.Cleanup when this test ends
 	})
-	
+
 	// Wait for the goroutine to acquire the lock (meaning cleanup happened)
 	select {
 	case <-done:
@@ -103,7 +103,7 @@ func TestLockMetrics_ResetsMetrics(t *testing.T) {
 	metrics.AssignedShardsTotal.WithLabelValues("test-node-1").Set(10)
 	metrics.ObjectCount.WithLabelValues("test-node-2", "TestObject", "5").Set(20)
 	metrics.ClientsConnected.WithLabelValues("test-node-3", "grpc").Set(5)
-	
+
 	// Verify metrics are set
 	if promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("test-node-1")) != 10 {
 		t.Fatal("Test setup failed: AssignedShardsTotal not set correctly")
@@ -114,11 +114,11 @@ func TestLockMetrics_ResetsMetrics(t *testing.T) {
 	if promtestutil.ToFloat64(metrics.ClientsConnected.WithLabelValues("test-node-3", "grpc")) != 5 {
 		t.Fatal("Test setup failed: ClientsConnected not set correctly")
 	}
-	
+
 	// Run a sub-test that calls LockMetrics
 	t.Run("SubTest", func(t *testing.T) {
 		LockMetrics(t)
-		
+
 		// Verify all metrics are reset to 0
 		if promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("test-node-1")) != 0 {
 			t.Error("AssignedShardsTotal was not reset by LockMetrics")

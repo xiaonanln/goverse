@@ -186,12 +186,12 @@ func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterCl
 			chatMsg := notification.Message
 			timestamp := time.Unix(chatMsg.Timestamp, 0).Format("15:04:05")
 			fmt.Printf("\n[%s] %s: %s\n", timestamp, chatMsg.UserName, chatMsg.Message)
-			
+
 			// Update last message timestamp
 			if chatMsg.Timestamp > c.lastMsgTimestamp {
 				c.lastMsgTimestamp = chatMsg.Timestamp
 			}
-			
+
 			// Re-display prompt
 			if c.roomName != "" {
 				fmt.Printf("[%s] > ", c.roomName)

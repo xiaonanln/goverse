@@ -9,7 +9,7 @@ import (
 // skipIfNoPostgres skips the test if PostgreSQL is not available
 func skipIfNoPostgres(t *testing.T) *Config {
 	t.Helper()
-	
+
 	// Check if we should skip PostgreSQL tests
 	if os.Getenv("SKIP_POSTGRES_TESTS") == "1" {
 		t.Skip("Skipping PostgreSQL integration test (SKIP_POSTGRES_TESTS=1)")

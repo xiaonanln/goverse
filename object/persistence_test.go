@@ -60,7 +60,7 @@ func (t *TestPersistentObject) OnCreated() {}
 func (t *TestPersistentObject) ToData() (proto.Message, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":          t.id,
 		"type":        t.Type(),
@@ -78,10 +78,10 @@ func (t *TestPersistentObject) FromData(data proto.Message) error {
 	if !ok {
 		return nil
 	}
-	
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	if customData, ok := structData.Fields["custom_data"]; ok {
 		t.CustomData = customData.GetStringValue()
 	}

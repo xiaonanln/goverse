@@ -32,7 +32,7 @@ func (u *UserProfile) OnCreated() {
 func (u *UserProfile) ToData() (proto.Message, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	
+
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":       u.Id(),
 		"type":     u.Type(),
@@ -54,10 +54,10 @@ func (u *UserProfile) FromData(data proto.Message) error {
 	if !ok {
 		return nil
 	}
-	
+
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	
+
 	if username, ok := structData.Fields["username"]; ok {
 		u.Username = username.GetStringValue()
 	}

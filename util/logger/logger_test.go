@@ -108,12 +108,12 @@ func TestFatalf(t *testing.T) {
 // --- SetPrefix and GetPrefix test ---
 func TestSetAndGetPrefix(t *testing.T) {
 	l := NewLogger("initial")
-	
+
 	// Check initial prefix
 	if got := l.GetPrefix(); got != "initial" {
 		t.Errorf("GetPrefix() = %v; want %v", got, "initial")
 	}
-	
+
 	// Change prefix
 	l.SetPrefix("changed")
 	if got := l.GetPrefix(); got != "changed" {
@@ -127,19 +127,19 @@ func TestPrefixInLogOutput(t *testing.T) {
 	l := NewLogger("test-prefix")
 	l.logger = log.New(&buf, "", 0)
 	l.SetLevel(INFO)
-	
+
 	l.Infof("test message")
-	
+
 	output := buf.String()
 	if !strings.Contains(output, "test-prefix") {
 		t.Errorf("Expected log output to contain prefix 'test-prefix', got: %s", output)
 	}
-	
+
 	// Change prefix and log again
 	buf.Reset()
 	l.SetPrefix("new-prefix")
 	l.Infof("another message")
-	
+
 	output = buf.String()
 	if !strings.Contains(output, "new-prefix") {
 		t.Errorf("Expected log output to contain prefix 'new-prefix', got: %s", output)
@@ -154,10 +154,10 @@ func TestConcurrentPrefixChanges(t *testing.T) {
 	l := NewLogger("initial")
 	const goroutines = 100
 	const operations = 100
-	
+
 	// Channel to signal completion
 	done := make(chan bool, goroutines)
-	
+
 	// Concurrent prefix changes
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
@@ -173,7 +173,7 @@ func TestConcurrentPrefixChanges(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines to complete
 	for i := 0; i < goroutines; i++ {
 		<-done
@@ -186,11 +186,11 @@ func TestConcurrentLevelAndPrefixChanges(t *testing.T) {
 	l := NewLogger("initial")
 	l.logger = log.New(&buf, "", 0)
 	l.SetLevel(INFO)
-	
+
 	const goroutines = 50
 	const operations = 100
 	done := make(chan bool, goroutines*2)
-	
+
 	// Concurrent prefix changes
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
@@ -202,7 +202,7 @@ func TestConcurrentLevelAndPrefixChanges(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Concurrent level changes
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
@@ -214,7 +214,7 @@ func TestConcurrentLevelAndPrefixChanges(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines to complete
 	for i := 0; i < goroutines*2; i++ {
 		<-done
@@ -227,11 +227,11 @@ func TestConcurrentLoggingAndPrefixChanges(t *testing.T) {
 	l := NewLogger("initial")
 	l.logger = log.New(&buf, "", 0)
 	l.SetLevel(INFO)
-	
+
 	const goroutines = 50
 	const operations = 100
 	done := make(chan bool, goroutines*2)
-	
+
 	// Concurrent logging
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
@@ -241,7 +241,7 @@ func TestConcurrentLoggingAndPrefixChanges(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Concurrent prefix changes
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
@@ -252,12 +252,12 @@ func TestConcurrentLoggingAndPrefixChanges(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines to complete
 	for i := 0; i < goroutines*2; i++ {
 		<-done
 	}
-	
+
 	// Verify no crashes occurred and some logs were written
 	if buf.Len() == 0 {
 		t.Error("Expected some log output")

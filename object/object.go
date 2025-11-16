@@ -17,7 +17,7 @@ type Object interface {
 	CreationTime() time.Time
 	OnInit(self Object, id string)
 	OnCreated()
-	
+
 	// ToData serializes the object state to a proto.Message for persistence.
 	//
 	// Thread-Safety Requirements:
@@ -36,7 +36,7 @@ type Object interface {
 	//   - proto.Message: Serialized object state
 	//   - error: ErrNotPersistent for non-persistent objects, or serialization error
 	ToData() (proto.Message, error)
-	
+
 	// FromData deserializes object state from a proto.Message.
 	//
 	// Thread-Safety Requirements:

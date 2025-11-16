@@ -33,8 +33,8 @@ type keyLockEntry struct {
 // It provides thread-safe RW locking per object ID to prevent concurrent
 // creation/deletion while allowing concurrent reads (calls/saves).
 type KeyLock struct {
-	mu     sync.Mutex
-	locks  map[string]*keyLockEntry
+	mu    sync.Mutex
+	locks map[string]*keyLockEntry
 }
 
 // NewKeyLock creates a new KeyLock manager

@@ -88,27 +88,27 @@ func StartEtcd() error {
 	cmd = exec.Command("etcd",
 		"--listen-client-urls", "http://0.0.0.0:2379",
 		"--advertise-client-urls", "http://0.0.0.0:2379")
-	
+
 	// Redirect output to /tmp/etcd.log
 	logFile, err := os.OpenFile("/tmp/etcd.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open etcd log file: %w", err)
 	}
-	
+
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	
+
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
 		return fmt.Errorf("failed to start etcd: %w", err)
 	}
-	
+
 	// Don't wait for the command to finish (it runs in background)
 	go func() {
 		cmd.Wait()
 		logFile.Close()
 	}()
-	
+
 	return nil
 }
 
@@ -139,7 +139,7 @@ func WaitForEtcd(endpoint string, timeout time.Duration) error {
 				_, healthCheckErr := cli.Get(ctx2, "/health-check")
 				cancel2()
 				cli.Close()
-				
+
 				if healthCheckErr == nil {
 					// Successfully connected
 					return nil

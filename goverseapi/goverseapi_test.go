@@ -10,12 +10,12 @@ func TestNewServer(t *testing.T) {
 		AdvertiseAddress:    "localhost:7070",
 		ClientListenAddress: "localhost:7071",
 	}
-	
+
 	server, err := NewServer(config)
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
 	}
-	
+
 	if server == nil {
 		t.Error("NewServer should return a server instance")
 	}
@@ -31,7 +31,7 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 	if err.Error() != expectedMsg {
 		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
 	}
-	
+
 	// Test with empty ListenAddress - should return error
 	config := &ServerConfig{
 		ListenAddress:       "",
@@ -46,7 +46,7 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 	if err.Error() != expectedMsg {
 		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
 	}
-	
+
 	// Test with empty AdvertiseAddress - should return error
 	config = &ServerConfig{
 		ListenAddress:       "localhost:7074",

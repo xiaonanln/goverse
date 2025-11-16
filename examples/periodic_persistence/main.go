@@ -30,7 +30,7 @@ func (c *Counter) OnCreated() {
 func (c *Counter) ToData() (proto.Message, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	data, err := structpb.NewStruct(map[string]interface{}{
 		"id":    c.Id(),
 		"count": float64(c.Count),
@@ -49,10 +49,10 @@ func (c *Counter) FromData(data proto.Message) error {
 	if !ok {
 		return nil
 	}
-	
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if count, ok := structData.Fields["count"]; ok {
 		c.Count = int(count.GetNumberValue())
 	}

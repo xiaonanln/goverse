@@ -87,7 +87,7 @@ func (wp *WorkerPool) worker() {
 // If the pool has been stopped, the result channel will contain context.Canceled
 func (wp *WorkerPool) Submit(task Task) <-chan error {
 	result := make(chan error, 1)
-	
+
 	// Check if pool is stopped first
 	select {
 	case <-wp.ctx.Done():
@@ -95,12 +95,12 @@ func (wp *WorkerPool) Submit(task Task) <-chan error {
 		return result
 	default:
 	}
-	
+
 	tw := taskWrapper{
 		task:   task,
 		result: result,
 	}
-	
+
 	// Try to send task, handling the case where channel might be closed
 	// We use select with default to avoid blocking if the channel is closed
 	select {
@@ -118,7 +118,7 @@ func (wp *WorkerPool) Submit(task Task) <-chan error {
 		}()
 		wp.tasks <- tw
 	}
-	
+
 	return result
 }
 
@@ -135,12 +135,12 @@ func (wp *WorkerPool) SubmitAndWait(ctx context.Context, tasks []Task) []Result 
 
 	for _, task := range tasks {
 		wg.Add(1)
-		
+
 		go func(t Task) {
 			defer wg.Done()
-			
+
 			resultChan := wp.Submit(t)
-			
+
 			select {
 			case <-ctx.Done():
 				mu.Lock()

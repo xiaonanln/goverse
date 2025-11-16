@@ -216,9 +216,9 @@ func TestWorkerPool_ContextCancellation(t *testing.T) {
 
 	// We expect some tasks to be cancelled (those that were running when context was cancelled)
 	// or those that checked context before completing
-	t.Logf("Started: %d, Completed: %d, Results: %d, Cancelled: %d", 
-		atomic.LoadInt32(&started), 
-		atomic.LoadInt32(&completed), 
+	t.Logf("Started: %d, Completed: %d, Results: %d, Cancelled: %d",
+		atomic.LoadInt32(&started),
+		atomic.LoadInt32(&completed),
 		len(results),
 		cancelledCount)
 }
@@ -294,7 +294,7 @@ func TestWorkerPool_StopNow(t *testing.T) {
 	}
 
 	if completedCount >= startedCount {
-		t.Errorf("All tasks completed despite StopNow, started=%d completed=%d", 
+		t.Errorf("All tasks completed despite StopNow, started=%d completed=%d",
 			startedCount, completedCount)
 	}
 
@@ -313,7 +313,7 @@ func TestWorkerPool_Concurrency(t *testing.T) {
 
 	task := func(ctx context.Context) error {
 		current := atomic.AddInt32(&activeWorkers, 1)
-		
+
 		mu.Lock()
 		if current > atomic.LoadInt32(&maxConcurrent) {
 			atomic.StoreInt32(&maxConcurrent, current)
@@ -340,12 +340,12 @@ func TestWorkerPool_Concurrency(t *testing.T) {
 
 	maxConcurrentValue := atomic.LoadInt32(&maxConcurrent)
 	if maxConcurrentValue > int32(numWorkers) {
-		t.Errorf("Max concurrent workers %d exceeded pool size %d", 
+		t.Errorf("Max concurrent workers %d exceeded pool size %d",
 			maxConcurrentValue, numWorkers)
 	}
 
 	if maxConcurrentValue < int32(numWorkers) {
-		t.Logf("Max concurrent workers %d was less than pool size %d (may be expected with timing)", 
+		t.Logf("Max concurrent workers %d was less than pool size %d (may be expected with timing)",
 			maxConcurrentValue, numWorkers)
 	}
 }

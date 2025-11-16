@@ -58,7 +58,7 @@ type Node struct {
 	clientObjectType      string
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
-	keyLock               *keylock.KeyLock // Per-object ID locking for create/delete/call/save coordination
+	keyLock               *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
 	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger

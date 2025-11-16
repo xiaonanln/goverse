@@ -74,7 +74,7 @@ func benchmarkSemaphore(b *testing.B, ctx context.Context, numTasks int) {
 	for i := 0; i < b.N; i++ {
 		const maxConcurrent = 20
 		semaphore := make(chan struct{}, maxConcurrent)
-		
+
 		type result struct {
 			err error
 		}

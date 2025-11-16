@@ -11,17 +11,17 @@ import (
 // TestPushMessageToClient tests the PushMessageToClient functionality
 func TestPushMessageToClient(t *testing.T) {
 	node := NewNode("test-node:1234")
-	
+
 	// Register a client type
 	node.RegisterClientType((*client.BaseClient)(nil))
-	
+
 	// Create a client object
 	ctx := context.Background()
 	clientID, messageChan, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
-	
+
 	// Test pushing a message
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -30,13 +30,13 @@ func TestPushMessageToClient(t *testing.T) {
 			Timestamp: 12345,
 		},
 	}
-	
+
 	// Push the message
 	err = node.PushMessageToClient(clientID, testMsg)
 	if err != nil {
 		t.Fatalf("Failed to push message to client: %v", err)
 	}
-	
+
 	// Verify the message was received
 	select {
 	case msg := <-messageChan:
@@ -58,14 +58,14 @@ func TestPushMessageToClient(t *testing.T) {
 // TestPushMessageToClient_NotFound tests pushing to a non-existent client
 func TestPushMessageToClient_NotFound(t *testing.T) {
 	node := NewNode("test-node:1234")
-	
+
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
 			UserName: "TestUser",
 			Message:  "Hello",
 		},
 	}
-	
+
 	err := node.PushMessageToClient("non-existent-client", testMsg)
 	if err == nil {
 		t.Fatal("Expected error when pushing to non-existent client, got nil")
@@ -75,13 +75,13 @@ func TestPushMessageToClient_NotFound(t *testing.T) {
 // TestPushMessageToClient_NotAClient tests pushing to a regular object
 func TestPushMessageToClient_NotAClient(t *testing.T) {
 	node := NewNode("test-node:1234")
-	
+
 	// Register a non-client object type
 	type TestObject struct {
 		client.BaseClient
 	}
 	node.RegisterObjectType((*TestObject)(nil))
-	
+
 	// Create a regular object (not through RegisterClient)
 	ctx := context.Background()
 	err := node.createObject(ctx, "TestObject", "test-object-123")
@@ -93,14 +93,14 @@ func TestPushMessageToClient_NotAClient(t *testing.T) {
 	node.objectsMu.RLock()
 	obj := node.objects["test-object-123"]
 	node.objectsMu.RUnlock()
-	
+
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
 			UserName: "TestUser",
 			Message:  "Hello",
 		},
 	}
-	
+
 	// This should work because TestObject embeds BaseClient
 	err = node.PushMessageToClient(obj.Id(), testMsg)
 	if err != nil {

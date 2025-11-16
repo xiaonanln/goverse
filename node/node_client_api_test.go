@@ -13,31 +13,31 @@ import (
 func TestRegisterClient_ReturnsIDAndMessageChan(t *testing.T) {
 	node := NewNode("test-node:1234")
 	node.RegisterClientType((*client.BaseClient)(nil))
-	
+
 	ctx := context.Background()
-	
+
 	// RegisterClient now returns the client ID and message channel
 	clientID, messageChan, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
-	
+
 	// Verify the client ID is a non-empty string
 	if clientID == "" {
 		t.Fatal("Client ID should not be empty")
 	}
-	
+
 	// Verify the message channel is not nil
 	if messageChan == nil {
 		t.Fatal("Message channel should not be nil")
 	}
-	
+
 	// Verify the client ID has the correct format (node address + / + unique ID)
 	expectedPrefix := "test-node:1234/"
 	if len(clientID) <= len(expectedPrefix) {
 		t.Fatalf("Client ID %s is too short, expected format: %s<unique-id>", clientID, expectedPrefix)
 	}
-	
+
 	if clientID[:len(expectedPrefix)] != expectedPrefix {
 		t.Fatalf("Client ID %s should start with %s", clientID, expectedPrefix)
 	}
@@ -47,19 +47,19 @@ func TestRegisterClient_ReturnsIDAndMessageChan(t *testing.T) {
 func TestRegisterClient_MessageChanWorks(t *testing.T) {
 	node := NewNode("test-node:1234")
 	node.RegisterClientType((*client.BaseClient)(nil))
-	
+
 	ctx := context.Background()
-	
+
 	// Register a client using the new API
 	clientID, messageChan, err := node.RegisterClient(ctx)
 	if err != nil {
 		t.Fatalf("Failed to register client: %v", err)
 	}
-	
+
 	if messageChan == nil {
 		t.Fatal("Message channel should not be nil")
 	}
-	
+
 	// Push a message and verify it's received through the channel
 	testMsg := &chat_pb.Client_NewMessageNotification{
 		Message: &chat_pb.ChatMessage{
@@ -68,12 +68,12 @@ func TestRegisterClient_MessageChanWorks(t *testing.T) {
 			Timestamp: 12345,
 		},
 	}
-	
+
 	err = node.PushMessageToClient(clientID, testMsg)
 	if err != nil {
 		t.Fatalf("Failed to push message: %v", err)
 	}
-	
+
 	// Verify message was received
 	select {
 	case msg := <-messageChan:

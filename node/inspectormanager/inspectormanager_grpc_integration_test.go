@@ -397,8 +397,8 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 
 	// Add objects with various IDs
 	testObjects := []struct {
-		id   string
-		typ  string
+		id  string
+		typ string
 	}{
 		{"test-obj-1", "Type1"},
 		{"test-obj-2", "Type2"},

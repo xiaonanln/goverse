@@ -35,12 +35,12 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numIterations; j++ {
 				objID := "race-obj"
-				
+
 				// Try to create
 				_, err := node.CreateObject(ctx, "TestPersistentObject", objID)
 				if err == nil {
 					successCount.Add(1)
-					
+
 					// Delete it
 					err = node.DeleteObject(ctx, objID)
 					if err != nil {
@@ -48,7 +48,7 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 						t.Logf("Delete failed: %v", err)
 					}
 				}
-				
+
 				time.Sleep(time.Microsecond)
 			}
 		}(i)
@@ -57,7 +57,7 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 	wg.Wait()
 
 	t.Logf("Successfully created object %d times", successCount.Load())
-	
+
 	// Should have at least some successful creates
 	if successCount.Load() == 0 {
 		t.Error("Expected at least some successful creates")

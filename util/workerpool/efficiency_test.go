@@ -27,10 +27,10 @@ func TestGoroutineCount(t *testing.T) {
 
 				pool := New(context.Background(), 20)
 				pool.Start()
-				
+
 				during := runtime.NumGoroutine()
 				workerGoroutines := during - before
-				
+
 				ctx := context.Background()
 				tasks := make([]Task, tt.numTasks)
 				for j := 0; j < tt.numTasks; j++ {
@@ -52,7 +52,7 @@ func TestGoroutineCount(t *testing.T) {
 
 				const maxConcurrent = 20
 				semaphore := make(chan struct{}, maxConcurrent)
-				
+
 				type result struct {
 					err error
 				}
@@ -125,7 +125,7 @@ func TestMemoryEfficiency(t *testing.T) {
 
 		const maxConcurrent = 20
 		semaphore := make(chan struct{}, maxConcurrent)
-		
+
 		type result struct {
 			err error
 		}

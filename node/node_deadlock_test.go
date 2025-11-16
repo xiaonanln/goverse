@@ -25,12 +25,12 @@ func (obj *TestObjectMethodCallingCreateReentrant) MethodThatCreatesObject(ctx c
 	testNodeMu.Lock()
 	n := testNodeRef
 	testNodeMu.Unlock()
-	
+
 	_, err := n.CreateObject(ctx, "TestPersistentObject", "child-object-123")
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"result": {Kind: &structpb.Value_StringValue{StringValue: "success"}},
@@ -98,12 +98,12 @@ func (obj *TestObjectMethodCallingCallReentrant) MethodThatCallsObject(ctx conte
 	testNodeMu.Lock()
 	n := testNodeRef
 	testNodeMu.Unlock()
-	
+
 	_, err := n.CallObject(ctx, "TestPersistentObjectWithMethod", "target-object", "GetValue", &emptypb.Empty{})
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"result": {Kind: &structpb.Value_StringValue{StringValue: "success"}},
@@ -171,7 +171,7 @@ func (obj *TestObjectOnCreatedCallingCreate) OnCreated() {
 	testNodeMu.Lock()
 	n := testNodeRef
 	testNodeMu.Unlock()
-	
+
 	_, err := n.CreateObject(context.Background(), "TestPersistentObject", "oncreated-child-123")
 	if err != nil {
 		// Log error but don't fail - we're just checking for deadlock
@@ -240,7 +240,7 @@ func (obj *TestObjectWithOnCreatedFlag) OnCreated() {
 func (obj *TestObjectWithOnCreatedFlag) CheckOnCreated(ctx context.Context, req *emptypb.Empty) (*structpb.Struct, error) {
 	obj.mu.Lock()
 	defer obj.mu.Unlock()
-	
+
 	wasCalled := obj.onCreatedCalled
 	return &structpb.Struct{
 		Fields: map[string]*structpb.Value{

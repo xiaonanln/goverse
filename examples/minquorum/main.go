@@ -5,9 +5,10 @@
 // you want to ensure a certain number of nodes are available before accepting traffic.
 //
 // Usage:
-//   go run main.go --minQuorum=3 --port=7001
-//   go run main.go --minQuorum=3 --port=7002 (in another terminal)
-//   go run main.go --minQuorum=3 --port=7003 (in another terminal)
+//
+//	go run main.go --minQuorum=3 --port=7001
+//	go run main.go --minQuorum=3 --port=7002 (in another terminal)
+//	go run main.go --minQuorum=3 --port=7003 (in another terminal)
 //
 // The cluster will only become "ready" when all 3 nodes are registered.
 package main
@@ -27,7 +28,7 @@ import (
 
 var (
 	minQuorum = flag.Int("minQuorum", 1, "Minimum number of nodes required for cluster to be ready")
-	port     = flag.Int("port", 7001, "Port to listen on for node communication")
+	port      = flag.Int("port", 7001, "Port to listen on for node communication")
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 		ClientListenAddress: fmt.Sprintf("localhost:%d", *port+1000),
 		EtcdAddress:         "localhost:2379",
 		EtcdPrefix:          "/goverse-example",
-		MinQuorum:            *minQuorum, // Set minimum quorum required
+		MinQuorum:           *minQuorum, // Set minimum quorum required
 	}
 
 	log.Printf("Starting node on port %d with minimum quorum requirement: %d", *port, *minQuorum)
@@ -53,7 +54,7 @@ func main() {
 	// Start a goroutine to monitor cluster readiness
 	go func() {
 		log.Printf("Waiting for cluster to become ready (requires %d nodes)...", *minQuorum)
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 

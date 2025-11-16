@@ -18,7 +18,7 @@ type ChatRoomMgr struct {
 
 func (mgr *ChatRoomMgr) OnCreated() {
 	mgr.Logger.Infof("ChatRoomMgr %s created", mgr.Id())
-	
+
 	// Create chat rooms immediately when ChatRoomMgr is created
 	// This happens after the cluster is ready (shard mapping is available)
 	mgr.Logger.Infof("Creating chat rooms...")
