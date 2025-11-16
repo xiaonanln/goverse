@@ -832,7 +832,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 	// Lock cluster state to avoid race conditions
 	clusterState, unlock := cm.LockClusterState()
 	defer unlock()
-	
+
 	localNode := cm.localNodeAddress
 
 	// Collect shards that need to be claimed
