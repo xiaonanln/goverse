@@ -5,32 +5,33 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
-"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
-// TestGetClusterState_Empty tests GetClusterState with empty state
-func TestGetClusterState_Empty(t *testing.T) {
+// TestLockClusterState_Empty tests LockClusterState with empty state
+func TestLockClusterState_Empty(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
-	// Call GetClusterState - should return a cloned state
-	state := cm.GetClusterState()
-	
+	// Call LockClusterState - should return state and unlock function
+	state, unlock := cm.LockClusterState()
+	defer unlock()
+
 	if state == nil {
-		t.Fatal("GetClusterState returned nil")
+		t.Fatal("LockClusterState returned nil")
 	}
-	
+
 	if state.Nodes == nil {
-		t.Error("Cloned state should have initialized nodes map")
+		t.Error("State should have initialized nodes map")
 	}
-	
+
 	if len(state.Nodes) != 0 {
-		t.Errorf("Expected empty nodes in cloned state, got %d", len(state.Nodes))
+		t.Errorf("Expected empty nodes in state, got %d", len(state.Nodes))
 	}
 }
 
-// TestGetClusterState_WithData tests GetClusterState with populated state
-func TestGetClusterState_WithData(t *testing.T) {
+// TestLockClusterState_WithData tests LockClusterState with populated state
+func TestLockClusterState_WithData(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
@@ -48,36 +49,37 @@ func TestGetClusterState_WithData(t *testing.T) {
 	cm.state.Revision = 123
 	cm.mu.Unlock()
 
-	// Call GetClusterState - should return a cloned state
-	state := cm.GetClusterState()
-	
+	// Call LockClusterState - should return state with lock held
+	state, unlock := cm.LockClusterState()
+	defer unlock()
+
 	if state == nil {
-		t.Fatal("GetClusterState returned nil")
+		t.Fatal("LockClusterState returned nil")
 	}
-	
+
 	if len(state.Nodes) != 2 {
-		t.Errorf("Expected 2 nodes in cloned state, got %d", len(state.Nodes))
+		t.Errorf("Expected 2 nodes in state, got %d", len(state.Nodes))
 	}
-	
+
 	if !state.Nodes["localhost:47001"] || !state.Nodes["localhost:47002"] {
-		t.Error("Cloned state should contain the correct nodes")
+		t.Error("State should contain the correct nodes")
 	}
-	
+
 	if state.Revision != 123 {
 		t.Errorf("Expected revision 123, got %d", state.Revision)
 	}
-	
+
 	if state.ShardMapping == nil {
-		t.Fatal("Cloned state should have shard mapping")
+		t.Fatal("State should have shard mapping")
 	}
-	
+
 	if len(state.ShardMapping.Shards) != 1 {
-		t.Errorf("Expected 1 shard in cloned state, got %d", len(state.ShardMapping.Shards))
+		t.Errorf("Expected 1 shard in state, got %d", len(state.ShardMapping.Shards))
 	}
 }
 
-// TestGetClusterState_IsIndependent tests that the cloned state is independent
-func TestGetClusterState_IsIndependent(t *testing.T) {
+// TestLockClusterState_LockingBehavior tests that the lock is properly held
+func TestLockClusterState_LockingBehavior(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
@@ -86,28 +88,31 @@ func TestGetClusterState_IsIndependent(t *testing.T) {
 	cm.state.Nodes["localhost:47001"] = true
 	cm.mu.Unlock()
 
-	// Get cloned state
-	state1 := cm.GetClusterState()
-	
-	// Modify the cloned state
-	state1.Nodes["localhost:47002"] = true
-	
-	// Get another cloned state
-	state2 := cm.GetClusterState()
-	
-	// Verify state2 doesn't have the modification from state1
-	if _, exists := state2.Nodes["localhost:47002"]; exists {
-		t.Error("Cloned states should be independent - modification in one shouldn't affect others")
+	// Lock the state
+	state, unlock := cm.LockClusterState()
+
+	// Verify we can read the state
+	if !state.Nodes["localhost:47001"] {
+		t.Error("State should have the original node")
 	}
-	
-	// Verify state2 has the original node
+
+	// Note: We can't easily test that modifications are prevented without
+	// complex concurrency testing, but the lock is held for reading
+
+	// Unlock
+	unlock()
+
+	// After unlock, verify we can still access the state through another call
+	state2, unlock2 := cm.LockClusterState()
+	defer unlock2()
+
 	if !state2.Nodes["localhost:47001"] {
-		t.Error("Cloned state should have the original node")
+		t.Error("State should still have the original node")
 	}
 }
 
-// TestGetClusterState_FullShardMapping tests GetClusterState with full 8192 shard mapping
-func TestGetClusterState_FullShardMapping(t *testing.T) {
+// TestLockClusterState_FullShardMapping tests LockClusterState with full 8192 shard mapping
+func TestLockClusterState_FullShardMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
 
@@ -140,34 +145,35 @@ func TestGetClusterState_FullShardMapping(t *testing.T) {
 	cm.state.Revision = 456
 	cm.mu.Unlock()
 
-	// Call GetClusterState - should return a cloned state with all shards
-	state := cm.GetClusterState()
+	// Call LockClusterState - should return state with all shards
+	state, unlock := cm.LockClusterState()
+	defer unlock()
 
 	if state == nil {
-		t.Fatal("GetClusterState returned nil")
+		t.Fatal("LockClusterState returned nil")
 	}
 
 	if len(state.Nodes) != len(nodeAddrs) {
-		t.Errorf("Expected %d nodes in cloned state, got %d", len(nodeAddrs), len(state.Nodes))
+		t.Errorf("Expected %d nodes in state, got %d", len(nodeAddrs), len(state.Nodes))
 	}
 
 	if state.ShardMapping == nil {
-		t.Fatal("Cloned state should have shard mapping")
+		t.Fatal("State should have shard mapping")
 	}
 
 	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in cloned state, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+		t.Errorf("Expected %d shards in state, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
 	}
 
 	if state.Revision != 456 {
 		t.Errorf("Expected revision 456, got %d", state.Revision)
 	}
 
-	// Verify a few sample shards are correctly cloned
+	// Verify a few sample shards are correctly accessible
 	for i := 0; i < 10; i++ {
 		shard, exists := state.ShardMapping.Shards[i]
 		if !exists {
-			t.Errorf("Shard %d should exist in cloned state", i)
+			t.Errorf("Shard %d should exist in state", i)
 			continue
 		}
 		expectedNode := nodeAddrs[i%len(nodeAddrs)]
@@ -179,17 +185,27 @@ func TestGetClusterState_FullShardMapping(t *testing.T) {
 		}
 	}
 
-	// Verify the clone is independent by modifying it
-	state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  "localhost:47099",
-		CurrentNode: "localhost:47099",
+	t.Logf("Successfully accessed state with %d nodes and %d shards", len(state.Nodes), len(state.ShardMapping.Shards))
+}
+
+// TestGetClusterState_ReturnsDirectReference tests that GetClusterState returns the state directly
+func TestGetClusterState_ReturnsDirectReference(t *testing.T) {
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+
+	// Add some nodes to internal state
+	cm.mu.Lock()
+	cm.state.Nodes["localhost:47001"] = true
+	cm.mu.Unlock()
+
+	// Get state
+	state := cm.GetClusterState()
+
+	if state == nil {
+		t.Fatal("GetClusterState returned nil")
 	}
 
-	// Get another clone and verify it wasn't affected
-	state2 := cm.GetClusterState()
-	if state2.ShardMapping.Shards[0].TargetNode == "localhost:47099" {
-		t.Error("Cloned states should be independent - modification in one shouldn't affect others")
+	if !state.Nodes["localhost:47001"] {
+		t.Error("State should have the original node")
 	}
-
-	t.Logf("Successfully cloned state with %d nodes and %d shards", len(state.Nodes), len(state.ShardMapping.Shards))
 }
