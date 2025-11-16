@@ -919,6 +919,7 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 		c.thisNode.GetAdvertiseAddress(), len(clusterState.Nodes), minQuorum, len(clusterState.ShardMapping.Shards), clusterState.Revision)
 
 	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
+		unlock()
 		c.logger.Warnf("Cluster state not yet stable, waiting before updating shard mapping")
 		return false
 	}
