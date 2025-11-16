@@ -831,7 +831,6 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 
 	// Lock cluster state to avoid race conditions
 	clusterState, unlock := cm.LockClusterState()
-	defer unlock()
 
 	localNode := cm.localNodeAddress
 
@@ -847,6 +846,9 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 			}
 		}
 	}
+
+	// Release lock before storing to avoid deadlock (storeShardMapping needs write lock)
+	unlock()
 
 	if len(shardsToUpdate) == 0 {
 		cm.logger.Debugf("No shards to claim for node %s", localNode)
