@@ -73,15 +73,15 @@ func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, 
 func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 	t.Parallel()
 
-	// Create a consensus manager without connecting to etcd
+	// Create a consensus manager without connecting to etcd and with empty local node address
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
 
-	// Call ReleaseShardsForNode with empty string - should return error
-	err := cm.ReleaseShardsForNode(ctx, "", objectsPerShard, 1*time.Second)
+	// Call ReleaseShardsForNode - should return error because local node address is empty
+	err := cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err == nil {
 		t.Error("ReleaseShardsForNode should return error for empty localNode")
 	}
@@ -92,13 +92,14 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 	t.Parallel()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	// Set a valid local node address in the constructor
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, "localhost:47001")
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
 
 	// Call with valid node but no shard mapping - should not error
-	err := cm.ReleaseShardsForNode(ctx, "localhost:47001", objectsPerShard, 1*time.Second)
+	err := cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err != nil {
 		t.Errorf("ReleaseShardsForNode should not error when no mapping exists: %v", err)
 	}
@@ -125,12 +126,12 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
-
 	// Set up test nodes
 	thisNodeAddr := "localhost:47001"
 	otherNodeAddr := "localhost:47002"
+
+	// Create consensus manager with the local node address
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
 	prefix := mgr.GetPrefix()
 
 	// Set up nodes
@@ -189,7 +190,7 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	}
 
 	// Call ReleaseShardsForNode with stability duration
-	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard, 1*time.Second)
+	err = cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err != nil {
 		t.Fatalf("ReleaseShardsForNode failed: %v", err)
 	}
@@ -297,13 +298,13 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
-
 	// Set up test nodes
 	thisNodeAddr := "localhost:47001"
 	otherNodeAddr := "localhost:47002"
 	prefix := mgr.GetPrefix()
+
+	// Create consensus manager with local node address
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
 
 	// Set up nodes
 	nodes := map[string]bool{
@@ -337,7 +338,7 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	}
 
 	// Call ReleaseShardsForNode with stability duration
-	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard, 1*time.Second)
+	err = cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err != nil {
 		t.Fatalf("ReleaseShardsForNode failed: %v", err)
 	}
@@ -387,13 +388,13 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
-
 	// Set up test nodes
 	thisNodeAddr := "localhost:47001"
 	otherNodeAddr := "localhost:47002"
 	prefix := mgr.GetPrefix()
+
+	// Create consensus manager with local node address
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
 
 	// Set up nodes
 	nodes := map[string]bool{
@@ -434,7 +435,7 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	}
 
 	// Call ReleaseShardsForNode with stability duration
-	err = cm.ReleaseShardsForNode(ctx, thisNodeAddr, objectsPerShard, 1*time.Second)
+	err = cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err != nil {
 		t.Fatalf("ReleaseShardsForNode failed: %v", err)
 	}

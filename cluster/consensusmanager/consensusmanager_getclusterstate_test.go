@@ -11,7 +11,7 @@ import (
 // TestLockClusterState_Empty tests LockClusterState with empty state
 func TestLockClusterState_Empty(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Call LockClusterState - should return state and unlock function
 	state, unlock := cm.LockClusterState()
@@ -33,7 +33,7 @@ func TestLockClusterState_Empty(t *testing.T) {
 // TestLockClusterState_WithData tests LockClusterState with populated state
 func TestLockClusterState_WithData(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -81,7 +81,7 @@ func TestLockClusterState_WithData(t *testing.T) {
 // TestLockClusterState_LockingBehavior tests that the lock is properly held
 func TestLockClusterState_LockingBehavior(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -114,7 +114,7 @@ func TestLockClusterState_LockingBehavior(t *testing.T) {
 // TestLockClusterState_FullShardMapping tests LockClusterState with full 8192 shard mapping
 func TestLockClusterState_FullShardMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add nodes to internal state
 	cm.mu.Lock()
@@ -191,7 +191,7 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 // TestGetClusterStateForTesting_ReturnsClonedState tests that GetClusterStateForTesting returns a cloned copy
 func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add some nodes to internal state
 	cm.mu.Lock()

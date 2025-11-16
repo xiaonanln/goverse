@@ -40,7 +40,7 @@ func TestWatchReconnection(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock())
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Initialize and start watch
 	err = cm.Initialize(ctx)
