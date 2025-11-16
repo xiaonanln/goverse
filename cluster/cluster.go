@@ -771,25 +771,11 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 		return
 	}
 
-	clusterState, unlock := c.consensusManager.LockClusterState()
-
-	// Only claim shards when cluster state is stable
-	if !clusterState.IsStable(c.getEffectiveNodeStabilityDuration()) {
-		unlock()
-		return
-	}
-
 	localAddr := c.thisNode.GetAdvertiseAddress()
-	if !clusterState.HasNode(localAddr) {
-		// This node is not yet in the cluster state
-		unlock()
-		return
-	}
-
-	unlock()
 
 	// Claim ownership of shards where this node is the target
-	err := c.consensusManager.ClaimShardsForNode(ctx, localAddr)
+	// The stability check is now performed inside ClaimShardsForNode
+	err := c.consensusManager.ClaimShardsForNode(ctx, localAddr, c.getEffectiveNodeStabilityDuration())
 	if err != nil {
 		c.logger.Warnf("Failed to claim shard ownership: %v", err)
 	}

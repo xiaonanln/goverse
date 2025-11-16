@@ -752,6 +752,8 @@ func TestClaimShardOwnership(t *testing.T) {
 	cm.mu.Lock()
 	cm.state.Nodes[thisNodeAddr] = true
 	cm.state.Nodes["localhost:47002"] = true
+	// Set LastChange to make cluster state stable
+	cm.state.LastChange = time.Now().Add(-11 * time.Second)
 
 	// Initialize shard mapping with some shards for this node
 	cm.state.ShardMapping = &ShardMapping{
@@ -781,8 +783,8 @@ func TestClaimShardOwnership(t *testing.T) {
 	}
 	cm.mu.Unlock()
 
-	// Call ClaimShardsForNode with the node address
-	err = cm.ClaimShardsForNode(ctx, thisNodeAddr)
+	// Call ClaimShardsForNode with the node address and stability duration
+	err = cm.ClaimShardsForNode(ctx, thisNodeAddr, 10*time.Second)
 	if err != nil {
 		t.Fatalf("ClaimShardsForNode failed: %v", err)
 	}
@@ -849,7 +851,7 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	cm.mu.Unlock()
 
 	// Call ClaimShardsForNode with empty string - should return error
-	err := cm.ClaimShardsForNode(ctx, "")
+	err := cm.ClaimShardsForNode(ctx, "", 10*time.Second)
 	if err == nil {
 		t.Error("ClaimShardsForNode should return error when localNode is empty")
 	}
@@ -893,6 +895,8 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 	cm.state.Nodes[thisNodeAddr] = true
 	cm.state.Nodes["localhost:47002"] = true
 	// deadNodeAddr is intentionally NOT added to simulate a dead node
+	// Set LastChange to make cluster state stable
+	cm.state.LastChange = time.Now().Add(-11 * time.Second)
 
 	// Initialize shard mapping with some shards
 	cm.state.ShardMapping = &ShardMapping{
@@ -936,8 +940,8 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 
 	cm.mu.Unlock()
 
-	// Call ClaimShardsForNode
-	err = cm.ClaimShardsForNode(ctx, thisNodeAddr)
+	// Call ClaimShardsForNode with stability duration
+	err = cm.ClaimShardsForNode(ctx, thisNodeAddr, 10*time.Second)
 	if err != nil {
 		t.Fatalf("ClaimShardsForNode failed: %v", err)
 	}
