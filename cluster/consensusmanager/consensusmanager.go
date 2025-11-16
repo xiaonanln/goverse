@@ -81,37 +81,7 @@ func (cs *ClusterState) IsStable(duration time.Duration) bool {
 	return time.Since(cs.LastChange) >= duration
 }
 
-func (cs *ClusterState) Clone() *ClusterState {
-	if cs == nil {
-		return nil
-	}
 
-	// Copy basic fields
-	cscp := &ClusterState{
-		Nodes: make(map[string]bool, len(cs.Nodes)),
-		ShardMapping: &ShardMapping{
-			Shards: make(map[int]ShardInfo),
-		},
-		Revision:   cs.Revision,
-		LastChange: cs.LastChange,
-	}
-
-	// Copy nodes map
-	for n, v := range cs.Nodes {
-		cscp.Nodes[n] = v
-	}
-
-	// Deep copy shard mapping
-	// Note: cs.ShardMapping could be nil if Clone is called before Initialize
-	// but cscp.ShardMapping is always initialized above
-	if cs.ShardMapping != nil {
-		for sid, info := range cs.ShardMapping.Shards {
-			cscp.ShardMapping.Shards[sid] = info
-		}
-	}
-
-	return cscp
-}
 
 // StateChangeListener is the interface for components that want to be notified of state changes
 type StateChangeListener interface {
@@ -816,12 +786,11 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 		return fmt.Errorf("localNode cannot be empty")
 	}
 
-	// Clone the cluster state to avoid race conditions
-	cm.mu.RLock()
-	clusterState := cm.state.Clone()
-	cm.mu.RUnlock()
-
+	// Lock cluster state to avoid race conditions
+	clusterState, unlock := cm.LockClusterState()
+	
 	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
+		unlock()
 		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
 		return nil
 	}
@@ -838,6 +807,8 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context, localNode st
 			}
 		}
 	}
+	
+	unlock()
 
 	if len(shardsToUpdate) == 0 {
 		cm.logger.Debugf("No shards to claim for node %s", localNode)
@@ -1216,15 +1187,23 @@ func (cm *ConsensusManager) SetMappingForTesting(mapping *ShardMapping) {
 	cm.mu.Unlock()
 }
 
+// LockClusterState acquires a read lock on the cluster state and returns the state and an unlock function.
+// The caller must call the unlock function when done accessing the state.
+// Usage:
+//   state, unlock := cm.LockClusterState()
+//   defer unlock()
+//   // Access state safely here
+func (cm *ConsensusManager) LockClusterState() (*ClusterState, func()) {
+	cm.mu.RLock()
+	return cm.state, func() {
+		cm.mu.RUnlock()
+	}
+}
+
 func (cm *ConsensusManager) GetClusterState() *ClusterState {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-
-	startTime := time.Now()
-	clonedState := cm.state.Clone()
-	cm.logger.Infof("GetClusterState Clone operation took %d us", time.Since(startTime).Microseconds())
-
-	return clonedState
+	return cm.state
 }
 
 // GetObjectsToEvict returns the list of object IDs that should be evicted from the given node
