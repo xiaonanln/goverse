@@ -2,10 +2,12 @@ package cluster
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
@@ -175,5 +177,87 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	leader := cluster.GetLeaderNode()
 	if leader != "" {
 		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
+	}
+}
+
+func TestClusterString(t *testing.T) {
+	// Test String() with a basic cluster
+	n := node.NewNode("localhost:47000")
+	cluster := newClusterForTesting(n, "TestCluster")
+
+	str := cluster.String()
+	t.Logf("Cluster string: %s", str)
+
+	// Verify format: Cluster<local-node-address,leader|member,quorum=%d>
+	// Should contain the node address
+	if !strings.Contains(str, "localhost:47000") {
+		t.Errorf("String() should contain node address 'localhost:47000', got: %s", str)
+	}
+
+	// Should contain either "leader" or "member"
+	if !strings.Contains(str, "leader") && !strings.Contains(str, "member") {
+		t.Errorf("String() should contain 'leader' or 'member', got: %s", str)
+	}
+
+	// Should contain quorum information
+	if !strings.Contains(str, "quorum=") {
+		t.Errorf("String() should contain 'quorum=', got: %s", str)
+	}
+
+	// Should start with "Cluster<" and end with ">"
+	if !strings.HasPrefix(str, "Cluster<") {
+		t.Errorf("String() should start with 'Cluster<', got: %s", str)
+	}
+	if !strings.HasSuffix(str, ">") {
+		t.Errorf("String() should end with '>', got: %s", str)
+	}
+}
+
+func TestClusterString_NoNode(t *testing.T) {
+	// Test String() when node is not set
+	cluster := &Cluster{
+		logger:    logger.NewLogger("TestCluster"),
+		minQuorum: 3,
+	}
+
+	str := cluster.String()
+	t.Logf("Cluster string (no node): %s", str)
+
+	// Should contain "unknown" when node is not set
+	if !strings.Contains(str, "unknown") {
+		t.Errorf("String() should contain 'unknown' when node not set, got: %s", str)
+	}
+
+	// Should contain quorum information
+	if !strings.Contains(str, "quorum=3") {
+		t.Errorf("String() should contain 'quorum=3', got: %s", str)
+	}
+}
+
+func TestClusterString_WithQuorum(t *testing.T) {
+	// Test String() with different quorum values
+	tests := []struct {
+		name      string
+		minQuorum int
+		expected  string
+	}{
+		{"quorum_1", 1, "quorum=1"},
+		{"quorum_3", 3, "quorum=3"},
+		{"quorum_5", 5, "quorum=5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := node.NewNode("localhost:47000")
+			cluster := newClusterForTesting(n, "TestCluster")
+			cluster.minQuorum = tt.minQuorum
+
+			str := cluster.String()
+			t.Logf("Cluster string: %s", str)
+
+			if !strings.Contains(str, tt.expected) {
+				t.Errorf("String() should contain '%s', got: %s", tt.expected, str)
+			}
+		})
 	}
 }

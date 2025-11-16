@@ -190,7 +190,7 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 		return fmt.Errorf("failed to start node connections: %w", err)
 	}
 
-	c.logger.Infof("Cluster started successfully")
+	c.logger.Infof("%s - Cluster started successfully", c)
 	return nil
 }
 
@@ -202,7 +202,7 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 // 4. Unregisters the node from etcd
 // 5. Closes the etcd connection
 func (c *Cluster) Stop(ctx context.Context) error {
-	c.logger.Infof("Stopping cluster...")
+	c.logger.Infof("%s - Stopping cluster...", c)
 
 	// Stop node connections
 	c.stopNodeConnections()
@@ -215,17 +215,17 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	// Unregister from etcd
 	if err := c.unregisterNode(ctx); err != nil {
-		c.logger.Errorf("Failed to unregister node: %v", err)
+		c.logger.Errorf("%s - Failed to unregister node: %v", c, err)
 		// Continue with cleanup even if unregister fails
 	}
 
 	// Close etcd connection
 	if err := c.closeEtcd(); err != nil {
-		c.logger.Errorf("Failed to close etcd: %v", err)
+		c.logger.Errorf("%s - Failed to close etcd: %v", c, err)
 		// Continue with cleanup even if close fails
 	}
 
-	c.logger.Infof("Cluster stopped")
+	c.logger.Infof("%s - Cluster stopped", c)
 	return nil
 }
 
@@ -271,10 +271,31 @@ func (c *Cluster) getEffectiveShardMappingCheckInterval() time.Duration {
 	return c.shardMappingCheckInterval
 }
 
-
-
 func (c *Cluster) GetThisNode() *node.Node {
 	return c.thisNode
+}
+
+// String returns a string representation of the cluster
+// Format: Cluster<local-node-address,leader|member,quorum=%d>
+func (c *Cluster) String() string {
+	var nodeAddr string
+	if c.thisNode != nil {
+		nodeAddr = c.thisNode.GetAdvertiseAddress()
+	} else {
+		nodeAddr = "unknown"
+	}
+
+	var role string
+	// Check if consensusManager is initialized before calling IsLeader
+	if c.consensusManager != nil && c.IsLeader() {
+		role = "leader"
+	} else {
+		role = "member"
+	}
+
+	quorum := c.getEffectiveMinQuorum()
+
+	return fmt.Sprintf("Cluster<%s,%s,quorum=%d>", nodeAddr, role, quorum)
 }
 
 // GetShardLock returns the cluster's ShardLock instance
@@ -316,7 +337,7 @@ func (c *Cluster) IsReady() bool {
 // This is called when shard mapping is successfully loaded or created
 func (c *Cluster) markClusterReady() {
 	c.clusterReadyOnce.Do(func() {
-		c.logger.Infof("Cluster is now ready")
+		c.logger.Infof("%s - Cluster is now ready", c)
 		close(c.clusterReadyChan)
 	})
 }
@@ -332,18 +353,18 @@ func (c *Cluster) checkAndMarkReady() {
 
 	// Check if shard mapping is available
 	if !c.consensusManager.IsReady() {
-		c.logger.Infof("Cannot mark cluster ready: consensus manager not ready")
+		c.logger.Infof("%s - Cannot mark cluster ready: consensus manager not ready", c)
 		return
 	}
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 	if !c.consensusManager.IsStateStable(localAddr, c.getEffectiveNodeStabilityDuration()) {
-		c.logger.Infof("Cannot mark cluster ready: cluster state not stable yet, will check again later")
+		c.logger.Infof("%s - Cannot mark cluster ready: cluster state not stable yet, will check again later", c)
 		return
 	}
 
 	// Both conditions met, mark cluster as ready
-	c.logger.Infof("All conditions met, marking cluster as READY for the first time!")
+	c.logger.Infof("%s - All conditions met, marking cluster as READY for the first time!", c)
 	c.markClusterReady()
 }
 
@@ -357,12 +378,12 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	// Check if the object is on this node
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Call locally
-		c.logger.Infof("Calling object %s.%s locally (type: %s)", id, method, objType)
+		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
 		return c.thisNode.CallObject(ctx, objType, id, method, request)
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("Routing CallObject for %s.%s to node %s (type: %s)", id, method, nodeAddr, objType)
+	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -423,16 +444,16 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Check if the object should be created on this node
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Create locally
-		c.logger.Infof("Creating object %s locally (type: %s)", objID, objType)
+		c.logger.Infof("%s - Creating object %s locally (type: %s)", c, objID, objType)
 		return c.thisNode.CreateObject(ctx, objType, objID)
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("Routing CreateObject for %s to node %s", objID, nodeAddr)
+	c.logger.Infof("%s - Routing CreateObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
-		c.logger.Warnf("CreateObject failed: %v", err)
+		c.logger.Warnf("%s - CreateObject failed: %v", c, err)
 		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
@@ -444,11 +465,11 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 
 	resp, err := client.CreateObject(ctx, req)
 	if err != nil {
-		c.logger.Warnf("CreateObject failed: %v", err)
+		c.logger.Warnf("%s - CreateObject failed: %v", c, err)
 		return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
 	}
 
-	c.logger.Infof("Successfully created object %s on node %s", resp.Id, nodeAddr)
+	c.logger.Infof("%s - Successfully created object %s on node %s", c, resp.Id, nodeAddr)
 	return resp.Id, nil
 }
 
@@ -468,16 +489,16 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	// Check if the object should be deleted on this node
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Delete locally
-		c.logger.Infof("Deleting object %s locally", objID)
+		c.logger.Infof("%s - Deleting object %s locally", c, objID)
 		return c.thisNode.DeleteObject(ctx, objID)
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("Routing DeleteObject for %s to node %s", objID, nodeAddr)
+	c.logger.Infof("%s - Routing DeleteObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
-		c.logger.Warnf("DeleteObject failed: %v", err)
+		c.logger.Warnf("%s - DeleteObject failed: %v", c, err)
 		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
@@ -488,11 +509,11 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 
 	_, err = client.DeleteObject(ctx, req)
 	if err != nil {
-		c.logger.Warnf("DeleteObject failed: %v", err)
+		c.logger.Warnf("%s - DeleteObject failed: %v", c, err)
 		return fmt.Errorf("remote DeleteObject failed on node %s: %w", nodeAddr, err)
 	}
 
-	c.logger.Infof("Successfully deleted object %s on node %s", objID, nodeAddr)
+	c.logger.Infof("%s - Successfully deleted object %s on node %s", c, objID, nodeAddr)
 	return nil
 }
 
@@ -512,12 +533,12 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	// Check if the client is on this node
 	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
 		// Push locally
-		c.logger.Infof("Pushing message to client %s locally", clientID)
+		c.logger.Infof("%s - Pushing message to client %s locally", c, clientID)
 		return c.thisNode.PushMessageToClient(clientID, message)
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("Routing PushMessageToClient for %s to node %s", clientID, nodeAddr)
+	c.logger.Infof("%s - Routing PushMessageToClient for %s to node %s", c, clientID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -544,7 +565,7 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 		return fmt.Errorf("remote PushMessageToClient failed on node %s: %w", nodeAddr, err)
 	}
 
-	c.logger.Infof("Successfully pushed message to client %s on node %s", clientID, nodeAddr)
+	c.logger.Infof("%s - Successfully pushed message to client %s on node %s", c, clientID, nodeAddr)
 	return nil
 }
 
@@ -653,7 +674,7 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
 func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 	if c.shardMappingRunning {
-		c.logger.Warnf("Shard mapping management already running")
+		c.logger.Warnf("%s - Shard mapping management already running", c)
 		return nil
 	}
 
@@ -661,7 +682,7 @@ func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 	c.shardMappingRunning = true
 
 	go c.shardMappingManagementLoop()
-	c.logger.Infof("Started shard mapping management (check interval: %v, stability duration: %v)",
+	c.logger.Infof("%s - Started shard mapping management (check interval: %v, stability duration: %v)", c,
 		c.getEffectiveShardMappingCheckInterval(), c.getEffectiveNodeStabilityDuration())
 
 	return nil
@@ -674,7 +695,7 @@ func (c *Cluster) stopShardMappingManagement() {
 		c.shardMappingCancel = nil
 	}
 	c.shardMappingRunning = false
-	c.logger.Infof("Stopped shard mapping management")
+	c.logger.Infof("%s - Stopped shard mapping management", c)
 }
 
 // shardMappingManagementLoop is the background loop that manages shard mapping
@@ -685,7 +706,7 @@ func (c *Cluster) shardMappingManagementLoop() {
 	for {
 		select {
 		case <-c.shardMappingCtx.Done():
-			c.logger.Debugf("Shard mapping management loop stopped")
+			c.logger.Debugf("%s - Shard mapping management loop stopped", c)
 			return
 		case <-ticker.C:
 			c.handleShardMappingCheck()
@@ -705,7 +726,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	// transient state changes.
 	stateChanged := c.leaderShardManagementLogic(ctx)
 	if stateChanged {
-		c.logger.Debugf("Cluster state changed by leader, waiting for next cycle")
+		c.logger.Debugf("%s - Cluster state changed by leader, waiting for next cycle", c)
 		// Ensure metrics are updated even when leader changed state to keep
 		// Prometheus/monitoring in sync with the in-memory state.
 		return
@@ -729,7 +750,7 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 	// The stability check is now performed inside ClaimShardsForNode
 	err := c.consensusManager.ClaimShardsForNode(ctx, localAddr, c.getEffectiveNodeStabilityDuration())
 	if err != nil {
-		c.logger.Warnf("Failed to claim shard ownership: %v", err)
+		c.logger.Warnf("%s - Failed to claim shard ownership: %v", c, err)
 	}
 }
 
@@ -756,7 +777,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 	// Pass the node stability duration to the consensus manager
 	err := c.consensusManager.ReleaseShardsForNode(ctx, localAddr, localObjectsPerShard, c.getEffectiveNodeStabilityDuration())
 	if err != nil {
-		c.logger.Warnf("Failed to release shard ownership: %v", err)
+		c.logger.Warnf("%s - Failed to release shard ownership: %v", c, err)
 	}
 }
 
@@ -766,7 +787,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 
 	// Check if cluster state is stable without cloning
 	if !c.consensusManager.IsStateStable(localAddr, c.getEffectiveNodeStabilityDuration()) {
-		c.logger.Debugf("Skipping object removal: cluster state is not stable yet")
+		c.logger.Debugf("%s - Skipping object removal: cluster state is not stable yet", c)
 		return
 	}
 
@@ -781,14 +802,14 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	// Remove each object that should be evicted
 	for _, objectID := range objectsToEvict {
 		shardID := sharding.GetShardID(objectID)
-		c.logger.Infof("Removing object %s (shard %d) as it no longer belongs to this node",
+		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 
 		err := c.thisNode.DeleteObject(ctx, objectID)
 		if err != nil {
-			c.logger.Errorf("Failed to delete object %s: %v", objectID, err)
+			c.logger.Errorf("%s - Failed to delete object %s: %v", c, objectID, err)
 		} else {
-			c.logger.Infof("Successfully removed object %s", objectID)
+			c.logger.Infof("%s - Successfully removed object %s", c, objectID)
 		}
 	}
 }
@@ -801,11 +822,11 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 		return false
 	}
 
-	c.logger.Infof("ACTING AS LEADER!")
+	c.logger.Infof("%s - ACTING AS LEADER!", c)
 
 	localAddr := c.thisNode.GetAdvertiseAddress()
 	if !c.consensusManager.IsStateStable(localAddr, c.getEffectiveNodeStabilityDuration()) {
-		c.logger.Warnf("Cluster state not yet stable for this node, waiting before updating shard mapping")
+		c.logger.Warnf("%s - Cluster state not yet stable for this node, waiting before updating shard mapping", c)
 		return false
 	}
 
@@ -813,11 +834,11 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 	// This handles node failures and ensures all shards have valid target nodes
 	reassignedCount, err := c.consensusManager.ReassignShardTargetNodes(ctx)
 	if reassignedCount > 0 {
-		c.logger.Infof("Reassigned %d shards to new target nodes", reassignedCount)
+		c.logger.Infof("%s - Reassigned %d shards to new target nodes", c, reassignedCount)
 		return true // State changed, allow it to stabilize before next operation
 	}
 	if err != nil {
-		c.logger.Errorf("Failed to reassign shard target nodes: %v", err)
+		c.logger.Errorf("%s - Failed to reassign shard target nodes: %v", c, err)
 		return false
 	}
 
@@ -825,12 +846,12 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 	// Only attempt if no reassignment was needed (cluster is stable)
 	rebalanced, err := c.consensusManager.RebalanceShards(ctx)
 	if err != nil {
-		c.logger.Errorf("Failed to rebalance shards: %v", err)
+		c.logger.Errorf("%s - Failed to rebalance shards: %v", c, err)
 		return false
 	}
 
 	if rebalanced {
-		c.logger.Infof("Rebalanced one shard to improve cluster balance")
+		c.logger.Infof("%s - Rebalanced one shard to improve cluster balance", c)
 		return true // State changed
 	}
 
