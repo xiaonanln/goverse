@@ -941,7 +941,7 @@ func (cm *ConsensusManager) ReleaseShardsForNode(ctx context.Context, localNode 
 	}
 
 	// Check if cluster state is stable before releasing shards
-	if !cm.IsStateStable(nodeStabilityDuration) {
+	if !cm.IsStateStable(localNode, nodeStabilityDuration) {
 		cm.logger.Debugf("Cluster state not stable, skipping shard release for node %s", localNode)
 		return nil
 	}
