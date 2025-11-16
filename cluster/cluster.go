@@ -431,40 +431,54 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
-	// Check if the object should be created on this node
-	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
-		// Create locally
-		c.logger.Infof("%s - Creating object %s locally (type: %s)", c, objID, objType)
-		return c.thisNode.CreateObject(ctx, objType, objID)
-	}
+	// Execute the actual creation asynchronously to prevent deadlocks
+	// This is crucial when CreateObject is called from within an object method,
+	// as waiting for the operation to complete while holding locks can cause deadlocks
+	go func() {
+		// Check if the object should be created on this node
+		if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+			// Create locally
+			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
+			_, err := c.thisNode.CreateObject(ctx, objType, objID)
+			if err != nil {
+				c.logger.Errorf("%s - Async CreateObject %s failed: %v", c, objID, err)
+			} else {
+				c.logger.Infof("%s - Async CreateObject %s completed successfully", c, objID)
+			}
+			return
+		}
 
-	// Route to the appropriate node
-	c.logger.Infof("%s - Routing CreateObject for %s to node %s", c, objID, nodeAddr)
+		// Route to the appropriate node
+		c.logger.Infof("%s - Async routing CreateObject for %s to node %s", c, objID, nodeAddr)
 
-	client, err := c.nodeConnections.GetConnection(nodeAddr)
-	if err != nil {
-		c.logger.Warnf("%s - CreateObject failed: %v", c, err)
-		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
-	}
+		client, err := c.nodeConnections.GetConnection(nodeAddr)
+		if err != nil {
+			c.logger.Errorf("%s - Async CreateObject %s failed to get connection: %v", c, objID, err)
+			return
+		}
 
-	// Call CreateObject on the remote node
-	req := &goverse_pb.CreateObjectRequest{
-		Type: objType,
-		Id:   objID,
-	}
+		// Call CreateObject on the remote node
+		req := &goverse_pb.CreateObjectRequest{
+			Type: objType,
+			Id:   objID,
+		}
 
-	resp, err := client.CreateObject(ctx, req)
-	if err != nil {
-		c.logger.Warnf("%s - CreateObject failed: %v", c, err)
-		return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
-	}
+		_, err = client.CreateObject(ctx, req)
+		if err != nil {
+			c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
+		} else {
+			c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+		}
+	}()
 
-	c.logger.Infof("%s - Successfully created object %s on node %s", c, resp.Id, nodeAddr)
-	return resp.Id, nil
+	// Return immediately with the object ID
+	c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
+	return objID, nil
 }
 
 // DeleteObject deletes an object from the cluster.
 // It determines which node hosts the object and routes the deletion request accordingly.
+// The deletion is performed asynchronously to prevent deadlocks when called from within object methods.
 func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if objID == "" {
 		return fmt.Errorf("object ID must be specified")
@@ -476,34 +490,47 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
-	// Check if the object should be deleted on this node
-	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
-		// Delete locally
-		c.logger.Infof("%s - Deleting object %s locally", c, objID)
-		return c.thisNode.DeleteObject(ctx, objID)
-	}
+	// Execute the actual deletion asynchronously to prevent deadlocks
+	// This is crucial when DeleteObject is called from within an object method,
+	// as waiting for the operation to complete while holding locks can cause deadlocks
+	go func() {
+		// Check if the object should be deleted on this node
+		if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+			// Delete locally
+			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
+			err := c.thisNode.DeleteObject(ctx, objID)
+			if err != nil {
+				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
+			} else {
+				c.logger.Infof("%s - Async DeleteObject %s completed successfully", c, objID)
+			}
+			return
+		}
 
-	// Route to the appropriate node
-	c.logger.Infof("%s - Routing DeleteObject for %s to node %s", c, objID, nodeAddr)
+		// Route to the appropriate node
+		c.logger.Infof("%s - Async routing DeleteObject for %s to node %s", c, objID, nodeAddr)
 
-	client, err := c.nodeConnections.GetConnection(nodeAddr)
-	if err != nil {
-		c.logger.Warnf("%s - DeleteObject failed: %v", c, err)
-		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
-	}
+		client, err := c.nodeConnections.GetConnection(nodeAddr)
+		if err != nil {
+			c.logger.Errorf("%s - Async DeleteObject %s failed to get connection: %v", c, objID, err)
+			return
+		}
 
-	// Call DeleteObject on the remote node
-	req := &goverse_pb.DeleteObjectRequest{
-		Id: objID,
-	}
+		// Call DeleteObject on the remote node
+		req := &goverse_pb.DeleteObjectRequest{
+			Id: objID,
+		}
 
-	_, err = client.DeleteObject(ctx, req)
-	if err != nil {
-		c.logger.Warnf("%s - DeleteObject failed: %v", c, err)
-		return fmt.Errorf("remote DeleteObject failed on node %s: %w", nodeAddr, err)
-	}
+		_, err = client.DeleteObject(ctx, req)
+		if err != nil {
+			c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
+		} else {
+			c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+		}
+	}()
 
-	c.logger.Infof("%s - Successfully deleted object %s on node %s", c, objID, nodeAddr)
+	// Return immediately
+	c.logger.Infof("%s - DeleteObject %s initiated asynchronously", c, objID)
 	return nil
 }
 
