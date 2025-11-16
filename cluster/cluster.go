@@ -98,9 +98,7 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 	}
 
 	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
-	if thisNode != nil {
-		thisNode.SetShardLock(c.shardLock)
-	}
+	thisNode.SetShardLock(c.shardLock)
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
 	if err != nil {
@@ -170,9 +168,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 	// Set the cluster's ShardLock on the node for per-cluster isolation
-	if c.thisNode != nil {
-		c.thisNode.SetShardLock(c.shardLock)
-	}
+	c.thisNode.SetShardLock(c.shardLock)
 
 	// Register this node with etcd
 	if err := c.registerNode(ctx); err != nil {
@@ -352,10 +348,6 @@ func (c *Cluster) checkAndMarkReady() {
 }
 
 func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
-	if c.thisNode == nil {
-		return nil, fmt.Errorf("ThisNode is not set")
-	}
-
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
@@ -416,10 +408,6 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
 func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
-	if c.thisNode == nil {
-		return "", fmt.Errorf("ThisNode is not set")
-	}
-
 	// If objID is not provided, generate one locally
 	// We need to know the ID to determine which node should create it
 	if objID == "" {
@@ -467,10 +455,6 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 // DeleteObject deletes an object from the cluster.
 // It determines which node hosts the object and routes the deletion request accordingly.
 func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
-	if c.thisNode == nil {
-		return fmt.Errorf("ThisNode is not set")
-	}
-
 	if objID == "" {
 		return fmt.Errorf("object ID must be specified")
 	}
@@ -516,10 +500,6 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 // Client IDs have the format: {nodeAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target node and routes the message accordingly
 func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
-	if c.thisNode == nil {
-		return fmt.Errorf("ThisNode is not set")
-	}
-
 	// Parse client ID to extract node address
 	// Client ID format: nodeAddress/uniqueId
 	parts := strings.SplitN(clientID, "/", 2)
@@ -582,10 +562,6 @@ func (c *Cluster) GetConsensusManagerForTesting() *consensusmanager.ConsensusMan
 
 // registerNode registers this node with etcd using the shared lease API
 func (c *Cluster) registerNode(ctx context.Context) error {
-	if c.thisNode == nil {
-		return fmt.Errorf("thisNode not set")
-	}
-
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
 	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
 	value := c.thisNode.GetAdvertiseAddress()
@@ -600,10 +576,6 @@ func (c *Cluster) registerNode(ctx context.Context) error {
 
 // unregisterNode unregisters this node from etcd using the shared lease API
 func (c *Cluster) unregisterNode(ctx context.Context) error {
-	if c.thisNode == nil {
-		return fmt.Errorf("thisNode not set")
-	}
-
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
 	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
@@ -646,9 +618,6 @@ func (c *Cluster) GetLeaderNode() string {
 
 // IsLeader returns true if this node is the cluster leader
 func (c *Cluster) IsLeader() bool {
-	if c.thisNode == nil {
-		return false
-	}
 	leaderNode := c.GetLeaderNode()
 	return leaderNode != "" && leaderNode == c.thisNode.GetAdvertiseAddress()
 }
@@ -754,10 +723,6 @@ func (c *Cluster) updateMetrics() {
 
 // claimShardOwnership claims ownership of shards when cluster state is stable
 func (c *Cluster) claimShardOwnership(ctx context.Context) {
-	if c.thisNode == nil {
-		return
-	}
-
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
 	// Claim ownership of shards where this node is the target
@@ -773,10 +738,6 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 // - TargetNode is another node (not empty and not this node)
 // - No objects exist on this node for that shard
 func (c *Cluster) releaseShardOwnership(ctx context.Context) {
-	if c.thisNode == nil {
-		return
-	}
-
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
 	// Count objects per shard on this node
@@ -801,11 +762,6 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 
 // removeObjectsNotBelongingToThisNode removes objects whose shards no longer belong to this node
 func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
-	if c.thisNode == nil {
-		c.logger.Warnf("Cannot remove objects: thisNode is nil")
-		return
-	}
-
 	localAddr := c.thisNode.GetAdvertiseAddress()
 
 	// Check if cluster state is stable without cloning
@@ -904,11 +860,6 @@ func (c *Cluster) stopNodeConnections() {
 
 // updateNodeConnections updates the NodeConnections with the current list of cluster nodes
 func (c *Cluster) updateNodeConnections() {
-	if c.thisNode == nil {
-		c.logger.Warnf("updateNodeConnections: thisNode is not initialized")
-		return
-	}
-
 	allNodes := c.GetNodes()
 	thisNodeAddr := c.thisNode.GetAdvertiseAddress()
 
