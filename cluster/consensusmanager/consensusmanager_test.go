@@ -98,9 +98,9 @@ func TestGetLeaderNode_WithNodes(t *testing.T) {
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47003"] = true
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47003", true)
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 	cm.mu.Unlock()
 
 	leader := cm.GetLeaderNode()
@@ -117,8 +117,8 @@ func TestGetShardMapping_NotAvailable(t *testing.T) {
 	if mapping == nil {
 		t.Error("Expected non-nil mapping even when not initialized")
 	}
-	if len(mapping.Shards) != 0 {
-		t.Errorf("Expected empty mapping, got %d shards", len(mapping.Shards))
+	if mapping.Shards.len() != 0 {
+		t.Errorf("Expected empty mapping, got %d shards", mapping.Shards.len())
 	}
 }
 
@@ -129,36 +129,37 @@ func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
 	// Initialize shard mapping
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
-	cm.state.ShardMapping.Shards[0] = ShardInfo{TargetNode: "node1", CurrentNode: "node1"}
-	cm.state.ShardMapping.Shards[1] = ShardInfo{TargetNode: "node2", CurrentNode: "node2"}
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{TargetNode: "node1", CurrentNode: "node1"})
+	cm.state.ShardMapping.Shards.set(1, ShardInfo{TargetNode: "node2", CurrentNode: "node2"})
 	cm.mu.Unlock()
 
 	// Get the mapping
 	mapping1 := cm.GetShardMapping()
 
 	// Verify initial state
-	if len(mapping1.Shards) != 2 {
-		t.Fatalf("Expected 2 shards, got %d", len(mapping1.Shards))
+	if mapping1.Shards.len() != 2 {
+		t.Fatalf("Expected 2 shards, got %d", mapping1.Shards.len())
 	}
 
 	// Modify the returned map (this should NOT affect internal state)
-	mapping1.Shards[0] = ShardInfo{TargetNode: "modified", CurrentNode: "modified"}
-	mapping1.Shards[999] = ShardInfo{TargetNode: "new", CurrentNode: "new"}
+	mapping1.Shards.set(0, ShardInfo{TargetNode: "modified", CurrentNode: "modified"})
+	mapping1.Shards.set(999, ShardInfo{TargetNode: "new", CurrentNode: "new"})
 
 	// Get the mapping again
 	mapping2 := cm.GetShardMapping()
 
 	// Verify that internal state was NOT modified
-	if mapping2.Shards[0].TargetNode != "node1" {
-		t.Errorf("Expected shard 0 to be node1, got %s (deep copy failed)", mapping2.Shards[0].TargetNode)
+	shard0, _ := mapping2.Shards.get(0)
+	if shard0.TargetNode != "node1" {
+		t.Errorf("Expected shard 0 to be node1, got %s (deep copy failed)", shard0.TargetNode)
 	}
-	if _, exists := mapping2.Shards[999]; exists {
+	if _, exists := mapping2.Shards.get(999); exists {
 		t.Error("Expected shard 999 to not exist (deep copy failed)")
 	}
-	if len(mapping2.Shards) != 2 {
-		t.Errorf("Expected 2 shards, got %d (deep copy failed)", len(mapping2.Shards))
+	if mapping2.Shards.len() != 2 {
+		t.Errorf("Expected 2 shards, got %d (deep copy failed)", mapping2.Shards.len())
 	}
 }
 
@@ -184,8 +185,8 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 
 	// Add nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 	cm.mu.Unlock()
 
 	n, err := cm.ReassignShardTargetNodes(context.Background())
@@ -196,8 +197,8 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 		t.Errorf("Expected %d shards reassigned (creating initial mapping), got %d", sharding.NumShards, n)
 	}
 
-	if len(cm.state.ShardMapping.Shards) != 8192 {
-		t.Fatalf("Expected shard mapping to have %d shards, got %d", sharding.NumShards, len(cm.state.ShardMapping.Shards))
+	if cm.state.ShardMapping.Shards.len() != 8192 {
+		t.Fatalf("Expected shard mapping to have %d shards, got %d", sharding.NumShards, cm.state.ShardMapping.Shards.len())
 	}
 }
 
@@ -210,24 +211,24 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 
 	// Add initial nodes
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 
 	// Set initial mapping
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	for i := 0; i < sharding.NumShards/2; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  "localhost:47001",
 			CurrentNode: "",
-		}
+		})
 	}
 	cm.mu.Unlock()
 
 	// Add a new node
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47003"] = true
+	cm.state.Nodes.set("localhost:47003", true)
 	cm.mu.Unlock()
 
 	// Update should create a new mapping (old shard assignments may change)
@@ -239,8 +240,8 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 		t.Error("Expected some shards to be reassigned after adding a new node")
 	}
 
-	if len(cm.state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in updated mapping, got %d", sharding.NumShards, len(cm.state.ShardMapping.Shards))
+	if cm.state.ShardMapping.Shards.len() != sharding.NumShards {
+		t.Errorf("Expected %d shards in updated mapping, got %d", sharding.NumShards, cm.state.ShardMapping.Shards.len())
 	}
 }
 
@@ -250,20 +251,20 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 
 	// Add nodes
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 
 	// Set mapping with same nodes
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  nodes[nodeIdx],
 			CurrentNode: "",
-		}
+		})
 	}
 	cm.mu.Unlock()
 
@@ -317,7 +318,7 @@ func TestIsStateStable(t *testing.T) {
 
 	// Add nodes to the state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes.set("localhost:47001", true)
 	cm.mu.Unlock()
 
 	// Should be stable now with nodes and old lastNodeChange
@@ -379,12 +380,11 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 
 	// Set a mapping with CurrentNode set
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes.set("localhost:47001", true)
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: map[int]ShardInfo{
-			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47001"},
-		},
+		Shards: newCowMap[int, ShardInfo](),
 	}
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{TargetNode: "localhost:47001", CurrentNode: "localhost:47001"})
 	cm.mu.Unlock()
 
 	node, err := cm.GetNodeForShard(0)
@@ -404,9 +404,8 @@ func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	// Set a mapping with CurrentNode empty
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: map[int]ShardInfo{
+		Shards: newCowMap[int, ShardInfo](),
 			0: {TargetNode: "localhost:47001", CurrentNode: ""},
-		},
 	}
 	cm.mu.Unlock()
 
@@ -428,12 +427,11 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 	// Set a mapping where CurrentNode differs from TargetNode
 	cm.mu.Lock()
 	// Add nodes to the state so CurrentNode validation passes
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: map[int]ShardInfo{
+		Shards: newCowMap[int, ShardInfo](),
 			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47002"},
-		},
 	}
 	cm.mu.Unlock()
 
@@ -464,18 +462,18 @@ func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
 
 	// Set a complete mapping with CurrentNode set
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	nodes := []string{"localhost:47001", "localhost:47002"}
 	for i := 0; i < sharding.NumShards; i++ {
 		nodeIdx := i % 2
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  nodes[nodeIdx],
 			CurrentNode: nodes[nodeIdx], // CurrentNode is set and matches TargetNode
-		}
+		})
 	}
 	cm.mu.Unlock()
 
@@ -498,13 +496,13 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	// Set a complete mapping with CurrentNode empty
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	for i := 0; i < sharding.NumShards; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  "localhost:47001",
 			CurrentNode: "", // CurrentNode not set
-		}
+		})
 	}
 	cm.mu.Unlock()
 
@@ -526,18 +524,18 @@ func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
 	// Set a complete mapping where shards are in migration state
 	cm.mu.Lock()
 	// Add nodes to the state so CurrentNode validation passes
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set("localhost:47001", true)
+	cm.state.Nodes.set("localhost:47002", true)
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	// For all shards, set TargetNode to localhost:47001 but CurrentNode to localhost:47002
 	// This simulates a migration in progress
 	for i := 0; i < sharding.NumShards; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  "localhost:47001",
 			CurrentNode: "localhost:47002",
-		}
+		})
 	}
 	cm.mu.Unlock()
 
@@ -567,11 +565,10 @@ func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	// Set a mapping where CurrentNode is not in the node list
 	cm.mu.Lock()
 	// Only add one node to the state
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes.set("localhost:47001", true)
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: map[int]ShardInfo{
+		Shards: newCowMap[int, ShardInfo](),
 			0: {TargetNode: "localhost:47001", CurrentNode: "localhost:47002"}, // CurrentNode not in node list
-		},
 	}
 	cm.mu.Unlock()
 
@@ -594,16 +591,16 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T)
 	// Set a mapping where CurrentNode is not in the node list
 	cm.mu.Lock()
 	// Only add one node to the state
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes.set("localhost:47001", true)
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 	// For all shards, set CurrentNode to a node not in the list
 	for i := 0; i < sharding.NumShards; i++ {
-		cm.state.ShardMapping.Shards[i] = ShardInfo{
+		cm.state.ShardMapping.Shards.set(i, ShardInfo{
 			TargetNode:  "localhost:47001",
 			CurrentNode: "localhost:47002", // Not in node list
-		}
+		})
 	}
 	cm.mu.Unlock()
 
@@ -750,35 +747,35 @@ func TestClaimShardOwnership(t *testing.T) {
 
 	// Add nodes to state
 	cm.mu.Lock()
-	cm.state.Nodes[thisNodeAddr] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set(thisNodeAddr, true)
+	cm.state.Nodes.set("localhost:47002", true)
 
 	// Initialize shard mapping with some shards for this node
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 
 	// Add a few test shards
 	// Shard 0: target is this node, current is empty (should be claimed)
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  thisNodeAddr,
 		CurrentNode: "",
 		ModRevision: 0,
-	}
+	})
 
 	// Shard 1: target is another node, current is empty (should NOT be claimed)
-	cm.state.ShardMapping.Shards[1] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(1, ShardInfo{
 		TargetNode:  "localhost:47002",
 		CurrentNode: "",
 		ModRevision: 0,
-	}
+	})
 
 	// Shard 2: target is this node, current is already set (should NOT be claimed)
-	cm.state.ShardMapping.Shards[2] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(2, ShardInfo{
 		TargetNode:  thisNodeAddr,
 		CurrentNode: thisNodeAddr,
 		ModRevision: 0,
-	}
+	})
 	cm.mu.Unlock()
 
 	// Call ClaimShardsForNode with the node address
@@ -839,13 +836,13 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	// Add a shard
 	cm.mu.Lock()
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:47001",
 		CurrentNode: "",
 		ModRevision: 0,
-	}
+	})
 	cm.mu.Unlock()
 
 	// Call ClaimShardsForNode with empty string - should return error
@@ -890,49 +887,49 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 
 	// Add nodes to state - note that deadNodeAddr is NOT in the active node list
 	cm.mu.Lock()
-	cm.state.Nodes[thisNodeAddr] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes.set(thisNodeAddr, true)
+	cm.state.Nodes.set("localhost:47002", true)
 	// deadNodeAddr is intentionally NOT added to simulate a dead node
 
 	// Initialize shard mapping with some shards
 	cm.state.ShardMapping = &ShardMapping{
-		Shards: make(map[int]ShardInfo),
+		Shards: newCowMap[int, ShardInfo](),
 	}
 
 	// Shard 0: target is another node, current is dead node (should NOT be claimed - target != thisNode)
-	cm.state.ShardMapping.Shards[0] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(0, ShardInfo{
 		TargetNode:  "localhost:47002",
 		CurrentNode: deadNodeAddr,
 		ModRevision: 0,
-	}
+	})
 
 	// Shard 1: target is this node, current is dead node (should be claimed)
-	cm.state.ShardMapping.Shards[1] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(1, ShardInfo{
 		TargetNode:  thisNodeAddr,
 		CurrentNode: deadNodeAddr,
 		ModRevision: 0,
-	}
+	})
 
 	// Shard 2: target is another node, current is empty (should NOT be claimed - target != thisNode)
-	cm.state.ShardMapping.Shards[2] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(2, ShardInfo{
 		TargetNode:  "localhost:47002",
 		CurrentNode: "",
 		ModRevision: 0,
-	}
+	})
 
 	// Shard 3: target is this node, current is empty (should be claimed)
-	cm.state.ShardMapping.Shards[3] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(3, ShardInfo{
 		TargetNode:  thisNodeAddr,
 		CurrentNode: "",
 		ModRevision: 0,
-	}
+	})
 
 	// Shard 4: target is this node, current is this node (should NOT be claimed - already correct, no update needed)
-	cm.state.ShardMapping.Shards[4] = ShardInfo{
+	cm.state.ShardMapping.Shards.set(4, ShardInfo{
 		TargetNode:  thisNodeAddr,
 		CurrentNode: thisNodeAddr,
 		ModRevision: 0,
-	}
+	})
 
 	cm.mu.Unlock()
 

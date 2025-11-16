@@ -44,15 +44,15 @@ func TestStorageFormat(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		if i%2 == 0 {
-			mapping.Shards[i] = ShardInfo{
+			mapping.Shards.set(i, ShardInfo{
 				TargetNode:  "node1",
 				CurrentNode: "",
-			}
+			})
 		} else {
-			mapping.Shards[i] = ShardInfo{
+			mapping.Shards.set(i, ShardInfo{
 				TargetNode:  "node2",
 				CurrentNode: "",
-			}
+			})
 		}
 	}
 
