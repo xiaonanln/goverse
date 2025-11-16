@@ -1204,11 +1204,17 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// IsStateStable returns true if the node list has not changed for the specified duration
-// and has at least the minimum required number of nodes
-func (cm *ConsensusManager) IsStateStable(duration time.Duration) bool {
+// IsStateStable returns true if the node list has not changed for the specified duration,
+// has at least the minimum required number of nodes, and the local node is present in the cluster
+func (cm *ConsensusManager) IsStateStable(localAddress string, duration time.Duration) bool {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
+
+	// Check if local node is in the cluster
+	if !cm.state.HasNode(localAddress) {
+		cm.logger.Debugf("Cluster state not stable: local node %s not in cluster", localAddress)
+		return false
+	}
 
 	if !cm.state.IsStable(duration) {
 		return false
