@@ -828,25 +828,11 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 	clusterState, unlock := cm.LockClusterState()
 
 	// Only claim shards when cluster state is stable
-	if !clusterState.IsStable(cm.clusterStateStabilityDuration) {
+	if !cm.IsStateStable() {
 		unlock()
-		return nil
+		return fmt.Errorf("cluster state not stable, skipping shard claiming")
 	}
-
-	// Access stored configuration while holding the lock
 	localNode := cm.localNodeAddress
-
-	if !clusterState.HasNode(localNode) {
-		// This node is not yet in the cluster state
-		unlock()
-		return nil
-	}
-
-	if clusterState == nil || len(clusterState.ShardMapping.Shards) == 0 {
-		unlock()
-		cm.logger.Debugf("No shard mapping available, skipping shard claiming")
-		return nil
-	}
 
 	// Collect shards that need to be claimed
 	shardsToUpdate := make(map[int]ShardInfo)

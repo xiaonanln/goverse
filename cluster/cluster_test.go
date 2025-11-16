@@ -25,11 +25,11 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 
 	// Create cluster config with test values (shorter durations for faster tests)
 	cfg := Config{
-		EtcdAddress:               "localhost:2379",
-		EtcdPrefix:                etcdPrefix,
-		MinQuorum:                 1,
-		NodeStabilityDuration:     3 * time.Second,
-		ShardMappingCheckInterval: 1 * time.Second,
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    etcdPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
 	}
 
 	// Create cluster with etcd

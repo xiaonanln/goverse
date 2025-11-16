@@ -41,7 +41,6 @@ type Cluster struct {
 	etcdAddress               string        // etcd server address (e.g., "localhost:2379")
 	etcdPrefix                string        // etcd key prefix for this cluster
 	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
-	nodeStabilityDuration     time.Duration // duration to wait for cluster state to stabilize before updating shard mapping
 	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
 	shardMappingCtx           context.Context
 	shardMappingCancel        context.CancelFunc
@@ -91,7 +90,6 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 		etcdAddress:               cfg.EtcdAddress,
 		etcdPrefix:                cfg.EtcdPrefix,
 		minQuorum:                 cfg.MinQuorum,
-		nodeStabilityDuration:     cfg.NodeStabilityDuration,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(),
@@ -113,12 +111,12 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 		localNodeAddr = thisNode.GetAdvertiseAddress()
 	}
 
-	// Create consensus manager with node stability duration and local node address
-	nodeStabilityDuration := cfg.NodeStabilityDuration
-	if nodeStabilityDuration <= 0 {
-		nodeStabilityDuration = DefaultNodeStabilityDuration
+	// Use the provided cluster state stability duration or default
+	stabilityDuration := cfg.ClusterStateStabilityDuration
+	if stabilityDuration <= 0 {
+		stabilityDuration = DefaultNodeStabilityDuration
 	}
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, nodeStabilityDuration, localNodeAddr)
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, localNodeAddr)
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
@@ -138,9 +136,8 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
-		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock),
+		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, ""),
 		minQuorum:                 1,
-		nodeStabilityDuration:     3 * time.Second,
 		shardMappingCheckInterval: 1 * time.Second,
 		shardLock:                 shardLock,
 	}
@@ -151,11 +148,11 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress string, etcdPrefix string) (*Cluster, error) {
 	// Create config with test values
 	cfg := Config{
-		EtcdAddress:               etcdAddress,
-		EtcdPrefix:                etcdPrefix,
-		MinQuorum:                 1,
-		NodeStabilityDuration:     3 * time.Second,
-		ShardMappingCheckInterval: 1 * time.Second,
+		EtcdAddress:                   etcdAddress,
+		EtcdPrefix:                    etcdPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
 	}
 
 	c, err := NewCluster(cfg, node)
@@ -255,20 +252,6 @@ func (c *Cluster) getEffectiveMinQuorum() int {
 		return 1
 	}
 	return c.minQuorum
-}
-
-// GetNodeStabilityDuration returns the duration to wait for cluster state to stabilize
-// If not set, returns the default DefaultNodeStabilityDuration (10s)
-func (c *Cluster) GetNodeStabilityDuration() time.Duration {
-	return c.getEffectiveNodeStabilityDuration()
-}
-
-// getEffectiveNodeStabilityDuration returns the effective node stability duration (with default of 10s)
-func (c *Cluster) getEffectiveNodeStabilityDuration() time.Duration {
-	if c.nodeStabilityDuration <= 0 {
-		return DefaultNodeStabilityDuration
-	}
-	return c.nodeStabilityDuration
 }
 
 // GetShardMappingCheckInterval returns how often to check if shard mapping needs updating
@@ -689,8 +672,8 @@ func (c *Cluster) startShardMappingManagement(ctx context.Context) error {
 	c.shardMappingRunning = true
 
 	go c.shardMappingManagementLoop()
-	c.logger.Infof("%s - Started shard mapping management (check interval: %v, stability duration: %v)", c,
-		c.getEffectiveShardMappingCheckInterval(), c.getEffectiveNodeStabilityDuration())
+	c.logger.Infof("%s - Started shard mapping management (check interval: %v)", c,
+		c.getEffectiveShardMappingCheckInterval())
 
 	return nil
 }
