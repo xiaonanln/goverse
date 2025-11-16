@@ -1311,3 +1311,7 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 
 	return objectsToEvict
 }
+
+func (cm *ConsensusManager) GetClusterStateStabilityDurationForTesting() time.Duration {
+	return cm.clusterStateStabilityDuration
+}
