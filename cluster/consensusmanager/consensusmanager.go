@@ -230,24 +230,6 @@ func (cm *ConsensusManager) SetMinQuorum(minQuorum int) {
 	cm.logger.Infof("ConsensusManager minimum quorum set to %d", minQuorum)
 }
 
-// GetNodeStabilityDuration returns the configured node stability duration
-// If not set or zero, returns a default of 10 seconds
-func (cm *ConsensusManager) GetNodeStabilityDuration() time.Duration {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	if cm.nodeStabilityDuration <= 0 {
-		return 10 * time.Second // Default value
-	}
-	return cm.nodeStabilityDuration
-}
-
-// GetLocalNodeAddress returns the configured local node address
-func (cm *ConsensusManager) GetLocalNodeAddress() string {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.localNodeAddress
-}
-
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
 // If not set, returns 1 as the default
 func (cm *ConsensusManager) GetMinQuorum() int {
@@ -837,21 +819,20 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 // where the local node is the target AND CurrentNode is empty or not alive
 // Only claims shards when cluster state is stable for the configured duration
 func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
-	// Get localNode from stored configuration
-	cm.mu.RLock()
+	// Lock cluster state to avoid race conditions
+	clusterState, unlock := cm.LockClusterState()
+
+	// Access stored configuration while holding the lock
 	localNode := cm.localNodeAddress
 	nodeStabilityDuration := cm.nodeStabilityDuration
 	if nodeStabilityDuration <= 0 {
 		nodeStabilityDuration = 10 * time.Second // Default value
 	}
-	cm.mu.RUnlock()
 
 	if localNode == "" {
+		unlock()
 		return fmt.Errorf("localNode cannot be empty")
 	}
-
-	// Lock cluster state to avoid race conditions
-	clusterState, unlock := cm.LockClusterState()
 
 	// Only claim shards when cluster state is stable
 	if !clusterState.IsStable(nodeStabilityDuration) {
