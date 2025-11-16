@@ -824,14 +824,15 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 // where the local node is the target AND CurrentNode is empty or not alive
 // Only claims shards when cluster state is stable for the configured duration
 func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
-	// Lock cluster state to avoid race conditions
-	clusterState, unlock := cm.LockClusterState()
-
 	// Only claim shards when cluster state is stable
 	if !cm.IsStateStable() {
-		unlock()
 		return fmt.Errorf("cluster state not stable, skipping shard claiming")
 	}
+
+	// Lock cluster state to avoid race conditions
+	clusterState, unlock := cm.LockClusterState()
+	defer unlock()
+	
 	localNode := cm.localNodeAddress
 
 	// Collect shards that need to be claimed
@@ -846,8 +847,6 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 			}
 		}
 	}
-
-	unlock()
 
 	if len(shardsToUpdate) == 0 {
 		cm.logger.Debugf("No shards to claim for node %s", localNode)
