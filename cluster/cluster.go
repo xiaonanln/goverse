@@ -431,13 +431,9 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
-	// Execute the actual creation asynchronously to prevent deadlocks
-	// This is crucial when CreateObject is called from within an object method,
-	// as waiting for the operation to complete while holding locks can cause deadlocks
-	go func() {
-		// Check if the object should be created on this node
-		if nodeAddr == c.thisNode.GetAdvertiseAddress() {
-			// Create locally
+	// Check if the object should be created on this node
+	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+		go func() {
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.thisNode.CreateObject(ctx, objType, objID)
 			if err != nil {
@@ -445,18 +441,23 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 			} else {
 				c.logger.Infof("%s - Async CreateObject %s completed successfully", c, objID)
 			}
-			return
-		}
+		}()
+		return objID, nil
+	}
 
-		// Route to the appropriate node
-		c.logger.Infof("%s - Async routing CreateObject for %s to node %s", c, objID, nodeAddr)
+	// Route to the appropriate node
+	c.logger.Infof("%s - Async routing CreateObject for %s to node %s", c, objID, nodeAddr)
 
-		client, err := c.nodeConnections.GetConnection(nodeAddr)
-		if err != nil {
-			c.logger.Errorf("%s - Async CreateObject %s failed to get connection: %v", c, objID, err)
-			return
-		}
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		c.logger.Errorf("%s - Async CreateObject %s failed to get connection: %v", c, objID, err)
+		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
 
+	// Execute the actual creation asynchronously to prevent deadlocks
+	// This is crucial when CreateObject is called from within an object method,
+	// as waiting for the operation to complete while holding locks can cause deadlocks
+	go func() {
 		// Call CreateObject on the remote node
 		req := &goverse_pb.CreateObjectRequest{
 			Type: objType,
