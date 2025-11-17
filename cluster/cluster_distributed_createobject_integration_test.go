@@ -170,6 +170,9 @@ func TestDistributedCreateObject(t *testing.T) {
 			t.Fatalf("Expected object ID %s, got %s", objID, createdID2)
 		}
 
+		// Wait for async operation to complete (CreateObject is async)
+		time.Sleep(1 * time.Second)
+
 		// Verify object count hasn't increased
 		objCountAfter := objectNode.NumObjects()
 		if objCountAfter != objCountBefore {

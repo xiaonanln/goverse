@@ -66,7 +66,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	}
 
 	// Wait for async creation to complete
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Call a method that internally calls CreateObject
 	// This should not deadlock because CreateObject is async
@@ -77,7 +77,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	}
 
 	// Wait for the async CreateObject from within the method to complete
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Verify the second object was created
 	objID2 := "async-test-obj-2"
@@ -142,7 +142,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	}
 
 	// Wait for async creations to complete
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Call a method on obj1 that deletes obj2
 	// This should not deadlock because DeleteObject is async
@@ -153,7 +153,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	}
 
 	// Wait for the async DeleteObject from within the method to complete
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Verify the second object was deleted
 	objects := node1.ListObjects()
@@ -218,7 +218,7 @@ func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	}
 
 	// Wait for async creation
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Measure time for DeleteObject to return
 	start = time.Now()

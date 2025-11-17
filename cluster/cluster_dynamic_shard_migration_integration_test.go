@@ -120,6 +120,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 		t.Logf("Created object %s from cluster %s", objID, creatorCluster.GetThisNode().GetAdvertiseAddress())
 	}
 
+	// Wait for async object creation to complete (CreateObject is async)
+	time.Sleep(1 * time.Second)
+
 	// Verify initial object placement
 	t.Logf("Verifying initial object placement on correct nodes...")
 	initialPlacement := verifyObjectPlacement(t, ctx, clusters, nodes, objectIDs)
@@ -172,6 +175,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 				t.Logf("Iteration %d: CreateObject(%s) error: %v", iteration, objID, err)
 			}
 		}
+
+		// Wait for async object creation to complete (CreateObject is async)
+		time.Sleep(1 * time.Second)
 
 		// Verify no duplicate objects across nodes
 		duplicates := findDuplicateObjects(t, nodes, objectIDs)
