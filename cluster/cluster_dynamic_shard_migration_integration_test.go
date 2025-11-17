@@ -108,7 +108,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	for i, objID := range objectIDs {
 		// Use different clusters to create objects (round-robin)
 		creatorCluster := clusters[i%3]
-		
+
 		createdID, err := creatorCluster.CreateObject(ctx, "TestMigrationObject", objID)
 		if err != nil {
 			t.Fatalf("Failed to create object %s: %v", objID, err)
@@ -116,7 +116,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 		if createdID != objID {
 			t.Fatalf("Expected object ID %s, got %s", objID, createdID)
 		}
-		
+
 		t.Logf("Created object %s from cluster %s", objID, creatorCluster.GetThisNode().GetAdvertiseAddress())
 	}
 
@@ -127,7 +127,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	// Perform 20 seconds of random shard mapping changes
 	t.Logf("Starting 20 seconds of random shard mapping changes...")
-	
+
 	// Get the leader cluster to perform shard mapping updates
 	var leaderCluster *Cluster
 	for _, c := range clusters {
@@ -151,7 +151,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	for time.Since(startTime) < 20*time.Second {
 		iteration++
 		t.Logf("=== Iteration %d: Changing shard mappings randomly ===", iteration)
-		
+
 		// Change shard mappings for all shards to random nodes
 		err := updateShardMappingsRandomly(ctx, t, leaderCluster, nodeAddresses)
 		if err != nil {
@@ -200,13 +200,13 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	for shardID, shardInfo := range finalMapping.Shards {
 		if shardInfo.TargetNode != shardInfo.CurrentNode {
 			unstableShards++
-			t.Logf("Warning: Shard %d not stable: target=%s, current=%s", 
+			t.Logf("Warning: Shard %d not stable: target=%s, current=%s",
 				shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 		}
 	}
 
 	if unstableShards > 0 {
-		t.Logf("Note: %d/%d shards are still migrating (this may be expected)", 
+		t.Logf("Note: %d/%d shards are still migrating (this may be expected)",
 			unstableShards, len(finalMapping.Shards))
 	} else {
 		t.Logf("All shards are stable (target == current) ✓")
@@ -214,7 +214,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	// Final verification: Check objects that still exist
 	t.Logf("Final verification: checking remaining objects...")
-	
+
 	finalPlacement := verifyObjectPlacement(t, ctx, clusters, nodes, objectIDs)
 	t.Logf("Final placement: %v objects found", len(finalPlacement))
 
@@ -232,9 +232,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	finalMissing := findMissingObjects(t, nodes, objectIDs)
 	survivingObjects := len(objectIDs) - len(finalMissing)
 	t.Logf("FINAL STATE: %d/%d objects survived the shard migrations", survivingObjects, len(objectIDs))
-	
+
 	if len(finalMissing) > 0 {
-		t.Logf("Note: %d objects were removed during shard ownership changes: %v", 
+		t.Logf("Note: %d objects were removed during shard ownership changes: %v",
 			len(finalMissing), finalMissing)
 		t.Logf("This is expected - the system removes objects when releasing shard ownership")
 	}
@@ -279,7 +279,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 			t.Errorf("Object %s should exist but not found on any node", objID)
 			incorrectPlacements++
 		} else if actualNode != expectedNode {
-			t.Logf("Note: Object %s is on %s but expected on %s", 
+			t.Logf("Note: Object %s is on %s but expected on %s",
 				objID, actualNode, expectedNode)
 			// This might happen if the watch hasn't updated yet, but shouldn't fail the test
 		}
@@ -315,14 +315,14 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	// Create update map with random target nodes for all shards
 	updateShards := make(map[int]consensusmanager.ShardInfo)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	
+
 	for shardID := 0; shardID < sharding.NumShards; shardID++ {
 		// Pick a random node
 		randomNode := nodeAddresses[rng.Intn(len(nodeAddresses))]
-		
+
 		// Get current shard info to preserve CurrentNode and ModRevision
 		currentInfo := currentMapping.Shards[shardID]
-		
+
 		updateShards[shardID] = consensusmanager.ShardInfo{
 			TargetNode:  randomNode,
 			CurrentNode: currentInfo.CurrentNode,
@@ -428,7 +428,7 @@ func findDuplicateObjects(t *testing.T, nodes []*node.Node, objectIDs []string) 
 	for _, objID := range objectIDs {
 		nodeCount := 0
 		var foundNodes []string
-		
+
 		for _, n := range nodes {
 			for _, obj := range n.ListObjects() {
 				if obj.Id == objID {
@@ -454,7 +454,7 @@ func findMissingObjects(t *testing.T, nodes []*node.Node, objectIDs []string) []
 
 	for _, objID := range objectIDs {
 		found := false
-		
+
 		for _, n := range nodes {
 			for _, obj := range n.ListObjects() {
 				if obj.Id == objID {
