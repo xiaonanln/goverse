@@ -155,6 +155,9 @@ func TestDistributedCreateObject(t *testing.T) {
 			t.Fatalf("Unknown target node: %s", targetNode)
 		}
 
+		// Wait for async object creation to complete before counting
+		waitForObjectCreated(t, objectNode, objID, 5*time.Second)
+
 		// Count objects on the node before duplicate attempt
 		objCountBefore := objectNode.NumObjects()
 
