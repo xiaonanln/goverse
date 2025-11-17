@@ -176,7 +176,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 		// Verify no duplicate objects across nodes
 		duplicates := findDuplicateObjects(t, nodes, objectIDs)
 		if len(duplicates) > 0 {
-			t.Errorf("Iteration %d: Found duplicate objects: %v", iteration, duplicates)
+			t.Fatalf("Iteration %d: Found duplicate objects: %v", iteration, duplicates)
 		} else {
 			t.Logf("Iteration %d: No duplicate objects found ✓", iteration)
 		}
@@ -245,6 +245,8 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 			t.Logf("After stabilization: CreateObject(%s) error: %v", objID, err)
 		}
 	}
+	// Give a short time for objects to be created
+	time.Sleep(1 * time.Second)
 
 	// Final verification: Check objects that still exist
 	t.Logf("Final verification: checking remaining objects...")
@@ -255,7 +257,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	// Verify no duplicates in final state (most important invariant)
 	finalDuplicates := findDuplicateObjects(t, nodes, objectIDs)
 	if len(finalDuplicates) > 0 {
-		t.Errorf("FINAL STATE: Found duplicate objects: %v", finalDuplicates)
+		t.Fatalf("FINAL STATE: Found duplicate objects: %v", finalDuplicates)
 	} else {
 		t.Logf("FINAL STATE: No duplicate objects ✓")
 	}
@@ -269,7 +271,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	t.Logf("FINAL STATE: %d/%d objects survived the shard migrations", survivingObjects, len(objectIDs))
 
 	if len(finalMissing) > 0 {
-		t.Errorf("Some objects are still missing after re-creation: %v", finalMissing)
+		t.Fatalf("Some objects are still missing after re-creation: %v", finalMissing)
 	} else {
 		t.Logf("All objects exist after re-creation ✓")
 	}
@@ -292,7 +294,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 		// Get the current node for this object based on shard mapping
 		expectedNode, err := leaderCluster.GetCurrentNodeForObject(ctx, objID)
 		if err != nil {
-			t.Errorf("Failed to get current node for object %s: %v", objID, err)
+			t.Fatalf("Failed to get current node for object %s: %v", objID, err)
 			continue
 		}
 
@@ -311,7 +313,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 		}
 
 		if actualNode == "" {
-			t.Errorf("Object %s should exist but not found on any node", objID)
+			t.Fatalf("Object %s should exist but not found on any node", objID)
 			incorrectPlacements++
 		} else if actualNode != expectedNode {
 			t.Logf("Note: Object %s is on %s but expected on %s",
@@ -338,13 +340,13 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	// Get the consensus manager to access storeShardMapping
 	consensusManager := leaderCluster.GetConsensusManagerForTesting()
 	if consensusManager == nil {
-		return fmt.Errorf("consensus manager is nil")
+		return fmt.Fatalf("consensus manager is nil")
 	}
 
 	// Get current shard mapping to preserve ModRevision
 	currentMapping := leaderCluster.GetShardMapping(ctx)
 	if currentMapping == nil {
-		return fmt.Errorf("current shard mapping is nil")
+		return fmt.Fatalf("current shard mapping is nil")
 	}
 
 	// Create update map with random target nodes for all shards
@@ -373,12 +375,12 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	// Get etcd manager from consensus manager
 	etcdMgr := leaderCluster.GetEtcdManagerForTesting()
 	if etcdMgr == nil {
-		return fmt.Errorf("etcd manager is nil")
+		return fmt.Fatalf("etcd manager is nil")
 	}
 
 	client := etcdMgr.GetClient()
 	if client == nil {
-		return fmt.Errorf("etcd client is nil")
+		return fmt.Fatalf("etcd client is nil")
 	}
 
 	prefix := etcdMgr.GetPrefix()
