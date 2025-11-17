@@ -256,6 +256,9 @@ func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
 			t.Fatalf("Failed to create object: %v", err)
 		}
 
+		// Wait for object to be created (CreateObject is async)
+		waitForObjectCreated(t, node, objID, 5*time.Second)
+
 		// Call multiple times
 		for j := 0; j < 5; j++ {
 			_, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", objID, "GetValue", &emptypb.Empty{})
@@ -304,6 +307,9 @@ func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
 		objID := "leak-test-obj"
 		_, err := node.CreateObject(ctx, "TestPersistentObject", objID)
 		if err == nil {
+			// Wait for object to be created (CreateObject is async)
+			waitForObjectCreated(t, node, objID, 5*time.Second)
+
 			err = node.DeleteObject(ctx, objID)
 			if err != nil {
 				t.Logf("Delete error: %v", err)

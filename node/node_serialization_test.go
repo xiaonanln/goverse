@@ -169,6 +169,9 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 			successCount, numGoroutines)
 	}
 
+	// Wait for object to be fully created (CreateObject is async)
+	waitForObjectCreated(t, node, objID, 5*time.Second)
+
 	// Verify only one object was actually created
 	if node.NumObjects() != 1 {
 		t.Errorf("Expected exactly 1 object, got %d", node.NumObjects())

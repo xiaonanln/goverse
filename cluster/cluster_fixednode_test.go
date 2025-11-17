@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -32,6 +33,9 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 	if createdID != objID {
 		t.Errorf("CreateObject returned ID %s, want %s", createdID, objID)
 	}
+
+	// Wait for object to be created
+	waitForObjectCreated(t, testNode, objID, 1*time.Second)
 
 	// Verify object was created locally
 	if testNode.NumObjects() != 1 {

@@ -4,9 +4,27 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xiaonanln/goverse/object"
 )
+
+// waitForObjectCreated waits for an object to be created on the specified node
+func waitForObjectCreated(t *testing.T, n *Node, objID string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		for _, obj := range n.ListObjects() {
+			if obj.Id == objID {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Object %s was not created on node within %v", objID, timeout)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
 
 // TestObject is a simple test object for testing
 type TestObject struct {
@@ -178,31 +196,35 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			id, err := node.CreateObject(ctx, "TestConcurrencyObject", objectID)
-
-			// Get the object
-			node.objectsMu.RLock()
-			obj := node.objects[objectID]
-			node.objectsMu.RUnlock()
-
 			results <- struct {
 				id  string
 				err error
 				obj Object
-			}{id, err, obj}
+			}{id, err, nil}
 		}()
 	}
 
 	// Collect all results
 	var errors []error
 	var ids []string
-	var objects []Object
 	for i := 0; i < numGoroutines; i++ {
 		result := <-results
 		ids = append(ids, result.id)
-		objects = append(objects, result.obj)
 		if result.err != nil {
 			errors = append(errors, result.err)
 		}
+	}
+
+	// Wait for object to be fully created before accessing it
+	waitForObjectCreated(t, node, objectID, 5*time.Second)
+
+	// Now get the objects for verification
+	var objects []Object
+	for i := 0; i < numGoroutines; i++ {
+		node.objectsMu.RLock()
+		obj := node.objects[objectID]
+		node.objectsMu.RUnlock()
+		objects = append(objects, obj)
 	}
 
 	// All calls should succeed
@@ -262,15 +284,18 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 		err error
 	}, numObjects)
 
+	// Track all object IDs for waiting
+	var createdIDs []string
 	for i := 0; i < numObjects; i++ {
-		go func(index int) {
-			objectID := strings.Repeat("a", index+1) // Different length IDs: "a", "aa", "aaa", etc.
-			id, err := node.CreateObject(ctx, "TestConcurrencyObject", objectID)
+		objectID := strings.Repeat("a", i+1) // Different length IDs: "a", "aa", "aaa", etc.
+		createdIDs = append(createdIDs, objectID)
+		go func(id string) {
+			returnedID, err := node.CreateObject(ctx, "TestConcurrencyObject", id)
 			results <- struct {
 				id  string
 				err error
-			}{id, err}
-		}(i)
+			}{returnedID, err}
+		}(objectID)
 	}
 
 	// Collect all results
@@ -292,6 +317,11 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 
 	if successCount != numObjects {
 		t.Errorf("Expected %d successful creations, got %d", numObjects, successCount)
+	}
+
+	// Wait for all objects to be fully created
+	for _, objID := range createdIDs {
+		waitForObjectCreated(t, node, objID, 5*time.Second)
 	}
 
 	// Verify all objects exist
