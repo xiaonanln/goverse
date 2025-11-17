@@ -11,6 +11,23 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
+// waitForObjectCreated waits for an object to be created on the specified node
+func waitForObjectCreated(t *testing.T, n *node.Node, objID string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		for _, obj := range n.ListObjects() {
+			if obj.Id == objID {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Object %s was not created on node within %v", objID, timeout)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // TestDistributedCreateObject tests shard mapping and routing logic
 // by verifying that objects are correctly assigned to nodes based on shards
 // This test requires a running etcd instance at localhost:2379
@@ -62,15 +79,6 @@ func TestDistributedCreateObject(t *testing.T) {
 	// Verify shard mapping is ready
 	_ = cluster1.GetShardMapping(ctx)
 
-	objExistsOnNode := func(objID string, n *node.Node) bool {
-		for _, obj := range n.ListObjects() {
-			if obj.Id == objID {
-				return true
-			}
-		}
-		return false
-	}
-
 	// Test CreateObject from cluster1
 	t.Run("CreateObject from cluster1", func(t *testing.T) {
 		// Create 10 objects and verify each is created on the correct target node
@@ -111,11 +119,8 @@ func TestDistributedCreateObject(t *testing.T) {
 				t.Fatalf("Unknown target node: %s", targetNode)
 			}
 
-			// Check if object exists on the target node
-			objExists := objExistsOnNode(objID, objectNode)
-			if !objExists {
-				t.Fatalf("Object %s should exist on target node %s, but doesn't", objID, targetNode)
-			}
+			// Wait for async object creation to complete
+			waitForObjectCreated(t, objectNode, objID, 5*time.Second)
 
 			t.Logf("Successfully created and verified object %s on node %s", objID, targetNode)
 		}
