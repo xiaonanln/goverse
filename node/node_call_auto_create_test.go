@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/proto"
@@ -304,6 +305,9 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
+
+	// Wait for object to be created (CreateObject is async)
+	waitForObjectCreated(t, node, "type-test-1", 5*time.Second)
 
 	// Try to call with different type - should fail with type mismatch
 	_, err = node.CallObject(ctx, "TestPersistentObjectWithMethod", "type-test-1", "GetValue", &emptypb.Empty{})

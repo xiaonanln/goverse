@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // TestListObjectIDs tests the ListObjectIDs method
@@ -69,6 +70,11 @@ func TestListObjectIDs_WithObjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create object 3: %v", err)
 	}
+
+	// Wait for all objects to be created (CreateObject is async)
+	waitForObjectCreated(t, n, objID1, 5*time.Second)
+	waitForObjectCreated(t, n, objID2, 5*time.Second)
+	waitForObjectCreated(t, n, objID3, 5*time.Second)
 
 	// Get object IDs
 	ids := n.ListObjectIDs()
