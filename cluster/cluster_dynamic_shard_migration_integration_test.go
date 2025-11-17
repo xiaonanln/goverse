@@ -340,13 +340,13 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	// Get the consensus manager to access storeShardMapping
 	consensusManager := leaderCluster.GetConsensusManagerForTesting()
 	if consensusManager == nil {
-		return fmt.Fatalf("consensus manager is nil")
+		return fmt.Errorf("consensus manager is nil")
 	}
 
 	// Get current shard mapping to preserve ModRevision
 	currentMapping := leaderCluster.GetShardMapping(ctx)
 	if currentMapping == nil {
-		return fmt.Fatalf("current shard mapping is nil")
+		return fmt.Errorf("current shard mapping is nil")
 	}
 
 	// Create update map with random target nodes for all shards
@@ -375,12 +375,12 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	// Get etcd manager from consensus manager
 	etcdMgr := leaderCluster.GetEtcdManagerForTesting()
 	if etcdMgr == nil {
-		return fmt.Fatalf("etcd manager is nil")
+		return fmt.Errorf("etcd manager is nil")
 	}
 
 	client := etcdMgr.GetClient()
 	if client == nil {
-		return fmt.Fatalf("etcd client is nil")
+		return fmt.Errorf("etcd client is nil")
 	}
 
 	prefix := etcdMgr.GetPrefix()
