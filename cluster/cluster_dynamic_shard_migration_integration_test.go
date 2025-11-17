@@ -148,7 +148,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	startTime := time.Now()
 	iteration := 0
-	for time.Since(startTime) < 20*time.Second {
+	for time.Since(startTime) < 10*time.Second {
 		iteration++
 		t.Logf("=== Iteration %d: Changing shard mappings randomly ===", iteration)
 
@@ -162,6 +162,16 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 		// Give a short time for migrations to occur
 		time.Sleep(500 * time.Millisecond)
+		// Attempt to (re-)create each object to ensure no duplicates are created during shard changes
+		for _, objID := range objectIDs {
+			// Pick a random cluster to attempt creation (simulate distributed clients)
+			creatorCluster := clusters[rand.Intn(len(clusters))]
+			_, err := creatorCluster.CreateObject(ctx, "TestMigrationObject", objID)
+			if err != nil && err.Error() != fmt.Sprintf("object with id %s already exists", objID) {
+				// Only log unexpected errors (ignore "already exists")
+				t.Logf("Iteration %d: CreateObject(%s) error: %v", iteration, objID, err)
+			}
+		}
 
 		// Verify no duplicate objects across nodes
 		duplicates := findDuplicateObjects(t, nodes, objectIDs)
@@ -191,25 +201,49 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	// Verify final shard mapping stability (TargetNode == CurrentNode)
 	t.Logf("Verifying final shard mapping stability...")
-	finalMapping := leaderCluster.GetShardMapping(ctx)
-	if finalMapping == nil {
-		t.Fatalf("Final shard mapping is nil")
-	}
 
-	unstableShards := 0
-	for shardID, shardInfo := range finalMapping.Shards {
-		if shardInfo.TargetNode != shardInfo.CurrentNode {
-			unstableShards++
-			t.Logf("Warning: Shard %d not stable: target=%s, current=%s",
-				shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
+	// Wait up to 30 seconds for all shards to become stable
+	maxWait := 30 * time.Second
+	stable := false
+	var unstableShards int
+	var finalMapping *consensusmanager.ShardMapping
+	start := time.Now()
+	for time.Since(start) < maxWait {
+		finalMapping = leaderCluster.GetShardMapping(ctx)
+		if finalMapping == nil {
+			t.Fatalf("Final shard mapping is nil")
 		}
+		unstableShards = 0
+		for shardID, shardInfo := range finalMapping.Shards {
+			if shardInfo.TargetNode != shardInfo.CurrentNode {
+				unstableShards++
+				t.Logf("Waiting: Shard %d not stable: target=%s, current=%s",
+					shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
+			}
+		}
+		if unstableShards == 0 {
+			stable = true
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 
-	if unstableShards > 0 {
-		t.Logf("Note: %d/%d shards are still migrating (this may be expected)",
-			unstableShards, len(finalMapping.Shards))
+	if !stable {
+		t.Fatalf("Timeout: %d/%d shards are still migrating after %v", unstableShards, len(finalMapping.Shards), maxWait)
 	} else {
 		t.Logf("All shards are stable (target == current) ✓")
+	}
+
+	// After stabilization, attempt to (re-)create each object to ensure no duplicates and correct placement
+	t.Logf("After stabilization: attempting to (re-)create each object to verify placement and no duplicates...")
+	for _, objID := range objectIDs {
+		// Pick a random cluster to attempt creation (simulate distributed clients)
+		creatorCluster := clusters[rand.Intn(len(clusters))]
+		_, err := creatorCluster.CreateObject(ctx, "TestMigrationObject", objID)
+		if err != nil && err.Error() != fmt.Sprintf("object with id %s already exists", objID) {
+			// Only log unexpected errors (ignore "already exists")
+			t.Logf("After stabilization: CreateObject(%s) error: %v", objID, err)
+		}
 	}
 
 	// Final verification: Check objects that still exist
@@ -229,14 +263,15 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	// Count surviving objects
 	// Note: Some objects may have been removed when shards were released during random shard changes
 	// This is expected behavior - the system doesn't automatically migrate objects
+	// Re-check for missing objects after re-creation
 	finalMissing := findMissingObjects(t, nodes, objectIDs)
 	survivingObjects := len(objectIDs) - len(finalMissing)
 	t.Logf("FINAL STATE: %d/%d objects survived the shard migrations", survivingObjects, len(objectIDs))
 
 	if len(finalMissing) > 0 {
-		t.Logf("Note: %d objects were removed during shard ownership changes: %v",
-			len(finalMissing), finalMissing)
-		t.Logf("This is expected - the system removes objects when releasing shard ownership")
+		t.Errorf("Some objects are still missing after re-creation: %v", finalMissing)
+	} else {
+		t.Logf("All objects exist after re-creation ✓")
 	}
 
 	// Verify surviving objects are on correct nodes according to current shard mapping
