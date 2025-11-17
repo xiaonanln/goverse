@@ -400,6 +400,34 @@ The project aims for high test coverage across all packages:
 - **cluster package**: Target 90%+ coverage
 - **server package**: Gradually improving coverage
 
+### Tests Requiring etcd
+
+The following test packages require a running etcd instance to execute successfully:
+
+- **cluster/consensusmanager/** - Most integration tests require etcd for consensus management and shard mapping
+- **cluster/etcdmanager/** - Integration tests require etcd to validate connection and key-value operations
+- **server/** - Some tests require etcd for cluster coordination and shard mapping
+
+**Running Tests with etcd:**
+```bash
+# Start etcd locally (example using Docker)
+docker run -d --name etcd-test -p 2379:2379 -p 2380:2380 \
+  quay.io/coreos/etcd:latest \
+  /usr/local/bin/etcd \
+  --listen-client-urls http://0.0.0.0:2379 \
+  --advertise-client-urls http://localhost:2379
+
+# Run tests
+go test -v ./cluster/consensusmanager/
+go test -v ./cluster/etcdmanager/
+go test -v ./server/
+
+# Stop etcd when done
+docker stop etcd-test && docker rm etcd-test
+```
+
+Tests in these packages that require etcd will skip automatically if etcd is not available, using `t.Skipf()` when connection fails. However, to get full test coverage, etcd must be running.
+
 ### etcd Integration Test Isolation
 
 **CRITICAL**: All tests using etcd must be properly isolated to prevent interference.
