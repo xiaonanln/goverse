@@ -490,13 +490,9 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if err != nil {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
-
-	// Execute the actual deletion asynchronously to prevent deadlocks
-	// This is crucial when DeleteObject is called from within an object method,
-	// as waiting for the operation to complete while holding locks can cause deadlocks
-	go func() {
-		// Check if the object should be deleted on this node
-		if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+	// Check if the object should be deleted on this node
+	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+		go func() {
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
 			err := c.thisNode.DeleteObject(ctx, objID)
@@ -505,18 +501,23 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 			} else {
 				c.logger.Infof("%s - Async DeleteObject %s completed successfully", c, objID)
 			}
-			return
-		}
+		}()
+		return nil
+	}
 
-		// Route to the appropriate node
-		c.logger.Infof("%s - Async routing DeleteObject for %s to node %s", c, objID, nodeAddr)
+	// Route to the appropriate node
+	c.logger.Infof("%s - Async routing DeleteObject for %s to node %s", c, objID, nodeAddr)
 
-		client, err := c.nodeConnections.GetConnection(nodeAddr)
-		if err != nil {
-			c.logger.Errorf("%s - Async DeleteObject %s failed to get connection: %v", c, objID, err)
-			return
-		}
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		c.logger.Errorf("%s - Async DeleteObject %s failed to get connection: %v", c, objID, err)
+		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
 
+	// Execute the actual deletion asynchronously to prevent deadlocks
+	// This is crucial when DeleteObject is called from within an object method,
+	// as waiting for the operation to complete while holding locks can cause deadlocks
+	go func() {
 		// Call DeleteObject on the remote node
 		req := &goverse_pb.DeleteObjectRequest{
 			Id: objID,
