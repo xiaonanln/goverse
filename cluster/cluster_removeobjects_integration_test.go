@@ -98,6 +98,8 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 		t.Logf("Created object %s (shard %d)", objID, shardIDs[i])
 	}
 
+	time.Sleep(1 * time.Second)
+
 	// Verify all objects exist on their initial nodes
 	t.Logf("Verifying objects exist on their initial nodes...")
 	initialNodeCounts := map[string]int{
