@@ -213,8 +213,8 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 			continue
 		}
 
-		// Wait a moment for the object to be created
-		time.Sleep(100 * time.Millisecond)
+		// Wait for async object creation to complete (CreateObject is async)
+		time.Sleep(1 * time.Second)
 
 		// Verify the object exists somewhere
 		if objExistsOnNode(objID, node2) {
