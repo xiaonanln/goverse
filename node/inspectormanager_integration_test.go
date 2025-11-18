@@ -165,7 +165,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 			objID := "concurrent-integration-obj-" + string(rune(id))
 			err := node.createObject(ctx, "TestPersistentObject", objID)
 			if err != nil {
-				t.Fatalf("Failed to create object %s: %v", objID, err)
+				t.Errorf("Failed to create object %s: %v", objID, err)
 			}
 			done <- true
 		}(i)

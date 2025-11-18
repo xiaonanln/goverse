@@ -267,7 +267,7 @@ func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
 	go func() {
 		_, err := n.CreateObject(ctx, "TestObjectWithOnCreatedFlag", "test-visibility")
 		if err != nil {
-			t.Fatalf("CreateObject failed: %v", err)
+			t.Errorf("CreateObject failed: %v", err)
 		}
 		createDone <- true
 	}()
