@@ -9,6 +9,9 @@ import (
 
 // TestGoroutineCount compares the number of goroutines created by each approach
 func TestGoroutineCount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running efficiency test in short mode")
+	}
 	tests := []struct {
 		name     string
 		numTasks int

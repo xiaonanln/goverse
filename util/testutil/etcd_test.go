@@ -10,6 +10,9 @@ import (
 
 // TestPrepareEtcdPrefix tests the PrepareEtcdPrefix function
 func TestPrepareEtcdPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Test basic functionality
 	prefix := PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -54,6 +57,9 @@ func TestPrepareEtcdPrefix(t *testing.T) {
 
 // TestPrepareEtcdPrefix_Cleanup verifies that cleanup is performed
 func TestPrepareEtcdPrefix_Cleanup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create a sub-test so we can verify cleanup happens
 	var prefix string
 	var testKey string
@@ -118,6 +124,9 @@ func TestPrepareEtcdPrefix_Cleanup(t *testing.T) {
 
 // TestPrepareEtcdPrefix_Isolation tests that each test gets its own isolated prefix
 func TestPrepareEtcdPrefix_Isolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Run two sub-tests with different prefixes
 	var prefix1, prefix2 string
 
@@ -146,6 +155,9 @@ func TestPrepareEtcdPrefix_Isolation(t *testing.T) {
 
 // TestPrepareEtcdPrefix_CleanBeforeTest verifies that the prefix is cleaned before test starts
 func TestPrepareEtcdPrefix_CleanBeforeTest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// First, manually put a key with the expected prefix
 	testPrefix := "/goverse-test/" + t.Name()
 	dirtyKey := testPrefix + "/dirty-key"
@@ -188,6 +200,9 @@ func TestPrepareEtcdPrefix_CleanBeforeTest(t *testing.T) {
 
 // TestPrepareEtcdPrefix_MultipleKeys tests cleanup with multiple keys
 func TestPrepareEtcdPrefix_MultipleKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	var prefix string
 	var keys []string
 
