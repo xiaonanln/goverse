@@ -3,101 +3,55 @@ package main
 import (
 	"context"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-	"google.golang.org/protobuf/types/known/anypb"
-
-	gateway_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/gateway/gatewayserver"
 )
 
-// gatewayServer implements the GatewayService with empty handlers
-type gatewayServer struct {
-	gateway_pb.UnimplementedGatewayServiceServer
-}
-
-// Register implements the Register RPC (empty for now)
-func (s *gatewayServer) Register(req *gateway_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
-	log.Println("Register called (not implemented)")
-	return nil
-}
-
-// CallObject implements the CallObject RPC (empty for now)
-func (s *gatewayServer) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
-	log.Println("CallObject called (not implemented)")
-	return &gateway_pb.CallObjectResponse{}, nil
-}
-
-// CreateObject implements the CreateObject RPC (empty for now)
-func (s *gatewayServer) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
-	log.Println("CreateObject called (not implemented)")
-	return &gateway_pb.CreateObjectResponse{}, nil
-}
-
-// DeleteObject implements the DeleteObject RPC (empty for now)
-func (s *gatewayServer) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
-	log.Println("DeleteObject called (not implemented)")
-	return &gateway_pb.DeleteObjectResponse{}, nil
-}
-
-func serveGRPC(addr string, shutdownChan chan struct{}) error {
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	g := grpc.NewServer()
-	gateway_pb.RegisterGatewayServiceServer(g, &gatewayServer{})
-	reflection.Register(g)
-	log.Printf("Gateway gRPC server listening on %s", addr)
-
-	// Handle graceful shutdown
-	go func() {
-		<-shutdownChan
-		log.Println("Shutting down gRPC server...")
-		g.GracefulStop()
-	}()
-
-	if err := g.Serve(l); err != nil {
-		return err
-	}
-	return nil
-}
-
 func main() {
-	// Create shutdown channel
-	shutdownChan := make(chan struct{})
+	// Create gateway server configuration
+	config := &gatewayserver.GatewayServerConfig{
+		ListenAddress: ":8082",
+		EtcdAddress:   "localhost:2379",
+		EtcdPrefix:    "/goverse",
+	}
+
+	// Create gateway server
+	gateway, err := gatewayserver.NewGatewayServer(config)
+	if err != nil {
+		log.Fatalf("Failed to create gateway server: %v", err)
+	}
+
+	// Create context for server lifecycle
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Handle signals for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start gRPC server
-	serverDone := make(chan struct{})
+	// Start gateway server in goroutine
+	serverDone := make(chan error, 1)
 	go func() {
-		if err := serveGRPC(":8082", shutdownChan); err != nil {
-			log.Printf("gRPC server error: %v", err)
-		}
-		log.Println("gRPC server stopped")
-		serverDone <- struct{}{}
+		serverDone <- gateway.Start(ctx)
 	}()
 
-	// Wait for shutdown signal
-	<-sigChan
-	log.Println("Received shutdown signal")
-	close(shutdownChan)
-
-	// Wait for server to stop with timeout
+	// Wait for shutdown signal or server error
 	select {
-	case <-serverDone:
-		log.Println("Server shutdown complete")
-	case <-time.After(5 * time.Second):
-		log.Println("Timeout waiting for server to shutdown")
+	case <-sigChan:
+		log.Println("Received shutdown signal")
+		cancel() // Cancel context to trigger server shutdown
+	case err := <-serverDone:
+		if err != nil {
+			log.Printf("Gateway server error: %v", err)
+		}
+	}
+
+	// Stop the gateway server
+	if err := gateway.Stop(); err != nil {
+		log.Printf("Error stopping gateway: %v", err)
 	}
 
 	log.Println("Gateway stopped")

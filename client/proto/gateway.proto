@@ -20,9 +20,10 @@ message RegisterResponse {
 
 message CallObjectRequest {
   string client_id = 1;
-  string method = 2;
-  google.protobuf.Any request = 3;
-  string type = 4;
+  string type = 2;
+  string id = 3; // Object ID to call
+  string method = 4;
+  google.protobuf.Any request = 5;
 }
 
 message CallObjectResponse {
