@@ -82,6 +82,11 @@ func validateGatewayConfig(config *GatewayConfig) error {
 func (g *Gateway) Start(ctx context.Context) error {
 	g.logger.Infof("Starting gateway")
 
+	// Initialize consensus manager to load initial cluster state
+	if err := g.consensusManager.Initialize(ctx); err != nil {
+		return fmt.Errorf("failed to initialize consensus manager: %w", err)
+	}
+
 	// Start consensus manager watch
 	if err := g.consensusManager.StartWatch(ctx); err != nil {
 		return fmt.Errorf("failed to start consensus manager watch: %w", err)
