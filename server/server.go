@@ -39,12 +39,13 @@ type ServerConfig struct {
 type Server struct {
 	goverse_pb.UnimplementedGoverseServer
 	client_pb.UnimplementedClientServiceServer
-	config  *ServerConfig
-	Node    *node.Node
-	ctx     context.Context
-	cancel  context.CancelFunc
-	logger  *logger.Logger
-	cluster *cluster.Cluster
+	config         *ServerConfig
+	Node           *node.Node
+	ctx            context.Context
+	cancel         context.CancelFunc
+	logger         *logger.Logger
+	cluster        *cluster.Cluster
+	goverseService *serverGoverseService
 }
 
 func NewServer(config *ServerConfig) (*Server, error) {
@@ -89,7 +90,17 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		cluster: c,
 	}
 
+	// Initialize the GoVerse service implementation
+	server.goverseService = newServerGoverseService(server)
+
 	return server, nil
+}
+
+// GetGoverseService returns the GoverseService implementation for this server.
+// This allows external code to access the GoVerse service API.
+// The returned service implements the goverseapi.GoverseService interface.
+func (server *Server) GetGoverseService() *serverGoverseService {
+	return server.goverseService
 }
 
 func validateServerConfig(config *ServerConfig) error {

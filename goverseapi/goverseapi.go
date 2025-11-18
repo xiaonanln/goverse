@@ -11,6 +11,27 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// GoverseService defines the core API for interacting with distributed objects.
+// This interface abstracts the internal object-call API used by nodes and gateways.
+//
+// Implementations:
+//   - serverGoverseService (in server package): wraps in-process object calls on nodes
+//   - Future: gatewayGoverseService will implement remote calls via gRPC
+type GoverseService interface {
+	// CallObject calls a method on a distributed object.
+	// The service determines the target node and routes the call appropriately.
+	CallObject(ctx context.Context, objType, objectID, method string, request proto.Message) (proto.Message, error)
+
+	// CreateObject creates a new distributed object.
+	// If objectID is empty, a unique ID will be generated.
+	// Returns the ID of the created object.
+	CreateObject(ctx context.Context, objType, objectID string) (string, error)
+
+	// DeleteObject deletes a distributed object.
+	// The operation is typically asynchronous to prevent deadlocks.
+	DeleteObject(ctx context.Context, objectID string) error
+}
+
 // Type aliases for core components
 type ServerConfig = server.ServerConfig
 type Server = server.Server
@@ -23,6 +44,12 @@ type Cluster = cluster.Cluster
 
 func NewServer(config *ServerConfig) (*Server, error) {
 	return server.NewServer(config)
+}
+
+// GetGoverseService returns the GoverseService from a Server instance.
+// This provides access to the internal object-call API for advanced use cases.
+func GetGoverseService(srv *Server) GoverseService {
+	return srv.GetGoverseService()
 }
 
 func RegisterClientType(clientObj ClientObject) {
