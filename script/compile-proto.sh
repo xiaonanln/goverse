@@ -4,7 +4,7 @@ set -euo pipefail
 # Proto files to compile
 PROTO_FILES=(
     "proto/goverse.proto"
-    "client/proto/client.proto"
+    "client/proto/gateway.proto"
     "inspector/proto/inspector.proto"
     "samples/chat/proto/chat.proto"
 )
@@ -59,16 +59,16 @@ if command -v python3 &> /dev/null; then
         fi
     fi
     
-    # Generate Python proto files from client/proto/client.proto
-    if [[ -f "client/proto/client.proto" ]]; then
+    # Generate Python proto files from client/proto/gateway.proto
+    if [[ -f "client/proto/gateway.proto" ]]; then
         if python3 -m grpc_tools.protoc \
             -I. \
             --python_out=. \
             --grpc_python_out=. \
-            client/proto/client.proto 2>&1; then
-            echo "  ✅ Python proto files generated for client/proto/client.proto"
+            client/proto/gateway.proto 2>&1; then
+            echo "  ✅ Python proto files generated for client/proto/gateway.proto"
         else
-            echo "  Note: Failed to generate Python proto files for client.proto"
+            echo "  Note: Failed to generate Python proto files for gateway.proto"
         fi
     fi
     

@@ -309,7 +309,7 @@ When modifying `.proto` files:
 
 Proto files to be aware of:
 - `proto/goverse.proto` - Core Goverse protocol
-- `client/proto/client.proto` - Client service protocol
+- `client/proto/gateway.proto` - Gateway service protocol
 - `inspector/proto/inspector.proto` - Inspector UI protocol
 - `samples/chat/proto/chat.proto` - Chat sample protocol
 

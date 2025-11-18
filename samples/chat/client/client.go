@@ -15,14 +15,14 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	client_pb "github.com/xiaonanln/goverse/client/proto"
+	gateway_pb "github.com/xiaonanln/goverse/client/proto"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 )
 
 type ChatClient struct {
 	conn             *grpc.ClientConn
-	client           client_pb.ClientServiceClient
+	client           gateway_pb.GatewayServiceClient
 	roomName         string
 	userName         string
 	logger           *logger.Logger
@@ -36,7 +36,7 @@ func NewChatClient(serverAddr, userID string) (*ChatClient, error) {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
 
-	client := client_pb.NewClientServiceClient(conn)
+	client := gateway_pb.NewGatewayServiceClient(conn)
 
 	return &ChatClient{
 		conn:     conn,
@@ -62,7 +62,7 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req := &client_pb.CallRequest{
+	req := &gateway_pb.CallRequest{
 		ClientId: c.clientID,
 		Method:   method,
 		Request:  anyReq,
@@ -165,7 +165,7 @@ func (c *ChatClient) GetRecentMessages() error {
 }
 
 // listenForMessages continuously listens for pushed messages from the server
-func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterClient) {
+func (c *ChatClient) listenForMessages(stream gateway_pb.GatewayService_RegisterClient) {
 	for {
 		msgAny, err := stream.Recv()
 		if err != nil {
@@ -307,14 +307,14 @@ func main() {
 	defer client.Close()
 	ctx := context.Background()
 
-	stream, err := client.client.Register(ctx, &client_pb.Empty{}) // Ensure registration
+	stream, err := client.client.Register(ctx, &gateway_pb.Empty{}) // Ensure registration
 	if err != nil {
 		log.Fatalf("Failed to register client: %v", err)
 	}
 	defer stream.CloseSend()
 
 	// Read initial registration response
-	regResp := receiveMessages(stream).(*client_pb.RegisterResponse)
+	regResp := receiveMessages(stream).(*gateway_pb.RegisterResponse)
 	client.clientID = regResp.ClientId
 	client.logger.Infof("Client %s registered successfully", client.clientID)
 
@@ -325,7 +325,7 @@ func main() {
 	client.RunInteractive()
 }
 
-func receiveMessages(stream client_pb.ClientService_RegisterClient) proto.Message {
+func receiveMessages(stream gateway_pb.GatewayService_RegisterClient) proto.Message {
 	msgAny, err := stream.Recv()
 	if err != nil {
 		log.Fatalf("Error receiving message: %v", err)
