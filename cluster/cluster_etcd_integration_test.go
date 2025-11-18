@@ -17,9 +17,6 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -78,9 +75,6 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -128,9 +122,6 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 // TestClusterEtcdLeaveDetection tests that clusters detect when other nodes leave
 func TestClusterEtcdLeaveDetection(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -207,9 +198,6 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -269,9 +257,6 @@ func TestClusterGetLeaderNode(t *testing.T) {
 
 // TestClusterGetLeaderNode_DynamicChange tests leader change when current leader leaves
 func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -350,9 +335,6 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 }
 
 func TestClusterStopUnregistersFromEtcd(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

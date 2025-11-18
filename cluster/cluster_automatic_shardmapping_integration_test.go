@@ -15,12 +15,6 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -113,12 +107,6 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 
 // TestClusterShardMappingAutoUpdate tests that shard mapping is updated when nodes change
 func TestClusterShardMappingAutoUpdate(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

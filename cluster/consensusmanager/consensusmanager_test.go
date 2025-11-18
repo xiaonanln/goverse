@@ -23,9 +23,6 @@ func (m *mockListener) OnClusterStateChanged() {
 }
 
 func TestNewConsensusManager(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	// Error is intentionally ignored as we're only testing ConsensusManager creation,
 	// not etcd manager functionality
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
@@ -49,9 +46,6 @@ func TestNewConsensusManager(t *testing.T) {
 }
 
 func TestAddRemoveListener(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -79,9 +73,6 @@ func TestAddRemoveListener(t *testing.T) {
 }
 
 func TestGetNodes_Empty(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -92,9 +83,6 @@ func TestGetNodes_Empty(t *testing.T) {
 }
 
 func TestGetLeaderNode_Empty(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -105,9 +93,6 @@ func TestGetLeaderNode_Empty(t *testing.T) {
 }
 
 func TestGetLeaderNode_WithNodes(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -125,9 +110,6 @@ func TestGetLeaderNode_WithNodes(t *testing.T) {
 }
 
 func TestGetShardMapping_NotAvailable(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -141,9 +123,6 @@ func TestGetShardMapping_NotAvailable(t *testing.T) {
 }
 
 func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -184,9 +163,6 @@ func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
 }
 
 func TestCreateShardMapping_NoNodes(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -201,7 +177,7 @@ func TestCreateShardMapping_NoNodes(t *testing.T) {
 
 func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
+		t.Skip("Skipping long-running test in short mode")
 	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", prefix)
@@ -230,7 +206,7 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 
 func TestUpdateShardMapping_WithExisting(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
+		t.Skip("Skipping long-running test in short mode")
 	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", prefix)
@@ -275,9 +251,6 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 }
 
 func TestUpdateShardMapping_NoChanges(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -320,9 +293,6 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 }
 
 func TestIsStateStable(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	localAddr := "localhost:47001"
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 10*time.Second, localAddr)
@@ -364,9 +334,6 @@ func TestIsStateStable(t *testing.T) {
 }
 
 func TestGetLastNodeChangeTime(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -389,9 +356,6 @@ func TestGetLastNodeChangeTime(t *testing.T) {
 }
 
 func TestGetNodeForShard_InvalidShard(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -407,9 +371,6 @@ func TestGetNodeForShard_InvalidShard(t *testing.T) {
 }
 
 func TestGetNodeForShard_NoMapping(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -420,9 +381,6 @@ func TestGetNodeForShard_NoMapping(t *testing.T) {
 }
 
 func TestGetNodeForShard_WithMapping(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -447,9 +405,6 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 }
 
 func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -474,9 +429,6 @@ func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
 }
 
 func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -504,9 +456,6 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 }
 
 func TestGetCurrentNodeForObject_NoMapping(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -517,9 +466,6 @@ func TestGetCurrentNodeForObject_NoMapping(t *testing.T) {
 }
 
 func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -553,9 +499,6 @@ func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
 }
 
 func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -584,9 +527,6 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 }
 
 func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -628,9 +568,6 @@ func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
 }
 
 func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -658,9 +595,6 @@ func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 }
 
 func TestGetCurrentNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -693,9 +627,6 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T)
 }
 
 func TestParseShardInfo(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	tests := []struct {
 		name        string
 		value       string
@@ -750,9 +681,6 @@ func TestParseShardInfo(t *testing.T) {
 }
 
 func TestFormatShardInfo(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	tests := []struct {
 		name string
 		info ShardInfo
@@ -787,9 +715,6 @@ func TestFormatShardInfo(t *testing.T) {
 }
 
 func TestStopWatch_NotStarted(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -798,9 +723,6 @@ func TestStopWatch_NotStarted(t *testing.T) {
 }
 
 func TestStartWatch_NoEtcdManager(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
 
 	ctx := context.Background()
@@ -814,7 +736,7 @@ func TestStartWatch_NoEtcdManager(t *testing.T) {
 // where it is the target node and CurrentNode is empty
 func TestClaimShardOwnership(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
+		t.Skip("Skipping long-running test in short mode")
 	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
@@ -920,9 +842,6 @@ func TestClaimShardOwnership(t *testing.T) {
 // TestClaimShardOwnership_NoThisNode tests that claiming doesn't happen
 // when this node address is not set
 func TestClaimShardOwnership_NoThisNode(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 	ctx := context.Background()
@@ -965,7 +884,7 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 // only when TargetNode is this node AND (CurrentNode is empty or not alive)
 func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
+		t.Skip("Skipping long-running test in short mode")
 	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
@@ -1128,9 +1047,6 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 // TestClaimShardsForNode_StabilityCheck tests that ClaimShardsForNode
 // respects the cluster stability duration and node presence check
 func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	thisNodeAddr := "localhost:47001"
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 10*time.Second, thisNodeAddr)
@@ -1237,9 +1153,6 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 // but CurrentNode is already set to a valid node. The leader should respect the existing assignment
 // and set TargetNode to match CurrentNode instead of using round-robin assignment.
 func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
