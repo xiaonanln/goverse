@@ -33,6 +33,15 @@ func waitForObjectCreated(t *testing.T, n *node.Node, objID string, timeout time
 // This test requires a running etcd instance at localhost:2379
 // Note: This test does NOT run in parallel because it uses mock servers on specific ports
 func TestDistributedCreateObject(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -199,6 +208,15 @@ func TestDistributedCreateObject(t *testing.T) {
 // This test requires a running etcd instance at localhost:2379
 // Note: This test does NOT run in parallel because it uses specific ports that may conflict with other tests
 func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 

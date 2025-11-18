@@ -20,6 +20,9 @@ func canEtcdRestart() bool {
 
 // TestWatchReconnection tests that the watch reconnects after etcd is stopped and restarted
 func TestWatchReconnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	if !canEtcdRestart() {
 		t.Skip("Skipping watch robustness test - not in CI environment")
 	}

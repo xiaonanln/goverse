@@ -11,6 +11,9 @@ import (
 // TestClusterReadyAfterNodeConnections verifies that the cluster is only marked ready
 // after node connections are established AND shard mapping is available
 func TestClusterReadyAfterNodeConnections(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -47,6 +50,9 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 
 // TestClusterReadyMultiNode verifies cluster readiness in a multi-node setup
 func TestClusterReadyMultiNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 

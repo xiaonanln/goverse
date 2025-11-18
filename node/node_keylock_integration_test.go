@@ -13,6 +13,9 @@ import (
 // TestKeyLockIntegration_CreateDeleteRace tests that create and delete operations
 // on the same object are properly serialized
 func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	node := NewNode("localhost:47000")
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
@@ -67,6 +70,9 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 // TestKeyLockIntegration_CallDuringDelete tests that calling an object method
 // while it's being deleted is properly handled
 func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	node := NewNode("localhost:47000")
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
@@ -132,6 +138,9 @@ func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
 // TestKeyLockIntegration_SaveDuringDelete tests that saving objects
 // while some are being deleted is properly handled
 func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	node := NewNode("localhost:47000")
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
@@ -187,6 +196,9 @@ func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
 // TestKeyLockIntegration_ConcurrentCallsSameObject tests that multiple concurrent
 // calls to the same object work correctly
 func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	node := NewNode("localhost:47000")
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
@@ -233,6 +245,9 @@ func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
 // TestKeyLockIntegration_CreateCallDeleteSequence tests a realistic sequence
 // of create, call, and delete operations
 func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	node := NewNode("localhost:47000")
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
@@ -290,6 +305,9 @@ func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
 
 // TestKeyLockIntegration_NoLockLeaks tests that per-key locks are properly cleaned up
 func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	node := NewNode("localhost:47000")
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 

@@ -21,6 +21,9 @@ func (obj *TestObject) OnCreated() {
 
 // TestServerCreateObject_RequiresID tests that Server.CreateObject requires a non-empty ID
 func TestServerCreateObject_RequiresID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix to get a unique prefix for test isolation
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 

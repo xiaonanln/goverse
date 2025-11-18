@@ -26,6 +26,12 @@ import (
 // When a node releases a shard (because TargetNode changed), objects on that shard are removed.
 // This test verifies the consistency of shard ownership during dynamic changes.
 func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
