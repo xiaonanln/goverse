@@ -646,6 +646,38 @@ provider.LoadErr = errors.New("simulated load error")
 - Use `t.Run()` for subtests
 - Use `t.Cleanup()` for automatic cleanup even on test failure
 
+#### Short Mode for Long-Running Tests
+
+Tests should support Go's `-short` flag to enable fast test runs during development:
+
+- **Tests expected to run for MORE than 10 seconds**: Should be skipped in short mode
+- **Tests expected to run for 10 seconds or LESS**: Should NOT be skipped in short mode
+
+Use `testing.Short()` to skip long-running tests:
+
+```go
+func TestLongRunningIntegration(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping long-running test in short mode")
+    }
+    
+    // Test that takes more than 10 seconds...
+}
+```
+
+**Examples of tests that should skip in short mode:**
+- Integration tests requiring etcd that take significant time
+- Tests with extensive async operations and multiple retry cycles
+- Performance benchmarks and load tests
+- Tests that verify behavior over extended time periods
+
+**Examples of tests that should NOT skip in short mode:**
+- Unit tests that complete quickly
+- Basic integration tests that finish in a few seconds
+- Tests with mocked dependencies that run fast
+
+Run tests with short mode: `go test -short ./...`
+
 Example test structure:
 
 ```go
