@@ -60,6 +60,21 @@ func TestNewGateway(t *testing.T) {
 				// Clean up
 				defer gateway.Stop()
 
+				// Verify etcdManager is initialized
+				if gateway.etcdManager == nil {
+					t.Fatal("Expected etcdManager to be initialized")
+				}
+
+				// Verify consensusManager is initialized
+				if gateway.consensusManager == nil {
+					t.Fatal("Expected consensusManager to be initialized")
+				}
+
+				// Verify shardLock is initialized
+				if gateway.shardLock == nil {
+					t.Fatal("Expected shardLock to be initialized")
+				}
+
 				// Verify defaults are set
 				if tt.config != nil && tt.config.EtcdPrefix == "" {
 					if gateway.config.EtcdPrefix != "/goverse" {
@@ -343,6 +358,72 @@ func TestGatewayStartWithoutStop(t *testing.T) {
 
 	// Clean up
 	gateway.Stop()
+}
+
+func TestGatewayConsensusManagerInitialized(t *testing.T) {
+	config := &GatewayConfig{
+		EtcdAddress: "localhost:2379",
+		EtcdPrefix:  "/test-gateway-consensus",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	defer gateway.Stop()
+
+	// Verify ConsensusManager is initialized
+	if gateway.consensusManager == nil {
+		t.Fatal("ConsensusManager should be initialized")
+	}
+
+	// Verify EtcdManager is initialized
+	if gateway.etcdManager == nil {
+		t.Fatal("EtcdManager should be initialized")
+	}
+
+	// Verify ShardLock is initialized
+	if gateway.shardLock == nil {
+		t.Fatal("ShardLock should be initialized")
+	}
+}
+
+func TestGatewayConsensusManagerWatch(t *testing.T) {
+	config := &GatewayConfig{
+		EtcdAddress: "localhost:2379",
+		EtcdPrefix:  "/test-gateway-watch",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	defer gateway.Stop()
+
+	ctx := context.Background()
+
+	// Start should initialize consensus manager watch
+	err = gateway.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gateway.Start() returned error: %v", err)
+	}
+
+	// Verify consensus manager is not nil
+	if gateway.consensusManager == nil {
+		t.Fatal("ConsensusManager should be initialized after Start()")
+	}
+
+	// Stop should stop the watch
+	err = gateway.Stop()
+	if err != nil {
+		t.Fatalf("Gateway.Stop() returned error: %v", err)
+	}
+
+	// Multiple stops should be idempotent
+	err = gateway.Stop()
+	if err != nil {
+		t.Fatalf("Second Gateway.Stop() returned error: %v", err)
+	}
 }
 
 func TestGatewayConfigDefaults(t *testing.T) {
