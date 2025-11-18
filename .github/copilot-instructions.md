@@ -645,6 +645,8 @@ provider.LoadErr = errors.New("simulated load error")
 - Mock external dependencies when appropriate
 - Use `t.Run()` for subtests
 - Use `t.Cleanup()` for automatic cleanup even on test failure
+- **Always use `t.Fatalf()` instead of `t.Errorf()` to fail tests quickly and stop execution immediately**
+- **Always use `t.Fatal()` instead of `t.Error()` to fail tests quickly and stop execution immediately**
 
 Example test structure:
 
@@ -664,11 +666,10 @@ func TestMyFunction(t *testing.T) {
         t.Run(tt.name, func(t *testing.T) {
             got, err := MyFunction(tt.input)
             if (err != nil) != tt.wantErr {
-                t.Errorf("MyFunction() error = %v, wantErr %v", err, tt.wantErr)
-                return
+                t.Fatalf("MyFunction() error = %v, wantErr %v", err, tt.wantErr)
             }
             if got != tt.want {
-                t.Errorf("MyFunction() = %v, want %v", got, tt.want)
+                t.Fatalf("MyFunction() = %v, want %v", got, tt.want)
             }
         })
     }
@@ -708,7 +709,7 @@ for _, obj := range objectNode.ListObjects() {
     }
 }
 if !objExists {
-    t.Errorf("Object %s should exist on target node %s", objID, targetNode)
+    t.Fatalf("Object %s should exist on target node %s", objID, targetNode)
 }
 ```
 
