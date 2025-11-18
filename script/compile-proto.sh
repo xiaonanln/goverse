@@ -7,6 +7,7 @@ PROTO_FILES=(
     "client/proto/client.proto"
     "inspector/proto/inspector.proto"
     "samples/chat/proto/chat.proto"
+    "samples/distributed-cache/proto/cache.proto"
 )
 
 # Common protoc options for Go
@@ -31,6 +32,7 @@ if command -v python3 &> /dev/null; then
     touch inspector/proto/__init__.py
     touch client/proto/__init__.py
     touch samples/chat/proto/__init__.py
+    touch samples/distributed-cache/proto/__init__.py
     
     # Generate Python proto files from goverse.proto
     if [[ -f "proto/goverse.proto" ]]; then
@@ -82,6 +84,19 @@ if command -v python3 &> /dev/null; then
             echo "  ✅ Python proto files generated for samples/chat/proto/chat.proto"
         else
             echo "  Note: Failed to generate Python proto files for chat.proto"
+        fi
+    fi
+    
+    # Generate Python proto files from samples/distributed-cache/proto/cache.proto
+    if [[ -f "samples/distributed-cache/proto/cache.proto" ]]; then
+        if python3 -m grpc_tools.protoc \
+            -I. \
+            --python_out=. \
+            --grpc_python_out=. \
+            samples/distributed-cache/proto/cache.proto 2>&1; then
+            echo "  ✅ Python proto files generated for samples/distributed-cache/proto/cache.proto"
+        else
+            echo "  Note: Failed to generate Python proto files for cache.proto"
         fi
     fi
 else

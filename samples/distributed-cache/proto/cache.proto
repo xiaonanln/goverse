@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package cache;
+
+option go_package = "github.com/xiaonanln/goverse/samples/distributed-cache/proto";
+
+// Request to set a cache entry
+message CacheManager_SetRequest {
+    string key = 1;
+    string value = 2;
+    int64 ttl_seconds = 3; // 0 means no expiration
+}
+
+// Response from set operation
+message CacheManager_SetResponse {
+    bool success = 1;
+}
+
+// Request to get a cache entry
+message CacheManager_GetRequest {
+    string key = 1;
+}
+
+// Response from get operation
+message CacheManager_GetResponse {
+    bool found = 1;
+    string value = 2;
+}
+
+// Request to delete a cache entry
+message CacheManager_DeleteRequest {
+    string key = 1;
+}
+
+// Response from delete operation
+message CacheManager_DeleteResponse {
+    bool success = 1;
+}
+
+// Request to get statistics from cache manager
+message CacheManager_StatsRequest {
+}
+
+// Response with cache statistics
+message CacheManager_StatsResponse {
+    int64 total_entries = 1;
+    int64 hit_count = 2;
+    int64 miss_count = 3;
+    string node_address = 4;
+}
+
+// DistributedCache grain messages
+
+// Request to set value in a cache entry grain
+message DistributedCache_SetValueRequest {
+    string value = 1;
+    int64 ttl_seconds = 2; // 0 means no expiration
+}
+
+// Response from set value operation
+message DistributedCache_SetValueResponse {
+    bool success = 1;
+}
+
+// Request to get value from a cache entry grain
+message DistributedCache_GetValueRequest {
+}
+
+// Response from get value operation
+message DistributedCache_GetValueResponse {
+    bool found = 1;
+    string value = 2;
+    int64 expires_at = 3; // Unix timestamp, 0 means no expiration
+}
+
+// Request to delete a cache entry grain
+message DistributedCache_DeleteRequest {
+}
+
+// Response from delete operation
+message DistributedCache_DeleteResponse {
+    bool success = 1;
+}
+
+// Client messages
+
+// Request to set a cache entry from client
+message Client_SetRequest {
+    string key = 1;
+    string value = 2;
+    int64 ttl_seconds = 3; // 0 means no expiration
+}
+
+// Response from client set operation
+message Client_SetResponse {
+    bool success = 1;
+}
+
+// Request to get a cache entry from client
+message Client_GetRequest {
+    string key = 1;
+}
+
+// Response from client get operation
+message Client_GetResponse {
+    bool found = 1;
+    string value = 2;
+}
+
+// Request to delete a cache entry from client
+message Client_DeleteRequest {
+    string key = 1;
+}
+
+// Response from client delete operation
+message Client_DeleteResponse {
+    bool success = 1;
+}
+
+// Request to get cache statistics from client
+message Client_GetStatsRequest {
+}
+
+// Response with cache statistics
+message Client_GetStatsResponse {
+    int64 total_entries = 1;
+    int64 hit_count = 2;
+    int64 miss_count = 3;
+    string node_address = 4;
+}
