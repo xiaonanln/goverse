@@ -26,7 +26,7 @@ func TestServerCreateObject_ShardIDComputation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			shardID := sharding.GetShardID(tc.objectID)
 			if shardID < 0 || shardID >= sharding.NumShards {
-				t.Errorf("GetShardID(%s) = %d, want value in range [0, %d)", tc.objectID, shardID, sharding.NumShards)
+				t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", tc.objectID, shardID, sharding.NumShards)
 			}
 			t.Logf("Object ID %s maps to shard %d", tc.objectID, shardID)
 		})
@@ -48,11 +48,11 @@ func TestServerCreateObject_ValidationLogic(t *testing.T) {
 	expectedError := "shard is targeted to node"
 
 	// The actual error would be:
-	// fmt.Errorf("object %s shard is targeted to node %s, not this node %s", req.GetId(), shardInfo.TargetNode, thisNodeAddr)
+	// fmt.Fatalf("object %s shard is targeted to node %s, not this node %s", req.GetId(), shardInfo.TargetNode, thisNodeAddr)
 	actualError := "object " + testObjectID + " shard is targeted to node " + targetNode + ", not this node " + thisNode
 
 	if !strings.Contains(actualError, expectedError) {
-		t.Errorf("Error message format incorrect. Expected to contain %q, got %q", expectedError, actualError)
+		t.Fatalf("Error message format incorrect. Expected to contain %q, got %q", expectedError, actualError)
 	}
 
 	t.Logf("Error message format verified: %s", actualError)
@@ -114,7 +114,7 @@ func TestServerCreateObject_EmptyTargetNodeAllowed(t *testing.T) {
 			}
 
 			if wouldAllow != tc.shouldAllow {
-				t.Errorf("Validation logic mismatch: targetNode=%s, thisNode=%s, expected allow=%v, got allow=%v",
+				t.Fatalf("Validation logic mismatch: targetNode=%s, thisNode=%s, expected allow=%v, got allow=%v",
 					tc.targetNode, tc.thisNode, tc.shouldAllow, wouldAllow)
 			}
 		})

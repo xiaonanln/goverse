@@ -24,7 +24,7 @@ func TestInspectorService_Ping(t *testing.T) {
 	}
 
 	if resp == nil {
-		t.Error("Ping() response should not be nil")
+		t.Fatal("Ping() response should not be nil")
 	}
 }
 
@@ -122,7 +122,7 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 
 			resp, err := svc.AddOrUpdateObject(context.Background(), tt.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AddOrUpdateObject() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("AddOrUpdateObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
@@ -130,26 +130,26 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 				// Verify error code
 				st, ok := status.FromError(err)
 				if !ok {
-					t.Errorf("Expected gRPC status error, got %v", err)
+					t.Fatalf("Expected gRPC status error, got %v", err)
 					return
 				}
 				if st.Code() != tt.wantCode {
-					t.Errorf("Expected error code %v, got %v", tt.wantCode, st.Code())
+					t.Fatalf("Expected error code %v, got %v", tt.wantCode, st.Code())
 				}
 			} else {
 				if resp == nil {
-					t.Error("AddOrUpdateObject() response should not be nil")
+					t.Fatal("AddOrUpdateObject() response should not be nil")
 				}
 			}
 
 			if !tt.skipVerify {
 				objects := pg.GetObjects()
 				if len(objects) != tt.wantCount {
-					t.Errorf("Expected %d objects, got %d", tt.wantCount, len(objects))
+					t.Fatalf("Expected %d objects, got %d", tt.wantCount, len(objects))
 				}
 
 				if tt.wantCount > 0 && objects[0].ID != tt.req.Object.Id {
-					t.Errorf("Expected object ID %s, got %s", tt.req.Object.Id, objects[0].ID)
+					t.Fatalf("Expected object ID %s, got %s", tt.req.Object.Id, objects[0].ID)
 				}
 			}
 		})
@@ -220,22 +220,22 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 
 			resp, err := svc.RegisterNode(context.Background(), tt.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("RegisterNode() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("RegisterNode() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if !tt.wantErr && resp == nil {
-				t.Error("RegisterNode() response should not be nil")
+				t.Fatal("RegisterNode() response should not be nil")
 			}
 
 			nodes := pg.GetNodes()
 			if len(nodes) != tt.wantNodeCount {
-				t.Errorf("Expected %d nodes, got %d", tt.wantNodeCount, len(nodes))
+				t.Fatalf("Expected %d nodes, got %d", tt.wantNodeCount, len(nodes))
 			}
 
 			objects := pg.GetObjects()
 			if len(objects) != tt.wantObjCount {
-				t.Errorf("Expected %d objects, got %d", tt.wantObjCount, len(objects))
+				t.Fatalf("Expected %d objects, got %d", tt.wantObjCount, len(objects))
 			}
 		})
 	}
@@ -275,11 +275,11 @@ func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 
 	objects = pg.GetObjects()
 	if len(objects) != 1 {
-		t.Errorf("Expected 1 object after removing stale, got %d", len(objects))
+		t.Fatalf("Expected 1 object after removing stale, got %d", len(objects))
 	}
 
 	if len(objects) > 0 && objects[0].ID != "obj1" {
-		t.Errorf("Expected remaining object to be obj1, got %s", objects[0].ID)
+		t.Fatalf("Expected remaining object to be obj1, got %s", objects[0].ID)
 	}
 }
 
@@ -314,19 +314,19 @@ func TestInspectorService_UnregisterNode(t *testing.T) {
 		t.Fatalf("UnregisterNode() error = %v", err)
 	}
 	if resp == nil {
-		t.Error("UnregisterNode() response should not be nil")
+		t.Fatal("UnregisterNode() response should not be nil")
 	}
 
 	// Verify node is removed
 	nodes := pg.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes after unregistration, got %d", len(nodes))
+		t.Fatalf("Expected 0 nodes after unregistration, got %d", len(nodes))
 	}
 
 	// Verify objects are also removed (cascade)
 	objects := pg.GetObjects()
 	if len(objects) != 0 {
-		t.Errorf("Expected 0 objects after node unregistration, got %d", len(objects))
+		t.Fatalf("Expected 0 objects after node unregistration, got %d", len(objects))
 	}
 }
 
@@ -345,12 +345,12 @@ func TestCreateHTTPHandler(t *testing.T) {
 		handler.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("Expected status OK, got %d", w.Code)
+			t.Fatalf("Expected status OK, got %d", w.Code)
 		}
 
 		contentType := w.Header().Get("Content-Type")
 		if contentType != "application/json" {
-			t.Errorf("Expected Content-Type application/json, got %s", contentType)
+			t.Fatalf("Expected Content-Type application/json, got %s", contentType)
 		}
 
 		var result struct {
@@ -363,11 +363,11 @@ func TestCreateHTTPHandler(t *testing.T) {
 		}
 
 		if len(result.GoverseNodes) != 0 {
-			t.Errorf("Expected 0 nodes, got %d", len(result.GoverseNodes))
+			t.Fatalf("Expected 0 nodes, got %d", len(result.GoverseNodes))
 		}
 
 		if len(result.GoverseObjects) != 0 {
-			t.Errorf("Expected 0 objects, got %d", len(result.GoverseObjects))
+			t.Fatalf("Expected 0 objects, got %d", len(result.GoverseObjects))
 		}
 	})
 
@@ -390,7 +390,7 @@ func TestCreateHTTPHandler(t *testing.T) {
 		handler.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("Expected status OK, got %d", w.Code)
+			t.Fatalf("Expected status OK, got %d", w.Code)
 		}
 
 		var result struct {
@@ -403,11 +403,11 @@ func TestCreateHTTPHandler(t *testing.T) {
 		}
 
 		if len(result.GoverseNodes) != 1 {
-			t.Errorf("Expected 1 node, got %d", len(result.GoverseNodes))
+			t.Fatalf("Expected 1 node, got %d", len(result.GoverseNodes))
 		}
 
 		if len(result.GoverseObjects) != 1 {
-			t.Errorf("Expected 1 object, got %d", len(result.GoverseObjects))
+			t.Fatalf("Expected 1 object, got %d", len(result.GoverseObjects))
 		}
 	})
 }
@@ -448,10 +448,10 @@ func TestInspectorService_Integration(t *testing.T) {
 
 	// Verify state
 	if len(pg.GetNodes()) != 2 {
-		t.Errorf("Expected 2 nodes, got %d", len(pg.GetNodes()))
+		t.Fatalf("Expected 2 nodes, got %d", len(pg.GetNodes()))
 	}
 	if len(pg.GetObjects()) != 3 {
-		t.Errorf("Expected 3 objects, got %d", len(pg.GetObjects()))
+		t.Fatalf("Expected 3 objects, got %d", len(pg.GetObjects()))
 	}
 
 	// Add object to node1
@@ -467,7 +467,7 @@ func TestInspectorService_Integration(t *testing.T) {
 	}
 
 	if len(pg.GetObjects()) != 4 {
-		t.Errorf("Expected 4 objects after adding, got %d", len(pg.GetObjects()))
+		t.Fatalf("Expected 4 objects after adding, got %d", len(pg.GetObjects()))
 	}
 
 	// Unregister node1
@@ -480,16 +480,16 @@ func TestInspectorService_Integration(t *testing.T) {
 
 	// Verify node1 and its objects are removed
 	if len(pg.GetNodes()) != 1 {
-		t.Errorf("Expected 1 node after unregistration, got %d", len(pg.GetNodes()))
+		t.Fatalf("Expected 1 node after unregistration, got %d", len(pg.GetNodes()))
 	}
 
 	// Only obj3 from node2 should remain
 	objects := pg.GetObjects()
 	if len(objects) != 1 {
-		t.Errorf("Expected 1 object after node1 removal, got %d", len(objects))
+		t.Fatalf("Expected 1 object after node1 removal, got %d", len(objects))
 	}
 	if len(objects) > 0 && objects[0].ID != "obj3" {
-		t.Errorf("Expected remaining object to be obj3, got %s", objects[0].ID)
+		t.Fatalf("Expected remaining object to be obj3, got %s", objects[0].ID)
 	}
 }
 
@@ -527,11 +527,11 @@ func TestInspectorService_ShardIDPropagation(t *testing.T) {
 	}
 
 	if objects[0].ShardID != int(testShardID) {
-		t.Errorf("Expected ShardID %d, got %d", testShardID, objects[0].ShardID)
+		t.Fatalf("Expected ShardID %d, got %d", testShardID, objects[0].ShardID)
 	}
 
 	if objects[0].ID != "test-object-1" {
-		t.Errorf("Expected object ID test-object-1, got %s", objects[0].ID)
+		t.Fatalf("Expected object ID test-object-1, got %s", objects[0].ID)
 	}
 }
 
@@ -564,12 +564,12 @@ func TestInspectorService_RegisterNode_WithShardIDs(t *testing.T) {
 	}
 
 	if shardIDMap["obj1"] != 100 {
-		t.Errorf("Expected obj1 ShardID 100, got %d", shardIDMap["obj1"])
+		t.Fatalf("Expected obj1 ShardID 100, got %d", shardIDMap["obj1"])
 	}
 	if shardIDMap["obj2"] != 200 {
-		t.Errorf("Expected obj2 ShardID 200, got %d", shardIDMap["obj2"])
+		t.Fatalf("Expected obj2 ShardID 200, got %d", shardIDMap["obj2"])
 	}
 	if shardIDMap["obj3"] != 300 {
-		t.Errorf("Expected obj3 ShardID 300, got %d", shardIDMap["obj3"])
+		t.Fatalf("Expected obj3 ShardID 300, got %d", shardIDMap["obj3"])
 	}
 }

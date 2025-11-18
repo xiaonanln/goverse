@@ -90,7 +90,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("Expected object %s to be created by method call, but it was not found", objID2)
+		t.Fatalf("Expected object %s to be created by method call, but it was not found", objID2)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 		}
 	}
 	if found {
-		t.Errorf("Expected object %s to be deleted by method call, but it still exists", objID2)
+		t.Fatalf("Expected object %s to be deleted by method call, but it still exists", objID2)
 	}
 }
 

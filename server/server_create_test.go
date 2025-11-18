@@ -57,7 +57,7 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 	}
 	expectedMsg := "object ID must be specified in CreateObject request"
 	if err2.Error() != expectedMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err2.Error())
+		t.Fatalf("Expected error message '%s', got '%s'", expectedMsg, err2.Error())
 	}
 
 	// Test 2: Non-empty ID

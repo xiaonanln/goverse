@@ -136,6 +136,6 @@ func TestWatchReconnection(t *testing.T) {
 	// Verify both nodes are present (watch reconnected successfully)
 	nodes = cm.GetNodes()
 	if len(nodes) != 2 {
-		t.Errorf("Expected 2 nodes after reconnection, got %d: %v", len(nodes), nodes)
+		t.Fatalf("Expected 2 nodes after reconnection, got %d: %v", len(nodes), nodes)
 	}
 }

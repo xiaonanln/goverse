@@ -80,7 +80,7 @@ func TestShardLocking_ReadWriteExclusion(t *testing.T) {
 	expectedOrder := []string{"write-acquired", "write-released", "read-acquired", "read-released"}
 	for i, expected := range expectedOrder {
 		if operationOrder[i] != expected {
-			t.Errorf("Operation %d: expected %s, got %s. Full order: %v",
+			t.Fatalf("Operation %d: expected %s, got %s. Full order: %v",
 				i, expected, operationOrder[i], operationOrder)
 		}
 	}
@@ -127,7 +127,7 @@ func TestShardLocking_MultipleReadLocks(t *testing.T) {
 	// Verify that we had multiple concurrent readers
 	max := maxConcurrentReaders.Load()
 	if max < 2 {
-		t.Errorf("Expected at least 2 concurrent readers, got %d", max)
+		t.Fatalf("Expected at least 2 concurrent readers, got %d", max)
 	}
 }
 
@@ -176,7 +176,7 @@ func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
 
 	// Verify that create acquired lock AFTER release released it
 	if createTime.Before(releaseTime) {
-		t.Errorf("CreateObject acquired lock before ReleaseShardsForNode released it. "+
+		t.Fatalf("CreateObject acquired lock before ReleaseShardsForNode released it. "+
 			"Release: %v, Create: %v", releaseTime, createTime)
 	}
 }
@@ -250,7 +250,7 @@ func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
 	// Verify that operations on different shards ran concurrently
 	max := maxConcurrentOps.Load()
 	if max < 2 {
-		t.Errorf("Expected operations on different shards to run concurrently, but max concurrent ops was %d", max)
+		t.Fatalf("Expected operations on different shards to run concurrently, but max concurrent ops was %d", max)
 	}
 }
 

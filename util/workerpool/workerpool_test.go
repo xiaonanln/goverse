@@ -24,7 +24,7 @@ func TestNew(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			wp := New(context.Background(), tt.numWorkers)
 			if wp.numWorkers != tt.want {
-				t.Errorf("New(%d).numWorkers = %d, want %d", tt.numWorkers, wp.numWorkers, tt.want)
+				t.Fatalf("New(%d).numWorkers = %d, want %d", tt.numWorkers, wp.numWorkers, tt.want)
 			}
 			wp.Stop()
 		})
@@ -56,7 +56,7 @@ func TestWorkerPool_BasicExecution(t *testing.T) {
 	wg.Wait()
 
 	if atomic.LoadInt32(&counter) != 10 {
-		t.Errorf("Expected 10 tasks to execute, got %d", atomic.LoadInt32(&counter))
+		t.Fatalf("Expected 10 tasks to execute, got %d", atomic.LoadInt32(&counter))
 	}
 }
 
@@ -76,10 +76,10 @@ func TestWorkerPool_ErrorHandling(t *testing.T) {
 	select {
 	case err := <-resultChan:
 		if err == nil {
-			t.Error("Expected error, got nil")
+			t.Fatal("Expected error, got nil")
 		}
 		if !errors.Is(err, expectedErr) {
-			t.Errorf("Expected error %v, got %v", expectedErr, err)
+			t.Fatalf("Expected error %v, got %v", expectedErr, err)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("Timeout waiting for result")
@@ -107,17 +107,17 @@ func TestWorkerPool_SubmitAndWait(t *testing.T) {
 	results := wp.SubmitAndWait(ctx, tasks)
 
 	if len(results) != 20 {
-		t.Errorf("Expected 20 results, got %d", len(results))
+		t.Fatalf("Expected 20 results, got %d", len(results))
 	}
 
 	if atomic.LoadInt32(&counter) != 20 {
-		t.Errorf("Expected 20 tasks to execute, got %d", atomic.LoadInt32(&counter))
+		t.Fatalf("Expected 20 tasks to execute, got %d", atomic.LoadInt32(&counter))
 	}
 
 	// Check all results are successful
 	for i, result := range results {
 		if result.Err != nil {
-			t.Errorf("Result %d has error: %v", i, result.Err)
+			t.Fatalf("Result %d has error: %v", i, result.Err)
 		}
 	}
 }
@@ -145,7 +145,7 @@ func TestWorkerPool_SubmitAndWaitWithErrors(t *testing.T) {
 	results := wp.SubmitAndWait(ctx, tasks)
 
 	if len(results) != 10 {
-		t.Errorf("Expected 10 results, got %d", len(results))
+		t.Fatalf("Expected 10 results, got %d", len(results))
 	}
 
 	// Count errors
@@ -160,10 +160,10 @@ func TestWorkerPool_SubmitAndWaitWithErrors(t *testing.T) {
 	}
 
 	if errorCount != 5 {
-		t.Errorf("Expected 5 errors, got %d", errorCount)
+		t.Fatalf("Expected 5 errors, got %d", errorCount)
 	}
 	if successCount != 5 {
-		t.Errorf("Expected 5 successes, got %d", successCount)
+		t.Fatalf("Expected 5 successes, got %d", successCount)
 	}
 }
 
@@ -203,7 +203,7 @@ func TestWorkerPool_ContextCancellation(t *testing.T) {
 	// All tasks will be submitted because SubmitAndWait spawns goroutines
 	// But tasks themselves will respect context cancellation
 	if len(results) != 10 {
-		t.Errorf("Expected 10 results, got %d", len(results))
+		t.Fatalf("Expected 10 results, got %d", len(results))
 	}
 
 	// Count cancelled tasks
@@ -251,7 +251,7 @@ func TestWorkerPool_Stop(t *testing.T) {
 	select {
 	case err := <-resultChan:
 		if err == nil {
-			t.Error("Should get error when submitting after stop")
+			t.Fatal("Should get error when submitting after stop")
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("Should get immediate error when submitting after stop")
@@ -290,11 +290,11 @@ func TestWorkerPool_StopNow(t *testing.T) {
 	completedCount := atomic.LoadInt32(&completed)
 
 	if startedCount == 0 {
-		t.Error("No tasks started")
+		t.Fatal("No tasks started")
 	}
 
 	if completedCount >= startedCount {
-		t.Errorf("All tasks completed despite StopNow, started=%d completed=%d",
+		t.Fatalf("All tasks completed despite StopNow, started=%d completed=%d",
 			startedCount, completedCount)
 	}
 
@@ -340,7 +340,7 @@ func TestWorkerPool_Concurrency(t *testing.T) {
 
 	maxConcurrentValue := atomic.LoadInt32(&maxConcurrent)
 	if maxConcurrentValue > int32(numWorkers) {
-		t.Errorf("Max concurrent workers %d exceeded pool size %d",
+		t.Fatalf("Max concurrent workers %d exceeded pool size %d",
 			maxConcurrentValue, numWorkers)
 	}
 
@@ -359,12 +359,12 @@ func TestWorkerPool_EmptyTaskList(t *testing.T) {
 	results := wp.SubmitAndWait(ctx, nil)
 
 	if results != nil {
-		t.Errorf("Expected nil results for empty task list, got %v", results)
+		t.Fatalf("Expected nil results for empty task list, got %v", results)
 	}
 
 	results = wp.SubmitAndWait(ctx, []Task{})
 	if results != nil {
-		t.Errorf("Expected nil results for empty task list, got %v", results)
+		t.Fatalf("Expected nil results for empty task list, got %v", results)
 	}
 }
 

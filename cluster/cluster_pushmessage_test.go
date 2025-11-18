@@ -24,7 +24,7 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 
 	err := c.PushMessageToClient(ctx, "localhost:7001/test-client", testMsg)
 	if err == nil {
-		t.Error("PushMessageToClient should fail when thisNode is not set")
+		t.Fatal("PushMessageToClient should fail when thisNode is not set")
 	}
 }
 
@@ -58,7 +58,7 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := c.PushMessageToClient(ctx, tt.clientID, testMsg)
 			if err == nil {
-				t.Errorf("PushMessageToClient should fail with invalid client ID: %s", tt.clientID)
+				t.Fatalf("PushMessageToClient should fail with invalid client ID: %s", tt.clientID)
 			}
 		})
 	}
@@ -102,10 +102,10 @@ func TestPushMessageToClient_LocalClient(t *testing.T) {
 			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
 		}
 		if notification.Message.UserName != "TestUser" {
-			t.Errorf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
+			t.Fatalf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
 		}
 		if notification.Message.Message != "Hello, World!" {
-			t.Errorf("Expected Message 'Hello, World!', got '%s'", notification.Message.Message)
+			t.Fatalf("Expected Message 'Hello, World!', got '%s'", notification.Message.Message)
 		}
 	default:
 		t.Fatal("No message received on client channel")
@@ -128,6 +128,6 @@ func TestPushMessageToClient_ClientNotFound(t *testing.T) {
 	// Try to push to a client that doesn't exist (but with valid format for local node)
 	err := c.PushMessageToClient(ctx, "localhost:7000/non-existent-client", testMsg)
 	if err == nil {
-		t.Error("Expected error when pushing to non-existent client")
+		t.Fatal("Expected error when pushing to non-existent client")
 	}
 }

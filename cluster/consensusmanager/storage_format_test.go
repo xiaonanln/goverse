@@ -72,7 +72,7 @@ func TestStorageFormat(t *testing.T) {
 
 	// Should have 10 shard keys
 	if len(resp.Kvs) != 10 {
-		t.Errorf("Expected 10 shard keys, got %d", len(resp.Kvs))
+		t.Fatalf("Expected 10 shard keys, got %d", len(resp.Kvs))
 	}
 
 	// Verify each key has the correct format and value
@@ -82,13 +82,13 @@ func TestStorageFormat(t *testing.T) {
 
 		// Check key format
 		if key[:len(prefix+"/shard/")] != prefix+"/shard/" {
-			t.Errorf("Unexpected key format: %s", key)
+			t.Fatalf("Unexpected key format: %s", key)
 		}
 
 		// Check value has the format "targetNode,currentNode"
 		// For now, currentNode is empty, so it should be "node1," or "node2,"
 		if value != "node1," && value != "node2," {
-			t.Errorf("Unexpected value format: %s (expected 'node1,' or 'node2,')", value)
+			t.Fatalf("Unexpected value format: %s (expected 'node1,' or 'node2,')", value)
 		}
 	}
 
@@ -103,7 +103,7 @@ func TestStorageFormat(t *testing.T) {
 	}
 
 	if len(state.ShardMapping.Shards) != 10 {
-		t.Errorf("Expected 10 shards in loaded mapping, got %d", len(state.ShardMapping.Shards))
+		t.Fatalf("Expected 10 shards in loaded mapping, got %d", len(state.ShardMapping.Shards))
 	}
 
 	// Verify all shards match
@@ -111,10 +111,10 @@ func TestStorageFormat(t *testing.T) {
 		expectedInfo := mapping.Shards[shardID]
 		actualInfo := state.ShardMapping.Shards[shardID]
 		if actualInfo.TargetNode != expectedInfo.TargetNode {
-			t.Errorf("Shard %d: expected target node %s, got %s", shardID, expectedInfo.TargetNode, actualInfo.TargetNode)
+			t.Fatalf("Shard %d: expected target node %s, got %s", shardID, expectedInfo.TargetNode, actualInfo.TargetNode)
 		}
 		if actualInfo.CurrentNode != expectedInfo.CurrentNode {
-			t.Errorf("Shard %d: expected current node %s, got %s", shardID, expectedInfo.CurrentNode, actualInfo.CurrentNode)
+			t.Fatalf("Shard %d: expected current node %s, got %s", shardID, expectedInfo.CurrentNode, actualInfo.CurrentNode)
 		}
 	}
 
@@ -154,7 +154,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 		t.Fatalf("Failed to create shard mapping: %v", err)
 	}
 	if n == 0 {
-		t.Error("Expected shards to be reassigned")
+		t.Fatal("Expected shards to be reassigned")
 	}
 
 	// Verify that 8192 shard keys exist
@@ -165,7 +165,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	}
 
 	if len(resp.Kvs) != sharding.NumShards {
-		t.Errorf("Expected %d shard keys, got %d", sharding.NumShards, len(resp.Kvs))
+		t.Fatalf("Expected %d shard keys, got %d", sharding.NumShards, len(resp.Kvs))
 	}
 
 	// Load back and verify count
@@ -175,7 +175,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	}
 
 	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in loaded mapping, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+		t.Fatalf("Expected %d shards in loaded mapping, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
 	}
 
 	t.Logf("Successfully stored and loaded all %d shards as individual keys", sharding.NumShards)
@@ -215,7 +215,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 		}
 
 		if count != len(newShards) {
-			t.Errorf("Expected to store %d shards, got %d", len(newShards), count)
+			t.Fatalf("Expected to store %d shards, got %d", len(newShards), count)
 		}
 
 		// Verify shards were created
@@ -227,7 +227,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 				t.Fatalf("Failed to read shard %d: %v", shardID, err)
 			}
 			if len(resp.Kvs) == 0 {
-				t.Errorf("Shard %d was not created", shardID)
+				t.Fatalf("Shard %d was not created", shardID)
 			}
 		}
 	})
@@ -240,10 +240,10 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 
 		count, err := cm.storeShardMapping(ctx, duplicateShards)
 		if err == nil {
-			t.Error("Expected error when trying to overwrite with ModRevision=0, got nil")
+			t.Fatal("Expected error when trying to overwrite with ModRevision=0, got nil")
 		}
 		if count != 0 {
-			t.Errorf("Expected 0 successful writes, got %d", count)
+			t.Fatalf("Expected 0 successful writes, got %d", count)
 		}
 	})
 
@@ -271,7 +271,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 			t.Fatalf("Failed to update shard with correct ModRevision: %v", err)
 		}
 		if count != 1 {
-			t.Errorf("Expected 1 successful write, got %d", count)
+			t.Fatalf("Expected 1 successful write, got %d", count)
 		}
 
 		// Verify the update
@@ -285,7 +285,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 		}
 		value := string(resp.Kvs[0].Value)
 		if value != "node4," {
-			t.Errorf("Expected value 'node4,', got '%s'", value)
+			t.Fatalf("Expected value 'node4,', got '%s'", value)
 		}
 	})
 
@@ -298,10 +298,10 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 
 		count, err := cm.storeShardMapping(ctx, wrongRevisionShards)
 		if err == nil {
-			t.Error("Expected error when updating with incorrect ModRevision, got nil")
+			t.Fatal("Expected error when updating with incorrect ModRevision, got nil")
 		}
 		if count != 0 {
-			t.Errorf("Expected 0 successful writes, got %d", count)
+			t.Fatalf("Expected 0 successful writes, got %d", count)
 		}
 
 		// Verify the shard was not updated
@@ -312,7 +312,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 		}
 		value := string(resp.Kvs[0].Value)
 		if value == "node5," {
-			t.Error("Shard should not have been updated with incorrect ModRevision")
+			t.Fatal("Shard should not have been updated with incorrect ModRevision")
 		}
 	})
 }

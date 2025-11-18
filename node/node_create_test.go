@@ -51,7 +51,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 	}
 	expectedMsg := "object ID must be specified"
 	if err.Error() != expectedMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+		t.Fatalf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
 
 	// Test 2: Non-empty ID should succeed
@@ -60,7 +60,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 		t.Fatalf("Expected success when creating object with valid ID, got error: %v", err)
 	}
 	if id != "test-obj-123" {
-		t.Errorf("Expected ID 'test-obj-123', got '%s'", id)
+		t.Fatalf("Expected ID 'test-obj-123', got '%s'", id)
 	}
 
 	// Test 3: Verify object was created
@@ -72,7 +72,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 		t.Fatal("Object should exist after creation")
 	}
 	if obj.Id() != "test-obj-123" {
-		t.Errorf("Object ID should be 'test-obj-123', got '%s'", obj.Id())
+		t.Fatalf("Object ID should be 'test-obj-123', got '%s'", obj.Id())
 	}
 }
 
@@ -91,7 +91,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 		t.Fatalf("Failed to create first object: %v", err)
 	}
 	if id1 != "duplicate-id" {
-		t.Errorf("Expected ID 'duplicate-id', got '%s'", id1)
+		t.Fatalf("Expected ID 'duplicate-id', got '%s'", id1)
 	}
 
 	// Try to create second object with same ID and type - should succeed and return existing object
@@ -100,7 +100,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 		t.Fatalf("Expected success when creating object with duplicate ID and same type, got error: %v", err)
 	}
 	if id2 != "duplicate-id" {
-		t.Errorf("Expected ID 'duplicate-id', got '%s'", id2)
+		t.Fatalf("Expected ID 'duplicate-id', got '%s'", id2)
 	}
 
 	// Verify only one object exists
@@ -114,7 +114,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	if count != 1 {
-		t.Errorf("Expected exactly 1 object with ID 'duplicate-id', got %d", count)
+		t.Fatalf("Expected exactly 1 object with ID 'duplicate-id', got %d", count)
 	}
 }
 
@@ -151,7 +151,7 @@ func TestCreateObject_DuplicateID_DifferentType(t *testing.T) {
 
 	// Error message should indicate type mismatch
 	if !strings.Contains(err.Error(), "different type") {
-		t.Errorf("Expected error message to contain 'different type', got '%s'", err.Error())
+		t.Fatalf("Expected error message to contain 'different type', got '%s'", err.Error())
 	}
 }
 
@@ -168,7 +168,7 @@ func TestCreateObject_UnknownType(t *testing.T) {
 	}
 
 	if !strings.Contains(err.Error(), "unknown object type") {
-		t.Errorf("Expected error message to contain 'unknown object type', got '%s'", err.Error())
+		t.Fatalf("Expected error message to contain 'unknown object type', got '%s'", err.Error())
 	}
 }
 
@@ -229,13 +229,13 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 
 	// All calls should succeed
 	if len(errors) > 0 {
-		t.Errorf("Expected no errors, got %d errors: %v", len(errors), errors)
+		t.Fatalf("Expected no errors, got %d errors: %v", len(errors), errors)
 	}
 
 	// All should return the same ID
 	for _, id := range ids {
 		if id != objectID {
-			t.Errorf("Expected ID '%s', got '%s'", objectID, id)
+			t.Fatalf("Expected ID '%s', got '%s'", objectID, id)
 		}
 	}
 
@@ -247,9 +247,9 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 		}
 		for i, obj := range objects {
 			if obj == nil {
-				t.Errorf("Object %d is nil", i)
+				t.Fatalf("Object %d is nil", i)
 			} else if obj != firstObj {
-				t.Errorf("Object %d (%p) is not the same instance as first object (%p)", i, obj, firstObj)
+				t.Fatalf("Object %d (%p) is not the same instance as first object (%p)", i, obj, firstObj)
 			}
 		}
 	}
@@ -265,7 +265,7 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	if count != 1 {
-		t.Errorf("Expected exactly 1 object with ID '%s', got %d", objectID, count)
+		t.Fatalf("Expected exactly 1 object with ID '%s', got %d", objectID, count)
 	}
 } // TestCreateObject_ConcurrentDifferentObjects tests concurrent creation of different objects
 
@@ -312,11 +312,11 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 
 	// All calls should succeed
 	if len(errors) > 0 {
-		t.Errorf("Expected no errors, got %d errors: %v", len(errors), errors)
+		t.Fatalf("Expected no errors, got %d errors: %v", len(errors), errors)
 	}
 
 	if successCount != numObjects {
-		t.Errorf("Expected %d successful creations, got %d", numObjects, successCount)
+		t.Fatalf("Expected %d successful creations, got %d", numObjects, successCount)
 	}
 
 	// Wait for all objects to be fully created
@@ -330,7 +330,7 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	if actualCount != numObjects {
-		t.Errorf("Expected %d objects in registry, got %d", numObjects, actualCount)
+		t.Fatalf("Expected %d objects in registry, got %d", numObjects, actualCount)
 	}
 }
 

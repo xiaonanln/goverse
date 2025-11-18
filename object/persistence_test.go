@@ -94,7 +94,7 @@ func TestBaseObject_ToData_NotPersistent(t *testing.T) {
 
 	_, err := obj.ToData()
 	if err == nil {
-		t.Error("ToData() should return error for non-persistent object")
+		t.Fatal("ToData() should return error for non-persistent object")
 	}
 }
 
@@ -105,7 +105,7 @@ func TestBaseObject_FromData_NotPersistent(t *testing.T) {
 	emptyStruct, _ := structpb.NewStruct(map[string]interface{}{})
 	err := obj.FromData(emptyStruct)
 	if err != nil {
-		t.Errorf("FromData() should return nil for non-persistent object, got: %v", err)
+		t.Fatalf("FromData() should return nil for non-persistent object, got: %v", err)
 	}
 }
 
@@ -125,15 +125,15 @@ func TestPersistentObject_ToData(t *testing.T) {
 	}
 
 	if structData.Fields["id"].GetStringValue() != "test-id" {
-		t.Errorf("ToData() id = %v; want test-id", structData.Fields["id"])
+		t.Fatalf("ToData() id = %v; want test-id", structData.Fields["id"])
 	}
 
 	if structData.Fields["type"].GetStringValue() != "TestPersistentObject" {
-		t.Errorf("ToData() type = %v; want TestPersistentObject", structData.Fields["type"])
+		t.Fatalf("ToData() type = %v; want TestPersistentObject", structData.Fields["type"])
 	}
 
 	if structData.Fields["custom_data"].GetStringValue() != "test-value" {
-		t.Errorf("ToData() custom_data = %v; want test-value", structData.Fields["custom_data"])
+		t.Fatalf("ToData() custom_data = %v; want test-value", structData.Fields["custom_data"])
 	}
 }
 
@@ -151,7 +151,7 @@ func TestPersistentObject_FromData(t *testing.T) {
 	}
 
 	if obj.CustomData != "loaded-value" {
-		t.Errorf("CustomData = %s; want loaded-value", obj.CustomData)
+		t.Fatalf("CustomData = %s; want loaded-value", obj.CustomData)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestSaveObject_Persistent(t *testing.T) {
 	}
 
 	if len(savedData) == 0 {
-		t.Error("Saved data is empty")
+		t.Fatal("Saved data is empty")
 	}
 }
 
@@ -198,7 +198,7 @@ func TestSaveObject_NotPersistent(t *testing.T) {
 	// Since ToData() returns error, we cannot call SaveObject
 	// Verify nothing was saved
 	if len(provider.storage) != 0 {
-		t.Error("Non-persistent object should not be saved")
+		t.Fatal("Non-persistent object should not be saved")
 	}
 }
 
@@ -242,7 +242,7 @@ func TestLoadObject(t *testing.T) {
 	}
 
 	if loadedObj.CustomData != "test-data" {
-		t.Errorf("CustomData = %s; want test-data", loadedObj.CustomData)
+		t.Fatalf("CustomData = %s; want test-data", loadedObj.CustomData)
 	}
 }
 
@@ -261,7 +261,7 @@ func TestMarshalProtoToJSON(t *testing.T) {
 	}
 
 	if len(jsonData) == 0 {
-		t.Error("MarshalProtoToJSON() returned empty data")
+		t.Fatal("MarshalProtoToJSON() returned empty data")
 	}
 }
 
@@ -275,10 +275,10 @@ func TestUnmarshalProtoFromJSON(t *testing.T) {
 	}
 
 	if data.Fields["key1"].GetStringValue() != "value1" {
-		t.Errorf("key1 = %v; want value1", data.Fields["key1"])
+		t.Fatalf("key1 = %v; want value1", data.Fields["key1"])
 	}
 
 	if data.Fields["key2"].GetNumberValue() != 123 {
-		t.Errorf("key2 = %v; want 123", data.Fields["key2"])
+		t.Fatalf("key2 = %v; want 123", data.Fields["key2"])
 	}
 }

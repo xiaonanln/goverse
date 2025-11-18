@@ -152,7 +152,7 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 
 	// Report any errors collected by the goroutine
 	for _, err := range stats.errors {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	if !success {
@@ -161,10 +161,10 @@ func TestDistributedPushMessageToClient(t *testing.T) {
 
 	// Verify counts
 	if stats.crossNode != numCrossNode {
-		t.Errorf("Expected %d cross-node messages, got %d", numCrossNode, stats.crossNode)
+		t.Fatalf("Expected %d cross-node messages, got %d", numCrossNode, stats.crossNode)
 	}
 	if stats.local != numLocal {
-		t.Errorf("Expected %d local messages, got %d", numLocal, stats.local)
+		t.Fatalf("Expected %d local messages, got %d", numLocal, stats.local)
 	}
 	t.Logf("Successfully received all %d messages (CrossNode: %d, Local: %d)",
 		numMessages, stats.crossNode, stats.local)

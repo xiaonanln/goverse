@@ -95,7 +95,7 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 
 	// We expect an error because we're not connected to etcd
 	if err == nil {
-		t.Error("Expected error when not connected to etcd, but got nil")
+		t.Fatal("Expected error when not connected to etcd, but got nil")
 	}
 
 	// The key test is that the function attempted to migrate multiple shards
@@ -207,16 +207,16 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 				// We expect an error because we're not connected to etcd,
 				// but the function should have attempted to rebalance
 				if err == nil {
-					t.Error("Expected error when not connected to etcd")
+					t.Fatal("Expected error when not connected to etcd")
 				}
 				t.Logf("Attempted to rebalance (error expected): %v", err)
 			} else {
 				// Should not attempt to rebalance, so no error
 				if err != nil {
-					t.Errorf("Expected no error when cluster is balanced, got: %v", err)
+					t.Fatalf("Expected no error when cluster is balanced, got: %v", err)
 				}
 				if rebalanced {
-					t.Error("Expected no rebalancing when cluster is balanced")
+					t.Fatal("Expected no rebalancing when cluster is balanced")
 				}
 			}
 		})

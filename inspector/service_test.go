@@ -49,7 +49,7 @@ func TestRemoveObject(t *testing.T) {
 	// Verify object was removed
 	objects = pg.GetObjects()
 	if len(objects) != 0 {
-		t.Errorf("Expected 0 objects after removal, got %d", len(objects))
+		t.Fatalf("Expected 0 objects after removal, got %d", len(objects))
 	}
 }
 
@@ -74,7 +74,7 @@ func TestRemoveObject_EmptyObjectID(t *testing.T) {
 	// Should not fail, just return empty
 	_, err := service.RemoveObject(ctx, req)
 	if err != nil {
-		t.Errorf("RemoveObject with empty ID should not fail: %v", err)
+		t.Fatalf("RemoveObject with empty ID should not fail: %v", err)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestRemoveObject_NodeNotRegistered(t *testing.T) {
 	// Should fail with NotFound error
 	_, err := service.RemoveObject(ctx, req)
 	if err == nil {
-		t.Error("RemoveObject should fail when node is not registered")
+		t.Fatal("RemoveObject should fail when node is not registered")
 	}
 }
 
@@ -117,7 +117,7 @@ func TestRemoveObject_NonExistentObject(t *testing.T) {
 	// Should not fail even if object doesn't exist
 	_, err := service.RemoveObject(ctx, req)
 	if err != nil {
-		t.Errorf("RemoveObject should succeed even for non-existent object: %v", err)
+		t.Fatalf("RemoveObject should succeed even for non-existent object: %v", err)
 	}
 }
 
@@ -166,14 +166,14 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 	}
 
 	if !objIDs["obj1"] {
-		t.Error("obj1 should still exist")
+		t.Fatal("obj1 should still exist")
 	}
 
 	if objIDs["obj2"] {
-		t.Error("obj2 should have been removed")
+		t.Fatal("obj2 should have been removed")
 	}
 
 	if !objIDs["obj3"] {
-		t.Error("obj3 should still exist")
+		t.Fatal("obj3 should still exist")
 	}
 }

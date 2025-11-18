@@ -33,15 +33,15 @@ func TestNewConsensusManager(t *testing.T) {
 	}
 
 	if cm.etcdManager != mgr {
-		t.Error("ConsensusManager should have the correct etcd manager")
+		t.Fatal("ConsensusManager should have the correct etcd manager")
 	}
 
 	if cm.logger == nil {
-		t.Error("ConsensusManager should have a logger")
+		t.Fatal("ConsensusManager should have a logger")
 	}
 
 	if cm.state.Nodes == nil {
-		t.Error("ConsensusManager should have initialized nodes map")
+		t.Fatal("ConsensusManager should have initialized nodes map")
 	}
 }
 
@@ -57,18 +57,18 @@ func TestAddRemoveListener(t *testing.T) {
 	cm.AddListener(listener2)
 
 	if len(cm.listeners) != 2 {
-		t.Errorf("Expected 2 listeners, got %d", len(cm.listeners))
+		t.Fatalf("Expected 2 listeners, got %d", len(cm.listeners))
 	}
 
 	// Remove listener
 	cm.RemoveListener(listener1)
 
 	if len(cm.listeners) != 1 {
-		t.Errorf("Expected 1 listener after removal, got %d", len(cm.listeners))
+		t.Fatalf("Expected 1 listener after removal, got %d", len(cm.listeners))
 	}
 
 	if cm.listeners[0] != listener2 {
-		t.Error("Wrong listener was removed")
+		t.Fatal("Wrong listener was removed")
 	}
 }
 
@@ -78,7 +78,7 @@ func TestGetNodes_Empty(t *testing.T) {
 
 	nodes := cm.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("Expected empty node list, got %d nodes", len(nodes))
+		t.Fatalf("Expected empty node list, got %d nodes", len(nodes))
 	}
 }
 
@@ -88,7 +88,7 @@ func TestGetLeaderNode_Empty(t *testing.T) {
 
 	leader := cm.GetLeaderNode()
 	if leader != "" {
-		t.Errorf("Expected empty leader, got %s", leader)
+		t.Fatalf("Expected empty leader, got %s", leader)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestGetLeaderNode_WithNodes(t *testing.T) {
 
 	leader := cm.GetLeaderNode()
 	if leader != "localhost:47001" {
-		t.Errorf("Expected leader localhost:47001, got %s", leader)
+		t.Fatalf("Expected leader localhost:47001, got %s", leader)
 	}
 }
 
@@ -115,10 +115,10 @@ func TestGetShardMapping_NotAvailable(t *testing.T) {
 
 	mapping := cm.GetShardMapping()
 	if mapping == nil {
-		t.Error("Expected non-nil mapping even when not initialized")
+		t.Fatal("Expected non-nil mapping even when not initialized")
 	}
 	if len(mapping.Shards) != 0 {
-		t.Errorf("Expected empty mapping, got %d shards", len(mapping.Shards))
+		t.Fatalf("Expected empty mapping, got %d shards", len(mapping.Shards))
 	}
 }
 
@@ -152,13 +152,13 @@ func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
 
 	// Verify that internal state was NOT modified
 	if mapping2.Shards[0].TargetNode != "node1" {
-		t.Errorf("Expected shard 0 to be node1, got %s (deep copy failed)", mapping2.Shards[0].TargetNode)
+		t.Fatalf("Expected shard 0 to be node1, got %s (deep copy failed)", mapping2.Shards[0].TargetNode)
 	}
 	if _, exists := mapping2.Shards[999]; exists {
-		t.Error("Expected shard 999 to not exist (deep copy failed)")
+		t.Fatal("Expected shard 999 to not exist (deep copy failed)")
 	}
 	if len(mapping2.Shards) != 2 {
-		t.Errorf("Expected 2 shards, got %d (deep copy failed)", len(mapping2.Shards))
+		t.Fatalf("Expected 2 shards, got %d (deep copy failed)", len(mapping2.Shards))
 	}
 }
 
@@ -168,10 +168,10 @@ func TestCreateShardMapping_NoNodes(t *testing.T) {
 
 	n, err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
-		t.Errorf("Should not error when no nodes available, got: %v", err)
+		t.Fatalf("Should not error when no nodes available, got: %v", err)
 	}
 	if n != 0 {
-		t.Errorf("Expected 0 shards reassigned, got %d", n)
+		t.Fatalf("Expected 0 shards reassigned, got %d", n)
 	}
 }
 
@@ -193,7 +193,7 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 		t.Fatalf("Failed to create shard mapping: %v", err)
 	}
 	if n != sharding.NumShards {
-		t.Errorf("Expected %d shards reassigned (creating initial mapping), got %d", sharding.NumShards, n)
+		t.Fatalf("Expected %d shards reassigned (creating initial mapping), got %d", sharding.NumShards, n)
 	}
 
 	if len(cm.state.ShardMapping.Shards) != 8192 {
@@ -236,11 +236,11 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
 	if n == 0 {
-		t.Error("Expected some shards to be reassigned after adding a new node")
+		t.Fatal("Expected some shards to be reassigned after adding a new node")
 	}
 
 	if len(cm.state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in updated mapping, got %d", sharding.NumShards, len(cm.state.ShardMapping.Shards))
+		t.Fatalf("Expected %d shards in updated mapping, got %d", sharding.NumShards, len(cm.state.ShardMapping.Shards))
 	}
 }
 
@@ -273,7 +273,7 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 		t.Fatalf("Failed to update shard mapping: %v", err)
 	}
 	if n != 0 {
-		t.Errorf("Expected 0 shards reassigned when nodes unchanged, got %d", n)
+		t.Fatalf("Expected 0 shards reassigned when nodes unchanged, got %d", n)
 	}
 
 	// Verify the mapping is the same (pointer comparison)
@@ -282,7 +282,7 @@ func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	cm.mu.RUnlock()
 
 	if !sameMapping {
-		t.Error("Expected same mapping object when no changes needed")
+		t.Fatal("Expected same mapping object when no changes needed")
 	}
 }
 
@@ -293,7 +293,7 @@ func TestIsStateStable(t *testing.T) {
 
 	// Not stable when lastNodeChange is zero
 	if cm.IsStateStable() {
-		t.Error("Should not be stable when lastNodeChange is zero")
+		t.Fatal("Should not be stable when lastNodeChange is zero")
 	}
 
 	// Set lastNodeChange to recent time
@@ -303,7 +303,7 @@ func TestIsStateStable(t *testing.T) {
 
 	// Should not be stable for longer duration (no nodes yet)
 	if cm.IsStateStable() {
-		t.Error("Should not be stable for 10 seconds when local node not in cluster")
+		t.Fatal("Should not be stable for 10 seconds when local node not in cluster")
 	}
 
 	// Set lastNodeChange to past but nodes list is empty
@@ -313,7 +313,7 @@ func TestIsStateStable(t *testing.T) {
 
 	// Should NOT be stable when nodes list is empty
 	if cm.IsStateStable() {
-		t.Error("Should not be stable when nodes list is empty")
+		t.Fatal("Should not be stable when nodes list is empty")
 	}
 
 	// Add nodes to the state
@@ -323,7 +323,7 @@ func TestIsStateStable(t *testing.T) {
 
 	// Should be stable now with nodes and old lastNodeChange
 	if !cm.IsStateStable() {
-		t.Error("Should be stable after 10 seconds with nodes present")
+		t.Fatal("Should be stable after 10 seconds with nodes present")
 	}
 }
 
@@ -334,7 +334,7 @@ func TestGetLastNodeChangeTime(t *testing.T) {
 	// Initial state
 	changeTime := cm.GetLastNodeChangeTime()
 	if !changeTime.IsZero() {
-		t.Error("Initial change time should be zero")
+		t.Fatal("Initial change time should be zero")
 	}
 
 	// Set a change time
@@ -345,7 +345,7 @@ func TestGetLastNodeChangeTime(t *testing.T) {
 
 	changeTime = cm.GetLastNodeChangeTime()
 	if !changeTime.Equal(testTime) {
-		t.Error("Should return the set change time")
+		t.Fatal("Should return the set change time")
 	}
 }
 
@@ -355,12 +355,12 @@ func TestGetNodeForShard_InvalidShard(t *testing.T) {
 
 	_, err := cm.GetNodeForShard(-1)
 	if err == nil {
-		t.Error("Expected error for negative shard ID")
+		t.Fatal("Expected error for negative shard ID")
 	}
 
 	_, err = cm.GetNodeForShard(sharding.NumShards)
 	if err == nil {
-		t.Error("Expected error for shard ID >= NumShards")
+		t.Fatal("Expected error for shard ID >= NumShards")
 	}
 }
 
@@ -370,7 +370,7 @@ func TestGetNodeForShard_NoMapping(t *testing.T) {
 
 	_, err := cm.GetNodeForShard(0)
 	if err == nil {
-		t.Error("Expected error when no shard mapping available")
+		t.Fatal("Expected error when no shard mapping available")
 	}
 }
 
@@ -394,7 +394,7 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 	}
 
 	if node != "localhost:47001" {
-		t.Errorf("Expected localhost:47001, got %s", node)
+		t.Fatalf("Expected localhost:47001, got %s", node)
 	}
 }
 
@@ -413,12 +413,12 @@ func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
 
 	_, err := cm.GetNodeForShard(0)
 	if err == nil {
-		t.Error("Expected error when CurrentNode is empty")
+		t.Fatal("Expected error when CurrentNode is empty")
 	}
 
 	expectedErrMsg := "shard 0 has no current node (not yet claimed)"
 	if err.Error() != expectedErrMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		t.Fatalf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 	}
 }
 
@@ -445,7 +445,7 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 	}
 
 	if node != "localhost:47002" {
-		t.Errorf("Expected CurrentNode localhost:47002, got %s", node)
+		t.Fatalf("Expected CurrentNode localhost:47002, got %s", node)
 	}
 }
 
@@ -455,7 +455,7 @@ func TestGetCurrentNodeForObject_NoMapping(t *testing.T) {
 
 	_, err := cm.GetCurrentNodeForObject("test-object")
 	if err == nil {
-		t.Error("Expected error when no shard mapping available")
+		t.Fatal("Expected error when no shard mapping available")
 	}
 }
 
@@ -488,7 +488,7 @@ func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
 
 	// Should be one of the nodes
 	if node != "localhost:47001" && node != "localhost:47002" {
-		t.Errorf("Unexpected node: %s", node)
+		t.Fatalf("Unexpected node: %s", node)
 	}
 }
 
@@ -512,11 +512,11 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	// Should fail because CurrentNode is not set
 	_, err := cm.GetCurrentNodeForObject("test-object-123")
 	if err == nil {
-		t.Error("Expected error when CurrentNode is empty")
+		t.Fatal("Expected error when CurrentNode is empty")
 	}
 
 	if err != nil && !strings.Contains(err.Error(), "has no current node") {
-		t.Errorf("Expected error message to contain 'has no current node', got '%s'", err.Error())
+		t.Fatalf("Expected error message to contain 'has no current node', got '%s'", err.Error())
 	}
 }
 
@@ -551,7 +551,7 @@ func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
 	// Verify error message mentions migration
 	expectedMsg := "is in migration"
 	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected error message to contain '%s', got: %v", expectedMsg, err)
+		t.Fatalf("Expected error message to contain '%s', got: %v", expectedMsg, err)
 	}
 
 	// Test with a different object to ensure it consistently fails during migration
@@ -579,12 +579,12 @@ func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	// Should fail because CurrentNode is not in the active node list
 	_, err := cm.GetNodeForShard(0)
 	if err == nil {
-		t.Error("Expected error when CurrentNode is not in active node list")
+		t.Fatal("Expected error when CurrentNode is not in active node list")
 	}
 
 	expectedErrMsg := "current node localhost:47002 for shard 0 is not in active node list"
 	if err.Error() != expectedErrMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		t.Fatalf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 	}
 }
 
@@ -611,12 +611,12 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T)
 	// Should fail because CurrentNode is not in the active node list
 	_, err := cm.GetCurrentNodeForObject("test-object-123")
 	if err == nil {
-		t.Error("Expected error when CurrentNode is not in active node list")
+		t.Fatal("Expected error when CurrentNode is not in active node list")
 	}
 
 	// Error message should mention that current node is not in active node list
 	if err != nil && !strings.Contains(err.Error(), "not in active node list") {
-		t.Errorf("Expected error message to contain 'not in active node list', got '%s'", err.Error())
+		t.Fatalf("Expected error message to contain 'not in active node list', got '%s'", err.Error())
 	}
 }
 
@@ -665,10 +665,10 @@ func TestParseShardInfo(t *testing.T) {
 				Value: []byte(tt.value),
 			})
 			if info.TargetNode != tt.wantTarget {
-				t.Errorf("parseShardInfo(%q).TargetNode = %q, want %q", tt.value, info.TargetNode, tt.wantTarget)
+				t.Fatalf("parseShardInfo(%q).TargetNode = %q, want %q", tt.value, info.TargetNode, tt.wantTarget)
 			}
 			if info.CurrentNode != tt.wantCurrent {
-				t.Errorf("parseShardInfo(%q).CurrentNode = %q, want %q", tt.value, info.CurrentNode, tt.wantCurrent)
+				t.Fatalf("parseShardInfo(%q).CurrentNode = %q, want %q", tt.value, info.CurrentNode, tt.wantCurrent)
 			}
 		})
 	}
@@ -702,7 +702,7 @@ func TestFormatShardInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := formatShardInfo(tt.info)
 			if got != tt.want {
-				t.Errorf("formatShardInfo() = %q, want %q", got, tt.want)
+				t.Fatalf("formatShardInfo() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -722,7 +722,7 @@ func TestStartWatch_NoEtcdManager(t *testing.T) {
 	ctx := context.Background()
 	err := cm.StartWatch(ctx)
 	if err == nil {
-		t.Error("Expected error when etcd manager not set")
+		t.Fatal("Expected error when etcd manager not set")
 	}
 }
 
@@ -802,14 +802,14 @@ func TestClaimShardOwnership(t *testing.T) {
 	}
 
 	if len(resp0.Kvs) == 0 {
-		t.Error("Shard 0 should exist in etcd after claiming")
+		t.Fatal("Shard 0 should exist in etcd after claiming")
 	} else {
 		shardInfo0 := parseShardInfo(resp0.Kvs[0])
 		if shardInfo0.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 0 CurrentNode should be %s, got %s", thisNodeAddr, shardInfo0.CurrentNode)
+			t.Fatalf("Shard 0 CurrentNode should be %s, got %s", thisNodeAddr, shardInfo0.CurrentNode)
 		}
 		if shardInfo0.TargetNode != thisNodeAddr {
-			t.Errorf("Shard 0 TargetNode should be %s, got %s", thisNodeAddr, shardInfo0.TargetNode)
+			t.Fatalf("Shard 0 TargetNode should be %s, got %s", thisNodeAddr, shardInfo0.TargetNode)
 		}
 	}
 
@@ -825,7 +825,7 @@ func TestClaimShardOwnership(t *testing.T) {
 		shardInfo1 := parseShardInfo(resp1.Kvs[0])
 		// If it exists, CurrentNode should still be empty
 		if shardInfo1.CurrentNode != "" && shardInfo1.CurrentNode != "localhost:47002" {
-			t.Errorf("Shard 1 should not be claimed by this node, CurrentNode: %s", shardInfo1.CurrentNode)
+			t.Fatalf("Shard 1 should not be claimed by this node, CurrentNode: %s", shardInfo1.CurrentNode)
 		}
 	}
 }
@@ -854,11 +854,11 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	// Call ClaimShardsForNode with empty localNode - should return error
 	err := cm.ClaimShardsForNode(ctx)
 	if err == nil {
-		t.Error("ClaimShardsForNode should return error when localNode is not in cluster")
+		t.Fatal("ClaimShardsForNode should return error when localNode is not in cluster")
 	}
 	// Accept either "not stable" (from IsStateStable check) or "not in cluster state" error
 	if err != nil && !strings.Contains(err.Error(), "not stable") && !strings.Contains(err.Error(), "not in cluster state") {
-		t.Errorf("Expected error about cluster not stable or node not in cluster, got: %v", err)
+		t.Fatalf("Expected error about cluster not stable or node not in cluster, got: %v", err)
 	}
 
 	// Verify the shard wasn't modified
@@ -867,7 +867,7 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	cm.mu.RUnlock()
 
 	if shard0.CurrentNode != "" {
-		t.Errorf("Shard should not be claimed when localNode is empty, CurrentNode: %s", shard0.CurrentNode)
+		t.Fatalf("Shard should not be claimed when localNode is empty, CurrentNode: %s", shard0.CurrentNode)
 	}
 }
 
@@ -966,7 +966,7 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 	if len(resp0.Kvs) > 0 {
 		shardInfo0 := parseShardInfo(resp0.Kvs[0])
 		if shardInfo0.CurrentNode == thisNodeAddr {
-			t.Errorf("Shard 0 should NOT be claimed (target is different node), but CurrentNode is: %s", shardInfo0.CurrentNode)
+			t.Fatalf("Shard 0 should NOT be claimed (target is different node), but CurrentNode is: %s", shardInfo0.CurrentNode)
 		}
 	}
 
@@ -977,11 +977,11 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 		t.Fatalf("Failed to get shard 1 from etcd: %v", err)
 	}
 	if len(resp1.Kvs) == 0 {
-		t.Error("Shard 1 should exist in etcd after claiming")
+		t.Fatal("Shard 1 should exist in etcd after claiming")
 	} else {
 		shardInfo1 := parseShardInfo(resp1.Kvs[0])
 		if shardInfo1.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 1 CurrentNode should be %s (target is this node AND current was dead), got %s", thisNodeAddr, shardInfo1.CurrentNode)
+			t.Fatalf("Shard 1 CurrentNode should be %s (target is this node AND current was dead), got %s", thisNodeAddr, shardInfo1.CurrentNode)
 		}
 	}
 
@@ -994,7 +994,7 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 	if len(resp2.Kvs) > 0 {
 		shardInfo2 := parseShardInfo(resp2.Kvs[0])
 		if shardInfo2.CurrentNode == thisNodeAddr {
-			t.Errorf("Shard 2 should NOT be claimed (target is different node), but CurrentNode is: %s", shardInfo2.CurrentNode)
+			t.Fatalf("Shard 2 should NOT be claimed (target is different node), but CurrentNode is: %s", shardInfo2.CurrentNode)
 		}
 	}
 
@@ -1005,11 +1005,11 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 		t.Fatalf("Failed to get shard 3 from etcd: %v", err)
 	}
 	if len(resp3.Kvs) == 0 {
-		t.Error("Shard 3 should exist in etcd after claiming")
+		t.Fatal("Shard 3 should exist in etcd after claiming")
 	} else {
 		shardInfo3 := parseShardInfo(resp3.Kvs[0])
 		if shardInfo3.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 3 CurrentNode should be %s (target is this node AND current was empty), got %s", thisNodeAddr, shardInfo3.CurrentNode)
+			t.Fatalf("Shard 3 CurrentNode should be %s (target is this node AND current was empty), got %s", thisNodeAddr, shardInfo3.CurrentNode)
 		}
 	}
 
@@ -1027,7 +1027,7 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 		shardInfo4 := parseShardInfo(resp4.Kvs[0])
 		// If it exists in etcd, it should still be set to thisNodeAddr (unchanged)
 		if shardInfo4.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 4 CurrentNode should remain %s (no update needed), got %s", thisNodeAddr, shardInfo4.CurrentNode)
+			t.Fatalf("Shard 4 CurrentNode should remain %s (no update needed), got %s", thisNodeAddr, shardInfo4.CurrentNode)
 		}
 	}
 }
@@ -1059,10 +1059,10 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		// Try to claim with 10s stability requirement - should return error
 		err := cm.ClaimShardsForNode(ctx)
 		if err == nil {
-			t.Error("ClaimShardsForNode should return error when cluster is unstable")
+			t.Fatal("ClaimShardsForNode should return error when cluster is unstable")
 		}
 		if err != nil && !strings.Contains(err.Error(), "not stable") {
-			t.Errorf("Expected error about cluster not stable, got: %v", err)
+			t.Fatalf("Expected error about cluster not stable, got: %v", err)
 		}
 
 		// Verify the shard was not claimed
@@ -1071,7 +1071,7 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		cm.mu.RUnlock()
 
 		if shard0.CurrentNode != "" {
-			t.Errorf("Shard should not be claimed when cluster is unstable, got CurrentNode: %s", shard0.CurrentNode)
+			t.Fatalf("Shard should not be claimed when cluster is unstable, got CurrentNode: %s", shard0.CurrentNode)
 		}
 	})
 
@@ -1119,11 +1119,11 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		// Try to claim (will use thisNodeAddr from constructor which is not in the cluster)
 		err := cm.ClaimShardsForNode(ctx)
 		if err == nil {
-			t.Error("ClaimShardsForNode should return error when node not in cluster")
+			t.Fatal("ClaimShardsForNode should return error when node not in cluster")
 		}
 		// Accept either "not stable" (from IsStateStable check) or "not in cluster state" error
 		if err != nil && !strings.Contains(err.Error(), "not stable") && !strings.Contains(err.Error(), "not in cluster state") {
-			t.Errorf("Expected error about cluster not stable or node not in cluster, got: %v", err)
+			t.Fatalf("Expected error about cluster not stable or node not in cluster, got: %v", err)
 		}
 
 		// Verify the shard was not claimed
@@ -1132,7 +1132,7 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 		cm.mu.RUnlock()
 
 		if shard2.CurrentNode != "" {
-			t.Errorf("Shard should not be claimed when node not in cluster, got CurrentNode: %s", shard2.CurrentNode)
+			t.Fatalf("Shard should not be claimed when node not in cluster, got CurrentNode: %s", shard2.CurrentNode)
 		}
 	})
 }
@@ -1200,38 +1200,38 @@ func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
 
 	// Verify shard 0: TargetNode should be set to node1 (respecting CurrentNode)
 	if shard0, ok := updateShards[0]; !ok {
-		t.Error("Shard 0 should be in update list")
+		t.Fatal("Shard 0 should be in update list")
 	} else {
 		if shard0.TargetNode != node1 {
-			t.Errorf("Shard 0: Expected TargetNode to be %s (respecting CurrentNode), got %s", node1, shard0.TargetNode)
+			t.Fatalf("Shard 0: Expected TargetNode to be %s (respecting CurrentNode), got %s", node1, shard0.TargetNode)
 		}
 		if shard0.CurrentNode != node1 {
-			t.Errorf("Shard 0: Expected CurrentNode to remain %s, got %s", node1, shard0.CurrentNode)
+			t.Fatalf("Shard 0: Expected CurrentNode to remain %s, got %s", node1, shard0.CurrentNode)
 		}
 	}
 
 	// Verify shard 1: TargetNode should be set to node2 (respecting CurrentNode)
 	if shard1, ok := updateShards[1]; !ok {
-		t.Error("Shard 1 should be in update list")
+		t.Fatal("Shard 1 should be in update list")
 	} else {
 		if shard1.TargetNode != node2 {
-			t.Errorf("Shard 1: Expected TargetNode to be %s (respecting CurrentNode), got %s", node2, shard1.TargetNode)
+			t.Fatalf("Shard 1: Expected TargetNode to be %s (respecting CurrentNode), got %s", node2, shard1.TargetNode)
 		}
 		if shard1.CurrentNode != node2 {
-			t.Errorf("Shard 1: Expected CurrentNode to remain %s, got %s", node2, shard1.CurrentNode)
+			t.Fatalf("Shard 1: Expected CurrentNode to remain %s, got %s", node2, shard1.CurrentNode)
 		}
 	}
 
 	// Verify shard 2: TargetNode should be assigned via round-robin (shard 2 % 2 = 0 -> node1)
 	if shard2, ok := updateShards[2]; !ok {
-		t.Error("Shard 2 should be in update list")
+		t.Fatal("Shard 2 should be in update list")
 	} else {
 		expectedTarget := node1 // shard 2 % 2 nodes = 0, so first node in sorted list
 		if shard2.TargetNode != expectedTarget {
-			t.Errorf("Shard 2: Expected TargetNode to be %s (round-robin), got %s", expectedTarget, shard2.TargetNode)
+			t.Fatalf("Shard 2: Expected TargetNode to be %s (round-robin), got %s", expectedTarget, shard2.TargetNode)
 		}
 		if shard2.CurrentNode != "" {
-			t.Errorf("Shard 2: Expected CurrentNode to remain empty, got %s", shard2.CurrentNode)
+			t.Fatalf("Shard 2: Expected CurrentNode to remain empty, got %s", shard2.CurrentNode)
 		}
 	}
 }

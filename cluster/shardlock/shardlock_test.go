@@ -67,7 +67,7 @@ func TestShardLock_ReadWriteExclusion(t *testing.T) {
 
 		// By the time we get here, first write lock should have been released
 		if !writeLockReleased {
-			t.Error("Second write lock acquired before first write lock was released")
+			t.Fatal("Second write lock acquired before first write lock was released")
 		}
 		unlock()
 	}()
@@ -101,7 +101,7 @@ func TestShardLock_ConcurrentReads(t *testing.T) {
 	// If read locks were truly concurrent, total time should be close to 50ms
 	// If they were serialized, it would be close to 500ms
 	if duration > 200*time.Millisecond {
-		t.Errorf("Concurrent reads took too long: %v (expected ~50ms)", duration)
+		t.Fatalf("Concurrent reads took too long: %v (expected ~50ms)", duration)
 	}
 }
 
@@ -133,12 +133,12 @@ func TestShardLock_WriteExclusivity(t *testing.T) {
 
 	// Verify counter incremented correctly (no race conditions)
 	if counter != writers {
-		t.Errorf("Counter = %d, expected %d (race condition detected)", counter, writers)
+		t.Fatalf("Counter = %d, expected %d (race condition detected)", counter, writers)
 	}
 
 	// Write locks should be serialized, so total time should be at least 50ms
 	if duration < 45*time.Millisecond {
-		t.Errorf("Write locks completed too quickly: %v (expected >=50ms)", duration)
+		t.Fatalf("Write locks completed too quickly: %v (expected >=50ms)", duration)
 	}
 }
 
@@ -176,12 +176,12 @@ func TestShardLock_DifferentShards(t *testing.T) {
 
 	// Both should complete in parallel
 	if !shard0Done || !shard1Done {
-		t.Error("Not all shards completed")
+		t.Fatal("Not all shards completed")
 	}
 
 	// Should take ~50ms if parallel, ~100ms if serialized
 	if duration > 80*time.Millisecond {
-		t.Errorf("Different shard locks took too long: %v (expected ~50ms)", duration)
+		t.Fatalf("Different shard locks took too long: %v (expected ~50ms)", duration)
 	}
 }
 
@@ -201,7 +201,7 @@ func TestContainsSlash(t *testing.T) {
 	for _, tt := range tests {
 		result := containsSlash(tt.input)
 		if result != tt.expected {
-			t.Errorf("containsSlash(%q) = %v, expected %v", tt.input, result, tt.expected)
+			t.Fatalf("containsSlash(%q) = %v, expected %v", tt.input, result, tt.expected)
 		}
 	}
 }
@@ -219,7 +219,7 @@ func TestShardLockKey(t *testing.T) {
 	for _, tt := range tests {
 		result := shardLockKey(tt.shardID)
 		if result != tt.expected {
-			t.Errorf("shardLockKey(%d) = %q, expected %q", tt.shardID, result, tt.expected)
+			t.Fatalf("shardLockKey(%d) = %q, expected %q", tt.shardID, result, tt.expected)
 		}
 	}
 }
@@ -255,7 +255,7 @@ func TestShardLock_MultipleInstances(t *testing.T) {
 
 	// Should take ~50ms if truly independent, ~100ms if they interfere
 	if duration > 80*time.Millisecond {
-		t.Errorf("Multiple ShardLock instances interfered: took %v (expected ~50ms)", duration)
+		t.Fatalf("Multiple ShardLock instances interfered: took %v (expected ~50ms)", duration)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestShardLock_AcquireWriteMultiple(t *testing.T) {
 
 	// Verify original slice wasn't modified
 	if shardIDs[0] != 3 {
-		t.Errorf("Original slice was modified")
+		t.Fatalf("Original slice was modified")
 	}
 
 	unlock()

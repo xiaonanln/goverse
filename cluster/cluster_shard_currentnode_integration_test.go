@@ -33,7 +33,7 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 
 		// Verify that both clusters see the same shard mapping
 		if len(mapping1.Shards) != len(mapping2.Shards) {
-			t.Errorf("Clusters have different number of shards: %d vs %d",
+			t.Fatalf("Clusters have different number of shards: %d vs %d",
 				len(mapping1.Shards), len(mapping2.Shards))
 		}
 
@@ -57,7 +57,7 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 				}
 			} else {
 				// CurrentNode doesn't match TargetNode - this shouldn't happen
-				t.Errorf("Shard %d: CurrentNode (%s) doesn't match TargetNode (%s)",
+				t.Fatalf("Shard %d: CurrentNode (%s) doesn't match TargetNode (%s)",
 					shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
 			}
 		}
@@ -69,15 +69,15 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 		// We expect most or all shards to be claimed
 		totalClaimed := node1ClaimedCount + node2ClaimedCount
 		if totalClaimed == 0 {
-			t.Errorf("No shards were claimed by any node")
+			t.Fatalf("No shards were claimed by any node")
 		}
 
 		// Both nodes should have claimed some shards (rough distribution check)
 		if node1ClaimedCount == 0 {
-			t.Errorf("Node1 didn't claim any shards")
+			t.Fatalf("Node1 didn't claim any shards")
 		}
 		if node2ClaimedCount == 0 {
-			t.Errorf("Node2 didn't claim any shards")
+			t.Fatalf("Node2 didn't claim any shards")
 		}
 	})
 }

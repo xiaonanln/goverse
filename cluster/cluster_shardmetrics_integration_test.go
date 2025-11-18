@@ -57,17 +57,17 @@ func TestShardMetricsIntegration(t *testing.T) {
 	metric2 := promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:50022"))
 
 	if int(metric1) != node1Count {
-		t.Errorf("Metric for localhost:50021 should be %d, got %f", node1Count, metric1)
+		t.Fatalf("Metric for localhost:50021 should be %d, got %f", node1Count, metric1)
 	}
 
 	if int(metric2) != node2Count {
-		t.Errorf("Metric for localhost:50022 should be %d, got %f", node2Count, metric2)
+		t.Fatalf("Metric for localhost:50022 should be %d, got %f", node2Count, metric2)
 	}
 
 	// Verify total shards across all nodes
 	totalShards := int(metric1) + int(metric2)
 	if totalShards != sharding.NumShards {
-		t.Errorf("Total shards should be %d, got %d", sharding.NumShards, totalShards)
+		t.Fatalf("Total shards should be %d, got %d", sharding.NumShards, totalShards)
 	}
 
 	t.Logf("Shard metrics verified: node1=%f, node2=%f, total=%d", metric1, metric2, totalShards)

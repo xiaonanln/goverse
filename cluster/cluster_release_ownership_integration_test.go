@@ -126,7 +126,7 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	}
 	// Accept either the empty-current-node form or duplicated-target form because the target node might have claimed it
 	if !expectedValues[parts] {
-		t.Errorf("Expected shard %d to have value %v after release, got %s",
+		t.Fatalf("Expected shard %d to have value %v after release, got %s",
 			targetShardID, expectedValues, parts)
 	}
 }

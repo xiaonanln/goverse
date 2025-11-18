@@ -13,11 +13,11 @@ func TestNew(t *testing.T) {
 	}
 
 	if nc.connections == nil {
-		t.Error("NodeConnections connections map should be initialized")
+		t.Fatal("NodeConnections connections map should be initialized")
 	}
 
 	if nc.logger == nil {
-		t.Error("NodeConnections logger should be initialized")
+		t.Fatal("NodeConnections logger should be initialized")
 	}
 }
 
@@ -34,7 +34,7 @@ func TestNodeConnections_StartStop(t *testing.T) {
 
 	// Verify context is set
 	if nc.ctx == nil {
-		t.Error("NodeConnections context should be set after Start()")
+		t.Fatal("NodeConnections context should be set after Start()")
 	}
 
 	// Stop NodeConnections
@@ -42,7 +42,7 @@ func TestNodeConnections_StartStop(t *testing.T) {
 
 	// Verify connections are closed
 	if nc.NumConnections() != 0 {
-		t.Errorf("Expected 0 connections after Stop(), got %d", nc.NumConnections())
+		t.Fatalf("Expected 0 connections after Stop(), got %d", nc.NumConnections())
 	}
 }
 
@@ -59,7 +59,7 @@ func TestNodeConnections_StartTwice(t *testing.T) {
 	// Start second time - should not error
 	err = nc.Start(ctx)
 	if err != nil {
-		t.Errorf("Starting NodeConnections twice should not error: %v", err)
+		t.Fatalf("Starting NodeConnections twice should not error: %v", err)
 	}
 
 	nc.Stop()
@@ -70,7 +70,7 @@ func TestNodeConnections_NumConnections(t *testing.T) {
 
 	// Initially should have 0 connections
 	if nc.NumConnections() != 0 {
-		t.Errorf("Expected 0 connections initially, got %d", nc.NumConnections())
+		t.Fatalf("Expected 0 connections initially, got %d", nc.NumConnections())
 	}
 }
 
@@ -79,7 +79,7 @@ func TestNodeConnections_GetConnection_NotExists(t *testing.T) {
 
 	_, err := nc.GetConnection("localhost:50000")
 	if err == nil {
-		t.Error("GetConnection should return error for non-existent connection")
+		t.Fatal("GetConnection should return error for non-existent connection")
 	}
 }
 
@@ -88,11 +88,11 @@ func TestNodeConnections_GetAllConnections(t *testing.T) {
 
 	connections := nc.GetAllConnections()
 	if connections == nil {
-		t.Error("GetAllConnections should not return nil")
+		t.Fatal("GetAllConnections should not return nil")
 	}
 
 	if len(connections) != 0 {
-		t.Errorf("Expected 0 connections initially, got %d", len(connections))
+		t.Fatalf("Expected 0 connections initially, got %d", len(connections))
 	}
 }
 
@@ -105,7 +105,7 @@ func TestNodeConnections_ConnectDisconnect(t *testing.T) {
 	// Test disconnect from non-existent node
 	err := nc.disconnectFromNode("localhost:60000")
 	if err != nil {
-		t.Errorf("Disconnecting from non-existent node should not error: %v", err)
+		t.Fatalf("Disconnecting from non-existent node should not error: %v", err)
 	}
 }
 
@@ -122,7 +122,7 @@ func TestNodeConnections_SetNodes(t *testing.T) {
 
 	// Initially, we should have 0 connections
 	if nc.NumConnections() != 0 {
-		t.Errorf("Expected 0 connections initially, got %d", nc.NumConnections())
+		t.Fatalf("Expected 0 connections initially, got %d", nc.NumConnections())
 	}
 
 	// Test that SetNodes processes node list correctly

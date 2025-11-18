@@ -18,19 +18,19 @@ func TestNewGoverseGraph(t *testing.T) {
 	}
 
 	if pg.objects == nil {
-		t.Error("objects map should be initialized")
+		t.Fatal("objects map should be initialized")
 	}
 
 	if pg.nodes == nil {
-		t.Error("nodes map should be initialized")
+		t.Fatal("nodes map should be initialized")
 	}
 
 	if len(pg.objects) != 0 {
-		t.Errorf("objects map should be empty, got %d items", len(pg.objects))
+		t.Fatalf("objects map should be empty, got %d items", len(pg.objects))
 	}
 
 	if len(pg.nodes) != 0 {
-		t.Errorf("nodes map should be empty, got %d items", len(pg.nodes))
+		t.Fatalf("nodes map should be empty, got %d items", len(pg.nodes))
 	}
 }
 
@@ -41,10 +41,10 @@ func TestGetNodes(t *testing.T) {
 	// Test with empty graph
 	nodes := pg.GetNodes()
 	if nodes == nil {
-		t.Error("GetNodes() should return non-nil slice")
+		t.Fatal("GetNodes() should return non-nil slice")
 	}
 	if len(nodes) != 0 {
-		t.Errorf("GetNodes() should return empty slice for empty graph, got %d items", len(nodes))
+		t.Fatalf("GetNodes() should return empty slice for empty graph, got %d items", len(nodes))
 	}
 
 	// Add some nodes
@@ -55,7 +55,7 @@ func TestGetNodes(t *testing.T) {
 
 	nodes = pg.GetNodes()
 	if len(nodes) != 2 {
-		t.Errorf("GetNodes() should return 2 nodes, got %d", len(nodes))
+		t.Fatalf("GetNodes() should return 2 nodes, got %d", len(nodes))
 	}
 
 	// Verify it returns a copy (modifying returned slice shouldn't affect internal state)
@@ -69,7 +69,7 @@ func TestGetNodes(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("GetNodes() should return a copy, original data was modified")
+		t.Fatal("GetNodes() should return a copy, original data was modified")
 	}
 }
 
@@ -80,10 +80,10 @@ func TestGetObjects(t *testing.T) {
 	// Test with empty graph
 	objects := pg.GetObjects()
 	if objects == nil {
-		t.Error("GetObjects() should return non-nil slice")
+		t.Fatal("GetObjects() should return non-nil slice")
 	}
 	if len(objects) != 0 {
-		t.Errorf("GetObjects() should return empty slice for empty graph, got %d items", len(objects))
+		t.Fatalf("GetObjects() should return empty slice for empty graph, got %d items", len(objects))
 	}
 
 	// Add some objects
@@ -94,7 +94,7 @@ func TestGetObjects(t *testing.T) {
 
 	objects = pg.GetObjects()
 	if len(objects) != 2 {
-		t.Errorf("GetObjects() should return 2 objects, got %d", len(objects))
+		t.Fatalf("GetObjects() should return 2 objects, got %d", len(objects))
 	}
 
 	// Verify it returns a copy (modifying returned slice shouldn't affect internal state)
@@ -108,7 +108,7 @@ func TestGetObjects(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("GetObjects() should return a copy, original data was modified")
+		t.Fatal("GetObjects() should return a copy, original data was modified")
 	}
 }
 
@@ -130,15 +130,15 @@ func TestAddOrUpdateObject(t *testing.T) {
 	}
 
 	if objects[0].ID != "test-obj-1" {
-		t.Errorf("Expected object ID 'test-obj-1', got '%s'", objects[0].ID)
+		t.Fatalf("Expected object ID 'test-obj-1', got '%s'", objects[0].ID)
 	}
 
 	if objects[0].Label != "Test Object 1" {
-		t.Errorf("Expected object label 'Test Object 1', got '%s'", objects[0].Label)
+		t.Fatalf("Expected object label 'Test Object 1', got '%s'", objects[0].Label)
 	}
 
 	if objects[0].GoverseNodeID != "node1" {
-		t.Errorf("Expected GoverseNodeID 'node1', got '%s'", objects[0].GoverseNodeID)
+		t.Fatalf("Expected GoverseNodeID 'node1', got '%s'", objects[0].GoverseNodeID)
 	}
 }
 
@@ -166,7 +166,7 @@ func TestAddOrUpdateObject_Duplicate(t *testing.T) {
 
 	// Verify the object was replaced with the newer version
 	if objects[0].Label != "Second Version" {
-		t.Errorf("Expected label 'Second Version', got '%s' - duplicate should replace existing", objects[0].Label)
+		t.Fatalf("Expected label 'Second Version', got '%s' - duplicate should replace existing", objects[0].Label)
 	}
 }
 
@@ -188,11 +188,11 @@ func TestAddOrUpdateNode(t *testing.T) {
 	}
 
 	if nodes[0].ID != "node1" {
-		t.Errorf("Expected node ID 'node1', got '%s'", nodes[0].ID)
+		t.Fatalf("Expected node ID 'node1', got '%s'", nodes[0].ID)
 	}
 
 	if nodes[0].Label != "Node 1" {
-		t.Errorf("Expected node label 'Node 1', got '%s'", nodes[0].Label)
+		t.Fatalf("Expected node label 'Node 1', got '%s'", nodes[0].Label)
 	}
 }
 
@@ -222,11 +222,11 @@ func TestAddOrUpdateNode_Update(t *testing.T) {
 
 	// Verify the node was updated
 	if nodes[0].Label != "Updated Label" {
-		t.Errorf("Expected label 'Updated Label', got '%s'", nodes[0].Label)
+		t.Fatalf("Expected label 'Updated Label', got '%s'", nodes[0].Label)
 	}
 
 	if nodes[0].AdvertiseAddr != "localhost:47001" {
-		t.Errorf("Expected address 'localhost:47001', got '%s'", nodes[0].AdvertiseAddr)
+		t.Fatalf("Expected address 'localhost:47001', got '%s'", nodes[0].AdvertiseAddr)
 	}
 }
 
@@ -249,7 +249,7 @@ func TestRemoveObject(t *testing.T) {
 	// Verify object was removed
 	objects = pg.GetObjects()
 	if len(objects) != 0 {
-		t.Errorf("Expected 0 objects after removal, got %d", len(objects))
+		t.Fatalf("Expected 0 objects after removal, got %d", len(objects))
 	}
 }
 
@@ -262,7 +262,7 @@ func TestRemoveObject_NonExistent(t *testing.T) {
 
 	objects := pg.GetObjects()
 	if len(objects) != 0 {
-		t.Errorf("Expected 0 objects, got %d", len(objects))
+		t.Fatalf("Expected 0 objects, got %d", len(objects))
 	}
 }
 
@@ -293,15 +293,15 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 	}
 
 	if !objIDs["obj1"] {
-		t.Error("obj1 should still exist")
+		t.Fatal("obj1 should still exist")
 	}
 
 	if objIDs["obj2"] {
-		t.Error("obj2 should have been removed")
+		t.Fatal("obj2 should have been removed")
 	}
 
 	if !objIDs["obj3"] {
-		t.Error("obj3 should still exist")
+		t.Fatal("obj3 should still exist")
 	}
 }
 
@@ -316,7 +316,7 @@ func TestRemoveNode(t *testing.T) {
 
 	nodes := pg.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes after removal, got %d", len(nodes))
+		t.Fatalf("Expected 0 nodes after removal, got %d", len(nodes))
 	}
 }
 
@@ -329,7 +329,7 @@ func TestRemoveNode_NonExistent(t *testing.T) {
 
 	nodes := pg.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes, got %d", len(nodes))
+		t.Fatalf("Expected 0 nodes, got %d", len(nodes))
 	}
 }
 
@@ -353,16 +353,16 @@ func TestRemoveNode_CascadeObjects(t *testing.T) {
 
 	objects := pg.GetObjects()
 	if len(objects) != 1 {
-		t.Errorf("Expected 1 object remaining (obj3), got %d", len(objects))
+		t.Fatalf("Expected 1 object remaining (obj3), got %d", len(objects))
 	}
 
 	if len(objects) > 0 && objects[0].ID != "obj3" {
-		t.Errorf("Expected remaining object to be 'obj3', got '%s'", objects[0].ID)
+		t.Fatalf("Expected remaining object to be 'obj3', got '%s'", objects[0].ID)
 	}
 
 	nodes := pg.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes after removal, got %d", len(nodes))
+		t.Fatalf("Expected 0 nodes after removal, got %d", len(nodes))
 	}
 }
 
@@ -398,15 +398,15 @@ func TestRemoveStaleObjects(t *testing.T) {
 	}
 
 	if !objIDs["obj1"] {
-		t.Error("obj1 should still exist")
+		t.Fatal("obj1 should still exist")
 	}
 
 	if objIDs["obj2"] {
-		t.Error("obj2 should have been removed as stale")
+		t.Fatal("obj2 should have been removed as stale")
 	}
 
 	if !objIDs["obj3"] {
-		t.Error("obj3 should still exist (belongs to different node)")
+		t.Fatal("obj3 should still exist (belongs to different node)")
 	}
 }
 
@@ -433,7 +433,7 @@ func TestRemoveStaleObjects_EmptyCurrentList(t *testing.T) {
 	}
 
 	if objects[0].ID != "obj3" {
-		t.Errorf("Expected remaining object to be 'obj3', got '%s'", objects[0].ID)
+		t.Fatalf("Expected remaining object to be 'obj3', got '%s'", objects[0].ID)
 	}
 }
 
@@ -460,7 +460,7 @@ func TestRemoveStaleObjects_NilObjects(t *testing.T) {
 	}
 
 	if objects[0].ID != "obj1" {
-		t.Errorf("Expected object 'obj1', got '%s'", objects[0].ID)
+		t.Fatalf("Expected object 'obj1', got '%s'", objects[0].ID)
 	}
 }
 
@@ -480,7 +480,7 @@ func TestRemoveStaleObjects_NonExistentNode(t *testing.T) {
 
 	objects := pg.GetObjects()
 	if len(objects) != 1 {
-		t.Errorf("Expected 1 object (unchanged), got %d", len(objects))
+		t.Fatalf("Expected 1 object (unchanged), got %d", len(objects))
 	}
 }
 
@@ -540,11 +540,11 @@ func TestConcurrentAccess(t *testing.T) {
 	nodes := pg.GetNodes()
 
 	if len(objects) == 0 {
-		t.Error("Expected some objects after concurrent operations")
+		t.Fatal("Expected some objects after concurrent operations")
 	}
 
 	if len(nodes) == 0 {
-		t.Error("Expected some nodes after concurrent operations")
+		t.Fatal("Expected some nodes after concurrent operations")
 	}
 }
 
@@ -597,11 +597,11 @@ func TestConcurrentRemoveAndRead(t *testing.T) {
 
 	// Some data should have been removed
 	if len(objects) >= 10 {
-		t.Error("Expected some objects to be removed")
+		t.Fatal("Expected some objects to be removed")
 	}
 
 	if len(nodes) >= 10 {
-		t.Error("Expected some nodes to be removed")
+		t.Fatal("Expected some nodes to be removed")
 	}
 }
 
@@ -629,11 +629,11 @@ func TestAddObject_MultipleNodes(t *testing.T) {
 	}
 
 	if nodeCount["node1"] != 2 {
-		t.Errorf("Expected 2 objects for node1, got %d", nodeCount["node1"])
+		t.Fatalf("Expected 2 objects for node1, got %d", nodeCount["node1"])
 	}
 
 	if nodeCount["node2"] != 1 {
-		t.Errorf("Expected 1 object for node2, got %d", nodeCount["node2"])
+		t.Fatalf("Expected 1 object for node2, got %d", nodeCount["node2"])
 	}
 }
 
@@ -643,7 +643,7 @@ func TestIsNodeRegistered(t *testing.T) {
 
 	// Test with empty graph
 	if pg.IsNodeRegistered("node1") {
-		t.Error("IsNodeRegistered() should return false for non-existent node in empty graph")
+		t.Fatal("IsNodeRegistered() should return false for non-existent node in empty graph")
 	}
 
 	// Add a node
@@ -656,12 +656,12 @@ func TestIsNodeRegistered(t *testing.T) {
 
 	// Test existing node
 	if !pg.IsNodeRegistered("localhost:47000") {
-		t.Error("IsNodeRegistered() should return true for registered node")
+		t.Fatal("IsNodeRegistered() should return true for registered node")
 	}
 
 	// Test non-existent node
 	if pg.IsNodeRegistered("localhost:47001") {
-		t.Error("IsNodeRegistered() should return false for non-registered node")
+		t.Fatal("IsNodeRegistered() should return false for non-registered node")
 	}
 
 	// Remove the node
@@ -669,6 +669,6 @@ func TestIsNodeRegistered(t *testing.T) {
 
 	// Test after removal
 	if pg.IsNodeRegistered("localhost:47000") {
-		t.Error("IsNodeRegistered() should return false after node removal")
+		t.Fatal("IsNodeRegistered() should return false after node removal")
 	}
 }

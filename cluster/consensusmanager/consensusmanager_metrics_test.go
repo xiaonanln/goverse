@@ -62,12 +62,12 @@ func TestUpdateShardMetrics_WithShards(t *testing.T) {
 	// Verify metrics
 	count0 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47000"))
 	if count0 != 3.0 {
-		t.Errorf("Expected shard count for localhost:47000 to be 3.0, got %f", count0)
+		t.Fatalf("Expected shard count for localhost:47000 to be 3.0, got %f", count0)
 	}
 
 	count1 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47001"))
 	if count1 != 2.0 {
-		t.Errorf("Expected shard count for localhost:47001 to be 2.0, got %f", count1)
+		t.Fatalf("Expected shard count for localhost:47001 to be 2.0, got %f", count1)
 	}
 }
 
@@ -99,17 +99,17 @@ func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
 	// Verify metrics - node with no shards should have count of 0
 	count0 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47000"))
 	if count0 != 1.0 {
-		t.Errorf("Expected shard count for localhost:47000 to be 1.0, got %f", count0)
+		t.Fatalf("Expected shard count for localhost:47000 to be 1.0, got %f", count0)
 	}
 
 	count1 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47001"))
 	if count1 != 1.0 {
-		t.Errorf("Expected shard count for localhost:47001 to be 1.0, got %f", count1)
+		t.Fatalf("Expected shard count for localhost:47001 to be 1.0, got %f", count1)
 	}
 
 	count2 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47002"))
 	if count2 != 0.0 {
-		t.Errorf("Expected shard count for localhost:47002 to be 0.0, got %f", count2)
+		t.Fatalf("Expected shard count for localhost:47002 to be 0.0, got %f", count2)
 	}
 }
 
@@ -141,12 +141,12 @@ func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
 	// Verify metrics - only claimed shards (with CurrentNode) should be counted
 	count0 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47000"))
 	if count0 != 0.0 {
-		t.Errorf("Expected shard count for localhost:47000 to be 0.0 (shards not claimed), got %f", count0)
+		t.Fatalf("Expected shard count for localhost:47000 to be 0.0 (shards not claimed), got %f", count0)
 	}
 
 	count1 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47001"))
 	if count1 != 1.0 {
-		t.Errorf("Expected shard count for localhost:47001 to be 1.0, got %f", count1)
+		t.Fatalf("Expected shard count for localhost:47001 to be 1.0, got %f", count1)
 	}
 }
 
@@ -177,18 +177,18 @@ func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
 	// Verify metrics - should count based on CurrentNode (actual ownership)
 	count0 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47000"))
 	if count0 != 1.0 {
-		t.Errorf("Expected shard count for localhost:47000 (current) to be 1.0, got %f", count0)
+		t.Fatalf("Expected shard count for localhost:47000 (current) to be 1.0, got %f", count0)
 	}
 
 	count1 := testutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("localhost:47001"))
 	if count1 != 0.0 {
-		t.Errorf("Expected shard count for localhost:47001 (target) to be 0.0, got %f", count1)
+		t.Fatalf("Expected shard count for localhost:47001 (target) to be 0.0, got %f", count1)
 	}
 
 	// Verify migrating shards count
 	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
 	if migratingCount != 1.0 {
-		t.Errorf("Expected migrating shards count to be 1.0, got %f", migratingCount)
+		t.Fatalf("Expected migrating shards count to be 1.0, got %f", migratingCount)
 	}
 }
 
@@ -220,7 +220,7 @@ func TestUpdateShardMetrics_NoMigrations(t *testing.T) {
 	// Verify no shards are migrating
 	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
 	if migratingCount != 0.0 {
-		t.Errorf("Expected migrating shards count to be 0.0, got %f", migratingCount)
+		t.Fatalf("Expected migrating shards count to be 0.0, got %f", migratingCount)
 	}
 }
 
@@ -255,6 +255,6 @@ func TestUpdateShardMetrics_MultipleMigrations(t *testing.T) {
 	// Verify 3 shards are migrating
 	migratingCount := testutil.ToFloat64(metrics.ShardsMigrating)
 	if migratingCount != 3.0 {
-		t.Errorf("Expected migrating shards count to be 3.0, got %f", migratingCount)
+		t.Fatalf("Expected migrating shards count to be 3.0, got %f", migratingCount)
 	}
 }

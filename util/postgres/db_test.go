@@ -51,7 +51,7 @@ func TestNewDB_InvalidConfig(t *testing.T) {
 				if db != nil {
 					db.Close()
 				}
-				t.Error("NewDB() should return error for invalid config")
+				t.Fatal("NewDB() should return error for invalid config")
 			}
 		})
 	}
@@ -61,7 +61,7 @@ func TestDB_Close_Nil(t *testing.T) {
 	db := &DB{}
 	err := db.Close()
 	if err != nil {
-		t.Errorf("Close() on DB with nil connection should not error, got: %v", err)
+		t.Fatalf("Close() on DB with nil connection should not error, got: %v", err)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestDB_Connection(t *testing.T) {
 	db := &DB{}
 	conn := db.Connection()
 	if conn != nil {
-		t.Error("Connection() should return nil when db.conn is nil")
+		t.Fatal("Connection() should return nil when db.conn is nil")
 	}
 }
 

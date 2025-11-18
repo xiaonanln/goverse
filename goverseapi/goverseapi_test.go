@@ -17,7 +17,7 @@ func TestNewServer(t *testing.T) {
 	}
 
 	if server == nil {
-		t.Error("NewServer should return a server instance")
+		t.Fatal("NewServer should return a server instance")
 	}
 }
 
@@ -25,11 +25,11 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 	// Test with nil config - should return error
 	_, err := NewServer(nil)
 	if err == nil {
-		t.Error("NewServer with nil config should return error")
+		t.Fatal("NewServer with nil config should return error")
 	}
 	expectedMsg := "invalid server configuration: config cannot be nil"
 	if err.Error() != expectedMsg {
-		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("NewServer error = %v; want %v", err.Error(), expectedMsg)
 	}
 
 	// Test with empty ListenAddress - should return error
@@ -40,11 +40,11 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 	}
 	_, err = NewServer(config)
 	if err == nil {
-		t.Error("NewServer with empty ListenAddress should return error")
+		t.Fatal("NewServer with empty ListenAddress should return error")
 	}
 	expectedMsg = "invalid server configuration: ListenAddress cannot be empty"
 	if err.Error() != expectedMsg {
-		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("NewServer error = %v; want %v", err.Error(), expectedMsg)
 	}
 
 	// Test with empty AdvertiseAddress - should return error
@@ -55,11 +55,11 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 	}
 	_, err = NewServer(config)
 	if err == nil {
-		t.Error("NewServer with empty AdvertiseAddress should return error")
+		t.Fatal("NewServer with empty AdvertiseAddress should return error")
 	}
 	expectedMsg = "invalid server configuration: AdvertiseAddress cannot be empty"
 	if err.Error() != expectedMsg {
-		t.Errorf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("NewServer error = %v; want %v", err.Error(), expectedMsg)
 	}
 }
 

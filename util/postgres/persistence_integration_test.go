@@ -39,7 +39,7 @@ func TestSaveObject_Integration(t *testing.T) {
 		t.Fatalf("ObjectExists() failed: %v", err)
 	}
 	if !exists {
-		t.Error("Object should exist after SaveObject()")
+		t.Fatal("Object should exist after SaveObject()")
 	}
 }
 
@@ -84,7 +84,7 @@ func TestSaveObject_Update_Integration(t *testing.T) {
 	}
 
 	if string(loadedData) != string(data2) {
-		t.Errorf("LoadObject() returned %s, want %s", string(loadedData), string(data2))
+		t.Fatalf("LoadObject() returned %s, want %s", string(loadedData), string(data2))
 	}
 }
 
@@ -122,7 +122,7 @@ func TestLoadObject_Integration(t *testing.T) {
 	}
 
 	if string(loadedData) != string(data) {
-		t.Errorf("LoadObject() returned %s, want %s", string(loadedData), string(data))
+		t.Fatalf("LoadObject() returned %s, want %s", string(loadedData), string(data))
 	}
 }
 
@@ -146,7 +146,7 @@ func TestLoadObject_NotFound_Integration(t *testing.T) {
 	// Try to load non-existent object
 	_, err = db.LoadObject(ctx, "non-existent-id")
 	if err == nil {
-		t.Error("LoadObject() should return error for non-existent object")
+		t.Fatal("LoadObject() should return error for non-existent object")
 	}
 }
 
@@ -189,7 +189,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 		t.Fatalf("ObjectExists() failed: %v", err)
 	}
 	if exists {
-		t.Error("Object should not exist after DeleteObject()")
+		t.Fatal("Object should not exist after DeleteObject()")
 	}
 }
 
@@ -213,7 +213,7 @@ func TestDeleteObject_NotFound_Integration(t *testing.T) {
 	// Try to delete non-existent object
 	err = db.DeleteObject(ctx, "non-existent-id")
 	if err == nil {
-		t.Error("DeleteObject() should return error for non-existent object")
+		t.Fatal("DeleteObject() should return error for non-existent object")
 	}
 }
 
@@ -244,7 +244,7 @@ func TestObjectExists_Integration(t *testing.T) {
 		t.Fatalf("ObjectExists() failed: %v", err)
 	}
 	if exists {
-		t.Error("Object should not exist initially")
+		t.Fatal("Object should not exist initially")
 	}
 
 	// Save object
@@ -259,7 +259,7 @@ func TestObjectExists_Integration(t *testing.T) {
 		t.Fatalf("ObjectExists() failed: %v", err)
 	}
 	if !exists {
-		t.Error("Object should exist after SaveObject()")
+		t.Fatal("Object should exist after SaveObject()")
 	}
 }
 
@@ -312,13 +312,13 @@ func TestListObjectsByType_Integration(t *testing.T) {
 	}
 
 	if len(results) != 3 {
-		t.Errorf("ListObjectsByType() returned %d objects, want 3", len(results))
+		t.Fatalf("ListObjectsByType() returned %d objects, want 3", len(results))
 	}
 
 	// Verify all objects are of the correct type
 	for _, result := range results {
 		if result.ObjectType != objectType {
-			t.Errorf("Object %s has type %s, want %s", result.ObjectID, result.ObjectType, objectType)
+			t.Fatalf("Object %s has type %s, want %s", result.ObjectID, result.ObjectType, objectType)
 		}
 	}
 }
@@ -347,7 +347,7 @@ func TestListObjectsByType_Empty_Integration(t *testing.T) {
 	}
 
 	if len(results) != 0 {
-		t.Errorf("ListObjectsByType() returned %d objects, want 0", len(results))
+		t.Fatalf("ListObjectsByType() returned %d objects, want 0", len(results))
 	}
 }
 
@@ -386,7 +386,7 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if string(data) != string(initialData) {
-		t.Errorf("Read returned %s, want %s", string(data), string(initialData))
+		t.Fatalf("Read returned %s, want %s", string(data), string(initialData))
 	}
 
 	// 3. Update
@@ -401,7 +401,7 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 		t.Fatalf("Read after update failed: %v", err)
 	}
 	if string(data) != string(updatedData) {
-		t.Errorf("Read after update returned %s, want %s", string(data), string(updatedData))
+		t.Fatalf("Read after update returned %s, want %s", string(data), string(updatedData))
 	}
 
 	// 5. List
@@ -410,7 +410,7 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 		t.Fatalf("List failed: %v", err)
 	}
 	if len(objects) != 1 {
-		t.Errorf("List returned %d objects, want 1", len(objects))
+		t.Fatalf("List returned %d objects, want 1", len(objects))
 	}
 
 	// 6. Delete
@@ -425,6 +425,6 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 		t.Fatalf("Exists check after delete failed: %v", err)
 	}
 	if exists {
-		t.Error("Object should not exist after delete")
+		t.Fatal("Object should not exist after delete")
 	}
 }

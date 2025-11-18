@@ -176,7 +176,7 @@ func TestDistributedCreateObject(t *testing.T) {
 		// Verify object count hasn't increased
 		objCountAfter := objectNode.NumObjects()
 		if objCountAfter != objCountBefore {
-			t.Errorf("Object count changed from %d to %d after duplicate create attempt", objCountBefore, objCountAfter)
+			t.Fatalf("Object count changed from %d to %d after duplicate create attempt", objCountBefore, objCountAfter)
 		}
 
 		// Verify only one instance of the object exists
@@ -187,7 +187,7 @@ func TestDistributedCreateObject(t *testing.T) {
 			}
 		}
 		if objectCount != 1 {
-			t.Errorf("Expected exactly 1 instance of object %s, found %d", objID, objectCount)
+			t.Fatalf("Expected exactly 1 instance of object %s, found %d", objID, objectCount)
 		}
 
 		t.Logf("Successfully verified duplicate CreateObject with same type is idempotent")
@@ -238,7 +238,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		// Note: Version is now tracked in ClusterState
 		// Verify they have same number of shards
 		if len(shardMapping.Shards) != len(shardMapping1.Shards) {
-			t.Errorf("Cluster %d has different shard count (%d) than cluster 0 (%d)",
+			t.Fatalf("Cluster %d has different shard count (%d) than cluster 0 (%d)",
 				i, len(shardMapping.Shards), len(shardMapping1.Shards))
 		}
 	}
@@ -262,12 +262,12 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 		totalSharded += count
 	}
 	if totalSharded != numObjects {
-		t.Errorf("Expected %d objects to be sharded, got %d", numObjects, totalSharded)
+		t.Fatalf("Expected %d objects to be sharded, got %d", numObjects, totalSharded)
 	}
 
 	// Verify objects are distributed across all 3 nodes
 	if len(shardCounts) != 3 {
-		t.Errorf("Expected objects to be distributed across all 3 nodes, got %d nodes", len(shardCounts))
+		t.Fatalf("Expected objects to be distributed across all 3 nodes, got %d nodes", len(shardCounts))
 	}
 
 	// Verify each node has roughly equal distribution

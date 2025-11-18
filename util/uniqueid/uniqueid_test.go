@@ -11,20 +11,20 @@ func TestUniqueId(t *testing.T) {
 	// Test that UniqueId returns a non-empty string
 	id := UniqueId()
 	if id == "" {
-		t.Error("UniqueId() returned empty string")
+		t.Fatal("UniqueId() returned empty string")
 	}
 
 	// Test that the ID is valid base64 URL encoding
 	_, err := base64.URLEncoding.DecodeString(id)
 	if err != nil {
-		t.Errorf("UniqueId() returned invalid base64 URL encoded string: %v", err)
+		t.Fatalf("UniqueId() returned invalid base64 URL encoded string: %v", err)
 	}
 
 	// Test that multiple calls return different IDs
 	id1 := UniqueId()
 	id2 := UniqueId()
 	if id1 == id2 {
-		t.Error("UniqueId() returned same ID for consecutive calls")
+		t.Fatal("UniqueId() returned same ID for consecutive calls")
 	}
 
 	// Test that IDs have consistent length (16 bytes = 20 chars in base64 URL)
@@ -32,7 +32,7 @@ func TestUniqueId(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		id := UniqueId()
 		if len(id) != expectedLen {
-			t.Errorf("UniqueId() returned string %s of length %d, expected %d", id, len(id), expectedLen)
+			t.Fatalf("UniqueId() returned string %s of length %d, expected %d", id, len(id), expectedLen)
 		}
 	}
 }
@@ -45,7 +45,7 @@ func TestUniqueIdUniqueness(t *testing.T) {
 	for i := 0; i < numIds; i++ {
 		id := UniqueId()
 		if ids[id] {
-			t.Errorf("Duplicate ID found: %s", id)
+			t.Fatalf("Duplicate ID found: %s", id)
 		}
 		ids[id] = true
 	}
@@ -65,7 +65,7 @@ func TestUniqueIdTiming(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, id := range ids {
 		if seen[id] {
-			t.Errorf("Duplicate ID found in rapid generation: %s", id)
+			t.Fatalf("Duplicate ID found in rapid generation: %s", id)
 		}
 		seen[id] = true
 	}
@@ -81,7 +81,7 @@ func TestUniqueIdNoSlash(t *testing.T) {
 	for i := 0; i < numTests; i++ {
 		id := UniqueId()
 		if strings.Contains(id, "/") {
-			t.Errorf("UniqueId() returned string containing '/': %s", id)
+			t.Fatalf("UniqueId() returned string containing '/': %s", id)
 		}
 	}
 }

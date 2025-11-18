@@ -108,16 +108,16 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 	// Verify that operations completed successfully
 	// Due to serialization, we should have consistent results
 	if createCount == 0 {
-		t.Error("Expected at least some create operations to succeed")
+		t.Fatal("Expected at least some create operations to succeed")
 	}
 	if callCount == 0 {
-		t.Error("Expected at least some call operations to succeed")
+		t.Fatal("Expected at least some call operations to succeed")
 	}
 	if deleteCount == 0 {
-		t.Error("Expected at least some delete operations to succeed")
+		t.Fatal("Expected at least some delete operations to succeed")
 	}
 	if saveCount == 0 {
-		t.Error("Expected at least some save operations to succeed")
+		t.Fatal("Expected at least some save operations to succeed")
 	}
 }
 
@@ -165,7 +165,7 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 	// (createObject returns existing object if already created)
 	t.Logf("Successful creates: %d/%d", successCount, numGoroutines)
 	if successCount != numGoroutines {
-		t.Errorf("Expected all creates to succeed with proper serialization, got %d/%d",
+		t.Fatalf("Expected all creates to succeed with proper serialization, got %d/%d",
 			successCount, numGoroutines)
 	}
 
@@ -174,7 +174,7 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 
 	// Verify only one object was actually created
 	if node.NumObjects() != 1 {
-		t.Errorf("Expected exactly 1 object, got %d", node.NumObjects())
+		t.Fatalf("Expected exactly 1 object, got %d", node.NumObjects())
 	}
 }
 
@@ -223,7 +223,7 @@ func TestSaveAllObjectsWhileCreating(t *testing.T) {
 	// Verify persistence completed without errors
 	// The save count should be at least as many as successful saves
 	if provider.GetSaveCount() == 0 {
-		t.Error("Expected at least some objects to be saved")
+		t.Fatal("Expected at least some objects to be saved")
 	}
 	t.Logf("Total save operations: %d", provider.GetSaveCount())
 }
@@ -293,11 +293,11 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 
 	// All deletes should succeed (idempotent behavior)
 	if deleteSuccessCount != numDeletes {
-		t.Errorf("Expected all %d deletes to succeed due to idempotency, got %d", numDeletes, deleteSuccessCount)
+		t.Fatalf("Expected all %d deletes to succeed due to idempotency, got %d", numDeletes, deleteSuccessCount)
 	}
 
 	// Some calls should have succeeded before delete
 	if callSuccessCount == 0 {
-		t.Error("Expected at least some calls to succeed")
+		t.Fatal("Expected at least some calls to succeed")
 	}
 }

@@ -15,11 +15,11 @@ import (
 func TestValidateServerConfig_NilConfig(t *testing.T) {
 	err := validateServerConfig(nil)
 	if err == nil {
-		t.Error("validateServerConfig should return error for nil config")
+		t.Fatal("validateServerConfig should return error for nil config")
 	}
 	expectedMsg := "config cannot be nil"
 	if err.Error() != expectedMsg {
-		t.Errorf("validateServerConfig error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("validateServerConfig error = %v; want %v", err.Error(), expectedMsg)
 	}
 }
 
@@ -33,11 +33,11 @@ func TestValidateServerConfig_EmptyListenAddress(t *testing.T) {
 	}
 	err := validateServerConfig(config)
 	if err == nil {
-		t.Error("validateServerConfig should return error for empty ListenAddress")
+		t.Fatal("validateServerConfig should return error for empty ListenAddress")
 	}
 	expectedMsg := "ListenAddress cannot be empty"
 	if err.Error() != expectedMsg {
-		t.Errorf("validateServerConfig error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("validateServerConfig error = %v; want %v", err.Error(), expectedMsg)
 	}
 }
 
@@ -51,11 +51,11 @@ func TestValidateServerConfig_EmptyAdvertiseAddress(t *testing.T) {
 	}
 	err := validateServerConfig(config)
 	if err == nil {
-		t.Error("validateServerConfig should return error for empty AdvertiseAddress")
+		t.Fatal("validateServerConfig should return error for empty AdvertiseAddress")
 	}
 	expectedMsg := "AdvertiseAddress cannot be empty"
 	if err.Error() != expectedMsg {
-		t.Errorf("validateServerConfig error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("validateServerConfig error = %v; want %v", err.Error(), expectedMsg)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 	}
 	err := validateServerConfig(config)
 	if err != nil {
-		t.Errorf("validateServerConfig should not return error for valid config, got: %v", err)
+		t.Fatalf("validateServerConfig should not return error for valid config, got: %v", err)
 	}
 }
 
@@ -90,13 +90,13 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 	}
 
 	if server == nil {
-		t.Error("NewServer should return a server instance")
+		t.Fatal("NewServer should return a server instance")
 		return
 	}
 
 	// Verify the cluster has the custom NodeStabilityDuration
 	if server.cluster.GetClusterStateStabilityDurationForTesting() != customDuration {
-		t.Errorf("Expected cluster NodeStabilityDuration to be %v, got %v",
+		t.Fatalf("Expected cluster NodeStabilityDuration to be %v, got %v",
 			customDuration, server.cluster.GetClusterStateStabilityDurationForTesting())
 	}
 }
@@ -116,13 +116,13 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 	}
 
 	if server == nil {
-		t.Error("NewServer should return a server instance")
+		t.Fatal("NewServer should return a server instance")
 		return
 	}
 
 	// Verify the cluster uses the default DefaultNodeStabilityDuration
 	if server.cluster.GetClusterStateStabilityDurationForTesting() != cluster.DefaultNodeStabilityDuration {
-		t.Errorf("Expected cluster NodeStabilityDuration to be default %v, got %v",
+		t.Fatalf("Expected cluster NodeStabilityDuration to be default %v, got %v",
 			cluster.DefaultNodeStabilityDuration, server.cluster.GetClusterStateStabilityDurationForTesting())
 	}
 }
@@ -142,19 +142,19 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	}
 
 	if server == nil {
-		t.Error("NewServer should return a server instance")
+		t.Fatal("NewServer should return a server instance")
 	}
 
 	if server.Node == nil {
-		t.Error("NewServer should initialize a Node")
+		t.Fatal("NewServer should initialize a Node")
 	}
 
 	if server.config != config {
-		t.Error("NewServer should store the provided config")
+		t.Fatal("NewServer should store the provided config")
 	}
 
 	if server.logger == nil {
-		t.Error("NewServer should initialize a logger")
+		t.Fatal("NewServer should initialize a logger")
 	}
 
 	// Test ListObjects on this server
@@ -166,7 +166,7 @@ func TestNewServer_ValidConfig(t *testing.T) {
 
 	// Initially should have no objects
 	if len(resp.Objects) != 0 {
-		t.Errorf("Expected 0 objects initially, got %d", len(resp.Objects))
+		t.Fatalf("Expected 0 objects initially, got %d", len(resp.Objects))
 	}
 }
 
@@ -193,11 +193,11 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	}
 
 	if server == nil {
-		t.Error("NewServer should return a server instance")
+		t.Fatal("NewServer should return a server instance")
 	}
 
 	if server.config != config {
-		t.Error("NewServer should store the provided config")
+		t.Fatal("NewServer should store the provided config")
 	}
 
 	// With the new pattern, NewServer automatically initializes the cluster with etcd
@@ -206,17 +206,17 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	// Verify that the cluster has an etcd manager with the custom prefix
 	etcdMgr := clusterInstance.GetEtcdManagerForTesting()
 	if etcdMgr == nil {
-		t.Error("NewServer should create the etcd manager on the cluster")
+		t.Fatal("NewServer should create the etcd manager on the cluster")
 		return
 	}
 
 	if etcdMgr.GetPrefix() != customPrefix {
-		t.Errorf("EtcdManager prefix = %s, want %s", etcdMgr.GetPrefix(), customPrefix)
+		t.Fatalf("EtcdManager prefix = %s, want %s", etcdMgr.GetPrefix(), customPrefix)
 	}
 
 	// Verify that the cluster's node matches the server's node
 	if clusterInstance.GetThisNode() != server.Node {
-		t.Error("Cluster's node should match the server's node")
+		t.Fatal("Cluster's node should match the server's node")
 	}
 
 	// Verify the node is registered in the correct etcd key
@@ -275,7 +275,7 @@ func TestNode_ListObjects(t *testing.T) {
 	objectInfos := n.ListObjects()
 
 	if len(objectInfos) != 0 {
-		t.Errorf("Expected 0 objects initially, got %d", len(objectInfos))
+		t.Fatalf("Expected 0 objects initially, got %d", len(objectInfos))
 	}
 }
 

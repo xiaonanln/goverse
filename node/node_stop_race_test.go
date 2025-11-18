@@ -84,12 +84,12 @@ func TestStop_RaceWithCreateObject(t *testing.T) {
 
 	// At least some operations should have been stopped
 	if stoppedCount == 0 {
-		t.Error("Expected at least some operations to be stopped")
+		t.Fatal("Expected at least some operations to be stopped")
 	}
 
 	// Verify node is properly stopped - objects should be cleared
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 }
 
@@ -164,12 +164,12 @@ func TestStop_RaceWithCallObject(t *testing.T) {
 
 	// At least some operations should have been stopped
 	if stoppedCount == 0 {
-		t.Error("Expected at least some operations to be stopped")
+		t.Fatal("Expected at least some operations to be stopped")
 	}
 
 	// Verify node is properly stopped
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 }
 
@@ -245,7 +245,7 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 		if err == nil {
 			successCount++
 		} else {
-			t.Errorf("Unexpected error from DeleteObject: %v", err)
+			t.Fatalf("Unexpected error from DeleteObject: %v", err)
 		}
 	}
 
@@ -253,12 +253,12 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 
 	// All operations should succeed due to idempotency
 	if successCount != 20 {
-		t.Errorf("Expected all 20 DeleteObject calls to succeed, got %d", successCount)
+		t.Fatalf("Expected all 20 DeleteObject calls to succeed, got %d", successCount)
 	}
 
 	// Verify node is properly stopped
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 }
 
@@ -341,17 +341,17 @@ func TestStop_RaceWithSaveAllObjects(t *testing.T) {
 
 	// At least some operations should have been stopped
 	if stoppedCount == 0 {
-		t.Error("Expected at least some operations to be stopped")
+		t.Fatal("Expected at least some operations to be stopped")
 	}
 
 	// Verify node is properly stopped
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 
 	// Verify objects were saved (either by the operations or by Stop's final save)
 	if provider.GetStorageCount() == 0 {
-		t.Error("Expected objects to be saved to persistence")
+		t.Fatal("Expected objects to be saved to persistence")
 	}
 }
 
@@ -380,17 +380,17 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	// Try CreateObject - should fail
 	_, err = node.CreateObject(ctx, "TestPersistentObject", "after-stop-obj")
 	if err == nil {
-		t.Error("Expected CreateObject to fail after stop")
+		t.Fatal("Expected CreateObject to fail after stop")
 	} else if err.Error() != "node is stopped" {
-		t.Errorf("Expected 'node is stopped' error, got: %v", err)
+		t.Fatalf("Expected 'node is stopped' error, got: %v", err)
 	}
 
 	// Try CallObject - should fail
 	_, err = node.CallObject(ctx, "TestPersistentObjectWithMethod", "after-stop-obj", "GetValue", &emptypb.Empty{})
 	if err == nil {
-		t.Error("Expected CallObject to fail after stop")
+		t.Fatal("Expected CallObject to fail after stop")
 	} else if err.Error() != "node is stopped" {
-		t.Errorf("Expected 'node is stopped' error, got: %v", err)
+		t.Fatalf("Expected 'node is stopped' error, got: %v", err)
 	}
 
 	// Try DeleteObject - should succeed (idempotent: node stopped = objects cleared)
@@ -398,15 +398,15 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	// the desired state (object not existing) is already achieved
 	err = node.DeleteObject(ctx, "after-stop-obj")
 	if err != nil {
-		t.Errorf("Expected DeleteObject to succeed after stop (idempotent), got error: %v", err)
+		t.Fatalf("Expected DeleteObject to succeed after stop (idempotent), got error: %v", err)
 	}
 
 	// Try SaveAllObjects - should fail
 	err = node.SaveAllObjects(ctx)
 	if err == nil {
-		t.Error("Expected SaveAllObjects to fail after stop")
+		t.Fatal("Expected SaveAllObjects to fail after stop")
 	} else if err.Error() != "node is stopped" {
-		t.Errorf("Expected 'node is stopped' error, got: %v", err)
+		t.Fatalf("Expected 'node is stopped' error, got: %v", err)
 	}
 }
 
@@ -449,13 +449,13 @@ func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
 	// Verify all objects were persisted
 	for _, id := range objectIDs {
 		if !provider.HasStoredData(id) {
-			t.Errorf("Object %s should be persisted before clearing", id)
+			t.Fatalf("Object %s should be persisted before clearing", id)
 		}
 	}
 
 	// Verify objects were cleared from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 }
 

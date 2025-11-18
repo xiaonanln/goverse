@@ -61,7 +61,7 @@ func TestGet(t *testing.T) {
 	cluster2 := This()
 
 	if cluster1 != cluster2 {
-		t.Error("This() should return the same cluster instance")
+		t.Fatal("This() should return the same cluster instance")
 	}
 }
 
@@ -71,7 +71,7 @@ func TestSetThisNode(t *testing.T) {
 	cluster := newClusterForTesting(n, "TestCluster")
 
 	if cluster.GetThisNode() != n {
-		t.Error("GetThisNode() should return the node set by newClusterForTesting()")
+		t.Fatal("GetThisNode() should return the node set by newClusterForTesting()")
 	}
 }
 
@@ -83,7 +83,7 @@ func TestSetThisNode_Panic(t *testing.T) {
 	// Trying to set a different node should fail (thisNode already set during creation)
 	// This test verifies that the node cannot be changed after cluster creation
 	if cluster.GetThisNode() != n1 {
-		t.Error("cluster should have n1 set from creation")
+		t.Fatal("cluster should have n1 set from creation")
 	}
 }
 
@@ -104,7 +104,7 @@ func TestNewCluster(t *testing.T) {
 	}
 
 	if cluster.GetEtcdManagerForTesting() == nil {
-		t.Error("GetEtcdManagerForTesting() should return the manager after NewCluster")
+		t.Fatal("GetEtcdManagerForTesting() should return the manager after NewCluster")
 	}
 }
 
@@ -127,7 +127,7 @@ func TestNewCluster_WithNode(t *testing.T) {
 
 	// Cluster should have the manager
 	if cluster.GetEtcdManagerForTesting() == nil {
-		t.Error("Cluster should have the etcd manager")
+		t.Fatal("Cluster should have the etcd manager")
 	}
 }
 
@@ -153,7 +153,7 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 
 	// Cluster should have the manager
 	if cluster.GetEtcdManagerForTesting() == nil {
-		t.Error("Cluster should have the etcd manager")
+		t.Fatal("Cluster should have the etcd manager")
 	}
 }
 
@@ -175,7 +175,7 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	// When there are no nodes, leader should be empty
 	leader := cluster.GetLeaderNode()
 	if leader != "" {
-		t.Errorf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
+		t.Fatalf("GetLeaderNode() should return empty string when no nodes, got %s", leader)
 	}
 }
 
@@ -190,25 +190,25 @@ func TestClusterString(t *testing.T) {
 	// Verify format: Cluster<local-node-address,leader|member,quorum=%d>
 	// Should contain the node address
 	if !strings.Contains(str, "localhost:47000") {
-		t.Errorf("String() should contain node address 'localhost:47000', got: %s", str)
+		t.Fatalf("String() should contain node address 'localhost:47000', got: %s", str)
 	}
 
 	// Should contain either "leader" or "member"
 	if !strings.Contains(str, "leader") && !strings.Contains(str, "member") {
-		t.Errorf("String() should contain 'leader' or 'member', got: %s", str)
+		t.Fatalf("String() should contain 'leader' or 'member', got: %s", str)
 	}
 
 	// Should contain quorum information
 	if !strings.Contains(str, "quorum=") {
-		t.Errorf("String() should contain 'quorum=', got: %s", str)
+		t.Fatalf("String() should contain 'quorum=', got: %s", str)
 	}
 
 	// Should start with "Cluster<" and end with ">"
 	if !strings.HasPrefix(str, "Cluster<") {
-		t.Errorf("String() should start with 'Cluster<', got: %s", str)
+		t.Fatalf("String() should start with 'Cluster<', got: %s", str)
 	}
 	if !strings.HasSuffix(str, ">") {
-		t.Errorf("String() should end with '>', got: %s", str)
+		t.Fatalf("String() should end with '>', got: %s", str)
 	}
 }
 
@@ -234,7 +234,7 @@ func TestClusterString_WithQuorum(t *testing.T) {
 			t.Logf("Cluster string: %s", str)
 
 			if !strings.Contains(str, tt.expected) {
-				t.Errorf("String() should contain '%s', got: %s", tt.expected, str)
+				t.Fatalf("String() should contain '%s', got: %s", tt.expected, str)
 			}
 		})
 	}
