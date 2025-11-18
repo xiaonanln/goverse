@@ -8,7 +8,9 @@ package gateway;
 
 service GatewayService {
     rpc Register (Empty) returns (stream google.protobuf.Any);
-    rpc Call (CallRequest) returns (CallResponse);
+    rpc Call (CallObjectRequest) returns (CallResponse);
+    rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
+    rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
 }
 
 // RegisterResponse is the first message that the client can receive from the Register stream
@@ -16,14 +18,32 @@ message RegisterResponse {
   string client_id = 1;
 }
 
-message CallRequest {
+message CallObjectRequest {
   string client_id = 1;
   string method = 2;
   google.protobuf.Any request = 3;
+  string type = 4;
 }
 
 message CallResponse {
   google.protobuf.Any response = 1;
+}
+
+message CreateObjectRequest {
+  string type = 1;
+  string id = 2; // ID must be specified
+}
+
+message CreateObjectResponse {
+  string id = 1;
+}
+
+message DeleteObjectRequest {
+  string id = 1;
+}
+
+message DeleteObjectResponse {
+  // Empty response - success is indicated by no error
 }
 
 message Empty {}

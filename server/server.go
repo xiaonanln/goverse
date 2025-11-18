@@ -38,7 +38,6 @@ type ServerConfig struct {
 
 type Server struct {
 	goverse_pb.UnimplementedGoverseServer
-	gateway_pb.UnimplementedGatewayServiceServer
 	config  *ServerConfig
 	Node    *node.Node
 	ctx     context.Context
@@ -132,7 +131,7 @@ func (server *Server) Run() error {
 
 	grpcServer := grpc.NewServer()
 	goverse_pb.RegisterGoverseServer(grpcServer, server)
-	gateway_pb.RegisterGatewayServiceServer(grpcServer, server)
+	gateway_pb.RegisterGatewayServiceServer(grpcServer, &gatewayServiceImpl{server: server})
 	reflection.Register(grpcServer)
 	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
 
@@ -187,7 +186,7 @@ func (server *Server) Run() error {
 
 	go func() {
 		server.logger.Infof("Client gRPC server listening on %s", clientServiceListener.Addr().String())
-		gateway_pb.RegisterGatewayServiceServer(clientGrpcServer, server)
+		gateway_pb.RegisterGatewayServiceServer(clientGrpcServer, &gatewayServiceImpl{server: server})
 		reflection.Register(clientGrpcServer)
 		if err := clientGrpcServer.Serve(clientServiceListener); err != nil {
 			server.logger.Errorf("Client gRPC server error: %v", err)
@@ -257,7 +256,7 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 }
 
 // Register implements the GatewayService Register method for client registration
-func (server *Server) Register(req *gateway_pb.Empty, stream gateway_pb.GatewayService_RegisterServer) error {
+func (server *Server) registerImpl(req *gateway_pb.Empty, stream gateway_pb.GatewayService_RegisterServer) error {
 	server.logRPC("Register", req)
 	clientId, messageChan, err := server.Node.RegisterClient(stream.Context())
 	if err != nil {
@@ -289,10 +288,24 @@ func (server *Server) Register(req *gateway_pb.Empty, stream gateway_pb.GatewayS
 	return nil
 }
 
+// gatewayServiceImpl wraps Server to implement GatewayService methods
+// This separate type is needed because Go doesn't support method overloading,
+// and both GatewayService and Goverse service have CreateObject/DeleteObject methods
+// with different parameter types
+type gatewayServiceImpl struct {
+	gateway_pb.UnimplementedGatewayServiceServer
+	server *Server
+}
+
+// Register implements the GatewayService Register method
+func (g *gatewayServiceImpl) Register(req *gateway_pb.Empty, stream gateway_pb.GatewayService_RegisterServer) error {
+	return g.server.registerImpl(req, stream)
+}
+
 // Call implements the GatewayService Call method for client RPC calls
-func (server *Server) Call(ctx context.Context, req *gateway_pb.CallRequest) (*gateway_pb.CallResponse, error) {
-	server.logRPC("Call", req)
-	resp, err := server.Node.CallClient(ctx, req.GetClientId(), req.GetMethod(), req.GetRequest())
+func (g *gatewayServiceImpl) Call(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallResponse, error) {
+	g.server.logRPC("Call", req)
+	resp, err := g.server.Node.CallClient(ctx, req.GetClientId(), req.GetMethod(), req.GetRequest())
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +314,20 @@ func (server *Server) Call(ctx context.Context, req *gateway_pb.CallRequest) (*g
 		Response: resp,
 	}
 	return response, nil
+}
+
+// CreateObject implements the GatewayService CreateObject method (empty implementation)
+func (g *gatewayServiceImpl) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
+	g.server.logRPC("Gateway.CreateObject", req)
+	// Empty implementation - to be filled in later
+	return &gateway_pb.CreateObjectResponse{}, nil
+}
+
+// DeleteObject implements the GatewayService DeleteObject method (empty implementation)
+func (g *gatewayServiceImpl) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
+	g.server.logRPC("Gateway.DeleteObject", req)
+	// Empty implementation - to be filled in later
+	return &gateway_pb.DeleteObjectResponse{}, nil
 }
 
 func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
