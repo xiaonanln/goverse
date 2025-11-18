@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	cache_pb "github.com/xiaonanln/goverse/samples/distributed-cache/proto"
 	client_pb "github.com/xiaonanln/goverse/client/proto"
+	cache_pb "github.com/xiaonanln/goverse/samples/distributed-cache/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -53,7 +53,8 @@ func main() {
 }
 
 func demonstrateCacheOperations(client client_pb.ClientServiceClient, clientID string) {
-	fmt.Println("=== Distributed Cache Demo ===\n")
+	fmt.Println("=== Distributed Cache Demo ===")
+	fmt.Println()
 
 	// Set operations
 	fmt.Println("1. Setting cache entries...")
