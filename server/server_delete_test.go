@@ -55,7 +55,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 
 	// Verify object is deleted
 	if n.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after deletion, got %d", n.NumObjects())
+		t.Fatalf("Expected 0 objects after deletion, got %d", n.NumObjects())
 	}
 }
 
@@ -92,7 +92,7 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 
 	expectedErrMsg := "object ID must be specified in DeleteObject request"
 	if err.Error() != expectedErrMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		t.Fatalf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 	}
 }
 
@@ -126,7 +126,7 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 	_, err := server.DeleteObject(ctx, deleteReq)
 	if err != nil {
 		// nil is correct: DeleteObject is idempotent and should succeed for non-existent objects
-		t.Errorf("Expected no error when deleting non-existent object (idempotent), got: %v", err)
+		t.Fatalf("Expected no error when deleting non-existent object (idempotent), got: %v", err)
 		return
 	}
 }

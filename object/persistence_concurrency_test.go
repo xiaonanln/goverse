@@ -39,7 +39,7 @@ func TestToData_Concurrency(t *testing.T) {
 
 	// Check for any errors
 	for err := range errors {
-		t.Errorf("ToData failed during concurrent access: %v", err)
+		t.Fatalf("ToData failed during concurrent access: %v", err)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestToDataAndFromData_Concurrency(t *testing.T) {
 
 	// Check for any errors
 	for err := range errors {
-		t.Errorf("Concurrent ToData/FromData failed: %v", err)
+		t.Fatalf("Concurrent ToData/FromData failed: %v", err)
 	}
 }
 
@@ -155,7 +155,7 @@ func TestFromData_Concurrency(t *testing.T) {
 
 	// Check for any errors
 	for err := range errors {
-		t.Errorf("FromData failed during concurrent access: %v", err)
+		t.Fatalf("FromData failed during concurrent access: %v", err)
 	}
 }
 
@@ -210,6 +210,6 @@ func TestMixedPersistenceOperations_Concurrency(t *testing.T) {
 
 	// Check for any errors
 	for err := range errors {
-		t.Errorf("Mixed persistence operations failed: %v", err)
+		t.Fatalf("Mixed persistence operations failed: %v", err)
 	}
 }

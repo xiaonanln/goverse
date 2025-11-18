@@ -42,7 +42,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 
 	// Verify existing object was registered with inspector manager
 	if !node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
-		t.Error("Existing object should be tracked by inspector manager after start")
+		t.Fatal("Existing object should be tracked by inspector manager after start")
 	}
 
 	// Create a new object after start
@@ -53,7 +53,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 
 	// Verify new object is tracked
 	if !node.inspectorManager.IsObjectTracked("post-start-obj-1") {
-		t.Error("New object should be tracked by inspector manager")
+		t.Fatal("New object should be tracked by inspector manager")
 	}
 
 	// Delete an object
@@ -61,7 +61,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 
 	// Verify object is no longer tracked
 	if node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
-		t.Error("Deleted object should not be tracked by inspector manager")
+		t.Fatal("Deleted object should not be tracked by inspector manager")
 	}
 
 	// Stop the node
@@ -77,7 +77,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 		case <-ctx2.Done():
 			// Expected - context should be done
 		default:
-			t.Error("Inspector manager context should be done after stop")
+			t.Fatal("Inspector manager context should be done after stop")
 		}
 	}
 }
@@ -115,7 +115,7 @@ func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	if count != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", count)
+		t.Fatalf("Expected 0 objects after stop, got %d", count)
 	}
 
 	// Create new node for second cycle
@@ -165,7 +165,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 			objID := "concurrent-integration-obj-" + string(rune(id))
 			err := node.createObject(ctx, "TestPersistentObject", objID)
 			if err != nil {
-				t.Errorf("Failed to create object %s: %v", objID, err)
+				t.Fatalf("Failed to create object %s: %v", objID, err)
 			}
 			done <- true
 		}(i)
@@ -180,7 +180,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	trackedCount := node.inspectorManager.ObjectCount()
 
 	if trackedCount != numObjects {
-		t.Errorf("Expected %d tracked objects, got %d", numObjects, trackedCount)
+		t.Fatalf("Expected %d tracked objects, got %d", numObjects, trackedCount)
 	}
 
 	// Concurrently delete half the objects
@@ -205,7 +205,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 
 	expectedCount := numObjects - numObjects/2
 	if trackedCount != expectedCount {
-		t.Errorf("Expected %d tracked objects after deletions, got %d", expectedCount, trackedCount)
+		t.Fatalf("Expected %d tracked objects after deletions, got %d", expectedCount, trackedCount)
 	}
 
 	err = node.Stop(ctx)

@@ -16,7 +16,7 @@ func TestClusterReadyChannel(t *testing.T) {
 	// Test 1: Channel should block before cluster is ready
 	select {
 	case <-c.ClusterReady():
-		t.Error("Channel should not be closed before cluster is ready")
+		t.Fatal("Channel should not be closed before cluster is ready")
 	case <-time.After(100 * time.Millisecond):
 		// Expected: channel is still open
 	}
@@ -29,7 +29,7 @@ func TestClusterReadyChannel(t *testing.T) {
 	case <-c.ClusterReady():
 		// Expected: channel is closed
 	case <-time.After(100 * time.Millisecond):
-		t.Error("Channel should be closed after cluster is ready")
+		t.Fatal("Channel should be closed after cluster is ready")
 	}
 }
 
@@ -81,6 +81,6 @@ func TestMarkClusterReadyIsIdempotent(t *testing.T) {
 	case <-c.ClusterReady():
 		// Expected: channel is closed
 	case <-time.After(100 * time.Millisecond):
-		t.Error("Channel should be closed after markClusterReady")
+		t.Fatal("Channel should be closed after markClusterReady")
 	}
 }

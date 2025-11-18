@@ -28,22 +28,22 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	t.Run("LeaderDetection", func(t *testing.T) {
 		// node1 should be the leader (smallest address)
 		if !cluster1.IsLeader() {
-			t.Errorf("cluster1 (localhost:50001) should be the leader")
+			t.Fatalf("cluster1 (localhost:50001) should be the leader")
 		}
 
 		if cluster2.IsLeader() {
-			t.Errorf("cluster2 (localhost:50002) should not be the leader")
+			t.Fatalf("cluster2 (localhost:50002) should not be the leader")
 		}
 
 		leader1 := cluster1.GetLeaderNode()
 		leader2 := cluster2.GetLeaderNode()
 
 		if leader1 != "localhost:50001" {
-			t.Errorf("cluster1 sees leader as %s, want localhost:50001", leader1)
+			t.Fatalf("cluster1 sees leader as %s, want localhost:50001", leader1)
 		}
 
 		if leader2 != "localhost:50001" {
-			t.Errorf("cluster2 sees leader as %s, want localhost:50001", leader2)
+			t.Fatalf("cluster2 sees leader as %s, want localhost:50001", leader2)
 		}
 	})
 
@@ -60,24 +60,24 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 			// Both clusters should agree on which node owns the object
 			node1, err := cluster1.GetCurrentNodeForObject(ctx, objectID)
 			if err != nil {
-				t.Errorf("cluster1.GetCurrentNodeForObject(%s) error: %v", objectID, err)
+				t.Fatalf("cluster1.GetCurrentNodeForObject(%s) error: %v", objectID, err)
 				continue
 			}
 
 			node2, err := cluster2.GetCurrentNodeForObject(ctx, objectID)
 			if err != nil {
-				t.Errorf("cluster2.GetCurrentNodeForObject(%s) error: %v", objectID, err)
+				t.Fatalf("cluster2.GetCurrentNodeForObject(%s) error: %v", objectID, err)
 				continue
 			}
 
 			if node1 != node2 {
-				t.Errorf("Clusters disagree on node for object %s: %s vs %s", objectID, node1, node2)
+				t.Fatalf("Clusters disagree on node for object %s: %s vs %s", objectID, node1, node2)
 			}
 
 			// Verify consistency
 			node1b, _ := cluster1.GetCurrentNodeForObject(ctx, objectID)
 			if node1 != node1b {
-				t.Errorf("GetCurrentNodeForObject(%s) not consistent: %s vs %s", objectID, node1, node1b)
+				t.Fatalf("GetCurrentNodeForObject(%s) not consistent: %s vs %s", objectID, node1, node1b)
 			}
 		}
 	})
@@ -90,18 +90,18 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 			// Both clusters should agree on which node owns the shard
 			node1, err := cluster1.GetNodeForShard(ctx, shardID)
 			if err != nil {
-				t.Errorf("cluster1.GetNodeForShard(%d) error: %v", shardID, err)
+				t.Fatalf("cluster1.GetNodeForShard(%d) error: %v", shardID, err)
 				continue
 			}
 
 			node2, err := cluster2.GetNodeForShard(ctx, shardID)
 			if err != nil {
-				t.Errorf("cluster2.GetNodeForShard(%d) error: %v", shardID, err)
+				t.Fatalf("cluster2.GetNodeForShard(%d) error: %v", shardID, err)
 				continue
 			}
 
 			if node1 != node2 {
-				t.Errorf("Clusters disagree on node for shard %d: %s vs %s", shardID, node1, node2)
+				t.Fatalf("Clusters disagree on node for shard %d: %s vs %s", shardID, node1, node2)
 			}
 		}
 
@@ -110,7 +110,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 		for _, shardID := range invalidCases {
 			_, err := cluster1.GetNodeForShard(ctx, shardID)
 			if err == nil {
-				t.Errorf("GetNodeForShard(%d) should return error for invalid shard ID", shardID)
+				t.Fatalf("GetNodeForShard(%d) should return error for invalid shard ID", shardID)
 			}
 		}
 	})

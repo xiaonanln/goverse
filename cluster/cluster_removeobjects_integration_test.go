@@ -178,7 +178,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	t.Logf("Verifying objects are removed from node1...")
 	for _, objID := range objectsToMove {
 		if objExistsOnNode(objID, node1) {
-			t.Errorf("Object %s should have been removed from node1 but still exists", objID)
+			t.Fatalf("Object %s should have been removed from node1 but still exists", objID)
 		} else {
 			t.Logf("✓ Object %s successfully removed from node1", objID)
 		}

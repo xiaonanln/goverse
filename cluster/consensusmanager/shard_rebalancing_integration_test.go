@@ -165,7 +165,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		}
 
 		if !rebalanced {
-			t.Error("Expected rebalancing to occur, but it didn't")
+			t.Fatal("Expected rebalancing to occur, but it didn't")
 		}
 
 		// Wait for watch to propagate
@@ -186,10 +186,10 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		// With batch rebalancing, we expect multiple shards (up to 100) to be migrated
 		// The exact number depends on imbalance conditions, but should be > 1
 		if migrationCount < 1 {
-			t.Errorf("Expected at least 1 shard to be migrating, found %d", migrationCount)
+			t.Fatalf("Expected at least 1 shard to be migrating, found %d", migrationCount)
 		}
 		if migrationCount > 100 {
-			t.Errorf("Expected at most 100 shards to be migrating (batch limit), found %d", migrationCount)
+			t.Fatalf("Expected at most 100 shards to be migrating (batch limit), found %d", migrationCount)
 		}
 	})
 
@@ -228,7 +228,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		}
 
 		if rebalanced {
-			t.Error("Expected no rebalancing to occur when already balanced")
+			t.Fatal("Expected no rebalancing to occur when already balanced")
 		}
 	})
 }

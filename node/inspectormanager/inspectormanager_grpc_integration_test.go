@@ -83,16 +83,16 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if !connected {
-		t.Error("Inspector manager should be connected")
+		t.Fatal("Inspector manager should be connected")
 	}
 
 	// Verify node was registered in the graph
 	nodes := pg.GetNodes()
 	if len(nodes) != 1 {
-		t.Errorf("Expected 1 node registered, got %d", len(nodes))
+		t.Fatalf("Expected 1 node registered, got %d", len(nodes))
 	}
 	if len(nodes) > 0 && nodes[0].AdvertiseAddr != nodeAddr {
-		t.Errorf("Expected node address %s, got %s", nodeAddr, nodes[0].AdvertiseAddr)
+		t.Fatalf("Expected node address %s, got %s", nodeAddr, nodes[0].AdvertiseAddr)
 	}
 
 	// Test direct ping
@@ -105,7 +105,7 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 	client := inspector_pb.NewInspectorServiceClient(conn)
 	_, err = client.Ping(ctx, &inspector_pb.Empty{})
 	if err != nil {
-		t.Errorf("Ping failed: %v", err)
+		t.Fatalf("Ping failed: %v", err)
 	}
 }
 
@@ -146,10 +146,10 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	// Verify object was registered in the graph
 	objects := pg.GetObjects()
 	if len(objects) != 1 {
-		t.Errorf("Expected 1 object registered, got %d", len(objects))
+		t.Fatalf("Expected 1 object registered, got %d", len(objects))
 	}
 	if len(objects) > 0 && objects[0].ID != "test-obj-1" {
-		t.Errorf("Expected object ID test-obj-1, got %s", objects[0].ID)
+		t.Fatalf("Expected object ID test-obj-1, got %s", objects[0].ID)
 	}
 
 	// Add more objects
@@ -161,7 +161,7 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	// Verify all objects are registered
 	objects = pg.GetObjects()
 	if len(objects) != 3 {
-		t.Errorf("Expected 3 objects registered, got %d", len(objects))
+		t.Fatalf("Expected 3 objects registered, got %d", len(objects))
 	}
 
 	// Remove an object
@@ -176,19 +176,19 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if tracked {
-		t.Error("Object test-obj-2 should not be tracked after removal")
+		t.Fatal("Object test-obj-2 should not be tracked after removal")
 	}
 
 	// Verify object was removed from the inspector graph
 	objects = pg.GetObjects()
 	if len(objects) != 2 {
-		t.Errorf("Expected 2 objects in inspector graph after removal, got %d", len(objects))
+		t.Fatalf("Expected 2 objects in inspector graph after removal, got %d", len(objects))
 	}
 
 	// Verify test-obj-2 is not in the graph
 	for _, obj := range objects {
 		if obj.ID == "test-obj-2" {
-			t.Error("Object test-obj-2 should be removed from inspector graph")
+			t.Fatal("Object test-obj-2 should be removed from inspector graph")
 		}
 	}
 }
@@ -238,7 +238,7 @@ func TestInspectorManager_NodeUnregistration(t *testing.T) {
 	// Verify node is unregistered
 	nodes = pg.GetNodes()
 	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes after unregister, got %d", len(nodes))
+		t.Fatalf("Expected 0 nodes after unregister, got %d", len(nodes))
 	}
 }
 
@@ -302,7 +302,7 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if connected {
-		t.Error("Inspector manager should detect disconnection")
+		t.Fatal("Inspector manager should detect disconnection")
 	}
 
 	// Add object while disconnected (should be queued)
@@ -336,7 +336,7 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if !connected {
-		t.Error("Inspector manager should reconnect after server restart")
+		t.Fatal("Inspector manager should reconnect after server restart")
 	}
 
 	// Wait for re-registration
@@ -345,13 +345,13 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	// Verify node is re-registered
 	nodes := pg.GetNodes()
 	if len(nodes) != 1 {
-		t.Errorf("Expected 1 node after reconnection, got %d", len(nodes))
+		t.Fatalf("Expected 1 node after reconnection, got %d", len(nodes))
 	}
 
 	// Verify objects are re-registered (both pre and during disconnect)
 	objects = pg.GetObjects()
 	if len(objects) != 2 {
-		t.Errorf("Expected 2 objects after reconnection, got %d", len(objects))
+		t.Fatalf("Expected 2 objects after reconnection, got %d", len(objects))
 	}
 
 	// Check both objects are present
@@ -361,10 +361,10 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	}
 
 	if !objectIDs["pre-disconnect-obj"] {
-		t.Error("pre-disconnect-obj should be re-registered")
+		t.Fatal("pre-disconnect-obj should be re-registered")
 	}
 	if !objectIDs["during-disconnect-obj"] {
-		t.Error("during-disconnect-obj should be registered after reconnection")
+		t.Fatal("during-disconnect-obj should be registered after reconnection")
 	}
 }
 
@@ -422,7 +422,7 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 	// Verify each object has a valid shard ID
 	for _, obj := range objects {
 		if obj.ShardID < 0 || obj.ShardID >= 8192 {
-			t.Errorf("Object %s has invalid ShardID %d (should be in [0, 8192))", obj.ID, obj.ShardID)
+			t.Fatalf("Object %s has invalid ShardID %d (should be in [0, 8192))", obj.ID, obj.ShardID)
 		}
 
 		// Verify shard ID is consistent (same object ID should always produce same shard)
@@ -446,7 +446,7 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 	for _, obj := range objects {
 		if obj.ID == firstObjectID {
 			if obj.ShardID != firstShardID {
-				t.Errorf("Object %s shard ID changed from %d to %d on re-add (should be consistent)",
+				t.Fatalf("Object %s shard ID changed from %d to %d on re-add (should be consistent)",
 					firstObjectID, firstShardID, obj.ShardID)
 			}
 		}
@@ -518,7 +518,7 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	// Verify all nodes are registered
 	nodes := pg.GetNodes()
 	if len(nodes) != 3 {
-		t.Errorf("Expected 3 nodes registered, got %d", len(nodes))
+		t.Fatalf("Expected 3 nodes registered, got %d", len(nodes))
 	}
 
 	// Add objects from different managers
@@ -532,7 +532,7 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	// Verify all objects are registered
 	objects := pg.GetObjects()
 	if len(objects) != 4 {
-		t.Errorf("Expected 4 objects registered, got %d", len(objects))
+		t.Fatalf("Expected 4 objects registered, got %d", len(objects))
 	}
 
 	// Verify objects are associated with correct nodes
@@ -542,13 +542,13 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	}
 
 	if len(objectsByNode[nodeAddr1]) != 2 {
-		t.Errorf("Expected 2 objects for node1, got %d", len(objectsByNode[nodeAddr1]))
+		t.Fatalf("Expected 2 objects for node1, got %d", len(objectsByNode[nodeAddr1]))
 	}
 	if len(objectsByNode[nodeAddr2]) != 1 {
-		t.Errorf("Expected 1 object for node2, got %d", len(objectsByNode[nodeAddr2]))
+		t.Fatalf("Expected 1 object for node2, got %d", len(objectsByNode[nodeAddr2]))
 	}
 	if len(objectsByNode[nodeAddr3]) != 1 {
-		t.Errorf("Expected 1 object for node3, got %d", len(objectsByNode[nodeAddr3]))
+		t.Fatalf("Expected 1 object for node3, got %d", len(objectsByNode[nodeAddr3]))
 	}
 }
 
@@ -589,7 +589,7 @@ func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if initialConnected {
-		t.Error("Manager should not be connected when inspector is not available")
+		t.Fatal("Manager should not be connected when inspector is not available")
 	}
 
 	// Start test inspector server on that address
@@ -634,7 +634,7 @@ func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
 	}
 
 	if !connected {
-		t.Errorf("Manager should reconnect after server starts (waited %v)", maxWait)
+		t.Fatalf("Manager should reconnect after server starts (waited %v)", maxWait)
 	}
 
 	// Poll to verify node is registered in the graph
@@ -661,6 +661,6 @@ func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
 
 	if !nodeRegistered {
 		nodes := pg.GetNodes()
-		t.Errorf("Node should be registered after reconnection. Found %d nodes", len(nodes))
+		t.Fatalf("Node should be registered after reconnection. Found %d nodes", len(nodes))
 	}
 }

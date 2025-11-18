@@ -33,7 +33,7 @@ func TestSaveObject_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := db.SaveObject(context.Background(), tt.objectID, tt.objectType, []byte(`{"key":"value"}`))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SaveObject() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("SaveObject() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -45,7 +45,7 @@ func TestLoadObject_Validation(t *testing.T) {
 	t.Run("empty object_id", func(t *testing.T) {
 		_, err := db.LoadObject(context.Background(), "")
 		if err == nil {
-			t.Error("LoadObject() should return error for empty object_id")
+			t.Fatal("LoadObject() should return error for empty object_id")
 		}
 	})
 }
@@ -56,7 +56,7 @@ func TestDeleteObject_Validation(t *testing.T) {
 	t.Run("empty object_id", func(t *testing.T) {
 		err := db.DeleteObject(context.Background(), "")
 		if err == nil {
-			t.Error("DeleteObject() should return error for empty object_id")
+			t.Fatal("DeleteObject() should return error for empty object_id")
 		}
 	})
 }
@@ -67,7 +67,7 @@ func TestObjectExists_Validation(t *testing.T) {
 	t.Run("empty object_id", func(t *testing.T) {
 		_, err := db.ObjectExists(context.Background(), "")
 		if err == nil {
-			t.Error("ObjectExists() should return error for empty object_id")
+			t.Fatal("ObjectExists() should return error for empty object_id")
 		}
 	})
 }
@@ -78,7 +78,7 @@ func TestListObjectsByType_Validation(t *testing.T) {
 	t.Run("empty object_type", func(t *testing.T) {
 		_, err := db.ListObjectsByType(context.Background(), "")
 		if err == nil {
-			t.Error("ListObjectsByType() should return error for empty object_type")
+			t.Fatal("ListObjectsByType() should return error for empty object_type")
 		}
 	})
 }

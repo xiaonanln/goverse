@@ -22,11 +22,11 @@ func TestLockClusterState_Empty(t *testing.T) {
 	}
 
 	if state.Nodes == nil {
-		t.Error("State should have initialized nodes map")
+		t.Fatal("State should have initialized nodes map")
 	}
 
 	if len(state.Nodes) != 0 {
-		t.Errorf("Expected empty nodes in state, got %d", len(state.Nodes))
+		t.Fatalf("Expected empty nodes in state, got %d", len(state.Nodes))
 	}
 }
 
@@ -58,15 +58,15 @@ func TestLockClusterState_WithData(t *testing.T) {
 	}
 
 	if len(state.Nodes) != 2 {
-		t.Errorf("Expected 2 nodes in state, got %d", len(state.Nodes))
+		t.Fatalf("Expected 2 nodes in state, got %d", len(state.Nodes))
 	}
 
 	if !state.Nodes["localhost:47001"] || !state.Nodes["localhost:47002"] {
-		t.Error("State should contain the correct nodes")
+		t.Fatal("State should contain the correct nodes")
 	}
 
 	if state.Revision != 123 {
-		t.Errorf("Expected revision 123, got %d", state.Revision)
+		t.Fatalf("Expected revision 123, got %d", state.Revision)
 	}
 
 	if state.ShardMapping == nil {
@@ -74,7 +74,7 @@ func TestLockClusterState_WithData(t *testing.T) {
 	}
 
 	if len(state.ShardMapping.Shards) != 1 {
-		t.Errorf("Expected 1 shard in state, got %d", len(state.ShardMapping.Shards))
+		t.Fatalf("Expected 1 shard in state, got %d", len(state.ShardMapping.Shards))
 	}
 }
 
@@ -93,7 +93,7 @@ func TestLockClusterState_LockingBehavior(t *testing.T) {
 
 	// Verify we can read the state
 	if !state.Nodes["localhost:47001"] {
-		t.Error("State should have the original node")
+		t.Fatal("State should have the original node")
 	}
 
 	// Note: We can't easily test that modifications are prevented without
@@ -107,7 +107,7 @@ func TestLockClusterState_LockingBehavior(t *testing.T) {
 	defer unlock2()
 
 	if !state2.Nodes["localhost:47001"] {
-		t.Error("State should still have the original node")
+		t.Fatal("State should still have the original node")
 	}
 }
 
@@ -154,7 +154,7 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 	}
 
 	if len(state.Nodes) != len(nodeAddrs) {
-		t.Errorf("Expected %d nodes in state, got %d", len(nodeAddrs), len(state.Nodes))
+		t.Fatalf("Expected %d nodes in state, got %d", len(nodeAddrs), len(state.Nodes))
 	}
 
 	if state.ShardMapping == nil {
@@ -162,26 +162,26 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 	}
 
 	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Errorf("Expected %d shards in state, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+		t.Fatalf("Expected %d shards in state, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
 	}
 
 	if state.Revision != 456 {
-		t.Errorf("Expected revision 456, got %d", state.Revision)
+		t.Fatalf("Expected revision 456, got %d", state.Revision)
 	}
 
 	// Verify a few sample shards are correctly accessible
 	for i := 0; i < 10; i++ {
 		shard, exists := state.ShardMapping.Shards[i]
 		if !exists {
-			t.Errorf("Shard %d should exist in state", i)
+			t.Fatalf("Shard %d should exist in state", i)
 			continue
 		}
 		expectedNode := nodeAddrs[i%len(nodeAddrs)]
 		if shard.TargetNode != expectedNode {
-			t.Errorf("Shard %d: expected target node %s, got %s", i, expectedNode, shard.TargetNode)
+			t.Fatalf("Shard %d: expected target node %s, got %s", i, expectedNode, shard.TargetNode)
 		}
 		if shard.CurrentNode != expectedNode {
-			t.Errorf("Shard %d: expected current node %s, got %s", i, expectedNode, shard.CurrentNode)
+			t.Fatalf("Shard %d: expected current node %s, got %s", i, expectedNode, shard.CurrentNode)
 		}
 	}
 
@@ -206,6 +206,6 @@ func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
 	}
 
 	if !state.Nodes["localhost:47001"] {
-		t.Error("State should have the original node")
+		t.Fatal("State should have the original node")
 	}
 }

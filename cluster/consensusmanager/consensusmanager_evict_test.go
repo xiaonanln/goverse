@@ -77,14 +77,14 @@ func TestGetObjectsToEvict(t *testing.T) {
 	}
 
 	if len(toEvict) != expectedEvictions {
-		t.Errorf("Expected %d objects to evict, got %d (found objects mapping to shards: %v)", expectedEvictions, len(toEvict), objToShard)
+		t.Fatalf("Expected %d objects to evict, got %d (found objects mapping to shards: %v)", expectedEvictions, len(toEvict), objToShard)
 	}
 
 	// Verify that evicted objects are from shards 0 and 2, not shard 1
 	for _, objID := range toEvict {
 		shardID := sharding.GetShardID(objID)
 		if shardID != 0 && shardID != 2 {
-			t.Errorf("Object %s with shard %d should not be evicted", objID, shardID)
+			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
 	}
 }
@@ -99,7 +99,7 @@ func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
 	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
 
 	if len(toEvict) != 0 {
-		t.Errorf("Expected no objects to evict with empty mapping, got %d", len(toEvict))
+		t.Fatalf("Expected no objects to evict with empty mapping, got %d", len(toEvict))
 	}
 }
 
@@ -139,7 +139,7 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
 
 	if len(toEvict) != 0 {
-		t.Errorf("Expected no client objects to be evicted, got %d", len(toEvict))
+		t.Fatalf("Expected no client objects to be evicted, got %d", len(toEvict))
 	}
 }
 
@@ -198,14 +198,14 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	}
 
 	if len(toEvict) != expectedEvictions {
-		t.Errorf("Expected %d objects to evict (shards without mapping), got %d (found objects: %v)", expectedEvictions, len(toEvict), objToShard)
+		t.Fatalf("Expected %d objects to evict (shards without mapping), got %d (found objects: %v)", expectedEvictions, len(toEvict), objToShard)
 	}
 
 	// Verify that evicted objects are from shards 1 and 2, not shard 0
 	for _, objID := range toEvict {
 		shardID := sharding.GetShardID(objID)
 		if shardID != 1 && shardID != 2 {
-			t.Errorf("Object %s with shard %d should not be evicted", objID, shardID)
+			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
 	}
 }
@@ -278,14 +278,14 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	}
 
 	if len(toEvict) != expectedEvictions {
-		t.Errorf("Expected %d objects to evict (CurrentNode mismatch), got %d (found objects: %v)", expectedEvictions, len(toEvict), objToShard)
+		t.Fatalf("Expected %d objects to evict (CurrentNode mismatch), got %d (found objects: %v)", expectedEvictions, len(toEvict), objToShard)
 	}
 
 	// Verify that evicted objects are from shards 0 and 2, not shard 1
 	for _, objID := range toEvict {
 		shardID := sharding.GetShardID(objID)
 		if shardID != 0 && shardID != 2 {
-			t.Errorf("Object %s with shard %d should not be evicted", objID, shardID)
+			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
 	}
 }
@@ -357,14 +357,14 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	}
 
 	if len(toEvict) != expectedEvictions {
-		t.Errorf("Expected %d objects to evict (TargetNode mismatch), got %d (found objects: %v)", expectedEvictions, len(toEvict), objToShard)
+		t.Fatalf("Expected %d objects to evict (TargetNode mismatch), got %d (found objects: %v)", expectedEvictions, len(toEvict), objToShard)
 	}
 
 	// Verify that evicted objects are from shards 0 and 2, not shard 1
 	for _, objID := range toEvict {
 		shardID := sharding.GetShardID(objID)
 		if shardID != 0 && shardID != 2 {
-			t.Errorf("Object %s with shard %d should not be evicted", objID, shardID)
+			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
 	}
 }

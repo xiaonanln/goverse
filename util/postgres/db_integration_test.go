@@ -90,7 +90,7 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 	}
 
 	if count != 0 {
-		t.Errorf("Expected 0 rows in new table, got %d", count)
+		t.Fatalf("Expected 0 rows in new table, got %d", count)
 	}
 
 	// Verify we can run InitSchema multiple times (idempotent)
@@ -133,7 +133,7 @@ func TestDB_Close_Integration(t *testing.T) {
 	ctx := context.Background()
 	err = db.Ping(ctx)
 	if err == nil {
-		t.Error("Ping() should fail after Close()")
+		t.Fatal("Ping() should fail after Close()")
 	}
 }
 

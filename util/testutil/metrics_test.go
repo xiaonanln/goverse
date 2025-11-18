@@ -17,7 +17,7 @@ func TestLockMetrics_Sequential(t *testing.T) {
 	// Verify the function doesn't panic when called
 	defer func() {
 		if r := recover(); r != nil {
-			t.Errorf("LockMetrics panicked: %v", r)
+			t.Fatalf("LockMetrics panicked: %v", r)
 		}
 	}()
 
@@ -61,7 +61,7 @@ func TestLockMetrics_Parallel(t *testing.T) {
 			// If tests are truly sequential, endCount should equal startCount
 			// (no other test should have started while we were sleeping)
 			if endCount != startCount {
-				t.Errorf("Test %d: Expected %d tests to have started, but %d started (tests are not properly serialized)", i, startCount, endCount)
+				t.Fatalf("Test %d: Expected %d tests to have started, but %d started (tests are not properly serialized)", i, startCount, endCount)
 			}
 		})
 	}
@@ -93,7 +93,7 @@ func TestLockMetrics_Cleanup(t *testing.T) {
 	case <-done:
 		// Success - cleanup released the lock
 	case <-time.After(200 * time.Millisecond):
-		t.Error("Lock was not released by cleanup within expected time")
+		t.Fatal("Lock was not released by cleanup within expected time")
 	}
 }
 
@@ -121,13 +121,13 @@ func TestLockMetrics_ResetsMetrics(t *testing.T) {
 
 		// Verify all metrics are reset to 0
 		if promtestutil.ToFloat64(metrics.AssignedShardsTotal.WithLabelValues("test-node-1")) != 0 {
-			t.Error("AssignedShardsTotal was not reset by LockMetrics")
+			t.Fatal("AssignedShardsTotal was not reset by LockMetrics")
 		}
 		if promtestutil.ToFloat64(metrics.ObjectCount.WithLabelValues("test-node-2", "TestObject", "5")) != 0 {
-			t.Error("ObjectCount was not reset by LockMetrics")
+			t.Fatal("ObjectCount was not reset by LockMetrics")
 		}
 		if promtestutil.ToFloat64(metrics.ClientsConnected.WithLabelValues("test-node-3", "grpc")) != 0 {
-			t.Error("ClientsConnected was not reset by LockMetrics")
+			t.Fatal("ClientsConnected was not reset by LockMetrics")
 		}
 	})
 }

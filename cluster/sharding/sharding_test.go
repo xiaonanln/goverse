@@ -7,7 +7,7 @@ import (
 
 func TestNumShards(t *testing.T) {
 	if NumShards != 8192 {
-		t.Errorf("NumShards should be 8192, got %d", NumShards)
+		t.Fatalf("NumShards should be 8192, got %d", NumShards)
 	}
 }
 
@@ -17,7 +17,7 @@ func TestGetShardID_BasicFunctionality(t *testing.T) {
 	shardID := GetShardID(objectID)
 
 	if shardID < 0 || shardID >= NumShards {
-		t.Errorf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
+		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
 	}
 }
 
@@ -28,7 +28,7 @@ func TestGetShardID_Consistency(t *testing.T) {
 	shardID2 := GetShardID(objectID)
 
 	if shardID1 != shardID2 {
-		t.Errorf("GetShardID(%s) should be consistent: got %d and %d", objectID, shardID1, shardID2)
+		t.Fatalf("GetShardID(%s) should be consistent: got %d and %d", objectID, shardID1, shardID2)
 	}
 }
 
@@ -43,10 +43,10 @@ func TestGetShardID_DifferentInputs(t *testing.T) {
 	// They should be different (though theoretically they could collide)
 	// We're just checking that they're both valid
 	if shardID1 < 0 || shardID1 >= NumShards {
-		t.Errorf("GetShardID(%s) = %d, want value in range [0, %d)", id1, shardID1, NumShards)
+		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", id1, shardID1, NumShards)
 	}
 	if shardID2 < 0 || shardID2 >= NumShards {
-		t.Errorf("GetShardID(%s) = %d, want value in range [0, %d)", id2, shardID2, NumShards)
+		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", id2, shardID2, NumShards)
 	}
 }
 
@@ -55,7 +55,7 @@ func TestGetShardID_EmptyString(t *testing.T) {
 	shardID := GetShardID("")
 
 	if shardID < 0 || shardID >= NumShards {
-		t.Errorf("GetShardID(\"\") = %d, want value in range [0, %d)", shardID, NumShards)
+		t.Fatalf("GetShardID(\"\") = %d, want value in range [0, %d)", shardID, NumShards)
 	}
 }
 
@@ -74,7 +74,7 @@ func TestGetShardID_SpecialCharacters(t *testing.T) {
 	for _, objectID := range testCases {
 		shardID := GetShardID(objectID)
 		if shardID < 0 || shardID >= NumShards {
-			t.Errorf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
+			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
 		}
 	}
 }
@@ -98,14 +98,14 @@ func TestGetShardID_Distribution(t *testing.T) {
 
 	// Verify we have at least some distribution (not all objects in one shard)
 	if len(shardCounts) < 2 {
-		t.Errorf("Expected distribution across multiple shards, got only %d shard(s)", len(shardCounts))
+		t.Fatalf("Expected distribution across multiple shards, got only %d shard(s)", len(shardCounts))
 	}
 
 	// With 10000 objects and 8192 shards, we expect most shards to have 0-2 objects
 	// Just verify that no single shard has all objects
 	for shardID, count := range shardCounts {
 		if count == numTests {
-			t.Errorf("All objects mapped to shard %d, expected better distribution", shardID)
+			t.Fatalf("All objects mapped to shard %d, expected better distribution", shardID)
 		}
 	}
 }
@@ -134,7 +134,7 @@ func TestGetShardID_KnownValues(t *testing.T) {
 
 		// Should only have one unique result
 		if len(results) != 1 {
-			t.Errorf("GetShardID(%s) produced multiple different results: %v", tc.objectID, results)
+			t.Fatalf("GetShardID(%s) produced multiple different results: %v", tc.objectID, results)
 		}
 	}
 }

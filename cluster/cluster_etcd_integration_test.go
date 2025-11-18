@@ -229,7 +229,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 		leader := cluster.GetLeaderNode()
 		t.Logf("Cluster %d sees leader: %s", i+1, leader)
 		if leader != expectedLeader {
-			t.Errorf("Cluster %d: GetLeaderNode() = %s, want %s", i+1, leader, expectedLeader)
+			t.Fatalf("Cluster %d: GetLeaderNode() = %s, want %s", i+1, leader, expectedLeader)
 		}
 	}
 
@@ -237,7 +237,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	for i, cluster := range clusters {
 		nodeList := cluster.GetNodes()
 		if len(nodeList) < 3 {
-			t.Errorf("Cluster %d should see at least 3 nodes, got %d", i+1, len(nodeList))
+			t.Fatalf("Cluster %d should see at least 3 nodes, got %d", i+1, len(nodeList))
 		}
 	}
 }
@@ -298,7 +298,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	initialLeader := cluster1.GetLeaderNode()
 	t.Logf("Initial leader: %s", initialLeader)
 	if initialLeader != "localhost:47200" {
-		t.Errorf("Initial leader should be localhost:47200, got %s", initialLeader)
+		t.Fatalf("Initial leader should be localhost:47200, got %s", initialLeader)
 	}
 
 	// Stop cluster2 (current leader) - this will unregister the node
@@ -314,6 +314,6 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	newLeader := cluster1.GetLeaderNode()
 	t.Logf("New leader after node2 left: %s", newLeader)
 	if newLeader != "localhost:47300" {
-		t.Errorf("After node2 left, leader should be localhost:47300, got %s", newLeader)
+		t.Fatalf("After node2 left, leader should be localhost:47300, got %s", newLeader)
 	}
 }

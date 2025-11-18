@@ -83,7 +83,7 @@ func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 	// Call ReleaseShardsForNode - should return error because local node address is empty
 	err := cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err == nil {
-		t.Error("ReleaseShardsForNode should return error for empty localNode")
+		t.Fatal("ReleaseShardsForNode should return error for empty localNode")
 	}
 }
 
@@ -101,7 +101,7 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 	// Call with valid node but no shard mapping - should not error
 	err := cm.ReleaseShardsForNode(ctx, objectsPerShard)
 	if err != nil {
-		t.Errorf("ReleaseShardsForNode should not error when no mapping exists: %v", err)
+		t.Fatalf("ReleaseShardsForNode should not error when no mapping exists: %v", err)
 	}
 }
 
@@ -205,14 +205,14 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 		t.Fatalf("Failed to get shard 0 from etcd: %v", err)
 	}
 	if len(resp0.Kvs) == 0 {
-		t.Error("Shard 0 should exist in etcd after releasing")
+		t.Fatal("Shard 0 should exist in etcd after releasing")
 	} else {
 		shardInfo0 := parseShardInfo(resp0.Kvs[0])
 		if shardInfo0.CurrentNode != "" {
-			t.Errorf("Shard 0 CurrentNode should be empty (released), got %s", shardInfo0.CurrentNode)
+			t.Fatalf("Shard 0 CurrentNode should be empty (released), got %s", shardInfo0.CurrentNode)
 		}
 		if shardInfo0.TargetNode != otherNodeAddr {
-			t.Errorf("Shard 0 TargetNode should remain %s, got %s", otherNodeAddr, shardInfo0.TargetNode)
+			t.Fatalf("Shard 0 TargetNode should remain %s, got %s", otherNodeAddr, shardInfo0.TargetNode)
 		}
 	}
 
@@ -223,11 +223,11 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 		t.Fatalf("Failed to get shard 1 from etcd: %v", err)
 	}
 	if len(resp1.Kvs) == 0 {
-		t.Error("Shard 1 should exist in etcd")
+		t.Fatal("Shard 1 should exist in etcd")
 	} else {
 		shardInfo1 := parseShardInfo(resp1.Kvs[0])
 		if shardInfo1.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 1 CurrentNode should remain %s (has objects), got %s", thisNodeAddr, shardInfo1.CurrentNode)
+			t.Fatalf("Shard 1 CurrentNode should remain %s (has objects), got %s", thisNodeAddr, shardInfo1.CurrentNode)
 		}
 	}
 
@@ -238,11 +238,11 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 		t.Fatalf("Failed to get shard 2 from etcd: %v", err)
 	}
 	if len(resp2.Kvs) == 0 {
-		t.Error("Shard 2 should exist in etcd")
+		t.Fatal("Shard 2 should exist in etcd")
 	} else {
 		shardInfo2 := parseShardInfo(resp2.Kvs[0])
 		if shardInfo2.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 2 CurrentNode should remain %s (target is self), got %s", thisNodeAddr, shardInfo2.CurrentNode)
+			t.Fatalf("Shard 2 CurrentNode should remain %s (target is self), got %s", thisNodeAddr, shardInfo2.CurrentNode)
 		}
 	}
 
@@ -253,11 +253,11 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 		t.Fatalf("Failed to get shard 3 from etcd: %v", err)
 	}
 	if len(resp3.Kvs) == 0 {
-		t.Error("Shard 3 should exist in etcd")
+		t.Fatal("Shard 3 should exist in etcd")
 	} else {
 		shardInfo3 := parseShardInfo(resp3.Kvs[0])
 		if shardInfo3.CurrentNode != thisNodeAddr {
-			t.Errorf("Shard 3 CurrentNode should remain %s (target is empty), got %s", thisNodeAddr, shardInfo3.CurrentNode)
+			t.Fatalf("Shard 3 CurrentNode should remain %s (target is empty), got %s", thisNodeAddr, shardInfo3.CurrentNode)
 		}
 	}
 
@@ -268,11 +268,11 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 		t.Fatalf("Failed to get shard 4 from etcd: %v", err)
 	}
 	if len(resp4.Kvs) == 0 {
-		t.Error("Shard 4 should exist in etcd")
+		t.Fatal("Shard 4 should exist in etcd")
 	} else {
 		shardInfo4 := parseShardInfo(resp4.Kvs[0])
 		if shardInfo4.CurrentNode != otherNodeAddr {
-			t.Errorf("Shard 4 CurrentNode should remain %s (current is other node), got %s", otherNodeAddr, shardInfo4.CurrentNode)
+			t.Fatalf("Shard 4 CurrentNode should remain %s (current is other node), got %s", otherNodeAddr, shardInfo4.CurrentNode)
 		}
 	}
 }
@@ -354,14 +354,14 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 			t.Fatalf("Failed to get shard %d from etcd: %v", i, err)
 		}
 		if len(resp.Kvs) == 0 {
-			t.Errorf("Shard %d should exist in etcd after releasing", i)
+			t.Fatalf("Shard %d should exist in etcd after releasing", i)
 		} else {
 			shardInfo := parseShardInfo(resp.Kvs[0])
 			if shardInfo.CurrentNode != "" {
-				t.Errorf("Shard %d CurrentNode should be empty (released), got %s", i, shardInfo.CurrentNode)
+				t.Fatalf("Shard %d CurrentNode should be empty (released), got %s", i, shardInfo.CurrentNode)
 			}
 			if shardInfo.TargetNode != otherNodeAddr {
-				t.Errorf("Shard %d TargetNode should remain %s, got %s", i, otherNodeAddr, shardInfo.TargetNode)
+				t.Fatalf("Shard %d TargetNode should remain %s, got %s", i, otherNodeAddr, shardInfo.TargetNode)
 			}
 		}
 	}
@@ -451,11 +451,11 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 			t.Fatalf("Failed to get shard %d from etcd: %v", shardID, err)
 		}
 		if len(resp.Kvs) == 0 {
-			t.Errorf("Shard %d should exist in etcd after releasing", shardID)
+			t.Fatalf("Shard %d should exist in etcd after releasing", shardID)
 		} else {
 			shardInfo := parseShardInfo(resp.Kvs[0])
 			if shardInfo.CurrentNode != "" {
-				t.Errorf("Shard %d CurrentNode should be empty (released), got %s", shardID, shardInfo.CurrentNode)
+				t.Fatalf("Shard %d CurrentNode should be empty (released), got %s", shardID, shardInfo.CurrentNode)
 			}
 		}
 	}

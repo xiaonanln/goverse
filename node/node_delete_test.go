@@ -52,12 +52,12 @@ func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 
 	// Verify object is removed from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after deletion, got %d", node.NumObjects())
 	}
 
 	// Verify object is removed from persistence
 	if provider.HasStoredData("delete-obj-1") {
-		t.Error("Object should not exist in persistence after deletion")
+		t.Fatal("Object should not exist in persistence after deletion")
 	}
 }
 
@@ -96,13 +96,13 @@ func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
 
 	// Verify object is removed from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after deletion, got %d", node.NumObjects())
 	}
 
 	// Verify nothing was attempted to be deleted from persistence
 	// (non-persistent objects shouldn't interact with persistence)
 	if provider.GetStorageCount() != 0 {
-		t.Errorf("Expected 0 items in storage (non-persistent object), got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 0 items in storage (non-persistent object), got %d", provider.GetStorageCount())
 	}
 }
 
@@ -140,7 +140,7 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 
 	// Verify object is removed from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after deletion, got %d", node.NumObjects())
 	}
 }
 
@@ -156,12 +156,12 @@ func TestNode_DeleteObject_NotFound(t *testing.T) {
 	// Try to delete non-existent object - should succeed (idempotent)
 	err := node.DeleteObject(ctx, "non-existent-obj")
 	if err != nil {
-		t.Errorf("Expected no error for idempotent delete of non-existent object, got: %v", err)
+		t.Fatalf("Expected no error for idempotent delete of non-existent object, got: %v", err)
 	}
 
 	// Verify nothing was stored in persistence
 	if provider.GetStorageCount() != 0 {
-		t.Errorf("Expected empty storage, got %d objects", provider.GetStorageCount())
+		t.Fatalf("Expected empty storage, got %d objects", provider.GetStorageCount())
 	}
 }
 
@@ -253,15 +253,15 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 
 	// Verify one object was removed
 	if node.NumObjects() != 4 {
-		t.Errorf("Expected 4 objects after deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 4 objects after deletion, got %d", node.NumObjects())
 	}
 	if provider.GetStorageCount() != 4 {
-		t.Errorf("Expected 4 objects in storage after deletion, got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 4 objects in storage after deletion, got %d", provider.GetStorageCount())
 	}
 
 	// Verify the correct object was removed
 	if provider.HasStoredData("multi-obj-3") {
-		t.Error("Deleted object should not exist in storage")
+		t.Fatal("Deleted object should not exist in storage")
 	}
 
 	// Verify other objects still exist
@@ -271,7 +271,7 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 		}
 		objID := fmt.Sprintf("multi-obj-%d", i)
 		if !provider.HasStoredData(objID) {
-			t.Errorf("Object %s should still exist in storage", objID)
+			t.Fatalf("Object %s should still exist in storage", objID)
 		}
 	}
 
@@ -283,10 +283,10 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 
 	// Verify two objects were removed
 	if node.NumObjects() != 3 {
-		t.Errorf("Expected 3 objects after second deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 3 objects after second deletion, got %d", node.NumObjects())
 	}
 	if provider.GetStorageCount() != 3 {
-		t.Errorf("Expected 3 objects in storage after second deletion, got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 3 objects in storage after second deletion, got %d", provider.GetStorageCount())
 	}
 }
 
@@ -338,7 +338,7 @@ func TestNode_DeleteObject_ThreadSafety(t *testing.T) {
 
 	// Verify all objects were deleted
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after concurrent deletions, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after concurrent deletions, got %d", node.NumObjects())
 	}
 
 	// Note: Due to concurrent access, some deletions might fail (object not found)

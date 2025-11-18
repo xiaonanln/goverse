@@ -62,7 +62,7 @@ func TestCluster_ShardLockIsolation(t *testing.T) {
 	// If locks are truly isolated, total time should be ~50ms
 	// If they interfere, it would be ~100ms
 	if duration > 80*time.Millisecond {
-		t.Errorf("Locks on different clusters interfered: took %v (expected ~50ms)", duration)
+		t.Fatalf("Locks on different clusters interfered: took %v (expected ~50ms)", duration)
 	}
 
 	t.Logf("Test passed: locks isolated correctly, duration: %v", duration)
@@ -109,17 +109,17 @@ func TestShardLock_MultipleClustersConcurrent(t *testing.T) {
 	for i, cluster := range clusters {
 		sl := cluster.GetShardLock()
 		if sl == nil {
-			t.Errorf("Cluster %d has nil ShardLock", i)
+			t.Fatalf("Cluster %d has nil ShardLock", i)
 			continue
 		}
 		if shardLocks[sl] {
-			t.Errorf("Cluster %d shares ShardLock with another cluster", i)
+			t.Fatalf("Cluster %d shares ShardLock with another cluster", i)
 		}
 		shardLocks[sl] = true
 	}
 
 	// Verify we have exactly numClusters unique ShardLock instances
 	if len(shardLocks) != numClusters {
-		t.Errorf("Expected %d unique ShardLock instances, got %d", numClusters, len(shardLocks))
+		t.Fatalf("Expected %d unique ShardLock instances, got %d", numClusters, len(shardLocks))
 	}
 }

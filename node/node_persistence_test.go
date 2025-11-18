@@ -151,7 +151,7 @@ func TestNode_SetPersistenceProvider(t *testing.T) {
 	node.SetPersistenceProvider(provider)
 
 	if node.persistenceProvider != provider {
-		t.Error("SetPersistenceProvider did not set the provider")
+		t.Fatal("SetPersistenceProvider did not set the provider")
 	}
 }
 
@@ -162,7 +162,7 @@ func TestNode_SetPersistenceInterval(t *testing.T) {
 	node.SetPersistenceInterval(interval)
 
 	if node.persistenceInterval != interval {
-		t.Errorf("SetPersistenceInterval: expected %v, got %v", interval, node.persistenceInterval)
+		t.Fatalf("SetPersistenceInterval: expected %v, got %v", interval, node.persistenceInterval)
 	}
 }
 
@@ -190,7 +190,7 @@ func TestNode_SaveAllObjects_NoPersistentObjects(t *testing.T) {
 
 	// Verify nothing was saved (non-persistent object)
 	if provider.GetSaveCount() != 0 {
-		t.Errorf("Expected 0 saved objects, got %d", provider.GetSaveCount())
+		t.Fatalf("Expected 0 saved objects, got %d", provider.GetSaveCount())
 	}
 }
 
@@ -223,12 +223,12 @@ func TestNode_SaveAllObjects_WithPersistentObjects(t *testing.T) {
 
 	// Verify objects were saved
 	if provider.GetSaveCount() != 2 {
-		t.Errorf("Expected 2 saved objects, got %d", provider.GetSaveCount())
+		t.Fatalf("Expected 2 saved objects, got %d", provider.GetSaveCount())
 	}
 
 	// Verify data was saved
 	if provider.GetStorageCount() != 2 {
-		t.Errorf("Expected 2 objects in storage, got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 2 objects in storage, got %d", provider.GetStorageCount())
 	}
 }
 
@@ -262,7 +262,7 @@ func TestNode_SaveAllObjects_MixedObjects(t *testing.T) {
 
 	// Only persistent object should be saved
 	if provider.GetSaveCount() != 1 {
-		t.Errorf("Expected 1 saved object, got %d", provider.GetSaveCount())
+		t.Fatalf("Expected 1 saved object, got %d", provider.GetSaveCount())
 	}
 }
 
@@ -294,7 +294,7 @@ func TestNode_PeriodicPersistence_Integration(t *testing.T) {
 	// Verify at least one save occurred
 	saveCount := provider.GetSaveCount()
 	if saveCount < 1 {
-		t.Errorf("Expected at least 1 save, got %d", saveCount)
+		t.Fatalf("Expected at least 1 save, got %d", saveCount)
 	}
 }
 
@@ -337,12 +337,12 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 	// Verify at least one save occurred (during shutdown)
 	saveCount := provider.GetSaveCount()
 	if saveCount < 1 {
-		t.Errorf("Expected at least 1 save during shutdown, got %d", saveCount)
+		t.Fatalf("Expected at least 1 save during shutdown, got %d", saveCount)
 	}
 
 	// Verify objects were cleared from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 }
 
@@ -353,7 +353,7 @@ func TestNode_SaveAllObjects_NoProvider(t *testing.T) {
 	ctx := context.Background()
 	err := node.SaveAllObjects(ctx)
 	if err == nil {
-		t.Error("Expected error when no provider is configured")
+		t.Fatal("Expected error when no provider is configured")
 	}
 }
 
@@ -415,35 +415,35 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 	// Verify the behavior:
 	// 1. Initially no saves (before first cycle)
 	if firstCount != 0 {
-		t.Errorf("Expected 0 saves before first cycle, got %d", firstCount)
+		t.Fatalf("Expected 0 saves before first cycle, got %d", firstCount)
 	}
 
 	// 2. After first cycle, should have saved both objects (2 saves)
 	if secondCount < 2 {
-		t.Errorf("Expected at least 2 saves after first cycle, got %d", secondCount)
+		t.Fatalf("Expected at least 2 saves after first cycle, got %d", secondCount)
 	}
 
 	// 3. After second cycle, should have more saves (at least 4 total)
 	if thirdCount < 4 {
-		t.Errorf("Expected at least 4 saves after second cycle, got %d", thirdCount)
+		t.Fatalf("Expected at least 4 saves after second cycle, got %d", thirdCount)
 	}
 
 	// 4. Verify periodic behavior: saves should increase over time
 	if !(firstCount < secondCount && secondCount < thirdCount) {
-		t.Errorf("Save counts should increase over time: %d, %d, %d", firstCount, secondCount, thirdCount)
+		t.Fatalf("Save counts should increase over time: %d, %d, %d", firstCount, secondCount, thirdCount)
 	}
 
 	// 5. Verify both objects were actually stored
 	if provider.GetStorageCount() != 2 {
-		t.Errorf("Expected 2 objects in storage, got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 2 objects in storage, got %d", provider.GetStorageCount())
 	}
 
 	// 6. Verify correct objects were stored
 	if !provider.HasStoredData("periodic-obj-1") {
-		t.Error("Object periodic-obj-1 was not stored")
+		t.Fatal("Object periodic-obj-1 was not stored")
 	}
 	if !provider.HasStoredData("periodic-obj-2") {
-		t.Error("Object periodic-obj-2 was not stored")
+		t.Fatal("Object periodic-obj-2 was not stored")
 	}
 
 	// 7. Verify the saved data is correct for object 1
@@ -456,10 +456,10 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 		t.Fatalf("Failed to unmarshal data for periodic-obj-1: %v", err)
 	}
 	if idField, ok := struct1.Fields["id"]; !ok || idField.GetStringValue() != "periodic-obj-1" {
-		t.Errorf("Expected id 'periodic-obj-1', got '%v'", struct1.Fields["id"])
+		t.Fatalf("Expected id 'periodic-obj-1', got '%v'", struct1.Fields["id"])
 	}
 	if valueField, ok := struct1.Fields["value"]; !ok || valueField.GetStringValue() != "value1" {
-		t.Errorf("Expected value 'value1' for periodic-obj-1, got '%v'", struct1.Fields["value"])
+		t.Fatalf("Expected value 'value1' for periodic-obj-1, got '%v'", struct1.Fields["value"])
 	}
 
 	// 8. Verify the saved data is correct for object 2
@@ -472,10 +472,10 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 		t.Fatalf("Failed to unmarshal data for periodic-obj-2: %v", err)
 	}
 	if idField, ok := struct2.Fields["id"]; !ok || idField.GetStringValue() != "periodic-obj-2" {
-		t.Errorf("Expected id 'periodic-obj-2', got '%v'", struct2.Fields["id"])
+		t.Fatalf("Expected id 'periodic-obj-2', got '%v'", struct2.Fields["id"])
 	}
 	if valueField, ok := struct2.Fields["value"]; !ok || valueField.GetStringValue() != "value2" {
-		t.Errorf("Expected value 'value2' for periodic-obj-2, got '%v'", struct2.Fields["value"])
+		t.Fatalf("Expected value 'value2' for periodic-obj-2, got '%v'", struct2.Fields["value"])
 	}
 }
 
@@ -519,7 +519,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	}
 	firstValue := firstStruct.Fields["value"].GetStringValue()
 	if firstValue != "initial-value" {
-		t.Errorf("Expected initial value 'initial-value', got '%s'", firstValue)
+		t.Fatalf("Expected initial value 'initial-value', got '%s'", firstValue)
 	}
 
 	// Change the object value
@@ -531,7 +531,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	// Verify another save occurred
 	secondCount := provider.GetSaveCount()
 	if secondCount <= firstCount {
-		t.Errorf("Expected more saves after update: first=%d, second=%d", firstCount, secondCount)
+		t.Fatalf("Expected more saves after update: first=%d, second=%d", firstCount, secondCount)
 	}
 
 	// Load and verify updated value
@@ -542,7 +542,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	}
 	secondValue := secondStruct.Fields["value"].GetStringValue()
 	if secondValue != "updated-value" {
-		t.Errorf("Expected updated value 'updated-value', got '%s'", secondValue)
+		t.Fatalf("Expected updated value 'updated-value', got '%s'", secondValue)
 	}
 
 	// Stop periodic persistence
@@ -595,13 +595,13 @@ func TestNode_PeriodicPersistence_StopsCleanly(t *testing.T) {
 	// We allow for one in-progress save to complete (countAtStop might be +1 from countBeforeStop)
 	// but there should be no new saves after that
 	if countAfterStop > countAtStop {
-		t.Errorf("Expected no more saves after stop completed: atStop=%d, after=%d", countAtStop, countAfterStop)
+		t.Fatalf("Expected no more saves after stop completed: atStop=%d, after=%d", countAtStop, countAfterStop)
 	}
 
 	// The count should have increased from before stopping to when we stopped
 	// (at least the in-progress save should complete)
 	if countAtStop < countBeforeStop {
-		t.Errorf("Count should not decrease: before=%d, atStop=%d", countBeforeStop, countAtStop)
+		t.Fatalf("Count should not decrease: before=%d, atStop=%d", countBeforeStop, countAtStop)
 	}
 }
 
@@ -644,7 +644,7 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 	// Verify the object has the persisted value
 	persistentObj := loadedObj.(*TestPersistentObject)
 	if persistentObj.Value != "persisted-value" {
-		t.Errorf("Expected value 'persisted-value' from persistence, got '%s'", persistentObj.Value)
+		t.Fatalf("Expected value 'persisted-value' from persistence, got '%s'", persistentObj.Value)
 	}
 }
 
@@ -687,7 +687,7 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	// Verify the object has the persisted value
 	persistentObj := loadedObj.(*TestPersistentObject)
 	if persistentObj.Value != "saved-state" {
-		t.Errorf("Expected value 'saved-state' from persistence, got '%s'", persistentObj.Value)
+		t.Fatalf("Expected value 'saved-state' from persistence, got '%s'", persistentObj.Value)
 	}
 }
 
@@ -715,18 +715,18 @@ func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
 	// Since object was not in persistence, FromData(nil) should have been called
 	// This indicates a new object creation
 	if obj.Id() != "new-obj-456" {
-		t.Errorf("Expected object ID 'new-obj-456', got '%s'", obj.Id())
+		t.Fatalf("Expected object ID 'new-obj-456', got '%s'", obj.Id())
 	}
 
 	// Verify that the object has empty value (FromData(nil) was called)
 	persistentObj := obj.(*TestPersistentObject)
 	if persistentObj.Value != "" {
-		t.Errorf("Expected empty value for new object, got '%s'", persistentObj.Value)
+		t.Fatalf("Expected empty value for new object, got '%s'", persistentObj.Value)
 	}
 
 	// The object should be registered in the node
 	if node.objects["new-obj-456"] == nil {
-		t.Error("Object was not registered in node.objects")
+		t.Fatal("Object was not registered in node.objects")
 	}
 }
 
@@ -751,12 +751,12 @@ func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	if obj.Id() != "non-persistent-obj" {
-		t.Errorf("Expected object ID 'non-persistent-obj', got '%s'", obj.Id())
+		t.Fatalf("Expected object ID 'non-persistent-obj', got '%s'", obj.Id())
 	}
 
 	// The object should be registered in the node
 	if node.objects["non-persistent-obj"] == nil {
-		t.Error("Object was not registered in node.objects")
+		t.Fatal("Object was not registered in node.objects")
 	}
 }
 
@@ -784,12 +784,12 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	if obj != nil {
-		t.Errorf("Expected nil object when creation fails, got %v", obj)
+		t.Fatalf("Expected nil object when creation fails, got %v", obj)
 	}
 
 	// The object should NOT be registered in the node
 	if node.objects["error-obj"] != nil {
-		t.Error("Object should not be registered when creation fails")
+		t.Fatal("Object should not be registered when creation fails")
 	}
 }
 
@@ -827,12 +827,12 @@ func TestNode_Stop_ClearsObjects(t *testing.T) {
 
 	// Verify objects were saved
 	if provider.GetSaveCount() != 5 {
-		t.Errorf("Expected 5 objects to be saved, got %d", provider.GetSaveCount())
+		t.Fatalf("Expected 5 objects to be saved, got %d", provider.GetSaveCount())
 	}
 
 	// Verify objects were cleared from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 
 	// Verify the map is actually empty
@@ -840,7 +840,7 @@ func TestNode_Stop_ClearsObjects(t *testing.T) {
 	mapLen := len(node.objects)
 	node.objectsMu.RUnlock()
 	if mapLen != 0 {
-		t.Errorf("Expected empty objects map after stop, got %d entries", mapLen)
+		t.Fatalf("Expected empty objects map after stop, got %d entries", mapLen)
 	}
 }
 
@@ -877,7 +877,7 @@ func TestNode_Stop_ClearsObjects_NoPersistence(t *testing.T) {
 
 	// Verify objects were cleared from memory even without persistence
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects after stop, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects after stop, got %d", node.NumObjects())
 	}
 
 	// Verify the map is actually empty
@@ -885,6 +885,6 @@ func TestNode_Stop_ClearsObjects_NoPersistence(t *testing.T) {
 	mapLen := len(node.objects)
 	node.objectsMu.RUnlock()
 	if mapLen != 0 {
-		t.Errorf("Expected empty objects map after stop, got %d entries", mapLen)
+		t.Fatalf("Expected empty objects map after stop, got %d entries", mapLen)
 	}
 }

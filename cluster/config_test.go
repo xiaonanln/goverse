@@ -10,24 +10,24 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Verify default values
 	if cfg.MinQuorum != 1 {
-		t.Errorf("Expected default MinQuorum to be 1, got %d", cfg.MinQuorum)
+		t.Fatalf("Expected default MinQuorum to be 1, got %d", cfg.MinQuorum)
 	}
 
 	if cfg.ClusterStateStabilityDuration != 10*time.Second {
-		t.Errorf("Expected default NodeStabilityDuration to be 10s, got %v", cfg.ClusterStateStabilityDuration)
+		t.Fatalf("Expected default NodeStabilityDuration to be 10s, got %v", cfg.ClusterStateStabilityDuration)
 	}
 
 	if cfg.ShardMappingCheckInterval != 5*time.Second {
-		t.Errorf("Expected default ShardMappingCheckInterval to be 5s, got %v", cfg.ShardMappingCheckInterval)
+		t.Fatalf("Expected default ShardMappingCheckInterval to be 5s, got %v", cfg.ShardMappingCheckInterval)
 	}
 
 	// EtcdAddress and EtcdPrefix should be empty by default
 	if cfg.EtcdAddress != "" {
-		t.Errorf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
+		t.Fatalf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
 	}
 
 	if cfg.EtcdPrefix != "" {
-		t.Errorf("Expected default EtcdPrefix to be empty, got %s", cfg.EtcdPrefix)
+		t.Fatalf("Expected default EtcdPrefix to be empty, got %s", cfg.EtcdPrefix)
 	}
 }
 
@@ -42,23 +42,23 @@ func TestConfigCustomization(t *testing.T) {
 
 	// Verify customizations
 	if cfg.EtcdAddress != "localhost:2379" {
-		t.Errorf("Expected EtcdAddress to be localhost:2379, got %s", cfg.EtcdAddress)
+		t.Fatalf("Expected EtcdAddress to be localhost:2379, got %s", cfg.EtcdAddress)
 	}
 
 	if cfg.EtcdPrefix != "/test" {
-		t.Errorf("Expected EtcdPrefix to be /test, got %s", cfg.EtcdPrefix)
+		t.Fatalf("Expected EtcdPrefix to be /test, got %s", cfg.EtcdPrefix)
 	}
 
 	if cfg.MinQuorum != 3 {
-		t.Errorf("Expected MinQuorum to be 3, got %d", cfg.MinQuorum)
+		t.Fatalf("Expected MinQuorum to be 3, got %d", cfg.MinQuorum)
 	}
 
 	if cfg.ClusterStateStabilityDuration != 5*time.Second {
-		t.Errorf("Expected NodeStabilityDuration to be 5s, got %v", cfg.ClusterStateStabilityDuration)
+		t.Fatalf("Expected NodeStabilityDuration to be 5s, got %v", cfg.ClusterStateStabilityDuration)
 	}
 
 	if cfg.ShardMappingCheckInterval != 2*time.Second {
-		t.Errorf("Expected ShardMappingCheckInterval to be 2s, got %v", cfg.ShardMappingCheckInterval)
+		t.Fatalf("Expected ShardMappingCheckInterval to be 2s, got %v", cfg.ShardMappingCheckInterval)
 	}
 }
 
@@ -81,14 +81,14 @@ func TestNewClusterAppliesConfig(t *testing.T) {
 
 	// Verify the config values are as expected
 	if cfg.MinQuorum != 3 {
-		t.Errorf("Expected MinQuorum to be 3, got %d", cfg.MinQuorum)
+		t.Fatalf("Expected MinQuorum to be 3, got %d", cfg.MinQuorum)
 	}
 
 	if cfg.ClusterStateStabilityDuration != 7*time.Second {
-		t.Errorf("Expected NodeStabilityDuration to be 7s, got %v", cfg.ClusterStateStabilityDuration)
+		t.Fatalf("Expected NodeStabilityDuration to be 7s, got %v", cfg.ClusterStateStabilityDuration)
 	}
 
 	if cfg.ShardMappingCheckInterval != 3*time.Second {
-		t.Errorf("Expected ShardMappingCheckInterval to be 3s, got %v", cfg.ShardMappingCheckInterval)
+		t.Fatalf("Expected ShardMappingCheckInterval to be 3s, got %v", cfg.ShardMappingCheckInterval)
 	}
 }

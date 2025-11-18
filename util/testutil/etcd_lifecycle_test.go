@@ -21,7 +21,7 @@ func TestIsDockerEnvironment(t *testing.T) {
 	expectedResult := (startErr == nil && stopErr == nil)
 
 	if result != expectedResult {
-		t.Errorf("IsDockerEnvironment() = %v, want %v", result, expectedResult)
+		t.Fatalf("IsDockerEnvironment() = %v, want %v", result, expectedResult)
 		t.Logf("start-etcd.sh exists: %v (err: %v)", startErr == nil, startErr)
 		t.Logf("stop-etcd.sh exists: %v (err: %v)", stopErr == nil, stopErr)
 	}
@@ -37,7 +37,7 @@ func TestIsDockerEnvironment_Consistency(t *testing.T) {
 	result2 := IsDockerEnvironment()
 
 	if result1 != result2 {
-		t.Errorf("IsDockerEnvironment() returned inconsistent results: %v != %v", result1, result2)
+		t.Fatalf("IsDockerEnvironment() returned inconsistent results: %v != %v", result1, result2)
 	}
 
 	// Verify the logic: both files must exist for true result
@@ -46,7 +46,7 @@ func TestIsDockerEnvironment_Consistency(t *testing.T) {
 	expectedResult := (startErr == nil && stopErr == nil)
 
 	if result1 != expectedResult {
-		t.Errorf("IsDockerEnvironment() = %v, but expected %v based on file existence", result1, expectedResult)
+		t.Fatalf("IsDockerEnvironment() = %v, but expected %v based on file existence", result1, expectedResult)
 		t.Logf("start-etcd.sh exists: %v", startErr == nil)
 		t.Logf("stop-etcd.sh exists: %v", stopErr == nil)
 	}
@@ -67,19 +67,19 @@ func TestIsGitHubActions(t *testing.T) {
 	// Test when GITHUB_ACTIONS is not set
 	os.Unsetenv("GITHUB_ACTIONS")
 	if IsGitHubActions() {
-		t.Error("IsGitHubActions() = true when env var not set, want false")
+		t.Fatal("IsGitHubActions() = true when env var not set, want false")
 	}
 
 	// Test when GITHUB_ACTIONS is set to "true"
 	os.Setenv("GITHUB_ACTIONS", "true")
 	if !IsGitHubActions() {
-		t.Error("IsGitHubActions() = false when env var is 'true', want true")
+		t.Fatal("IsGitHubActions() = false when env var is 'true', want true")
 	}
 
 	// Test when GITHUB_ACTIONS is set to other value
 	os.Setenv("GITHUB_ACTIONS", "false")
 	if IsGitHubActions() {
-		t.Error("IsGitHubActions() = true when env var is 'false', want false")
+		t.Fatal("IsGitHubActions() = true when env var is 'false', want false")
 	}
 }
 
@@ -100,13 +100,13 @@ func TestDockerScriptsPaths(t *testing.T) {
 	repoStopScript := filepath.Join(projectRoot, "script", "docker", "stop-etcd.sh")
 
 	if _, err := os.Stat(repoStartScript); err != nil {
-		t.Errorf("start-etcd.sh not found at %s: %v", repoStartScript, err)
+		t.Fatalf("start-etcd.sh not found at %s: %v", repoStartScript, err)
 	} else {
 		t.Logf("✓ Found start-etcd.sh at %s", repoStartScript)
 	}
 
 	if _, err := os.Stat(repoStopScript); err != nil {
-		t.Errorf("stop-etcd.sh not found at %s: %v", repoStopScript, err)
+		t.Fatalf("stop-etcd.sh not found at %s: %v", repoStopScript, err)
 	} else {
 		t.Logf("✓ Found stop-etcd.sh at %s", repoStopScript)
 	}

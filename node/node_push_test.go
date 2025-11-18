@@ -45,10 +45,10 @@ func TestPushMessageToClient(t *testing.T) {
 			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
 		}
 		if notification.Message.UserName != "TestUser" {
-			t.Errorf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
+			t.Fatalf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
 		}
 		if notification.Message.Message != "Hello, World!" {
-			t.Errorf("Expected Message 'Hello, World!', got '%s'", notification.Message.Message)
+			t.Fatalf("Expected Message 'Hello, World!', got '%s'", notification.Message.Message)
 		}
 	default:
 		t.Fatal("No message received on client channel")

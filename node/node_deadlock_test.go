@@ -267,7 +267,7 @@ func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
 	go func() {
 		_, err := n.CreateObject(ctx, "TestObjectWithOnCreatedFlag", "test-visibility")
 		if err != nil {
-			t.Errorf("CreateObject failed: %v", err)
+			t.Fatalf("CreateObject failed: %v", err)
 		}
 		createDone <- true
 	}()
@@ -288,7 +288,7 @@ func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
 			// If we successfully called the method, OnCreated must have been called
 			result := resp.(*structpb.Struct)
 			if !result.Fields["onCreatedCalled"].GetBoolValue() {
-				t.Error("Method was callable before OnCreated completed!")
+				t.Fatal("Method was callable before OnCreated completed!")
 			}
 		}
 		time.Sleep(1 * time.Millisecond)

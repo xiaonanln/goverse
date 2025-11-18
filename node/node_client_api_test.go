@@ -82,7 +82,7 @@ func TestRegisterClient_MessageChanWorks(t *testing.T) {
 			t.Fatalf("Expected *chat_pb.Client_NewMessageNotification, got %T", msg)
 		}
 		if notification.Message.UserName != "TestUser" {
-			t.Errorf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
+			t.Fatalf("Expected UserName 'TestUser', got '%s'", notification.Message.UserName)
 		}
 	default:
 		t.Fatal("No message received on client channel")

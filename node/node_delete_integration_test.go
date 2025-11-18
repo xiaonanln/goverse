@@ -55,18 +55,18 @@ func TestDeleteObject_Integration(t *testing.T) {
 
 	// Step 4: Verify the object is removed from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects in memory after deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects in memory after deletion, got %d", node.NumObjects())
 	}
 
 	// Step 5: Verify the object is removed from persistence
 	if provider.HasStoredData("integration-test-obj") {
-		t.Error("Object should be removed from persistence after deletion")
+		t.Fatal("Object should be removed from persistence after deletion")
 	}
 
 	// Step 6: Verify deletion is idempotent - can delete non-existent object without error
 	err = node.DeleteObject(ctx, "integration-test-obj")
 	if err != nil {
-		t.Errorf("Expected no error when deleting already-deleted object (idempotent), got: %v", err)
+		t.Fatalf("Expected no error when deleting already-deleted object (idempotent), got: %v", err)
 	}
 }
 
@@ -108,12 +108,12 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 
 	// Step 3: Verify the object is removed from memory
 	if node.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects in memory after deletion, got %d", node.NumObjects())
+		t.Fatalf("Expected 0 objects in memory after deletion, got %d", node.NumObjects())
 	}
 
 	// Step 4: Verify nothing was stored in persistence (non-persistent objects shouldn't be stored)
 	if provider.GetStorageCount() != 0 {
-		t.Errorf("Expected 0 items in persistence storage, got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 0 items in persistence storage, got %d", provider.GetStorageCount())
 	}
 }
 
@@ -187,21 +187,21 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 
 	// Verify final state
 	if node.NumObjects() != 3 {
-		t.Errorf("Expected 3 objects remaining in memory, got %d", node.NumObjects())
+		t.Fatalf("Expected 3 objects remaining in memory, got %d", node.NumObjects())
 	}
 	if provider.GetStorageCount() != 2 {
-		t.Errorf("Expected 2 objects remaining in persistence, got %d", provider.GetStorageCount())
+		t.Fatalf("Expected 2 objects remaining in persistence, got %d", provider.GetStorageCount())
 	}
 
 	// Verify correct objects remain in persistence
 	if !provider.HasStoredData("persist-1") {
-		t.Error("persist-1 should still be in persistence")
+		t.Fatal("persist-1 should still be in persistence")
 	}
 	if provider.HasStoredData("persist-2") {
-		t.Error("persist-2 should be deleted from persistence")
+		t.Fatal("persist-2 should be deleted from persistence")
 	}
 	if !provider.HasStoredData("persist-3") {
-		t.Error("persist-3 should still be in persistence")
+		t.Fatal("persist-3 should still be in persistence")
 	}
 }
 

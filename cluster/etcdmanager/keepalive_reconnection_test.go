@@ -127,7 +127,7 @@ func TestRegisterKeyLeaseReconnection(t *testing.T) {
 	}
 
 	if !found {
-		t.Errorf("Node %s not found after etcd reconnection - keepalive may have failed to reconnect", nodeAddress)
+		t.Fatalf("Node %s not found after etcd reconnection - keepalive may have failed to reconnect", nodeAddress)
 	}
 
 	// Cleanup - unregister using the original manager

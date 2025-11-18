@@ -11,19 +11,19 @@ func TestDefaultConfig(t *testing.T) {
 	}
 
 	if config.Host != "localhost" {
-		t.Errorf("Expected host 'localhost', got '%s'", config.Host)
+		t.Fatalf("Expected host 'localhost', got '%s'", config.Host)
 	}
 	if config.Port != 5432 {
-		t.Errorf("Expected port 5432, got %d", config.Port)
+		t.Fatalf("Expected port 5432, got %d", config.Port)
 	}
 	if config.User != "goverse" {
-		t.Errorf("Expected user 'goverse', got '%s'", config.User)
+		t.Fatalf("Expected user 'goverse', got '%s'", config.User)
 	}
 	if config.Database != "goverse" {
-		t.Errorf("Expected database 'goverse', got '%s'", config.Database)
+		t.Fatalf("Expected database 'goverse', got '%s'", config.Database)
 	}
 	if config.SSLMode != "disable" {
-		t.Errorf("Expected sslmode 'disable', got '%s'", config.SSLMode)
+		t.Fatalf("Expected sslmode 'disable', got '%s'", config.SSLMode)
 	}
 }
 
@@ -41,7 +41,7 @@ func TestConfig_ConnectionString(t *testing.T) {
 	got := config.ConnectionString()
 
 	if got != expected {
-		t.Errorf("ConnectionString() = %s; want %s", got, expected)
+		t.Fatalf("ConnectionString() = %s; want %s", got, expected)
 	}
 }
 
@@ -116,12 +116,12 @@ func TestConfig_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			// Check if SSLMode default is set when missing and no error
 			if !tt.wantErr && tt.name == "missing sslmode sets default" {
 				if tt.config.SSLMode != "disable" {
-					t.Errorf("Expected SSLMode to default to 'disable', got '%s'", tt.config.SSLMode)
+					t.Fatalf("Expected SSLMode to default to 'disable', got '%s'", tt.config.SSLMode)
 				}
 			}
 		})

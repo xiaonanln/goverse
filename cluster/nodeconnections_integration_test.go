@@ -132,7 +132,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	// Verify the pattern: initial -> +1 after add -> back to initial after removal -> +1 again after re-add
 	// Note: Actual connection attempts may fail without running servers, but we verify the logic
 	if countAfterReaddition < countAfterRemoval {
-		t.Errorf("Expected connection count to increase after re-addition, got %d (was %d after removal)",
+		t.Fatalf("Expected connection count to increase after re-addition, got %d (was %d after removal)",
 			countAfterReaddition, countAfterRemoval)
 	}
 }

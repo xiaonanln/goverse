@@ -60,7 +60,7 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 
 	// Should have at least some successful creates
 	if successCount.Load() == 0 {
-		t.Error("Expected at least some successful creates")
+		t.Fatal("Expected at least some successful creates")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
 
 	// Verify object was deleted from persistence
 	if provider.HasStoredData("call-delete-obj") {
-		t.Error("Object should have been deleted from persistence")
+		t.Fatal("Object should have been deleted from persistence")
 	}
 }
 
@@ -226,7 +226,7 @@ func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
 
 	expectedCalls := numCallers * numCalls
 	if successCount.Load() != int32(expectedCalls) {
-		t.Errorf("Expected %d successful calls, got %d", expectedCalls, successCount.Load())
+		t.Fatalf("Expected %d successful calls, got %d", expectedCalls, successCount.Load())
 	}
 }
 
@@ -281,7 +281,7 @@ func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
 
 		// Verify deleted from persistence
 		if provider.HasStoredData(objID) {
-			t.Error("Object should be deleted from persistence")
+			t.Fatal("Object should be deleted from persistence")
 		}
 	}
 
@@ -322,6 +322,6 @@ func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
 
 	finalLocks := node.keyLock.Len()
 	if finalLocks > initialLocks {
-		t.Errorf("Lock leak detected: initial=%d, final=%d", initialLocks, finalLocks)
+		t.Fatalf("Lock leak detected: initial=%d, final=%d", initialLocks, finalLocks)
 	}
 }

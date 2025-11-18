@@ -15,12 +15,12 @@ func TestListObjectIDs(t *testing.T) {
 	// Initially should have no objects
 	ids := n.ListObjectIDs()
 	if len(ids) != 0 {
-		t.Errorf("Expected 0 object IDs initially, got %d", len(ids))
+		t.Fatalf("Expected 0 object IDs initially, got %d", len(ids))
 	}
 
 	// The method should return nil when no objects exist
 	if ids != nil {
-		t.Errorf("Expected nil, got %v", ids)
+		t.Fatalf("Expected nil, got %v", ids)
 	}
 }
 
@@ -34,11 +34,11 @@ func TestListObjectIDs_EmptySlice(t *testing.T) {
 
 	// Should return nil when no objects exist
 	if ids != nil {
-		t.Errorf("Expected nil, got %v", ids)
+		t.Fatalf("Expected nil, got %v", ids)
 	}
 
 	if len(ids) != 0 {
-		t.Errorf("Expected length 0, got %d", len(ids))
+		t.Fatalf("Expected length 0, got %d", len(ids))
 	}
 }
 
@@ -81,11 +81,11 @@ func TestListObjectIDs_WithObjects(t *testing.T) {
 
 	// Should return non-nil slice with 3 objects
 	if ids == nil {
-		t.Errorf("Expected non-nil slice, got nil")
+		t.Fatalf("Expected non-nil slice, got nil")
 	}
 
 	if len(ids) != 3 {
-		t.Errorf("Expected 3 object IDs, got %d", len(ids))
+		t.Fatalf("Expected 3 object IDs, got %d", len(ids))
 	}
 
 	// Verify all object IDs are present
@@ -96,7 +96,7 @@ func TestListObjectIDs_WithObjects(t *testing.T) {
 
 	for _, expectedID := range []string{objID1, objID2, objID3} {
 		if !idMap[expectedID] {
-			t.Errorf("Expected object ID %s not found in list", expectedID)
+			t.Fatalf("Expected object ID %s not found in list", expectedID)
 		}
 	}
 }

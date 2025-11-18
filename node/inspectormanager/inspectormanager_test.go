@@ -17,15 +17,15 @@ func TestInspectorManager_NewInspectorManager(t *testing.T) {
 	}
 
 	if mgr.nodeAddress != nodeAddr {
-		t.Errorf("Expected nodeAddress %s, got %s", nodeAddr, mgr.nodeAddress)
+		t.Fatalf("Expected nodeAddress %s, got %s", nodeAddr, mgr.nodeAddress)
 	}
 
 	if mgr.objects == nil {
-		t.Error("Objects map should be initialized")
+		t.Fatal("Objects map should be initialized")
 	}
 
 	if mgr.logger == nil {
-		t.Error("Logger should be initialized")
+		t.Fatal("Logger should be initialized")
 	}
 }
 
@@ -38,7 +38,7 @@ func TestInspectorManager_StartStop(t *testing.T) {
 	// Start should not fail even if inspector is not available
 	err := mgr.Start(ctx)
 	if err != nil {
-		t.Errorf("Start failed: %v", err)
+		t.Fatalf("Start failed: %v", err)
 	}
 
 	// Allow some time for the management goroutine to start
@@ -47,7 +47,7 @@ func TestInspectorManager_StartStop(t *testing.T) {
 	// Stop should not fail
 	err = mgr.Stop()
 	if err != nil {
-		t.Errorf("Stop failed: %v", err)
+		t.Fatalf("Stop failed: %v", err)
 	}
 
 	// Verify context was canceled
@@ -55,7 +55,7 @@ func TestInspectorManager_StartStop(t *testing.T) {
 	case <-mgr.ctx.Done():
 		// Expected - context should be canceled
 	default:
-		t.Error("Context should be canceled after Stop")
+		t.Fatal("Context should be canceled after Stop")
 	}
 }
 
@@ -76,15 +76,15 @@ func TestInspectorManager_NotifyObjectAdded(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if !exists {
-		t.Error("Object should be stored in manager")
+		t.Fatal("Object should be stored in manager")
 	}
 
 	if obj.Id != objectID {
-		t.Errorf("Expected object ID %s, got %s", objectID, obj.Id)
+		t.Fatalf("Expected object ID %s, got %s", objectID, obj.Id)
 	}
 
 	if obj.Class != objectType {
-		t.Errorf("Expected object type %s, got %s", objectType, obj.Class)
+		t.Fatalf("Expected object type %s, got %s", objectType, obj.Class)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestInspectorManager_NotifyObjectRemoved(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if !exists {
-		t.Error("Object should be stored in manager")
+		t.Fatal("Object should be stored in manager")
 	}
 
 	// Remove the object
@@ -117,7 +117,7 @@ func TestInspectorManager_NotifyObjectRemoved(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if exists {
-		t.Error("Object should be removed from manager")
+		t.Fatal("Object should be removed from manager")
 	}
 }
 
@@ -146,7 +146,7 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if count != len(objects) {
-		t.Errorf("Expected %d objects, got %d", len(objects), count)
+		t.Fatalf("Expected %d objects, got %d", len(objects), count)
 	}
 
 	// Remove one object
@@ -158,7 +158,7 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if count != len(objects)-1 {
-		t.Errorf("Expected %d objects after removal, got %d", len(objects)-1, count)
+		t.Fatalf("Expected %d objects after removal, got %d", len(objects)-1, count)
 	}
 
 	// Verify the right object was removed
@@ -167,7 +167,7 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if exists {
-		t.Error("obj-2 should be removed")
+		t.Fatal("obj-2 should be removed")
 	}
 
 	// Verify other objects still exist
@@ -177,7 +177,7 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if !exists1 || !exists3 {
-		t.Error("Other objects should still exist")
+		t.Fatal("Other objects should still exist")
 	}
 }
 
@@ -190,14 +190,14 @@ func TestInspectorManager_StartStopMultipleTimes(t *testing.T) {
 	// First start/stop cycle
 	err := mgr.Start(ctx)
 	if err != nil {
-		t.Errorf("First Start failed: %v", err)
+		t.Fatalf("First Start failed: %v", err)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	err = mgr.Stop()
 	if err != nil {
-		t.Errorf("First Stop failed: %v", err)
+		t.Fatalf("First Stop failed: %v", err)
 	}
 
 	// Create a new manager for second cycle (as the old one is stopped)
@@ -206,14 +206,14 @@ func TestInspectorManager_StartStopMultipleTimes(t *testing.T) {
 	// Second start/stop cycle
 	err = mgr.Start(ctx)
 	if err != nil {
-		t.Errorf("Second Start failed: %v", err)
+		t.Fatalf("Second Start failed: %v", err)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	err = mgr.Stop()
 	if err != nil {
-		t.Errorf("Second Stop failed: %v", err)
+		t.Fatalf("Second Stop failed: %v", err)
 	}
 }
 
@@ -247,7 +247,7 @@ func TestInspectorManager_ConcurrentNotifications(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if count != numObjects {
-		t.Errorf("Expected %d objects, got %d (possible race condition)", numObjects, count)
+		t.Fatalf("Expected %d objects, got %d (possible race condition)", numObjects, count)
 	}
 }
 
@@ -266,14 +266,14 @@ func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if count != 2 {
-		t.Errorf("Expected 2 objects before start, got %d", count)
+		t.Fatalf("Expected 2 objects before start, got %d", count)
 	}
 
 	// Start should succeed with existing objects
 	ctx := context.Background()
 	err := mgr.Start(ctx)
 	if err != nil {
-		t.Errorf("Start failed: %v", err)
+		t.Fatalf("Start failed: %v", err)
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -284,12 +284,12 @@ func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 	mgr.mu.RUnlock()
 
 	if count != 2 {
-		t.Errorf("Expected 2 objects after start, got %d", count)
+		t.Fatalf("Expected 2 objects after start, got %d", count)
 	}
 
 	err = mgr.Stop()
 	if err != nil {
-		t.Errorf("Stop failed: %v", err)
+		t.Fatalf("Stop failed: %v", err)
 	}
 }
 
@@ -317,6 +317,6 @@ func TestInspectorManager_ShardIDComputation(t *testing.T) {
 	// Note: ShardID can be 0, which is a valid shard, so we just verify it's in range
 
 	if obj.ShardId < 0 || obj.ShardId >= 8192 {
-		t.Errorf("ShardId should be in range [0, 8192), got %d", obj.ShardId)
+		t.Fatalf("ShardId should be in range [0, 8192), got %d", obj.ShardId)
 	}
 }

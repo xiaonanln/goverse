@@ -16,7 +16,7 @@ func TestKeyLock_BasicLock(t *testing.T) {
 
 	// Verify entry exists
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry, got %d", kl.Len())
 	}
 }
 
@@ -29,7 +29,7 @@ func TestKeyLock_BasicRLock(t *testing.T) {
 
 	// Verify entry exists
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry, got %d", kl.Len())
 	}
 }
 
@@ -40,13 +40,13 @@ func TestKeyLock_AutoCleanup(t *testing.T) {
 	// Acquire and release lock
 	unlock := kl.Lock("key1")
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry, got %d", kl.Len())
 	}
 	unlock()
 
 	// Entry should be cleaned up
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after unlock, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after unlock, got %d", kl.Len())
 	}
 }
 
@@ -59,22 +59,22 @@ func TestKeyLock_MultipleKeys(t *testing.T) {
 	unlock3 := kl.RLock("key3")
 
 	if kl.Len() != 3 {
-		t.Errorf("Expected 3 lock entries, got %d", kl.Len())
+		t.Fatalf("Expected 3 lock entries, got %d", kl.Len())
 	}
 
 	unlock1()
 	if kl.Len() != 2 {
-		t.Errorf("Expected 2 lock entries after unlock1, got %d", kl.Len())
+		t.Fatalf("Expected 2 lock entries after unlock1, got %d", kl.Len())
 	}
 
 	unlock2()
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry after unlock2, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry after unlock2, got %d", kl.Len())
 	}
 
 	unlock3()
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after unlock3, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after unlock3, got %d", kl.Len())
 	}
 }
 
@@ -100,7 +100,7 @@ func TestKeyLock_ConcurrentReaders(t *testing.T) {
 
 	// All readers should have finished and cleaned up
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after all readers finished, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after all readers finished, got %d", kl.Len())
 	}
 }
 
@@ -130,11 +130,11 @@ func TestKeyLock_ExclusionBetweenWriters(t *testing.T) {
 
 	// All writers should have completed
 	if counter != int32(numWriters) {
-		t.Errorf("Expected counter to be %d, got %d", numWriters, counter)
+		t.Fatalf("Expected counter to be %d, got %d", numWriters, counter)
 	}
 
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after cleanup, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after cleanup, got %d", kl.Len())
 	}
 }
 
@@ -179,7 +179,7 @@ func TestKeyLock_WriterExcludesReaders(t *testing.T) {
 	wg.Wait()
 
 	if readerSeenWriterInCritical.Load() {
-		t.Error("Reader was able to enter critical section while writer held lock")
+		t.Fatal("Reader was able to enter critical section while writer held lock")
 	}
 }
 
@@ -215,7 +215,7 @@ func TestKeyLock_HighConcurrency(t *testing.T) {
 
 	// All locks should be cleaned up
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after cleanup, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after cleanup, got %d", kl.Len())
 	}
 }
 
@@ -270,14 +270,14 @@ func TestKeyLock_ReferenceCountingUnderConcurrency(t *testing.T) {
 
 	// While goroutines are running, should have 1 entry
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry while goroutines are running, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry while goroutines are running, got %d", kl.Len())
 	}
 
 	wg.Wait()
 
 	// After all unlock, should be cleaned up
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after all goroutines finished, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after all goroutines finished, got %d", kl.Len())
 	}
 }
 
@@ -289,7 +289,7 @@ func TestKeyLock_NestedLocks(t *testing.T) {
 	// First lock
 	unlock1 := kl.Lock("key1")
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry after first lock, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry after first lock, got %d", kl.Len())
 	}
 
 	// Nested lock (same goroutine, different invocation)
@@ -297,17 +297,17 @@ func TestKeyLock_NestedLocks(t *testing.T) {
 	// So we test with a different key to ensure no deadlock in the manager itself
 	unlock2 := kl.Lock("key2")
 	if kl.Len() != 2 {
-		t.Errorf("Expected 2 lock entries after second lock, got %d", kl.Len())
+		t.Fatalf("Expected 2 lock entries after second lock, got %d", kl.Len())
 	}
 
 	unlock2()
 	if kl.Len() != 1 {
-		t.Errorf("Expected 1 lock entry after unlock2, got %d", kl.Len())
+		t.Fatalf("Expected 1 lock entry after unlock2, got %d", kl.Len())
 	}
 
 	unlock1()
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after unlock1, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after unlock1, got %d", kl.Len())
 	}
 }
 
@@ -339,6 +339,6 @@ func TestKeyLock_RaceDetector(t *testing.T) {
 	wg.Wait()
 
 	if kl.Len() != 0 {
-		t.Errorf("Expected 0 lock entries after cleanup, got %d", kl.Len())
+		t.Fatalf("Expected 0 lock entries after cleanup, got %d", kl.Len())
 	}
 }

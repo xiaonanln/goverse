@@ -27,18 +27,18 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 		t.Log("Cluster is now ready")
 		// Success: cluster became ready after both node connections and shard mapping are available
 	case <-time.After(timeout):
-		t.Errorf("Cluster should be ready within %v after Start()", timeout)
+		t.Fatalf("Cluster should be ready within %v after Start()", timeout)
 	}
 
 	// Verify cluster is ready
 	if !cluster1.IsReady() {
-		t.Error("Cluster.IsReady() should return true after cluster is ready")
+		t.Fatal("Cluster.IsReady() should return true after cluster is ready")
 	}
 
 	// Verify node connections are established
 	nc := cluster1.GetNodeConnections()
 	if nc == nil {
-		t.Error("NodeConnections should not be nil after cluster is ready")
+		t.Fatal("NodeConnections should not be nil after cluster is ready")
 	}
 
 	// Verify shard mapping is available
@@ -66,7 +66,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	case <-cluster1.ClusterReady():
 		t.Log("Cluster1 (leader) is ready")
 	case <-time.After(timeout):
-		t.Error("Cluster1 should be ready within timeout")
+		t.Fatal("Cluster1 should be ready within timeout")
 	}
 
 	// Wait for cluster2 (non-leader) to be ready
@@ -74,15 +74,15 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	case <-cluster2.ClusterReady():
 		t.Log("Cluster2 (non-leader) is ready")
 	case <-time.After(timeout):
-		t.Error("Cluster2 should be ready within timeout")
+		t.Fatal("Cluster2 should be ready within timeout")
 	}
 
 	// Verify both clusters are ready
 	if !cluster1.IsReady() {
-		t.Error("Cluster1 should be ready")
+		t.Fatal("Cluster1 should be ready")
 	}
 	if !cluster2.IsReady() {
-		t.Error("Cluster2 should be ready")
+		t.Fatal("Cluster2 should be ready")
 	}
 
 	// Verify shard mapping is available on both

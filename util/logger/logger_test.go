@@ -25,7 +25,7 @@ func TestLogLevelString(t *testing.T) {
 
 	for _, tt := range tests {
 		if got := tt.level.String(); got != tt.expected {
-			t.Errorf("LogLevel.String() = %s; want %s", got, tt.expected)
+			t.Fatalf("LogLevel.String() = %s; want %s", got, tt.expected)
 		}
 	}
 }
@@ -35,7 +35,7 @@ func TestSetAndGetLevel(t *testing.T) {
 	l := NewLogger("test")
 	l.SetLevel(DEBUG)
 	if got := l.GetLevel(); got != DEBUG {
-		t.Errorf("GetLevel() = %v; want %v", got, DEBUG)
+		t.Fatalf("GetLevel() = %v; want %v", got, DEBUG)
 	}
 }
 
@@ -54,7 +54,7 @@ func TestLoggerLevels(t *testing.T) {
 	logs := buf.String()
 	for _, msg := range []string{"debug msg", "info msg", "warn msg", "error msg"} {
 		if !strings.Contains(logs, msg) {
-			t.Errorf("Expected log to contain %q", msg)
+			t.Fatalf("Expected log to contain %q", msg)
 		}
 	}
 }
@@ -72,10 +72,10 @@ func TestLoggerLevelFiltering(t *testing.T) {
 
 	logs := buf.String()
 	if strings.Contains(logs, "debug msg") || strings.Contains(logs, "info msg") {
-		t.Errorf("Unexpected log entries at level WARN")
+		t.Fatalf("Unexpected log entries at level WARN")
 	}
 	if !strings.Contains(logs, "warn msg") {
-		t.Errorf("Expected WARN log to be present")
+		t.Fatalf("Expected WARN log to be present")
 	}
 }
 
@@ -96,12 +96,12 @@ func TestFatalf(t *testing.T) {
 	err := cmd.Run()
 
 	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Errorf("Expected exit code 1, got %v", err)
+		t.Fatalf("Expected exit code 1, got %v", err)
 	}
 
 	output := stderr.String()
 	if !strings.Contains(output, "fatal error occurred") || !strings.Contains(output, "goroutine") {
-		t.Errorf("Fatalf did not log expected output or stack trace:\n%s", output)
+		t.Fatalf("Fatalf did not log expected output or stack trace:\n%s", output)
 	}
 }
 
@@ -111,13 +111,13 @@ func TestSetAndGetPrefix(t *testing.T) {
 
 	// Check initial prefix
 	if got := l.GetPrefix(); got != "initial" {
-		t.Errorf("GetPrefix() = %v; want %v", got, "initial")
+		t.Fatalf("GetPrefix() = %v; want %v", got, "initial")
 	}
 
 	// Change prefix
 	l.SetPrefix("changed")
 	if got := l.GetPrefix(); got != "changed" {
-		t.Errorf("GetPrefix() after SetPrefix = %v; want %v", got, "changed")
+		t.Fatalf("GetPrefix() after SetPrefix = %v; want %v", got, "changed")
 	}
 }
 
@@ -132,7 +132,7 @@ func TestPrefixInLogOutput(t *testing.T) {
 
 	output := buf.String()
 	if !strings.Contains(output, "test-prefix") {
-		t.Errorf("Expected log output to contain prefix 'test-prefix', got: %s", output)
+		t.Fatalf("Expected log output to contain prefix 'test-prefix', got: %s", output)
 	}
 
 	// Change prefix and log again
@@ -142,10 +142,10 @@ func TestPrefixInLogOutput(t *testing.T) {
 
 	output = buf.String()
 	if !strings.Contains(output, "new-prefix") {
-		t.Errorf("Expected log output to contain prefix 'new-prefix', got: %s", output)
+		t.Fatalf("Expected log output to contain prefix 'new-prefix', got: %s", output)
 	}
 	if strings.Contains(output, "test-prefix") {
-		t.Errorf("Expected log output not to contain old prefix 'test-prefix', got: %s", output)
+		t.Fatalf("Expected log output not to contain old prefix 'test-prefix', got: %s", output)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestConcurrentPrefixChanges(t *testing.T) {
 				got := l.GetPrefix()
 				// Verify we get a valid prefix (should be one of the concurrent writes)
 				if len(got) == 0 || len(got) > 10 {
-					t.Errorf("Invalid prefix length: %d", len(got))
+					t.Fatalf("Invalid prefix length: %d", len(got))
 				}
 			}
 			done <- true
@@ -260,6 +260,6 @@ func TestConcurrentLoggingAndPrefixChanges(t *testing.T) {
 
 	// Verify no crashes occurred and some logs were written
 	if buf.Len() == 0 {
-		t.Error("Expected some log output")
+		t.Fatal("Expected some log output")
 	}
 }

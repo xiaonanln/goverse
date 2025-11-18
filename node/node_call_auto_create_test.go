@@ -53,7 +53,7 @@ func TestCallObject_AutoCreateNonPersistent(t *testing.T) {
 	}
 
 	if resp == nil {
-		t.Error("Response should not be nil")
+		t.Fatal("Response should not be nil")
 	}
 
 	// Verify object was created
@@ -66,7 +66,7 @@ func TestCallObject_AutoCreateNonPersistent(t *testing.T) {
 
 	// Verify it's the right type
 	if obj.Type() != "TestObjectWithMethod" {
-		t.Errorf("Object type should be TestObjectWithMethod, got %s", obj.Type())
+		t.Fatalf("Object type should be TestObjectWithMethod, got %s", obj.Type())
 	}
 
 	// Verify method was called
@@ -75,7 +75,7 @@ func TestCallObject_AutoCreateNonPersistent(t *testing.T) {
 	callCount := testObj.CallCount
 	testObj.mu.Unlock()
 	if callCount != 1 {
-		t.Errorf("Method should have been called once, got %d", callCount)
+		t.Fatalf("Method should have been called once, got %d", callCount)
 	}
 }
 
@@ -175,13 +175,13 @@ func TestCallObject_AutoCreatePersistent_NotInStorage(t *testing.T) {
 	value := testObj.Value
 	testObj.mu.Unlock()
 	if value != "default" {
-		t.Errorf("Object should have default value from FromData(nil), got %s", value)
+		t.Fatalf("Object should have default value from FromData(nil), got %s", value)
 	}
 
 	// Verify the response contains the default value
 	respStruct := resp.(*structpb.Struct)
 	if respStruct.Fields["value"].GetStringValue() != "default" {
-		t.Errorf("Response should contain default value, got %s", respStruct.Fields["value"].GetStringValue())
+		t.Fatalf("Response should contain default value, got %s", respStruct.Fields["value"].GetStringValue())
 	}
 }
 
@@ -236,13 +236,13 @@ func TestCallObject_AutoCreatePersistent_LoadFromStorage(t *testing.T) {
 	value := testObj.Value
 	testObj.mu.Unlock()
 	if value != "loaded-from-storage" {
-		t.Errorf("Object should have value loaded from storage, got %s", value)
+		t.Fatalf("Object should have value loaded from storage, got %s", value)
 	}
 
 	// Verify the response contains the loaded value
 	respStruct := resp.(*structpb.Struct)
 	if respStruct.Fields["value"].GetStringValue() != "loaded-from-storage" {
-		t.Errorf("Response should contain loaded value, got %s", respStruct.Fields["value"].GetStringValue())
+		t.Fatalf("Response should contain loaded value, got %s", respStruct.Fields["value"].GetStringValue())
 	}
 }
 
@@ -278,7 +278,7 @@ func TestCallObject_AutoCreate_MultipleCallsIdempotent(t *testing.T) {
 
 	// Should be the same object instance
 	if obj1 != obj2 {
-		t.Error("Multiple calls should use the same object instance")
+		t.Fatal("Multiple calls should use the same object instance")
 	}
 
 	// Verify method was called twice
@@ -287,7 +287,7 @@ func TestCallObject_AutoCreate_MultipleCallsIdempotent(t *testing.T) {
 	callCount := testObj.CallCount
 	testObj.mu.Unlock()
 	if callCount != 2 {
-		t.Errorf("Method should have been called twice, got %d", callCount)
+		t.Fatalf("Method should have been called twice, got %d", callCount)
 	}
 }
 
@@ -316,7 +316,7 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 	}
 
 	if err.Error() != "failed to auto-create object type-test-1: object with id type-test-1 already exists but with different type: expected TestPersistentObjectWithMethod, got TestObjectWithMethod" {
-		t.Errorf("Expected type mismatch error, got: %v", err)
+		t.Fatalf("Expected type mismatch error, got: %v", err)
 	}
 }
 
@@ -335,7 +335,7 @@ func TestCallObject_AutoCreate_UnknownType(t *testing.T) {
 
 	// Error should mention unknown type
 	if err.Error() != "failed to auto-create object unknown-1: unknown object type: UnknownType" {
-		t.Errorf("Expected unknown type error, got: %v", err)
+		t.Fatalf("Expected unknown type error, got: %v", err)
 	}
 }
 
@@ -355,7 +355,7 @@ func TestCallObject_AutoCreate_MethodNotFound(t *testing.T) {
 
 	// Verify error message
 	if err.Error() != "method not found in class TestObjectWithMethod: NonExistentMethod" {
-		t.Errorf("Expected method not found error, got: %v", err)
+		t.Fatalf("Expected method not found error, got: %v", err)
 	}
 
 	// Verify object was still created
@@ -363,6 +363,6 @@ func TestCallObject_AutoCreate_MethodNotFound(t *testing.T) {
 	_, exists := node.objects["method-test-1"]
 	node.objectsMu.RUnlock()
 	if !exists {
-		t.Error("Object should exist even though method was not found")
+		t.Fatal("Object should exist even though method was not found")
 	}
 }

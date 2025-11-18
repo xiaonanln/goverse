@@ -24,17 +24,17 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	case <-c.ClusterReady():
 		t.Log("✓ Cluster correctly became ready after BOTH node connections AND shard mapping are available")
 	case <-time.After(timeout):
-		t.Errorf("Cluster should be ready within %v after Start()", timeout)
+		t.Fatalf("Cluster should be ready within %v after Start()", timeout)
 	}
 
 	// Verify cluster is ready
 	if !c.IsReady() {
-		t.Error("Cluster.IsReady() should return true")
+		t.Fatal("Cluster.IsReady() should return true")
 	}
 
 	// Verify both prerequisites are met
 	if c.GetNodeConnections() == nil {
-		t.Error("Node connections should be established")
+		t.Fatal("Node connections should be established")
 	}
 
 	_ = c.GetShardMapping(ctx)

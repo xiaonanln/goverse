@@ -31,7 +31,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 	}
 
 	if createdID != objID {
-		t.Errorf("CreateObject returned ID %s, want %s", createdID, objID)
+		t.Fatalf("CreateObject returned ID %s, want %s", createdID, objID)
 	}
 
 	// Wait for object to be created
@@ -39,7 +39,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 
 	// Verify object was created locally
 	if testNode.NumObjects() != 1 {
-		t.Errorf("Expected 1 object on node, got %d", testNode.NumObjects())
+		t.Fatalf("Expected 1 object on node, got %d", testNode.NumObjects())
 	}
 
 	// Verify the object can be found
@@ -52,7 +52,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("Object %s not found on node", objID)
+		t.Fatalf("Object %s not found on node", objID)
 	}
 }
 
@@ -82,7 +82,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 	}
 
 	if resp == nil {
-		t.Error("CallObject returned nil response")
+		t.Fatal("CallObject returned nil response")
 	}
 }
 
@@ -101,12 +101,12 @@ func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 	objID := "localhost:7001/test-object-456"
 	_, err := c.CreateObject(ctx, "testObject", objID)
 	if err == nil {
-		t.Error("CreateObject should fail when trying to route to a different node without node connections")
+		t.Fatal("CreateObject should fail when trying to route to a different node without node connections")
 	}
 
 	// Verify object was NOT created locally
 	if testNode.NumObjects() != 0 {
-		t.Errorf("Expected 0 objects on local node, got %d", testNode.NumObjects())
+		t.Fatalf("Expected 0 objects on local node, got %d", testNode.NumObjects())
 	}
 }
 
@@ -121,7 +121,7 @@ func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 	objID := "localhost:7001/remote-obj"
 	_, err := c.CallObject(ctx, "echoObject", objID, "Echo", nil)
 	if err == nil {
-		t.Error("CallObject should fail when trying to route to a different node without node connections")
+		t.Fatal("CallObject should fail when trying to route to a different node without node connections")
 	}
 }
 
@@ -162,7 +162,7 @@ func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
 			_, err := c.CreateObject(ctx, "testObject", tt.objectID)
 			if tt.shouldLocal {
 				if err != nil {
-					t.Errorf("CreateObject failed for local fixed node: %v", err)
+					t.Fatalf("CreateObject failed for local fixed node: %v", err)
 				}
 			}
 		})
