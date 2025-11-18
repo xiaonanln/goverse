@@ -317,3 +317,48 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 		t.Errorf("After node2 left, leader should be localhost:47300, got %s", newLeader)
 	}
 }
+
+func TestClusterStopUnregistersFromEtcd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	// Create and start cluster
+	cluster := mustNewCluster(ctx, t, "localhost:47010", testPrefix)
+	nodeAddr := cluster.GetThisNode().GetAdvertiseAddress()
+
+	// Get etcd client to check key directly
+	etcdMgr := cluster.GetEtcdManagerForTesting()
+	client := etcdMgr.GetClient()
+	nodesPrefix := etcdMgr.GetPrefix() + "/nodes/"
+	key := nodesPrefix + nodeAddr
+
+	// Verify key exists after start
+	resp, err := client.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Failed to check node key after start: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatalf("Node key %s should exist after cluster start", key)
+	}
+	t.Logf("Node key %s exists as expected after start", key)
+
+	// Stop the cluster
+	err = cluster.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop cluster: %v", err)
+	}
+
+	// Verify key is gone after stop
+	resp, err = client.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Failed to check node key after stop: %v", err)
+	}
+	if len(resp.Kvs) > 0 {
+		t.Fatalf("Node key %s should be removed after cluster stop", key)
+	}
+	t.Logf("Node key %s successfully removed after stop", key)
+}
