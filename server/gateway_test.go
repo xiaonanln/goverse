@@ -66,8 +66,8 @@ func TestGatewayServiceImpl_DeleteObject(t *testing.T) {
 	}
 }
 
-// TestGatewayServiceImpl_Call tests the Call method with CallObjectRequest
-func TestGatewayServiceImpl_Call(t *testing.T) {
+// TestGatewayServiceImpl_CallObject tests the CallObject method with CallObjectRequest
+func TestGatewayServiceImpl_CallObject(t *testing.T) {
 	// Create a minimal server setup
 	n := node.NewNode("localhost:47000")
 	server := &Server{
@@ -86,11 +86,11 @@ func TestGatewayServiceImpl_Call(t *testing.T) {
 	}
 
 	// This will fail because client doesn't exist, but that's okay for this test
-	_, err := gateway.Call(ctx, req)
+	_, err := gateway.CallObject(ctx, req)
 	if err == nil {
-		t.Logf("Call succeeded (unexpected - client doesn't exist)")
+		t.Logf("CallObject succeeded (unexpected - client doesn't exist)")
 	} else {
-		t.Logf("Call failed as expected: %v", err)
+		t.Logf("CallObject failed as expected: %v", err)
 	}
 }
 

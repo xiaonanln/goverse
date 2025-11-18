@@ -302,15 +302,15 @@ func (g *gatewayServiceImpl) Register(req *gateway_pb.Empty, stream gateway_pb.G
 	return g.server.registerImpl(req, stream)
 }
 
-// Call implements the GatewayService Call method for client RPC calls
-func (g *gatewayServiceImpl) Call(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallResponse, error) {
-	g.server.logRPC("Call", req)
+// CallObject implements the GatewayService CallObject method for client RPC calls
+func (g *gatewayServiceImpl) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
+	g.server.logRPC("CallObject", req)
 	resp, err := g.server.Node.CallClient(ctx, req.GetClientId(), req.GetMethod(), req.GetRequest())
 	if err != nil {
 		return nil, err
 	}
 
-	response := &gateway_pb.CallResponse{
+	response := &gateway_pb.CallObjectResponse{
 		Response: resp,
 	}
 	return response, nil

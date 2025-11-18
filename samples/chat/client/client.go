@@ -67,7 +67,7 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 		Method:   method,
 		Request:  anyReq,
 	}
-	resp, err := c.client.Call(ctx, req)
+	resp, err := c.client.CallObject(ctx, req)
 	c.logger.Infof("Calling %s %s => %s, error=%v", method, anyReq.String(), resp.String(), err)
 	if err != nil {
 		return nil, fmt.Errorf("CallObject failed: %w", err)
