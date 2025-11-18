@@ -16,10 +16,9 @@ import (
 
 // GatewayServerConfig holds configuration for the gateway server
 type GatewayServerConfig struct {
-	ListenAddress string        // Address to listen on for client connections (e.g., ":8082")
-	EtcdAddress   string        // Address of etcd for cluster state
-	EtcdPrefix    string        // Optional: etcd key prefix (default: "/goverse")
-	ShutdownGrace time.Duration // Optional: graceful shutdown timeout (default: 5s)
+	ListenAddress string // Address to listen on for client connections (e.g., ":49000")
+	EtcdAddress   string // Address of etcd for cluster state
+	EtcdPrefix    string // Optional: etcd key prefix (default: "/goverse")
 }
 
 // GatewayServer handles client connections and routes requests to nodes
@@ -79,9 +78,6 @@ func validateConfig(config *GatewayServerConfig) error {
 	if config.EtcdPrefix == "" {
 		config.EtcdPrefix = "/goverse"
 	}
-	if config.ShutdownGrace == 0 {
-		config.ShutdownGrace = 5 * time.Second
-	}
 
 	return nil
 }
@@ -127,8 +123,8 @@ func (s *GatewayServer) Stop() error {
 	s.logger.Infof("Stopping gateway server")
 
 	if s.grpcServer != nil {
-		// Create a timeout context for graceful shutdown
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.config.ShutdownGrace)
+		// Create a timeout context for graceful shutdown (5 seconds)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 
 		// Graceful stop in goroutine
