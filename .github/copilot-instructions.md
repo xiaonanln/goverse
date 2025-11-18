@@ -876,6 +876,6 @@ All tests must pass before merging. Maintain or improve test coverage with new c
 ## Additional Resources
 
 - See `README.md` for feature overview and examples
-- See `TESTING.md` for detailed test documentation
+- See `docs/TESTING.md` for detailed test documentation
 - See `samples/chat/` for a complete example application
 - Use the Inspector UI at http://localhost:8080 for cluster visualization

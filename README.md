@@ -364,7 +364,7 @@ scrape_configs:
       - targets: ['localhost:47000', 'localhost:47001', 'localhost:47002']
 ```
 
-See [PROMETHEUS_INTEGRATION.md](PROMETHEUS_INTEGRATION.md) for detailed metric descriptions and usage examples.
+See [PROMETHEUS_INTEGRATION.md](docs/PROMETHEUS_INTEGRATION.md) for detailed metric descriptions and usage examples.
 
 ---
 
@@ -536,7 +536,7 @@ This script is used in CI/CD but can also be run locally for testing.
 ## 📚 Documentation
 
 - [Push Messaging](docs/PUSH_MESSAGING.md): Real-time server-to-client message delivery.
-- [Prometheus Integration](PROMETHEUS_INTEGRATION.md): Metrics for monitoring and observability.
+- [Prometheus Integration](docs/PROMETHEUS_INTEGRATION.md): Metrics for monitoring and observability.
 - [PostgreSQL Setup](docs/postgres-setup.md): Guide for setting up object persistence with PostgreSQL.
 - [Persistence Example](examples/persistence/): Complete example of using PostgreSQL persistence.
 - [Inspector UI](inspector/web/index.html): Visualize cluster state and objects.
