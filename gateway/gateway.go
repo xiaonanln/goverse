@@ -5,6 +5,9 @@ import (
 	"fmt"
 
 	gateway_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/cluster/consensusmanager"
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
 )
 
@@ -16,8 +19,11 @@ type GatewayConfig struct {
 
 // Gateway handles the core gateway logic for routing requests to nodes
 type Gateway struct {
-	config *GatewayConfig
-	logger *logger.Logger
+	config           *GatewayConfig
+	logger           *logger.Logger
+	etcdManager      *etcdmanager.EtcdManager
+	consensusManager *consensusmanager.ConsensusManager
+	shardLock        *shardlock.ShardLock
 }
 
 // NewGateway creates a new gateway instance
@@ -26,9 +32,30 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		return nil, fmt.Errorf("invalid gateway configuration: %w", err)
 	}
 
+	// Create etcd manager
+	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, config.EtcdPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
+	}
+
+	// Connect to etcd
+	if err := etcdMgr.Connect(); err != nil {
+		_ = etcdMgr.Close()
+		return nil, fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+
+	// Create shard lock
+	shardLock := shardlock.NewShardLock()
+
+	// Create consensus manager (no local node address for gateway)
+	consensusMgr := consensusmanager.NewConsensusManager(etcdMgr, shardLock, 0, "")
+
 	gateway := &Gateway{
-		config: config,
-		logger: logger.NewLogger("Gateway"),
+		config:           config,
+		logger:           logger.NewLogger("Gateway"),
+		etcdManager:      etcdMgr,
+		consensusManager: consensusMgr,
+		shardLock:        shardLock,
 	}
 
 	return gateway, nil
@@ -55,8 +82,11 @@ func validateGatewayConfig(config *GatewayConfig) error {
 func (g *Gateway) Start(ctx context.Context) error {
 	g.logger.Infof("Starting gateway")
 
-	// TODO: Initialize connection to cluster via etcd
-	// TODO: Set up ConsensusManager for shard mapping
+	// Start consensus manager watch
+	if err := g.consensusManager.StartWatch(ctx); err != nil {
+		return fmt.Errorf("failed to start consensus manager watch: %w", err)
+	}
+
 	// TODO: Set up NodeConnections for routing to nodes
 
 	g.logger.Infof("Gateway started")
@@ -67,8 +97,14 @@ func (g *Gateway) Start(ctx context.Context) error {
 func (g *Gateway) Stop() error {
 	g.logger.Infof("Stopping gateway")
 
-	// TODO: Clean up cluster connections
-	// TODO: Stop ConsensusManager
+	// Stop consensus manager watch
+	g.consensusManager.StopWatch()
+
+	// Close etcd connection
+	if err := g.etcdManager.Close(); err != nil {
+		g.logger.Errorf("Error closing etcd manager: %v", err)
+	}
+
 	// TODO: Stop NodeConnections
 
 	g.logger.Infof("Gateway stopped")
