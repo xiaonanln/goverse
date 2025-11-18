@@ -319,10 +319,6 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 }
 
 func TestClusterStopUnregistersFromEtcd(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -335,6 +331,9 @@ func TestClusterStopUnregistersFromEtcd(t *testing.T) {
 	client := etcdMgr.GetClient()
 	nodesPrefix := etcdMgr.GetPrefix() + "/nodes/"
 	key := nodesPrefix + nodeAddr
+
+	// Wait for etcd registration to complete
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify key exists after start
 	resp, err := client.Get(ctx, key)
@@ -351,6 +350,9 @@ func TestClusterStopUnregistersFromEtcd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to stop cluster: %v", err)
 	}
+
+	// Wait for etcd unregistration to complete
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify key is gone after stop
 	resp, err = client.Get(ctx, key)
