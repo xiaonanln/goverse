@@ -8,7 +8,7 @@ package gateway;
 
 service GatewayService {
     rpc Register (Empty) returns (stream google.protobuf.Any);
-    rpc Call (CallObjectRequest) returns (CallResponse);
+    rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
     rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
     rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
 }
@@ -25,7 +25,7 @@ message CallObjectRequest {
   string type = 4;
 }
 
-message CallResponse {
+message CallObjectResponse {
   google.protobuf.Any response = 1;
 }
 

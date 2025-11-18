@@ -27,10 +27,10 @@ func (s *gatewayServer) Register(req *gateway_pb.Empty, stream grpc.ServerStream
 	return nil
 }
 
-// Call implements the Call RPC (empty for now)
-func (s *gatewayServer) Call(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallResponse, error) {
-	log.Println("Call called (not implemented)")
-	return &gateway_pb.CallResponse{}, nil
+// CallObject implements the CallObject RPC (empty for now)
+func (s *gatewayServer) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
+	log.Println("CallObject called (not implemented)")
+	return &gateway_pb.CallObjectResponse{}, nil
 }
 
 // CreateObject implements the CreateObject RPC (empty for now)
