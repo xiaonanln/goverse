@@ -16,6 +16,8 @@ Goverse is a **distributed object runtime for Go** implementing the **virtual ac
 
 ## Architecture
 
+**For gateway refactor work, see [GATEWAY_DESIGN.md](../GATEWAY_DESIGN.md) for the complete design document.**
+
 ### Key Components
 
 - **server/** - Node server implementation with context-based shutdown
