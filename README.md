@@ -9,6 +9,8 @@ GoVerse is a distributed object runtime for Go, inspired by Orleans.
 It provides virtual actors, automatic placement, lifecycle management, and streaming RPCs.  
 Designed for building fault-tolerant backend services and large-scale real-time systems.
 
+> **Architecture Evolution**: GoVerse is evolving toward a Node/Gateway split, separating object hosting (nodes) from client protocols (gateways). This allows independent scaling and flexible client protocol support while maintaining the virtual actor model. See [Architecture](docs/ARCHITECTURE.md) for details.
+
 ---
 
 ## Key Features
@@ -79,6 +81,7 @@ go get github.com/xiaonanln/goverse
 
 Full documentation:
 - [Getting Started](docs/GET_STARTED.md) - Complete guide to building with GoVerse
+- [Architecture](docs/ARCHITECTURE.md) - System architecture and Node/Gateway design
 - [Object Model & Architecture](docs/GET_STARTED.md#core-concepts) - Understanding virtual actors
 - [Cluster Configuration](docs/GET_STARTED.md#cluster-configuration) - Quorum & stability settings
 - [Object Persistence](docs/GET_STARTED.md#object-persistence) - PostgreSQL integration
