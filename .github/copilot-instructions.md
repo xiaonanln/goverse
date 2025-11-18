@@ -647,6 +647,7 @@ provider.LoadErr = errors.New("simulated load error")
 - Use `t.Cleanup()` for automatic cleanup even on test failure
 - **Always use `t.Fatalf()` instead of `t.Errorf()` to fail tests quickly and stop execution immediately**
 - **Always use `t.Fatal()` instead of `t.Error()` to fail tests quickly and stop execution immediately**
+- **Exception: Use `t.Error()` or `t.Errorf()` (not `t.Fatal*`) when called from a goroutine, as `t.Fatal*` can only be called from the test goroutine**
 
 Example test structure:
 
