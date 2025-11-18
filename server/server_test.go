@@ -13,6 +13,9 @@ import (
 )
 
 func TestValidateServerConfig_NilConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	err := validateServerConfig(nil)
 	if err == nil {
 		t.Fatal("validateServerConfig should return error for nil config")
@@ -24,10 +27,12 @@ func TestValidateServerConfig_NilConfig(t *testing.T) {
 }
 
 func TestValidateServerConfig_EmptyListenAddress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := &ServerConfig{
 		ListenAddress:             "",
 		AdvertiseAddress:          "localhost:8080",
-		ClientListenAddress:       "localhost:8081",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -42,10 +47,12 @@ func TestValidateServerConfig_EmptyListenAddress(t *testing.T) {
 }
 
 func TestValidateServerConfig_EmptyAdvertiseAddress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := &ServerConfig{
 		ListenAddress:             "localhost:8080",
 		AdvertiseAddress:          "",
-		ClientListenAddress:       "localhost:8081",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -60,10 +67,12 @@ func TestValidateServerConfig_EmptyAdvertiseAddress(t *testing.T) {
 }
 
 func TestValidateServerConfig_ValidConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := &ServerConfig{
 		ListenAddress:             "localhost:8080",
 		AdvertiseAddress:          "localhost:8080",
-		ClientListenAddress:       "localhost:8081",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -74,12 +83,14 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 }
 
 func TestServerConfig_NodeStabilityDuration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create config with custom NodeStabilityDuration
 	customDuration := 3 * time.Second
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9097",
 		AdvertiseAddress:          "localhost:9097",
-		ClientListenAddress:       "localhost:9098",
 		NodeStabilityDuration:     customDuration,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -102,11 +113,13 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 }
 
 func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create config without custom NodeStabilityDuration
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9099",
 		AdvertiseAddress:          "localhost:9099",
-		ClientListenAddress:       "localhost:9100",
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
@@ -128,10 +141,12 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 }
 
 func TestNewServer_ValidConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9090",
 		AdvertiseAddress:          "localhost:9090",
-		ClientListenAddress:       "localhost:9091",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -171,13 +186,15 @@ func TestNewServer_ValidConfig(t *testing.T) {
 }
 
 func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use a custom etcd prefix for testing
 	customPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9095",
 		AdvertiseAddress:          "localhost:9095",
-		ClientListenAddress:       "localhost:9096",
 		EtcdAddress:               "localhost:2379",
 		EtcdPrefix:                customPrefix,
 		NodeStabilityDuration:     3 * time.Second,
@@ -267,6 +284,9 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 }
 
 func TestNode_ListObjects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create a node directly without going through NewServer
 	ctx := context.Background()
 	n := testutil.MustNewNode(ctx, t, "localhost:9094")
@@ -284,6 +304,9 @@ func TestNode_ListObjects(t *testing.T) {
 // 2. Register its node address to etcd
 // 3. Become the sole leader
 func TestServerStartupWithEtcd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix to get a unique prefix for test isolation
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -291,7 +314,6 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:47100",
 		AdvertiseAddress:          "localhost:47100",
-		ClientListenAddress:       "localhost:47101",
 		EtcdAddress:               "localhost:2379",
 		EtcdPrefix:                etcdPrefix,
 		NodeStabilityDuration:     3 * time.Second,
@@ -402,7 +424,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	t.Logf("Server successfully started and registered as sole node/leader: %s", leaderNode)
 
 	// Give some time for shard mapping to initialize
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, clusterInstance)
 
 	// Verify shard mapping was created and stored
 	shardMapping := clusterInstance.GetShardMapping(ctx)

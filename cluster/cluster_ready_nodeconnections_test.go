@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -11,6 +10,9 @@ import (
 // TestClusterReadyAfterNodeConnections verifies that the cluster is only marked ready
 // after node connections are established AND shard mapping is available
 func TestClusterReadyAfterNodeConnections(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -21,14 +23,7 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 
 	// Wait for shard mapping to be created and cluster to be marked ready
 	// This should happen within NodeStabilityDuration + ShardMappingCheckInterval + some buffer
-	timeout := testutil.WaitForShardMappingTimeout
-	select {
-	case <-cluster1.ClusterReady():
-		t.Log("Cluster is now ready")
-		// Success: cluster became ready after both node connections and shard mapping are available
-	case <-time.After(timeout):
-		t.Fatalf("Cluster should be ready within %v after Start()", timeout)
-	}
+	testutil.WaitForClusterReady(t, cluster1)
 
 	// Verify cluster is ready
 	if !cluster1.IsReady() {
@@ -47,6 +42,9 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 
 // TestClusterReadyMultiNode verifies cluster readiness in a multi-node setup
 func TestClusterReadyMultiNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -59,23 +57,8 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:47112", testPrefix)
 
 	// Wait for both clusters to be ready (cluster.Start already handles all initialization)
-	timeout := testutil.WaitForShardMappingTimeout
-
-	// Wait for cluster1 (leader) to be ready
-	select {
-	case <-cluster1.ClusterReady():
-		t.Log("Cluster1 (leader) is ready")
-	case <-time.After(timeout):
-		t.Fatal("Cluster1 should be ready within timeout")
-	}
-
-	// Wait for cluster2 (non-leader) to be ready
-	select {
-	case <-cluster2.ClusterReady():
-		t.Log("Cluster2 (non-leader) is ready")
-	case <-time.After(timeout):
-		t.Fatal("Cluster2 should be ready within timeout")
-	}
+	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Verify both clusters are ready
 	if !cluster1.IsReady() {

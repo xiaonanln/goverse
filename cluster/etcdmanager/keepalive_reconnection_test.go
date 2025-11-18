@@ -18,6 +18,9 @@ func canEtcdRestart() bool {
 
 // TestRegisterKeyLeaseReconnection tests that RegisterKeyLease persists through etcd reconnection
 func TestRegisterKeyLeaseReconnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	if !canEtcdRestart() {
 		t.Skip("Skipping reconnection test - not in CI environment")
 	}

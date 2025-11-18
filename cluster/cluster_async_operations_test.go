@@ -29,7 +29,7 @@ func waitForClusterReady(t *testing.T, cluster *Cluster, timeout time.Duration) 
 // the CreateObject call returns immediately without waiting for completion.
 func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
+		t.Skip("Skipping long-running integration test in short mode")
 	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
@@ -98,7 +98,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 // an object method without causing deadlocks.
 func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
+		t.Skip("Skipping long-running integration test in short mode")
 	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
@@ -173,7 +173,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 // return immediately without waiting for the operation to complete
 func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
+		t.Skip("Skipping long-running integration test in short mode")
 	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")

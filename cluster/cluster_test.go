@@ -33,7 +33,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 	}
 
 	// Create cluster with etcd
-	c, err := NewCluster(cfg, n)
+	c, err := NewClusterWithNode(cfg, n)
 	if err != nil {
 		n.Stop(ctx) // Clean up node if cluster creation fails
 		t.Fatalf("Failed to create cluster: %v", err)
@@ -56,6 +56,9 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 }
 
 func TestGet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Test that Get returns a singleton
 	cluster1 := This()
 	cluster2 := This()
@@ -66,6 +69,9 @@ func TestGet(t *testing.T) {
 }
 
 func TestSetThisNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create a new cluster for testing
 	n := node.NewNode("test-address")
 	cluster := newClusterForTesting(n, "TestCluster")
@@ -76,6 +82,9 @@ func TestSetThisNode(t *testing.T) {
 }
 
 func TestSetThisNode_Panic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create a new cluster for testing with n1
 	n1 := node.NewNode("test-address-1")
 	cluster := newClusterForTesting(n1, "TestCluster")
@@ -88,6 +97,9 @@ func TestSetThisNode_Panic(t *testing.T) {
 }
 
 func TestNewCluster(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -109,6 +121,9 @@ func TestNewCluster(t *testing.T) {
 }
 
 func TestNewCluster_WithNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create a new cluster for testing with node
 	n := node.NewNode("test-address")
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testutil.PrepareEtcdPrefix(t, "localhost:2379"))
@@ -132,6 +147,9 @@ func TestNewCluster_WithNode(t *testing.T) {
 }
 
 func TestNewCluster_WithEtcdConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -158,6 +176,9 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 }
 
 func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -180,6 +201,9 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 }
 
 func TestClusterString(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Test String() with a basic cluster
 	n := node.NewNode("localhost:47000")
 	cluster := newClusterForTesting(n, "TestCluster")
@@ -213,6 +237,9 @@ func TestClusterString(t *testing.T) {
 }
 
 func TestClusterString_WithQuorum(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Test String() with different quorum values
 	tests := []struct {
 		name      string

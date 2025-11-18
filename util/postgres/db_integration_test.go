@@ -46,6 +46,9 @@ func cleanupTestTable(t *testing.T, db *DB) {
 }
 
 func TestNewDB_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -63,6 +66,9 @@ func TestNewDB_Integration(t *testing.T) {
 }
 
 func TestDB_InitSchema_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -101,6 +107,9 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 }
 
 func TestDB_Ping_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -117,6 +126,9 @@ func TestDB_Ping_Integration(t *testing.T) {
 }
 
 func TestDB_Close_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -138,6 +150,9 @@ func TestDB_Close_Integration(t *testing.T) {
 }
 
 func TestDB_Connection_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)

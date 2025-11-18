@@ -36,12 +36,11 @@ func main() {
 
 	// Configure server with MinQuorum requirement
 	config := &goverseapi.ServerConfig{
-		ListenAddress:       fmt.Sprintf("localhost:%d", *port),
-		AdvertiseAddress:    fmt.Sprintf("localhost:%d", *port),
-		ClientListenAddress: fmt.Sprintf("localhost:%d", *port+1000),
-		EtcdAddress:         "localhost:2379",
-		EtcdPrefix:          "/goverse-example",
-		MinQuorum:           *minQuorum, // Set minimum quorum required
+		ListenAddress:    fmt.Sprintf("localhost:%d", *port),
+		AdvertiseAddress: fmt.Sprintf("localhost:%d", *port),
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/goverse-example",
+		MinQuorum:        *minQuorum, // Set minimum quorum required
 	}
 
 	log.Printf("Starting node on port %d with minimum quorum requirement: %d", *port, *minQuorum)

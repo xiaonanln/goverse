@@ -15,14 +15,14 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	client_pb "github.com/xiaonanln/goverse/client/proto"
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 )
 
 type ChatClient struct {
 	conn             *grpc.ClientConn
-	client           client_pb.ClientServiceClient
+	client           gate_pb.GateServiceClient
 	roomName         string
 	userName         string
 	logger           *logger.Logger
@@ -36,7 +36,7 @@ func NewChatClient(serverAddr, userID string) (*ChatClient, error) {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
 
-	client := client_pb.NewClientServiceClient(conn)
+	client := gate_pb.NewGateServiceClient(conn)
 
 	return &ChatClient{
 		conn:     conn,
@@ -50,7 +50,7 @@ func (c *ChatClient) Close() error {
 	return c.conn.Close()
 }
 
-func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, error) {
+func (c *ChatClient) CallObject(objectType, objectID, method string, arg proto.Message) (proto.Message, error) {
 	if c.clientID == "" {
 		return nil, fmt.Errorf("client is not registered")
 	}
@@ -62,16 +62,22 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req := &client_pb.CallRequest{
+	req := &gate_pb.CallObjectRequest{
 		ClientId: c.clientID,
+		Type:     objectType,
+		Id:       objectID,
 		Method:   method,
 		Request:  anyReq,
 	}
-	resp, err := c.client.Call(ctx, req)
-	c.logger.Infof("Calling %s %s => %s, error=%v", method, anyReq.String(), resp.String(), err)
+	resp, err := c.client.CallObject(ctx, req)
 	if err != nil {
+		c.logger.Infof("Calling %s.%s.%s failed: %v", objectType, objectID, method, err)
 		return nil, fmt.Errorf("CallObject failed: %w", err)
 	}
+	if resp == nil {
+		return nil, fmt.Errorf("CallObject returned nil response")
+	}
+	c.logger.Infof("Calling %s.%s.%s => %s", objectType, objectID, method, resp.String())
 	ret, err := resp.GetResponse().UnmarshalNew()
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
@@ -80,12 +86,13 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 }
 
 func (c *ChatClient) ListChatrooms() error {
-	respMsg, err := c.Call("ListChatRooms", &chat_pb.Client_ListChatRoomsRequest{})
+	// Call ChatRoomMgr directly
+	respMsg, err := c.CallObject("ChatRoomMgr", "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
 	if err != nil {
 		return fmt.Errorf("Failed to list chat rooms: %w", err)
 	}
 
-	resp := respMsg.(*chat_pb.Client_ListChatRoomsResponse)
+	resp := respMsg.(*chat_pb.ChatRoom_ListResponse)
 
 	fmt.Println("Available Chatrooms:")
 	for _, room := range resp.ChatRooms {
@@ -95,17 +102,17 @@ func (c *ChatClient) ListChatrooms() error {
 }
 
 func (c *ChatClient) JoinChatroom(roomName string) error {
-	// First, try to get or create the chatroom
-	joinRequest := &chat_pb.Client_JoinChatRoomRequest{
-		RoomName: roomName,
+	// Call ChatRoom object directly
+	joinRequest := &chat_pb.ChatRoom_JoinRequest{
 		UserName: c.userName,
+		ClientId: c.clientID,
 	}
-	respMsg, err := c.Call("Join", joinRequest)
+	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+roomName, "Join", joinRequest)
 	if err != nil {
 		return fmt.Errorf("failed to join chatroom %s: %w", roomName, err)
 	}
 
-	resp := respMsg.(*chat_pb.Client_JoinChatRoomResponse)
+	resp := respMsg.(*chat_pb.ChatRoom_JoinResponse)
 	c.logger.Infof("Joined chatroom %s", resp.RoomName)
 	c.roomName = roomName
 	c.lastMsgTimestamp = 0
@@ -123,12 +130,12 @@ func (c *ChatClient) SendMessage(message string) error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	req := &chat_pb.Client_SendChatMessageRequest{
+	// Call ChatRoom object directly
+	req := &chat_pb.ChatRoom_SendChatMessageRequest{
 		UserName: c.userName,
-		RoomName: c.roomName,
 		Message:  message,
 	}
-	_, err := c.Call("SendMessage", req)
+	_, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "SendMessage", req)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -142,19 +149,21 @@ func (c *ChatClient) GetRecentMessages() error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	req := &chat_pb.Client_GetRecentMessagesRequest{
+	// Call ChatRoom object directly
+	req := &chat_pb.ChatRoom_GetRecentMessagesRequest{
 		AfterTimestamp: c.lastMsgTimestamp, // Use stored timestamp
 	}
 	c.logger.Infof("Getting messages after timestamp: %d", c.lastMsgTimestamp)
-	respMsg, err := c.Call("GetRecentMessages", req)
+	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "GetRecentMessages", req)
 	if err != nil {
 		return fmt.Errorf("failed to get recent messages: %w", err)
 	}
 
-	resp := respMsg.(*chat_pb.Client_GetRecentMessagesResponse)
+	resp := respMsg.(*chat_pb.ChatRoom_GetRecentMessagesResponse)
 	fmt.Printf("Recent messages in [%s]:\n", c.roomName)
 	for _, msg := range resp.Messages {
-		timestamp := time.Unix(msg.Timestamp, 0).Format("15:04:05")
+		// Timestamp is in microseconds
+		timestamp := time.UnixMicro(msg.Timestamp).Format("15:04:05")
 		fmt.Printf("[%s] %s: %s\n", timestamp, msg.UserName, msg.Message)
 		// Update lastMsgTimestamp if this message is newer
 		if msg.Timestamp > c.lastMsgTimestamp {
@@ -165,7 +174,7 @@ func (c *ChatClient) GetRecentMessages() error {
 }
 
 // listenForMessages continuously listens for pushed messages from the server
-func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterClient) {
+func (c *ChatClient) listenForMessages(stream gate_pb.GateService_RegisterClient) {
 	for {
 		msgAny, err := stream.Recv()
 		if err != nil {
@@ -184,7 +193,8 @@ func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterCl
 		case *chat_pb.Client_NewMessageNotification:
 			// Display the pushed message
 			chatMsg := notification.Message
-			timestamp := time.Unix(chatMsg.Timestamp, 0).Format("15:04:05")
+			// Timestamp is in microseconds
+			timestamp := time.UnixMicro(chatMsg.Timestamp).Format("15:04:05")
 			fmt.Printf("\n[%s] %s: %s\n", timestamp, chatMsg.UserName, chatMsg.Message)
 
 			// Update last message timestamp
@@ -307,14 +317,14 @@ func main() {
 	defer client.Close()
 	ctx := context.Background()
 
-	stream, err := client.client.Register(ctx, &client_pb.Empty{}) // Ensure registration
+	stream, err := client.client.Register(ctx, &gate_pb.Empty{}) // Ensure registration
 	if err != nil {
 		log.Fatalf("Failed to register client: %v", err)
 	}
 	defer stream.CloseSend()
 
 	// Read initial registration response
-	regResp := receiveMessages(stream).(*client_pb.RegisterResponse)
+	regResp := receiveMessages(stream).(*gate_pb.RegisterResponse)
 	client.clientID = regResp.ClientId
 	client.logger.Infof("Client %s registered successfully", client.clientID)
 
@@ -325,7 +335,7 @@ func main() {
 	client.RunInteractive()
 }
 
-func receiveMessages(stream client_pb.ClientService_RegisterClient) proto.Message {
+func receiveMessages(stream gate_pb.GateService_RegisterClient) proto.Message {
 	msgAny, err := stream.Recv()
 	if err != nil {
 		log.Fatalf("Error receiving message: %v", err)

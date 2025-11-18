@@ -8,6 +8,9 @@ import (
 
 // TestKeepAliveRetry tests that the keep-alive mechanism retries when the channel closes
 func TestKeepAliveRetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -90,6 +93,9 @@ func TestKeepAliveRetry(t *testing.T) {
 
 // TestKeepAliveContextCancellation tests that keep-alive stops when context is cancelled
 func TestKeepAliveContextCancellation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -150,6 +156,9 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 
 // TestRegisterKeyLeaseIdempotent tests that registering the same key multiple times overwrites the value
 func TestRegisterKeyLeaseIdempotent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -201,6 +210,9 @@ func TestRegisterKeyLeaseIdempotent(t *testing.T) {
 
 // TestCloseStopsSharedLease tests that Close() stops the shared lease loop
 func TestCloseStopsSharedLease(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)

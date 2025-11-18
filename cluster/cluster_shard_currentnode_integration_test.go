@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -12,6 +11,9 @@ import (
 // by setting CurrentNode when they are the TargetNode and CurrentNode is empty
 // This test requires a running etcd instance at localhost:2379
 func TestClusterShardCurrentNodeClaiming(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -22,7 +24,8 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:51002", testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Test that shards have been claimed by the appropriate nodes
 	t.Run("ShardOwnershipClaiming", func(t *testing.T) {

@@ -20,12 +20,11 @@ import (
 func main() {
 	// Create server configuration with custom NodeStabilityDuration
 	config := &goverseapi.ServerConfig{
-		ListenAddress:       "localhost:7000",
-		AdvertiseAddress:    "localhost:7000",
-		ClientListenAddress: "localhost:8000",
-		EtcdAddress:         "localhost:2379",
-		EtcdPrefix:          "/myapp",
-		MinQuorum:           1,
+		ListenAddress:    "localhost:7000",
+		AdvertiseAddress: "localhost:7000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/myapp",
+		MinQuorum:        1,
 		// Set custom stability duration (default is 10s if not specified)
 		// A shorter duration means the cluster will update shard mapping sooner
 		// after node changes, but may cause more frequent rebalancing
@@ -41,9 +40,8 @@ func main() {
 	log.Printf("Server created with custom NodeStabilityDuration: %v", config.NodeStabilityDuration)
 	log.Printf("The cluster will wait %v for node list to stabilize before updating shard mapping", config.NodeStabilityDuration)
 
-	// Register your object and client types here
+	// Register your object types here
 	// goverseapi.RegisterObjectType((*MyObject)(nil))
-	// goverseapi.RegisterClientType((*MyClient)(nil))
 
 	// Start the server (this blocks until shutdown)
 	if err := server.Run(); err != nil {

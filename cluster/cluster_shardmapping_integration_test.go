@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -12,6 +11,9 @@ import (
 // TestClusterShardMappingIntegration tests shard mapping with actual etcd integration
 // This test requires a running etcd instance at localhost:2379
 func TestClusterShardMappingIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -22,7 +24,8 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:50002", testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Test leader detection
 	t.Run("LeaderDetection", func(t *testing.T) {

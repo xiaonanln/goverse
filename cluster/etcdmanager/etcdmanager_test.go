@@ -153,6 +153,9 @@ func TestNewEtcdManagerWithPrefix(t *testing.T) {
 
 // TestEtcdManagerConnect tests connecting to etcd
 func TestEtcdManagerConnect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	// Note: This test requires a running etcd instance at localhost:2379
@@ -193,6 +196,9 @@ func TestEtcdManagerConnectInvalidEndpoint(t *testing.T) {
 
 // TestEtcdManagerClose tests closing the connection
 func TestEtcdManagerClose(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -215,6 +221,9 @@ func TestEtcdManagerClose(t *testing.T) {
 
 // TestEtcdManagerGetClient tests getting the client
 func TestEtcdManagerGetClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	// Test before connect
@@ -242,6 +251,9 @@ func TestEtcdManagerGetClient(t *testing.T) {
 
 // TestRegisterKeyLeaseAndUnregisterKey tests the new shared lease API
 func TestRegisterKeyLeaseAndUnregisterKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)
@@ -344,6 +356,9 @@ func TestRegisterKeyLeaseAndUnregisterKey(t *testing.T) {
 
 // TestSharedLeaseResilience tests that the shared lease recovers from failures
 func TestSharedLeaseResilience(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	t.Parallel()
 
 	mgr := setupEtcdTest(t)

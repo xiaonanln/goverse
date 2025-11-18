@@ -15,7 +15,6 @@ func main() {
 	var (
 		listenAddr        = flag.String("listen", "localhost:47000", "Server listen address")
 		advertiseAddr     = flag.String("advertise", "localhost:47000", "Server advertise address")
-		clientListenAddr  = flag.String("client-listen", "localhost:48000", "Client listen address")
 		metricsListenAddr = flag.String("metrics-listen", "localhost:9100", "Metrics listen address")
 	)
 	flag.Parse()
@@ -23,7 +22,6 @@ func main() {
 	config := &goverseapi.ServerConfig{
 		ListenAddress:        *listenAddr,
 		AdvertiseAddress:     *advertiseAddr,
-		ClientListenAddress:  *clientListenAddr,
 		MetricsListenAddress: *metricsListenAddr,
 	}
 	// Create and run the server
@@ -39,7 +37,8 @@ func main() {
 }
 
 func initializeChatServer() {
-	goverseapi.RegisterClientType((*ChatClient)(nil))
+	// Register object types - no ChatClient needed with new gate architecture
+	// Clients call ChatRoomMgr and ChatRoom objects directly via the gate
 	goverseapi.RegisterObjectType((*ChatRoomMgr)(nil))
 	goverseapi.RegisterObjectType((*ChatRoom)(nil))
 

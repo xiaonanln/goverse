@@ -71,6 +71,9 @@ func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, 
 
 // TestReleaseShardsForNode_EmptyNode tests releasing shards when localNode is empty
 func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	t.Parallel()
 
 	// Create a consensus manager without connecting to etcd and with empty local node address
@@ -89,6 +92,9 @@ func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 
 // TestReleaseShardsForNode_NoShardMapping tests releasing when no shard mapping exists
 func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	t.Parallel()
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
@@ -107,6 +113,9 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 
 // TestReleaseShardsForNode_WithEtcd tests the full release flow with etcd
 func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -279,6 +288,9 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 
 // TestReleaseShardsForNode_MultipleShards tests releasing multiple shards at once
 func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -369,6 +381,9 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 
 // TestReleaseShardsForNode_RealShardIDs tests with realistic shard IDs
 func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 

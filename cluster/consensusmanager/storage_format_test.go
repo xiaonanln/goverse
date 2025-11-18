@@ -14,6 +14,9 @@ import (
 
 // TestStorageFormat verifies that shards are stored in individual keys
 func TestStorageFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create etcd manager
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
@@ -123,6 +126,9 @@ func TestStorageFormat(t *testing.T) {
 
 // TestStorageFormatFullMapping verifies storage works with all 8192 shards
 func TestStorageFormatFullMapping(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create etcd manager
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
@@ -183,6 +189,9 @@ func TestStorageFormatFullMapping(t *testing.T) {
 
 // TestConditionalPutWithModRevision verifies that shards are stored conditionally based on ModRevision
 func TestConditionalPutWithModRevision(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Create etcd manager
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)

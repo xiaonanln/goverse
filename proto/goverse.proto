@@ -14,7 +14,7 @@ service Goverse {
   rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
   rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
-  rpc PushMessageToClient (PushMessageToClientRequest) returns (PushMessageToClientResponse);
+  rpc RegisterGate (RegisterGateRequest) returns (stream GateMessage);
 }
 
 message StatusResponse {
@@ -68,6 +68,26 @@ message PushMessageToClientRequest {
 
 message PushMessageToClientResponse {
   // Empty response - success is indicated by no error
+}
+
+message RegisterGateRequest {
+  string gate_addr = 1;
+}
+
+message RegisterGateResponse {
+}
+
+// ClientMessageEnvelope wraps a message for a specific client
+message ClientMessageEnvelope {
+  string client_id = 1;
+  google.protobuf.Any message = 2;
+}
+
+message GateMessage {
+  oneof message {
+    RegisterGateResponse register_gate_response = 1;
+    ClientMessageEnvelope client_message = 2;
+  }
 }
 
 message Empty {}

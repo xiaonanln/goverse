@@ -12,6 +12,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -32,7 +33,8 @@ const (
 )
 
 type Cluster struct {
-	thisNode                  *node.Node
+	node                      *node.Node
+	gate                      *gate.Gateway
 	etcdManager               *etcdmanager.EtcdManager
 	consensusManager          *consensusmanager.ConsensusManager
 	nodeConnections           *nodeconnections.NodeConnections
@@ -47,6 +49,8 @@ type Cluster struct {
 	clusterManagementRunning  bool
 	clusterReadyChan          chan bool
 	clusterReadyOnce          sync.Once
+	gateChannels              map[string]chan proto.Message
+	gateChannelsMu            sync.RWMutex
 }
 
 func SetThis(c *Cluster) {
@@ -76,15 +80,15 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 	return mgr, nil
 }
 
-// NewCluster creates a new cluster instance with the given configuration.
+// NewClusterWithNode creates a new cluster instance with the given configuration.
 // It automatically connects to etcd and initializes the etcd manager and consensus manager.
 // This function assigns the created cluster to the singleton and should be called once during application initialization.
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
-func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
+func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 	// Create a new cluster instance with its own ShardLock to ensure per-cluster isolation
 	c := &Cluster{
-		thisNode:                  thisNode,
+		node:                      node,
 		logger:                    logger.NewLogger("Cluster"),
 		clusterReadyChan:          make(chan bool),
 		etcdAddress:               cfg.EtcdAddress,
@@ -93,37 +97,60 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(),
+		gateChannels:              make(map[string]chan proto.Message),
 	}
+	if err := c.init(cfg); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
 
+func NewClusterWithGate(cfg Config, g *gate.Gateway) (*Cluster, error) {
+	c := &Cluster{
+		gate:                      g,
+		logger:                    logger.NewLogger("Cluster"),
+		clusterReadyChan:          make(chan bool),
+		etcdAddress:               cfg.EtcdAddress,
+		etcdPrefix:                cfg.EtcdPrefix,
+		minQuorum:                 cfg.MinQuorum,
+		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
+		nodeConnections:           nodeconnections.New(),
+		shardLock:                 shardlock.NewShardLock(),
+		gateChannels:              make(map[string]chan proto.Message),
+	}
+	if err := c.init(cfg); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (c *Cluster) init(cfg Config) error {
+	// Initialization logic for the cluster
 	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
-	thisNode.SetShardLock(c.shardLock)
+	// Note: Gateways don't need ShardLock as they don't host objects
+	if c.isNode() {
+		c.node.SetShardLock(c.shardLock)
+	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.etcdManager = mgr
-
-	// Get local node address
-	localNodeAddr := ""
-	if thisNode != nil {
-		localNodeAddr = thisNode.GetAdvertiseAddress()
-	}
 
 	// Use the provided cluster state stability duration or default
 	stabilityDuration := cfg.ClusterStateStabilityDuration
 	if stabilityDuration <= 0 {
 		stabilityDuration = DefaultNodeStabilityDuration
 	}
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, localNodeAddr)
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr())
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
 		c.consensusManager.SetMinQuorum(cfg.MinQuorum)
 	}
-
-	return c, nil
+	return nil
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
@@ -132,7 +159,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 	// Use test-appropriate durations (faster than production defaults)
 	shardLock := shardlock.NewShardLock()
 	return &Cluster{
-		thisNode:                  node,
+		node:                      node,
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
@@ -140,6 +167,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		minQuorum:                 1,
 		shardMappingCheckInterval: 1 * time.Second,
 		shardLock:                 shardLock,
+		gateChannels:              make(map[string]chan proto.Message),
 	}
 }
 
@@ -155,7 +183,30 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 		ShardMappingCheckInterval:     1 * time.Second,
 	}
 
-	c, err := NewCluster(cfg, node)
+	c, err := NewClusterWithNode(cfg, node)
+	if err != nil {
+		return nil, err
+	}
+
+	// Override logger with custom name for testing
+	c.logger = logger.NewLogger(name)
+
+	return c, nil
+}
+
+// newClusterWithEtcdForTestingGate creates a new cluster instance for testing with a gate and initializes it with etcd
+// Uses test-appropriate configuration values (shorter durations)
+func newClusterWithEtcdForTestingGate(name string, gate *gate.Gateway, etcdAddress string, etcdPrefix string) (*Cluster, error) {
+	// Create config with test values
+	cfg := Config{
+		EtcdAddress:                   etcdAddress,
+		EtcdPrefix:                    etcdPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
+	}
+
+	c, err := NewClusterWithGate(cfg, gate)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +219,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 
 // Start initializes and starts the cluster with the given node.
 // It performs the following operations in sequence:
-// 1. Sets the node on the cluster
-// 2. Sets the cluster's ShardLock on the node
-// 3. Registers the node with etcd
+// 3. Registers the node/gate with etcd
 // 4. Starts watching cluster state changes
 // 5. Starts node connections
 // 6. Starts shard mapping management
@@ -178,12 +227,15 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
-	// Set the cluster's ShardLock on the node for per-cluster isolation
-	c.thisNode.SetShardLock(c.shardLock)
-
-	// Register this node with etcd
-	if err := c.registerNode(ctx); err != nil {
-		return fmt.Errorf("failed to register node: %w", err)
+	// Register this node or gateway with etcd
+	if c.isNode() {
+		if err := c.registerNode(ctx); err != nil {
+			return fmt.Errorf("failed to register node: %w", err)
+		}
+	} else if c.isGateway() {
+		if err := c.registerGate(ctx); err != nil {
+			return fmt.Errorf("failed to register gate: %w", err)
+		}
 	}
 
 	// Start watching for cluster state changes
@@ -224,10 +276,20 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	// Stop watching cluster state (must stop before closing etcd)
 	c.consensusManager.StopWatch()
 
+	// Clean up gate channels
+	c.cleanupGateChannels()
+
 	// Unregister from etcd
-	if err := c.unregisterNode(ctx); err != nil {
-		c.logger.Errorf("%s - Failed to unregister node: %v", c, err)
-		// Continue with cleanup even if unregister fails
+	if c.isNode() {
+		if err := c.unregisterNode(ctx); err != nil {
+			c.logger.Errorf("%s - Failed to unregister node: %v", c, err)
+			// Continue with cleanup even if unregister fails
+		}
+	} else if c.isGateway() {
+		if err := c.unregisterGate(ctx); err != nil {
+			c.logger.Errorf("%s - Failed to unregister gate: %v", c, err)
+			// Continue with cleanup even if unregister fails
+		}
 	}
 
 	// Close etcd connection
@@ -238,6 +300,27 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	c.logger.Infof("%s - Cluster stopped", c)
 	return nil
+}
+
+// getAdvertiseAddr returns the advertise address of this cluster (node or gateway)
+func (c *Cluster) getAdvertiseAddr() string {
+	if c.node != nil {
+		return c.node.GetAdvertiseAddress()
+	}
+	if c.gate != nil {
+		return c.gate.GetAdvertiseAddress()
+	}
+	return ""
+}
+
+// isNode returns true if this cluster is a node cluster
+func (c *Cluster) isNode() bool {
+	return c.node != nil
+}
+
+// isGateway returns true if this cluster is a gateway cluster
+func (c *Cluster) isGateway() bool {
+	return c.gate != nil
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -269,13 +352,28 @@ func (c *Cluster) getEffectiveShardMappingCheckInterval() time.Duration {
 }
 
 func (c *Cluster) GetThisNode() *node.Node {
-	return c.thisNode
+	return c.node
+}
+
+// GetThisGateway returns the gateway instance if this cluster is a gateway cluster
+// Returns nil if this is not a gateway cluster
+func (c *Cluster) GetThisGateway() *gate.Gateway {
+	return c.gate
 }
 
 // String returns a string representation of the cluster
-// Format: Cluster<local-node-address,leader|member,quorum=%d>
+// Format: Cluster<local-address,type,leader|member,quorum=%d>
 func (c *Cluster) String() string {
-	nodeAddr := c.thisNode.GetAdvertiseAddress()
+	addr := c.getAdvertiseAddr()
+
+	var clusterType string
+	if c.isNode() {
+		clusterType = "node"
+	} else if c.isGateway() {
+		clusterType = "gateway"
+	} else {
+		clusterType = "unknown"
+	}
 
 	var role string
 	if c.IsLeader() {
@@ -286,7 +384,7 @@ func (c *Cluster) String() string {
 
 	quorum := c.getEffectiveMinQuorum()
 
-	return fmt.Sprintf("Cluster<%s,%s,quorum=%d>", nodeAddr, role, quorum)
+	return fmt.Sprintf("Cluster<%s,%s,%s,quorum=%d>", addr, clusterType, role, quorum)
 }
 
 // GetShardLock returns the cluster's ShardLock instance
@@ -365,14 +463,14 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
 
-	// Check if the object is on this node
-	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
-		// Call locally
+	// Check if the object is on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
+		// Call locally on node
 		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
-		return c.thisNode.CallObject(ctx, objType, id, method, request)
+		return c.node.CallObject(ctx, objType, id, method, request)
 	}
 
-	// Route to the appropriate node
+	// Route to the appropriate node (both node and gateway clusters can route)
 	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
@@ -380,11 +478,11 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
-	// Marshal request to Any
+	// Marshal the request to Any for transport
 	var requestAny *anypb.Any
 	if request != nil {
-		requestAny = &anypb.Any{}
-		if err := requestAny.MarshalFrom(request); err != nil {
+		requestAny, err = anypb.New(request)
+		if err != nil {
 			return nil, fmt.Errorf("failed to marshal request: %w", err)
 		}
 	}
@@ -415,6 +513,43 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	return response, nil
 }
 
+// CallObjectAnyRequest calls a method on a distributed object, accepting an *anypb.Any request.
+// This is an optimized version that avoids unnecessary marshal/unmarshal cycles when the request
+// is already in Any format (e.g., from a gateway that received it from a client).
+func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (*anypb.Any, error) {
+	if !c.isGateway() {
+		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gateway clusters")
+	}
+	// Determine which node hosts this object
+	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
+	}
+
+	// Route to the appropriate node (both node and gateway clusters can route)
+	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
+
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
+
+	// Call CallObject on the remote node - pass Any directly (optimization: no marshal needed)
+	req := &goverse_pb.CallObjectRequest{
+		Id:      id,
+		Method:  method,
+		Type:    objType,
+		Request: request,
+	}
+
+	resp, err := client.CallObject(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
+	}
+
+	return resp.Response, nil
+}
+
 // CreateObject creates a distributed object on the appropriate node based on sharding
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
@@ -431,11 +566,11 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
-	// Check if the object should be created on this node
-	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+	// Check if the object should be created on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
-			_, err := c.thisNode.CreateObject(ctx, objType, objID)
+			_, err := c.node.CreateObject(ctx, objType, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed: %v", c, objID, err)
 			} else {
@@ -446,40 +581,52 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Async routing CreateObject for %s to node %s", c, objID, nodeAddr)
+	c.logger.Infof("%s - Routing CreateObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
-		c.logger.Errorf("%s - Async CreateObject %s failed to get connection: %v", c, objID, err)
+		c.logger.Errorf("%s - CreateObject %s failed to get connection: %v", c, objID, err)
 		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
-	// Execute the actual creation asynchronously to prevent deadlocks
-	// This is crucial when CreateObject is called from within an object method,
-	// as waiting for the operation to complete while holding locks can cause deadlocks
-	go func() {
-		// Call CreateObject on the remote node
-		req := &goverse_pb.CreateObjectRequest{
-			Type: objType,
-			Id:   objID,
-		}
-
+	// Execute the actual creation
+	// For gateways, execute synchronously since they don't risk deadlocks
+	// (gateways don't host objects so they don't hold object locks)
+	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
+	req := &goverse_pb.CreateObjectRequest{
+		Type: objType,
+		Id:   objID,
+	}
+	if c.isGateway() {
+		// Synchronous execution for gateways
 		_, err = client.CreateObject(ctx, req)
 		if err != nil {
-			c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
-		} else {
-			c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+			c.logger.Errorf("%s - CreateObject %s failed on remote node: %v", c, objID, err)
+			return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
 		}
-	}()
+		c.logger.Infof("%s - CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+		return objID, nil
+	} else {
+		// Asynchronous execution for nodes to prevent deadlocks
+		go func() {
+			_, err = client.CreateObject(ctx, req)
+			if err != nil {
+				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
+			} else {
+				c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+			}
+		}()
 
-	// Return immediately with the object ID
-	c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
-	return objID, nil
+		// Return immediately with the object ID
+		c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
+		return objID, nil
+	}
 }
 
 // DeleteObject deletes an object from the cluster.
 // It determines which node hosts the object and routes the deletion request accordingly.
-// The deletion is performed asynchronously to prevent deadlocks when called from within object methods.
+// For gateways, the deletion is performed synchronously. For nodes, it is performed
+// asynchronously to prevent deadlocks when called from within object methods.
 func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if objID == "" {
 		return fmt.Errorf("object ID must be specified")
@@ -490,12 +637,12 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if err != nil {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
-	// Check if the object should be deleted on this node
-	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
+	// Check if the object should be deleted on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
-			err := c.thisNode.DeleteObject(ctx, objID)
+			err := c.node.DeleteObject(ctx, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
 			} else {
@@ -506,86 +653,165 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Async routing DeleteObject for %s to node %s", c, objID, nodeAddr)
+	c.logger.Infof("%s - Routing DeleteObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
-		c.logger.Errorf("%s - Async DeleteObject %s failed to get connection: %v", c, objID, err)
+		c.logger.Errorf("%s - DeleteObject %s failed to get connection: %v", c, objID, err)
 		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
-	// Execute the actual deletion asynchronously to prevent deadlocks
-	// This is crucial when DeleteObject is called from within an object method,
-	// as waiting for the operation to complete while holding locks can cause deadlocks
-	go func() {
-		// Call DeleteObject on the remote node
-		req := &goverse_pb.DeleteObjectRequest{
-			Id: objID,
-		}
-
+	// Execute the actual deletion
+	// For gateways, execute synchronously since they don't risk deadlocks
+	// (gateways don't host objects so they don't hold object locks)
+	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
+	req := &goverse_pb.DeleteObjectRequest{
+		Id: objID,
+	}
+	if c.isGateway() {
+		// Synchronous execution for gateways
 		_, err = client.DeleteObject(ctx, req)
 		if err != nil {
-			c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
-		} else {
-			c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+			c.logger.Errorf("%s - DeleteObject %s failed on remote node: %v", c, objID, err)
+			return fmt.Errorf("remote DeleteObject failed on node %s: %w", nodeAddr, err)
 		}
-	}()
+		c.logger.Infof("%s - DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+		return nil
+	} else {
+		// Asynchronous execution for nodes to prevent deadlocks
+		go func() {
+			_, err = client.DeleteObject(ctx, req)
+			if err != nil {
+				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
+			} else {
+				c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+			}
+		}()
 
-	// Return immediately
-	c.logger.Infof("%s - DeleteObject %s initiated asynchronously", c, objID)
-	return nil
+		// Return immediately
+		c.logger.Infof("%s - DeleteObject %s initiated asynchronously", c, objID)
+		return nil
+	}
+}
+
+// RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
+func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, error) {
+	if !c.isNode() {
+		return nil, fmt.Errorf("RegisterGateConnection can only be called on node clusters, not gate clusters")
+	}
+
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	if oldCh, ok := c.gateChannels[gateAddr]; ok {
+		c.logger.Warnf("Gate %s already registered, replacing connection", gateAddr)
+		close(oldCh)
+	}
+
+	// Create a buffered channel to prevent blocking
+	ch := make(chan proto.Message, 1024)
+	c.gateChannels[gateAddr] = ch
+	c.logger.Infof("Registered gate connection for %s", gateAddr)
+	return ch, nil
+}
+
+// UnregisterGateConnection removes a gate connection
+func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Message) {
+	if !c.isNode() {
+		c.logger.Warnf("UnregisterGateConnection can only be called on node clusters, not gate clusters")
+		return
+	}
+
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	if currentCh, ok := c.gateChannels[gateAddr]; ok {
+		if currentCh == ch {
+			close(currentCh)
+			delete(c.gateChannels, gateAddr)
+			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
+		} else {
+			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
+		}
+	}
+}
+
+// cleanupGateChannels closes all gate channels and clears the map
+// Should be called during cluster shutdown
+func (c *Cluster) cleanupGateChannels() {
+	if !c.isNode() {
+		return
+	}
+
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	for gateAddr, ch := range c.gateChannels {
+		// Use recover to handle potential double-close panics gracefully
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					c.logger.Warnf("Gate channel for %s already closed or panic during close: %v", gateAddr, r)
+				}
+			}()
+			close(ch)
+			c.logger.Infof("Closed gate channel for %s during shutdown", gateAddr)
+		}()
+	}
+	c.gateChannels = make(map[string]chan proto.Message)
 }
 
 // PushMessageToClient sends a message to a client by its ID
-// Client IDs have the format: {nodeAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
-// This method parses the client ID to determine the target node and routes the message accordingly
+// Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
+// This method parses the client ID to determine the target gate and routes the message accordingly
+// This method can only be called on a node cluster, not a gate cluster
 func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
-	// Parse client ID to extract node address
-	// Client ID format: nodeAddress/uniqueId
+	// This method can only be called on node clusters
+	if c.isGateway() {
+		return fmt.Errorf("PushMessageToClient can only be called on node clusters, not gate clusters")
+	}
+
+	// Parse client ID to extract gate address
+	// Client ID format: gateAddress/uniqueId
 	parts := strings.SplitN(clientID, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return fmt.Errorf("invalid client ID format: %s (expected format: nodeAddress/uniqueId)", clientID)
+		return fmt.Errorf("invalid client ID format: %s (expected format: gateAddress/uniqueId)", clientID)
 	}
 
-	nodeAddr := parts[0]
+	gateAddr := parts[0]
 
-	// Check if the client is on this node
-	if nodeAddr == c.thisNode.GetAdvertiseAddress() {
-		// Push locally
-		c.logger.Infof("%s - Pushing message to client %s locally", c, clientID)
-		return c.thisNode.PushMessageToClient(clientID, message)
-	}
+	// Check if the client is on a connected gate
+	c.gateChannelsMu.RLock()
+	gateCh, isGateConnected := c.gateChannels[gateAddr]
 
-	// Route to the appropriate node
-	c.logger.Infof("%s - Routing PushMessageToClient for %s to node %s", c, clientID, nodeAddr)
+	if isGateConnected {
+		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, gateAddr)
 
-	client, err := c.nodeConnections.GetConnection(nodeAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
-	}
+		// Wrap message in ClientMessageEnvelope with client ID
+		anyMsg, err := anypb.New(message)
+		if err != nil {
+			c.gateChannelsMu.RUnlock()
+			return fmt.Errorf("failed to marshal message for gate: %w", err)
+		}
 
-	// Marshal message to Any
-	var messageAny *anypb.Any
-	if message != nil {
-		messageAny = &anypb.Any{}
-		if err := messageAny.MarshalFrom(message); err != nil {
-			return fmt.Errorf("failed to marshal message: %w", err)
+		envelope := &goverse_pb.ClientMessageEnvelope{
+			ClientId: clientID,
+			Message:  anyMsg,
+		}
+
+		select {
+		case gateCh <- envelope:
+			c.gateChannelsMu.RUnlock()
+			return nil
+		default:
+			c.gateChannelsMu.RUnlock()
+			return fmt.Errorf("gate %s message channel is full", gateAddr)
 		}
 	}
+	c.gateChannelsMu.RUnlock()
 
-	// Call PushMessageToClient on the remote node
-	req := &goverse_pb.PushMessageToClientRequest{
-		ClientId: clientID,
-		Message:  messageAny,
-	}
-
-	_, err = client.PushMessageToClient(ctx, req)
-	if err != nil {
-		return fmt.Errorf("remote PushMessageToClient failed on node %s: %w", nodeAddr, err)
-	}
-
-	c.logger.Infof("%s - Successfully pushed message to client %s on node %s", c, clientID, nodeAddr)
-	return nil
+	// Gate not connected to this node
+	return fmt.Errorf("gate %s not connected to this node, cannot push message to client %s", gateAddr, clientID)
 }
 
 // GetEtcdManagerForTesting returns the cluster's etcd manager
@@ -603,8 +829,8 @@ func (c *Cluster) GetConsensusManagerForTesting() *consensusmanager.ConsensusMan
 // registerNode registers this node with etcd using the shared lease API
 func (c *Cluster) registerNode(ctx context.Context) error {
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
-	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
-	value := c.thisNode.GetAdvertiseAddress()
+	key := nodesPrefix + c.getAdvertiseAddr()
+	value := c.getAdvertiseAddr()
 
 	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
 	if err != nil {
@@ -617,7 +843,28 @@ func (c *Cluster) registerNode(ctx context.Context) error {
 // unregisterNode unregisters this node from etcd using the shared lease API
 func (c *Cluster) unregisterNode(ctx context.Context) error {
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
-	key := nodesPrefix + c.thisNode.GetAdvertiseAddress()
+	key := nodesPrefix + c.getAdvertiseAddr()
+	return c.etcdManager.UnregisterKeyLease(ctx, key)
+}
+
+// registerGate registers this gateway with etcd using the shared lease API
+func (c *Cluster) registerGate(ctx context.Context) error {
+	gatesPrefix := c.etcdManager.GetPrefix() + "/gates/"
+	key := gatesPrefix + c.getAdvertiseAddr()
+	value := c.getAdvertiseAddr()
+
+	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
+	if err != nil {
+		return fmt.Errorf("failed to register gate: %w", err)
+	}
+
+	return nil
+}
+
+// unregisterGate unregisters this gateway from etcd using the shared lease API
+func (c *Cluster) unregisterGate(ctx context.Context) error {
+	gatesPrefix := c.etcdManager.GetPrefix() + "/gates/"
+	key := gatesPrefix + c.getAdvertiseAddr()
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
 }
 
@@ -649,6 +896,11 @@ func (c *Cluster) GetNodes() []string {
 	return c.consensusManager.GetNodes()
 }
 
+// GetGates returns a list of all registered gates
+func (c *Cluster) GetGates() []string {
+	return c.consensusManager.GetGates()
+}
+
 // GetLeaderNode returns the leader node address.
 // The leader is the node with the smallest advertised address in lexicographic order.
 // Returns an empty string if there are no registered nodes or if consensus manager is not set.
@@ -658,8 +910,11 @@ func (c *Cluster) GetLeaderNode() string {
 
 // IsLeader returns true if this node is the cluster leader
 func (c *Cluster) IsLeader() bool {
+	if !c.isNode() {
+		return false
+	}
 	leaderNode := c.GetLeaderNode()
-	return leaderNode != "" && leaderNode == c.thisNode.GetAdvertiseAddress()
+	return leaderNode != "" && leaderNode == c.getAdvertiseAddr()
 }
 
 // GetShardMapping retrieves the current shard mapping
@@ -762,6 +1017,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.removeObjectsNotBelongingToThisNode(ctx)
 	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
+	c.registerGateWithNodes(ctx)
 }
 
 func (c *Cluster) updateMetrics() {
@@ -770,6 +1026,10 @@ func (c *Cluster) updateMetrics() {
 
 // claimShardOwnership claims ownership of shards when cluster state is stable
 func (c *Cluster) claimShardOwnership(ctx context.Context) {
+	if c.isGateway() {
+		// Gateways don't host objects, so they don't need to claim shard ownership
+		return
+	}
 	// Claim ownership of shards where this node is the target
 	// The stability check is now performed inside ClaimShardsForNode
 	err := c.consensusManager.ClaimShardsForNode(ctx)
@@ -782,9 +1042,15 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 // - CurrentNode is this node
 // - TargetNode is another node (not empty and not this node)
 // - No objects exist on this node for that shard
+// Note: This is a node-only operation. Gateways don't host objects so they skip this.
 func (c *Cluster) releaseShardOwnership(ctx context.Context) {
+	// Gateways don't host objects, so they don't need to release shard ownership
+	if c.isGateway() {
+		return
+	}
+
 	// Count objects per shard on this node
-	objectIDs := c.thisNode.ListObjectIDs()
+	objectIDs := c.node.ListObjectIDs()
 	localObjectsPerShard := make(map[int]int)
 	for _, objectID := range objectIDs {
 		// Skip client objects (those with "/" in ID)
@@ -803,8 +1069,14 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 }
 
 // removeObjectsNotBelongingToThisNode removes objects whose shards no longer belong to this node
+// Note: This is a node-only operation. Gateways don't host objects so they skip this.
 func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
-	localAddr := c.thisNode.GetAdvertiseAddress()
+	// Gateways don't host objects, so they don't need to remove objects
+	if c.isGateway() {
+		return
+	}
+
+	localAddr := c.getAdvertiseAddr()
 
 	// Check if cluster state is stable without cloning
 	if !c.consensusManager.IsStateStable() {
@@ -813,7 +1085,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	}
 
 	// Get all object IDs on this node
-	objectIDs := c.thisNode.ListObjectIDs()
+	objectIDs := c.node.ListObjectIDs()
 
 	// Ask ConsensusManager to determine which objects should be evicted
 	// This is more efficient than cloning the entire cluster state
@@ -826,7 +1098,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 
-		err := c.thisNode.DeleteObject(ctx, objectID)
+		err := c.node.DeleteObject(ctx, objectID)
 		if err != nil {
 			c.logger.Errorf("%s - Failed to delete object %s: %v", c, objectID, err)
 		} else {
@@ -902,7 +1174,7 @@ func (c *Cluster) stopNodeConnections() {
 // updateNodeConnections updates the NodeConnections with the current list of cluster nodes
 func (c *Cluster) updateNodeConnections() {
 	allNodes := c.GetNodes()
-	thisNodeAddr := c.thisNode.GetAdvertiseAddress()
+	thisNodeAddr := c.getAdvertiseAddr()
 
 	// Filter out this node's address
 	otherNodes := make([]string, 0, len(allNodes))
@@ -918,6 +1190,18 @@ func (c *Cluster) updateNodeConnections() {
 // GetNodeConnections returns the node connections manager
 func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 	return c.nodeConnections
+}
+
+// registerGateWithNodes registers this gate with all nodes that haven't been registered yet
+// This is called periodically from the cluster management loop for gateway clusters
+func (c *Cluster) registerGateWithNodes(ctx context.Context) {
+	if !c.isGateway() {
+		return
+	}
+
+	// Delegate to gate
+	allConnections := c.nodeConnections.GetAllConnections()
+	c.gate.RegisterWithNodes(ctx, allConnections)
 }
 
 func (c *Cluster) GetClusterStateStabilityDurationForTesting() time.Duration {
