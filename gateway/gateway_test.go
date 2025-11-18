@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"testing"
+	"time"
 
 	gateway_pb "github.com/xiaonanln/goverse/client/proto"
 )
@@ -428,27 +429,41 @@ func TestGatewayConsensusManagerWatch(t *testing.T) {
 
 func TestGatewayConfigDefaults(t *testing.T) {
 	tests := []struct {
-		name           string
-		inputPrefix    string
-		expectedPrefix string
+		name                       string
+		inputPrefix                string
+		inputManagementInterval    time.Duration
+		expectedPrefix             string
+		expectedManagementInterval time.Duration
 	}{
 		{
-			name:           "custom prefix",
-			inputPrefix:    "/custom-prefix",
-			expectedPrefix: "/custom-prefix",
+			name:                       "custom prefix",
+			inputPrefix:                "/custom-prefix",
+			inputManagementInterval:    0,
+			expectedPrefix:             "/custom-prefix",
+			expectedManagementInterval: DefaultManagementInterval,
 		},
 		{
-			name:           "empty prefix uses default",
-			inputPrefix:    "",
-			expectedPrefix: "/goverse",
+			name:                       "empty prefix uses default",
+			inputPrefix:                "",
+			inputManagementInterval:    0,
+			expectedPrefix:             "/goverse",
+			expectedManagementInterval: DefaultManagementInterval,
+		},
+		{
+			name:                       "custom management interval",
+			inputPrefix:                "/goverse",
+			inputManagementInterval:    10 * time.Second,
+			expectedPrefix:             "/goverse",
+			expectedManagementInterval: 10 * time.Second,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &GatewayConfig{
-				EtcdAddress: "localhost:2379",
-				EtcdPrefix:  tt.inputPrefix,
+				EtcdAddress:        "localhost:2379",
+				EtcdPrefix:         tt.inputPrefix,
+				ManagementInterval: tt.inputManagementInterval,
 			}
 
 			gateway, err := NewGateway(config)
@@ -459,6 +474,9 @@ func TestGatewayConfigDefaults(t *testing.T) {
 
 			if gateway.config.EtcdPrefix != tt.expectedPrefix {
 				t.Fatalf("Expected EtcdPrefix=%s, got %s", tt.expectedPrefix, gateway.config.EtcdPrefix)
+			}
+			if gateway.config.ManagementInterval != tt.expectedManagementInterval {
+				t.Fatalf("Expected ManagementInterval=%v, got %v", tt.expectedManagementInterval, gateway.config.ManagementInterval)
 			}
 		})
 	}
