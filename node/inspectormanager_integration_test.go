@@ -8,6 +8,9 @@ import (
 
 // TestInspectorManager_Integration tests the full integration of InspectorManager with Node
 func TestInspectorManager_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	t.Parallel()
 
 	node := NewNode("localhost:47100")
@@ -84,6 +87,9 @@ func TestInspectorManager_Integration(t *testing.T) {
 
 // TestInspectorManager_Integration_MultipleStartStop tests multiple start/stop cycles
 func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	t.Parallel()
 
 	node := NewNode("localhost:47101")
@@ -143,6 +149,9 @@ func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
 
 // TestInspectorManager_Integration_ConcurrentObjectOps tests concurrent object operations
 func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	t.Parallel()
 
 	node := NewNode("localhost:47102")

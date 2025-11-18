@@ -14,6 +14,12 @@ import (
 // TestClusterEtcdIntegration tests cluster node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
 func TestClusterEtcdIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -69,6 +75,12 @@ func TestClusterEtcdIntegration(t *testing.T) {
 
 // TestClusterEtcdDynamicDiscovery tests that clusters dynamically discover new nodes
 func TestClusterEtcdDynamicDiscovery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -116,6 +128,12 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 
 // TestClusterEtcdLeaveDetection tests that clusters detect when other nodes leave
 func TestClusterEtcdLeaveDetection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -186,6 +204,12 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 // TestClusterGetLeaderNode tests leader election across multiple nodes
 func TestClusterGetLeaderNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -245,6 +269,12 @@ func TestClusterGetLeaderNode(t *testing.T) {
 
 // TestClusterGetLeaderNode_DynamicChange tests leader change when current leader leaves
 func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -320,6 +350,12 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 }
 
 func TestClusterStopUnregistersFromEtcd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 

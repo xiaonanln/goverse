@@ -51,6 +51,9 @@ func startTestInspectorServer(t *testing.T) (*grpc.Server, *graph.GoverseGraph, 
 
 // TestInspectorManager_ActualConnection tests actual gRPC connection between Node and Inspector
 func TestInspectorManager_ActualConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Start test inspector server on a random port
 	_, pg, inspectorAddr := startTestInspectorServer(t)
 
@@ -111,6 +114,9 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 
 // TestInspectorManager_ObjectNotifications tests object add/remove notifications over actual connection
 func TestInspectorManager_ObjectNotifications(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Start test inspector server on a random port
 	_, pg, inspectorAddr := startTestInspectorServer(t)
 
@@ -195,6 +201,9 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 
 // TestInspectorManager_NodeUnregistration tests proper node unregistration
 func TestInspectorManager_NodeUnregistration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Start test inspector server on a random port
 	_, pg, inspectorAddr := startTestInspectorServer(t)
 
@@ -244,6 +253,9 @@ func TestInspectorManager_NodeUnregistration(t *testing.T) {
 
 // TestInspectorManager_ReconnectionLogic tests the reconnection behavior
 func TestInspectorManager_ReconnectionLogic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Start test inspector server on a random port
 	grpcServer, pg, inspectorAddr := startTestInspectorServer(t)
 
@@ -370,6 +382,9 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 
 // TestInspectorManager_ShardIDPropagation_Integration tests end-to-end shard ID propagation
 func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Start test inspector server
 	_, pg, inspectorAddr := startTestInspectorServer(t)
 
@@ -455,6 +470,9 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 
 // TestInspectorManager_MultipleNodesConnection tests multiple nodes connecting to same inspector
 func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Start test inspector server on a random port
 	_, pg, inspectorAddr := startTestInspectorServer(t)
 
@@ -555,6 +573,9 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 // TestInspectorManager_ConnectFailureAndRetry tests behavior when initial connection fails
 // and manager retries in background
 func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Get an unused port by listening and then closing immediately
 	tempListener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
