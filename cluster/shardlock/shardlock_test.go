@@ -67,7 +67,7 @@ func TestShardLock_ReadWriteExclusion(t *testing.T) {
 
 		// By the time we get here, first write lock should have been released
 		if !writeLockReleased {
-			t.Fatal("Second write lock acquired before first write lock was released")
+			t.Error("Second write lock acquired before first write lock was released")
 		}
 		unlock()
 	}()

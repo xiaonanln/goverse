@@ -167,7 +167,7 @@ func TestConcurrentPrefixChanges(t *testing.T) {
 				got := l.GetPrefix()
 				// Verify we get a valid prefix (should be one of the concurrent writes)
 				if len(got) == 0 || len(got) > 10 {
-					t.Fatalf("Invalid prefix length: %d", len(got))
+					t.Errorf("Invalid prefix length: %d", len(got))
 				}
 			}
 			done <- true
