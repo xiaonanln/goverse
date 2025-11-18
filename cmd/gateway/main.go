@@ -28,9 +28,21 @@ func (s *gatewayServer) Register(req *gateway_pb.Empty, stream grpc.ServerStream
 }
 
 // Call implements the Call RPC (empty for now)
-func (s *gatewayServer) Call(ctx context.Context, req *gateway_pb.CallRequest) (*gateway_pb.CallResponse, error) {
+func (s *gatewayServer) Call(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallResponse, error) {
 	log.Println("Call called (not implemented)")
 	return &gateway_pb.CallResponse{}, nil
+}
+
+// CreateObject implements the CreateObject RPC (empty for now)
+func (s *gatewayServer) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
+	log.Println("CreateObject called (not implemented)")
+	return &gateway_pb.CreateObjectResponse{}, nil
+}
+
+// DeleteObject implements the DeleteObject RPC (empty for now)
+func (s *gatewayServer) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
+	log.Println("DeleteObject called (not implemented)")
+	return &gateway_pb.DeleteObjectResponse{}, nil
 }
 
 func serveGRPC(addr string, shutdownChan chan struct{}) error {

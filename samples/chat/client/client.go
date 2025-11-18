@@ -62,7 +62,7 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req := &gateway_pb.CallRequest{
+	req := &gateway_pb.CallObjectRequest{
 		ClientId: c.clientID,
 		Method:   method,
 		Request:  anyReq,
