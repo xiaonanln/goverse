@@ -8,6 +8,7 @@ import (
 
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // TestClusterEtcdIntegration tests cluster node registration and discovery through etcd
@@ -326,9 +327,19 @@ func TestClusterStopUnregistersFromEtcd(t *testing.T) {
 	cluster := mustNewCluster(ctx, t, "localhost:47010", testPrefix)
 	nodeAddr := cluster.GetThisNode().GetAdvertiseAddress()
 
-	// Get etcd client to check key directly
+	// Create a separate etcd client for verification (independent of cluster)
+	// This client won't be closed when cluster.Stop() is called
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"localhost:2379"},
+		DialTimeout: 10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create etcd client: %v", err)
+	}
+	defer etcdClient.Close()
+
+	// Get the key path for this node
 	etcdMgr := cluster.GetEtcdManagerForTesting()
-	client := etcdMgr.GetClient()
 	nodesPrefix := etcdMgr.GetPrefix() + "/nodes/"
 	key := nodesPrefix + nodeAddr
 
@@ -336,7 +347,7 @@ func TestClusterStopUnregistersFromEtcd(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify key exists after start
-	resp, err := client.Get(ctx, key)
+	resp, err := etcdClient.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("Failed to check node key after start: %v", err)
 	}
@@ -355,7 +366,7 @@ func TestClusterStopUnregistersFromEtcd(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify key is gone after stop
-	resp, err = client.Get(ctx, key)
+	resp, err = etcdClient.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("Failed to check node key after stop: %v", err)
 	}
