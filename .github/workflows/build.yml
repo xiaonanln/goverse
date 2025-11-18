@@ -84,6 +84,17 @@ jobs:
             exit 1
           fi
       
+      - name: Build gateway
+        run: |
+          echo "Building gateway..."
+          go build -o gateway.out ./cmd/gateway
+          if [ -f "./gateway.out" ]; then
+            echo "✅ Gateway binary built successfully"
+          else
+            echo "❌ Gateway binary not found"
+            exit 1
+          fi
+      
       - name: Build chat server
         run: |
           echo "Building chat server..."
@@ -109,4 +120,4 @@ jobs:
       - name: List all build artifacts
         run: |
           echo "Build completed! Generated binaries:"
-          ls -la inspector* server* client* 2>/dev/null || echo "No binaries found matching pattern"
+          ls -la inspector* gateway* server* client* 2>/dev/null || echo "No binaries found matching pattern"
