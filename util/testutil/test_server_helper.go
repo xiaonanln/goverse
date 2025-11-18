@@ -102,16 +102,22 @@ func (tsh *TestServerHelper) IsRunning() bool {
 type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
-	PushMessageToClient(clientID string, message proto.Message) error
+	DeleteObject(ctx context.Context, id string) error
+}
+
+type clusterInterface interface {
+	RegisterGateConnection(gateAddr string) (chan proto.Message, error)
+	UnregisterGateConnection(gateAddr string, ch chan proto.Message)
 }
 
 // MockGoverseServer is a minimal implementation of the Goverse gRPC service for testing
 // It delegates actual operations to a provided Node instance
 type MockGoverseServer struct {
 	goverse_pb.UnimplementedGoverseServer
-	logger *logger.Logger
-	node   nodeInterface
-	mu     sync.Mutex
+	logger  *logger.Logger
+	node    nodeInterface
+	cluster clusterInterface
+	mu      sync.Mutex
 }
 
 // NewMockGoverseServer creates a new mock Goverse server
@@ -126,6 +132,13 @@ func (m *MockGoverseServer) SetNode(node nodeInterface) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.node = node
+}
+
+// SetCluster sets the cluster instance for the server to delegate to
+func (m *MockGoverseServer) SetCluster(cluster clusterInterface) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cluster = cluster
 }
 
 // Status returns a status response
@@ -210,15 +223,8 @@ func (m *MockGoverseServer) CreateObject(ctx context.Context, req *goverse_pb.Cr
 	}, nil
 }
 
-// ListObjects returns an empty list
-func (m *MockGoverseServer) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*goverse_pb.ListObjectsResponse, error) {
-	return &goverse_pb.ListObjectsResponse{
-		Objects: []*goverse_pb.ObjectInfo{},
-	}, nil
-}
-
-// PushMessageToClient handles remote push message by delegating to the node
-func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
+// DeleteObject handles remote object deletion by delegating to the node
+func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.DeleteObjectRequest) (*goverse_pb.DeleteObjectResponse, error) {
 	m.mu.Lock()
 	node := m.node
 	m.mu.Unlock()
@@ -227,21 +233,86 @@ func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *govers
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
-	// Unmarshal the message
-	var message proto.Message
-	var err error
-	if req.Message != nil {
-		message, err = anypb.UnmarshalNew(req.Message, proto.UnmarshalOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal message: %v", err)
+	// Call DeleteObject on the actual node
+	err := node.DeleteObject(ctx, req.Id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete object: %v", err)
+	}
+
+	return &goverse_pb.DeleteObjectResponse{}, nil
+}
+
+// ListObjects returns an empty list
+func (m *MockGoverseServer) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*goverse_pb.ListObjectsResponse, error) {
+	return &goverse_pb.ListObjectsResponse{
+		Objects: []*goverse_pb.ObjectInfo{},
+	}, nil
+}
+
+// RegisterGate handles gate registration by delegating to the cluster
+func (m *MockGoverseServer) RegisterGate(req *goverse_pb.RegisterGateRequest, stream goverse_pb.Goverse_RegisterGateServer) error {
+	m.mu.Lock()
+	cluster := m.cluster
+	m.mu.Unlock()
+
+	gateAddr := req.GetGateAddr()
+	if gateAddr == "" {
+		return fmt.Errorf("gate_addr must be specified in RegisterGate request")
+	}
+
+	if cluster == nil {
+		return fmt.Errorf("no cluster assigned to mock server")
+	}
+
+	m.logger.Infof("Gate %s registered, starting message stream", gateAddr)
+
+	// Send RegisterGateResponse as the first message
+	registerResponse := &goverse_pb.GateMessage{
+		Message: &goverse_pb.GateMessage_RegisterGateResponse{
+			RegisterGateResponse: &goverse_pb.RegisterGateResponse{},
+		},
+	}
+	if err := stream.Send(registerResponse); err != nil {
+		m.logger.Errorf("Failed to send RegisterGateResponse to gate %s: %v", gateAddr, err)
+		return err
+	}
+
+	// Acquire message channel from cluster
+	msgChan, err := cluster.RegisterGateConnection(gateAddr)
+	if err != nil {
+		m.logger.Errorf("Failed to register gate connection for %s: %v", gateAddr, err)
+		return err
+	}
+	defer cluster.UnregisterGateConnection(gateAddr, msgChan)
+
+	// Loop to forward messages from channel to stream
+	for {
+		select {
+		case <-stream.Context().Done():
+			m.logger.Infof("Gate %s stream closed: %v", gateAddr, stream.Context().Err())
+			return nil
+		case msg, ok := <-msgChan:
+			if !ok {
+				m.logger.Infof("Gate %s message channel closed, stopping stream", gateAddr)
+				return nil
+			}
+			// The message should be a ClientMessageEnvelope
+			envelope, ok := msg.(*goverse_pb.ClientMessageEnvelope)
+			if !ok {
+				m.logger.Errorf("Received non-envelope message for gate %s: %v", gateAddr, msg)
+				continue
+			}
+
+			gateMsg := &goverse_pb.GateMessage{
+				Message: &goverse_pb.GateMessage_ClientMessage{
+					ClientMessage: envelope,
+				},
+			}
+
+			if err := stream.Send(gateMsg); err != nil {
+				m.logger.Errorf("Failed to send message to gate %s: %v", gateAddr, err)
+				return err
+			}
 		}
 	}
-
-	// Push message to the client on this node
-	err = node.PushMessageToClient(req.ClientId, message)
-	if err != nil {
-		return nil, err
-	}
-
-	return &goverse_pb.PushMessageToClientResponse{}, nil
 }

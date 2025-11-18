@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -12,6 +11,9 @@ import (
 // is only marked ready when BOTH node connections are established AND shard mapping is available.
 // This is a regression test for the issue where cluster was marked ready without waiting for node connections.
 func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -19,13 +21,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	c := mustNewCluster(ctx, t, "localhost:47201", testPrefix)
 
 	// Wait for cluster to be ready (Start() initializes everything)
-	timeout := testutil.WaitForShardMappingTimeout
-	select {
-	case <-c.ClusterReady():
-		t.Log("✓ Cluster correctly became ready after BOTH node connections AND shard mapping are available")
-	case <-time.After(timeout):
-		t.Fatalf("Cluster should be ready within %v after Start()", timeout)
-	}
+	testutil.WaitForClusterReady(t, c)
 
 	// Verify cluster is ready
 	if !c.IsReady() {

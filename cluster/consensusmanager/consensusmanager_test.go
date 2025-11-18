@@ -176,6 +176,9 @@ func TestCreateShardMapping_NoNodes(t *testing.T) {
 }
 
 func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	mgr.Connect()
@@ -202,6 +205,9 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 }
 
 func TestUpdateShardMapping_WithExisting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	mgr.Connect()
@@ -729,6 +735,9 @@ func TestStartWatch_NoEtcdManager(t *testing.T) {
 // TestClaimShardOwnership tests that a node claims ownership of shards
 // where it is the target node and CurrentNode is empty
 func TestClaimShardOwnership(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {
@@ -874,6 +883,9 @@ func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 // TestClaimShardOwnership_TargetAndEmpty tests that a node claims ownership
 // only when TargetNode is this node AND (CurrentNode is empty or not alive)
 func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	if err != nil {

@@ -6,6 +6,9 @@ import (
 )
 
 func TestSaveObject_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -44,6 +47,9 @@ func TestSaveObject_Integration(t *testing.T) {
 }
 
 func TestSaveObject_Update_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -89,6 +95,9 @@ func TestSaveObject_Update_Integration(t *testing.T) {
 }
 
 func TestLoadObject_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -127,6 +136,9 @@ func TestLoadObject_Integration(t *testing.T) {
 }
 
 func TestLoadObject_NotFound_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -151,6 +163,9 @@ func TestLoadObject_NotFound_Integration(t *testing.T) {
 }
 
 func TestDeleteObject_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -194,6 +209,9 @@ func TestDeleteObject_Integration(t *testing.T) {
 }
 
 func TestDeleteObject_NotFound_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -218,6 +236,9 @@ func TestDeleteObject_NotFound_Integration(t *testing.T) {
 }
 
 func TestObjectExists_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -264,6 +285,9 @@ func TestObjectExists_Integration(t *testing.T) {
 }
 
 func TestListObjectsByType_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -324,6 +348,9 @@ func TestListObjectsByType_Integration(t *testing.T) {
 }
 
 func TestListObjectsByType_Empty_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)
@@ -352,6 +379,9 @@ func TestListObjectsByType_Empty_Integration(t *testing.T) {
 }
 
 func TestPersistence_FullWorkflow_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	config := skipIfNoPostgres(t)
 
 	db, err := NewDB(config)

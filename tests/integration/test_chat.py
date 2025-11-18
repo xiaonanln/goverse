@@ -35,23 +35,15 @@ sys.path.insert(0, str(INTEGRATION_DIR))
 from ChatServer import ChatServer
 from Inspector import Inspector
 from ChatClient import ChatClient
+from Gateway import Gateway
 from proto import goverse_pb2
 import grpc
 
-def run_push_messaging_test(num_servers=1):
+def run_push_messaging_test(gateway_port=49000):
     """Test push-based messaging between two chat clients."""
     print("\nTesting push-based messaging...")
     
-    # Select a random server from available servers
-    server_ports = [48000 + i for i in range(num_servers)]
-    selected_port = random.choice(server_ports)
-    selected_server_idx = server_ports.index(selected_port)
-    
-    print(f"Available servers: {len(server_ports)}")
-    if num_servers > 1:
-        print(f"Randomly selected server: localhost:{selected_port} (server {selected_server_idx + 1})")
-    else:
-        print(f"Using server: localhost:{selected_port}")
+    print(f"Connecting clients to gateway: localhost:{gateway_port}")
     
     # Create two chat clients
     client1 = ChatClient()
@@ -60,12 +52,12 @@ def run_push_messaging_test(num_servers=1):
     try:
         # Start both clients in background
         print("Starting client1 (sender)...")
-        if not client1.start_interactive(selected_port, 'user1'):
+        if not client1.start_interactive(gateway_port, 'user1'):
             print("❌ Failed to start client1")
             return False
         
         print("Starting client2 (receiver)...")
-        if not client2.start_interactive(selected_port, 'user2'):
+        if not client2.start_interactive(gateway_port, 'user2'):
             print("❌ Failed to start client2")
             return False
         
@@ -124,20 +116,11 @@ def run_push_messaging_test(num_servers=1):
         client1.stop()
         client2.stop()
 
-def run_chat_test(num_servers=1):
+def run_chat_test(gateway_port=49000, num_servers=1):
     """Run the chat client with test input and verify output."""
     print("\nTesting chat client and server interaction...")
     
-    # Select a random server from available servers
-    server_ports = [48000 + i for i in range(num_servers)]
-    selected_port = random.choice(server_ports)
-    selected_server_idx = server_ports.index(selected_port)
-    
-    print(f"Available servers: {len(server_ports)}")
-    if num_servers > 1:
-        print(f"Randomly selected server: localhost:{selected_port} (server {selected_server_idx + 1})")
-    else:
-        print(f"Using server: localhost:{selected_port}")
+    print(f"Connecting client to gateway: localhost:{gateway_port}")
     
     # Create ChatClient instance
     chat_client = ChatClient()
@@ -157,7 +140,7 @@ def run_chat_test(num_servers=1):
         ]
     
     # Run the test and get output
-    output = chat_client.run_test(server_port=selected_port, messages=messages)
+    output = chat_client.run_test(server_port=gateway_port, messages=messages)
     
     # Define test expectations (adjust messages based on number of servers)
     msg1, msg2 = messages[0], messages[1]
@@ -234,6 +217,14 @@ def main():
             if not server.wait_for_ready(timeout=20):
                 return 1
 
+        # Start gateway using Gateway class
+        gateway = Gateway(listen_port=49000)
+        gateway.start()
+        
+        # Wait for gateway to be ready
+        if not gateway.wait_for_ready(timeout=30):
+            return 1
+
         # Wait for cluster to be ready and objects to be created
         # We expect: 1 ChatRoomMgr + 5 ChatRooms = 6 objects minimum across all servers
         print("\nWaiting for chat rooms to be created (cluster ready)...")
@@ -299,18 +290,26 @@ def main():
             print(objects_response)
 
         # Run push messaging test
-        push_ok = run_push_messaging_test(num_servers)
+        push_ok = run_push_messaging_test(gateway_port=49000)
 
         if not push_ok:
             print("\n❌ Push messaging test failed!")
             return 1
         
         # Run chat test
-        chat_ok = run_chat_test(num_servers)
+        chat_ok = run_chat_test(gateway_port=49000, num_servers=num_servers)
 
         if not chat_ok:
             print("\n❌ Chat test failed!")
             return 1
+
+        # Stop gateway and check exit code
+        print("\nStopping gateway...")
+        gateway_ok = True
+        code = gateway.close()
+        print(f"Gateway exited with code {code}")
+        if code != 0:
+            gateway_ok = False
 
         # Stop chat servers (gracefully) and check exit codes
         print("\nStopping chat servers...")
@@ -329,6 +328,9 @@ def main():
         if code != 0:
             inspector_ok = False
 
+        if not gateway_ok:
+            print("\n❌ Gateway exited with non-zero status")
+            return 1
         if not servers_ok:
             print("\n❌ One or more chat servers exited with non-zero status")
             return 1

@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xiaonanln/goverse/client"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
@@ -17,13 +16,10 @@ import (
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
-	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type Object = object.Object
-type ClientObject = client.ClientObject
 
 // Node represents a node in the distributed system that manages objects and clients
 //
@@ -55,7 +51,6 @@ type Node struct {
 	advertiseAddress      string
 	objectTypes           map[string]reflect.Type
 	objectTypesMu         sync.RWMutex
-	clientObjectType      string
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
@@ -168,15 +163,6 @@ func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
 	node.shardLock = sl
 }
 
-func (node *Node) RegisterClientType(clientObj ClientObject) {
-	if node.clientObjectType != "" {
-		panic(fmt.Errorf("client object type already registered: %s", node.clientObjectType))
-	}
-	node.clientObjectType = reflect.TypeOf(clientObj).Elem().Name()
-	node.RegisterObjectType(clientObj)
-	node.logger.Infof("Registered client type %s", node.clientObjectType)
-}
-
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)
@@ -208,71 +194,6 @@ func isConcreteProtoMessage(t reflect.Type) bool {
 	}
 	protoMessageType := reflect.TypeOf((*proto.Message)(nil)).Elem()
 	return t.Implements(protoMessageType)
-}
-
-// RegisterClient creates a new client object and returns its ID and message channel
-func (node *Node) RegisterClient(ctx context.Context) (string, chan proto.Message, error) {
-	clientId, messageChan, err := node.newClientObject(ctx)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return clientId, messageChan, nil
-}
-
-// newClientObject creates a new client object and returns its ID and message channel
-func (node *Node) newClientObject(ctx context.Context) (string, chan proto.Message, error) {
-	if node.clientObjectType == "" {
-		return "", nil, fmt.Errorf("client object type not registered")
-	}
-
-	clientId := node.advertiseAddress + "/" + uniqueid.UniqueId()
-	err := node.createObject(ctx, node.clientObjectType, clientId)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to create ClientProxy object: %w", err)
-	}
-
-	// Verify the created object exists and get its message channel
-	node.objectsMu.RLock()
-	obj := node.objects[clientId]
-	node.objectsMu.RUnlock()
-
-	if obj == nil {
-		return "", nil, fmt.Errorf("client object %s not found after creation", clientId)
-	}
-
-	clientObj, ok := obj.(ClientObject)
-	if !ok {
-		return "", nil, fmt.Errorf("object %s is not a ClientObject", clientId)
-	}
-
-	node.logger.Infof("Registered new client: %s", clientObj.String())
-	return clientId, clientObj.MessageChan(), nil
-}
-
-// UnregisterClient removes a client by its ID
-func (node *Node) UnregisterClient(ctx context.Context, clientId string) {
-	node.DeleteObject(ctx, clientId)
-	node.logger.Infof("Unregistered client: %s", clientId)
-}
-
-func (node *Node) CallClient(ctx context.Context, clientId, method string, requestAny *anypb.Any) (*anypb.Any, error) {
-	request, err := requestAny.UnmarshalNew()
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal request: %w", err)
-	}
-
-	resp, err := node.CallObject(ctx, node.clientObjectType, clientId, method, request)
-	if err != nil {
-		return nil, err
-	}
-
-	var anyResp anypb.Any
-	err = anyResp.MarshalFrom(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-	return &anyResp, nil
 }
 
 // CallObject implements the Goverse gRPC service CallObject method
@@ -668,32 +589,6 @@ type ObjectInfo struct {
 	Type         string
 	Id           string
 	CreationTime time.Time
-}
-
-// PushMessageToClient sends a message to a client's message channel
-// Returns nil if successful, error if client not found or not a ClientObject
-func (node *Node) PushMessageToClient(clientID string, message proto.Message) error {
-	node.objectsMu.RLock()
-	obj, ok := node.objects[clientID]
-	node.objectsMu.RUnlock()
-
-	if !ok {
-		return fmt.Errorf("client not found: %s", clientID)
-	}
-
-	clientObj, ok := obj.(ClientObject)
-	if !ok {
-		return fmt.Errorf("object %s is not a ClientObject", clientID)
-	}
-
-	// Send message to the client's channel
-	select {
-	case clientObj.MessageChan() <- message:
-		node.logger.Infof("Pushed message to client %s", clientID)
-		return nil
-	default:
-		return fmt.Errorf("client %s message channel is full or closed", clientID)
-	}
 }
 
 // SetPersistenceProvider configures the persistence provider for this node

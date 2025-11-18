@@ -16,17 +16,12 @@ type ServerConfig = server.ServerConfig
 type Server = server.Server
 type Node = node.Node
 type Object = object.Object
-type ClientObject = client.ClientObject
 type BaseObject = object.BaseObject
 type BaseClient = client.BaseClient
 type Cluster = cluster.Cluster
 
 func NewServer(config *ServerConfig) (*Server, error) {
 	return server.NewServer(config)
-}
-
-func RegisterClientType(clientObj ClientObject) {
-	cluster.This().GetThisNode().RegisterClientType(clientObj)
 }
 
 func RegisterObjectType(obj Object) {
@@ -45,10 +40,9 @@ func CallObject(ctx context.Context, objType, id string, method string, request 
 	return cluster.This().CallObject(ctx, objType, id, method, request)
 }
 
-// PushMessageToClient sends a message to a client via their client object
+// PushMessageToClient sends a message to a client via the gate connection
 // This allows distributed objects to push notifications/messages to connected clients
-// The client ID has the format: nodeAddress/uniqueId (e.g., "localhost:7001/abc123")
-// This method automatically routes the message to the correct node in the cluster
+// The client ID has the format: gateAddress/uniqueId (e.g., "localhost:7001/abc123")
 func PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
 	return cluster.This().PushMessageToClient(ctx, clientID, message)
 }

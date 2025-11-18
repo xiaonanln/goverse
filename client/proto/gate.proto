@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/xiaonanln/goverse/client/proto/gate_pb";
+
+package gate;
+
+service GateService {
+    rpc Register (Empty) returns (stream google.protobuf.Any);
+    rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
+    rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
+    rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
+}
+
+// RegisterResponse is the first message that the client can receive from the Register stream
+message RegisterResponse {
+  string client_id = 1;
+}
+
+message CallObjectRequest {
+  string client_id = 1;
+  string type = 2;
+  string id = 3; // Object ID to call
+  string method = 4;
+  google.protobuf.Any request = 5;
+}
+
+message CallObjectResponse {
+  google.protobuf.Any response = 1;
+}
+
+message CreateObjectRequest {
+  string type = 1;
+  string id = 2; // ID must be specified
+}
+
+message CreateObjectResponse {
+  string id = 1;
+}
+
+message DeleteObjectRequest {
+  string id = 1;
+}
+
+message DeleteObjectResponse {
+  // Empty response - success is indicated by no error
+}
+
+message Empty {}

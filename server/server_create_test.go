@@ -21,15 +21,17 @@ func (obj *TestObject) OnCreated() {
 
 // TestServerCreateObject_RequiresID tests that Server.CreateObject requires a non-empty ID
 func TestServerCreateObject_RequiresID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix to get a unique prefix for test isolation
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	config := &ServerConfig{
-		ListenAddress:       "localhost:47200",
-		AdvertiseAddress:    "localhost:47200",
-		ClientListenAddress: "localhost:47201",
-		EtcdAddress:         "localhost:2379",
-		EtcdPrefix:          etcdPrefix,
+		ListenAddress:    "localhost:47200",
+		AdvertiseAddress: "localhost:47200",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       etcdPrefix,
 	}
 
 	server, err := NewServer(config)

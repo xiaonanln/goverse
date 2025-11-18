@@ -11,6 +11,9 @@ import (
 // TestNodeConnectionsIntegration tests the NodeConnections manager with etcd node discovery
 // This test requires a running etcd instance at localhost:2379
 func TestNodeConnectionsIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -55,6 +58,9 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 
 // TestNodeConnectionsDynamicDiscovery tests that NodeConnections automatically connects to new nodes
 func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -87,6 +93,9 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 // TestNodeConnectionsRemovalAndReaddition tests that a node can be removed and then re-added
 // This test verifies that NodeConnections properly disconnects and reconnects
 func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 

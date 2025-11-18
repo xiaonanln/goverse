@@ -26,6 +26,9 @@ import (
 // When a node releases a shard (because TargetNode changed), objects on that shard are removed.
 // This test verifies the consistency of shard ownership during dynamic changes.
 func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -82,7 +85,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	// Wait for servers to be ready and shard mapping to be initialized
 	t.Logf("Waiting for cluster ready and shard mapping initialization...")
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	for _, c := range clusters {
+		testutil.WaitForClusterReady(t, c)
+	}
 
 	// Verify leader is established
 	leaderNode := cluster1.GetLeaderNode()
