@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - develop
+      - gateway
   pull_request:
     branches:
       - main
       - develop
+      - gateway
   workflow_dispatch:
 
 jobs:
