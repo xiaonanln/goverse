@@ -31,9 +31,6 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
@@ -102,9 +99,6 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
-	}
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
 	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
@@ -180,9 +174,6 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
-	}
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
 	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")

@@ -16,9 +16,6 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()

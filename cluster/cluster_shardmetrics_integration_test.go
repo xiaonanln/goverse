@@ -17,9 +17,6 @@ func TestShardMetricsIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running integration test in short mode")
-	}
 	// Lock metrics to prevent parallel execution with other metrics tests
 	// This also resets all metrics to ensure clean state
 	testutil.LockMetrics(t)

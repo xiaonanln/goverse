@@ -116,9 +116,6 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
-	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -294,9 +291,6 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
-	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -389,9 +383,6 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
-	}
-	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
 	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
