@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	client_pb "github.com/xiaonanln/goverse/client/proto"
+	gateway_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -38,7 +38,7 @@ type ServerConfig struct {
 
 type Server struct {
 	goverse_pb.UnimplementedGoverseServer
-	client_pb.UnimplementedClientServiceServer
+	gateway_pb.UnimplementedGatewayServiceServer
 	config  *ServerConfig
 	Node    *node.Node
 	ctx     context.Context
@@ -132,7 +132,7 @@ func (server *Server) Run() error {
 
 	grpcServer := grpc.NewServer()
 	goverse_pb.RegisterGoverseServer(grpcServer, server)
-	client_pb.RegisterClientServiceServer(grpcServer, server)
+	gateway_pb.RegisterGatewayServiceServer(grpcServer, server)
 	reflection.Register(grpcServer)
 	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
 
@@ -187,7 +187,7 @@ func (server *Server) Run() error {
 
 	go func() {
 		server.logger.Infof("Client gRPC server listening on %s", clientServiceListener.Addr().String())
-		client_pb.RegisterClientServiceServer(clientGrpcServer, server)
+		gateway_pb.RegisterGatewayServiceServer(clientGrpcServer, server)
 		reflection.Register(clientGrpcServer)
 		if err := clientGrpcServer.Serve(clientServiceListener); err != nil {
 			server.logger.Errorf("Client gRPC server error: %v", err)
@@ -219,7 +219,7 @@ func (server *Server) logRPC(method string, req proto.Message) {
 }
 
 // Helper function to send a proto.Message to the stream
-func sendMessageToStream(stream client_pb.ClientService_RegisterServer, msg proto.Message) error {
+func sendMessageToStream(stream gateway_pb.GatewayService_RegisterServer, msg proto.Message) error {
 	var anyMsg anypb.Any
 	if err := anyMsg.MarshalFrom(msg); err != nil {
 		return fmt.Errorf("failed to marshal message: %v", err)
@@ -256,8 +256,8 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 	return nil
 }
 
-// Register implements the ClientService Register method for client registration
-func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientService_RegisterServer) error {
+// Register implements the GatewayService Register method for client registration
+func (server *Server) Register(req *gateway_pb.Empty, stream gateway_pb.GatewayService_RegisterServer) error {
 	server.logRPC("Register", req)
 	clientId, messageChan, err := server.Node.RegisterClient(stream.Context())
 	if err != nil {
@@ -273,7 +273,7 @@ func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientServ
 		metrics.RecordClientDisconnected(server.config.AdvertiseAddress, "grpc")
 	}()
 
-	resp := client_pb.RegisterResponse{
+	resp := gateway_pb.RegisterResponse{
 		ClientId: clientId,
 	}
 	if err := sendMessageToStream(stream, &resp); err != nil {
@@ -281,7 +281,7 @@ func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientServ
 	}
 
 	for msg := range messageChan {
-		// Convert message to client_pb format as needed
+		// Convert message to gateway_pb format as needed
 		if err := sendMessageToStream(stream, msg); err != nil {
 			return fmt.Errorf("failed to send message to client %s: %v", clientId, err)
 		}
@@ -289,15 +289,15 @@ func (server *Server) Register(req *client_pb.Empty, stream client_pb.ClientServ
 	return nil
 }
 
-// Call implements the ClientService Call method for client RPC calls
-func (server *Server) Call(ctx context.Context, req *client_pb.CallRequest) (*client_pb.CallResponse, error) {
+// Call implements the GatewayService Call method for client RPC calls
+func (server *Server) Call(ctx context.Context, req *gateway_pb.CallRequest) (*gateway_pb.CallResponse, error) {
 	server.logRPC("Call", req)
 	resp, err := server.Node.CallClient(ctx, req.GetClientId(), req.GetMethod(), req.GetRequest())
 	if err != nil {
 		return nil, err
 	}
 
-	response := &client_pb.CallResponse{
+	response := &gateway_pb.CallResponse{
 		Response: resp,
 	}
 	return response, nil

@@ -2,11 +2,11 @@ syntax = "proto3";
 
 import "google/protobuf/any.proto";
 
-option go_package = "github.com/xiaonanln/goverse/client/proto/client_pb";
+option go_package = "github.com/xiaonanln/goverse/client/proto/gateway_pb";
 
-package client;
+package gateway;
 
-service ClientService {
+service GatewayService {
     rpc Register (Empty) returns (stream google.protobuf.Any);
     rpc Call (CallRequest) returns (CallResponse);
 }
