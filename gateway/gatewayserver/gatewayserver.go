@@ -7,6 +7,7 @@ import (
 	"time"
 
 	gateway_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/gateway"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -29,6 +30,7 @@ type GatewayServer struct {
 	cancel     context.CancelFunc
 	logger     *logger.Logger
 	grpcServer *grpc.Server
+	gateway    *gateway.Gateway
 }
 
 // NewGatewayServer creates a new gateway server instance
@@ -39,11 +41,23 @@ func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create gateway instance
+	gatewayConfig := &gateway.GatewayConfig{
+		EtcdAddress: config.EtcdAddress,
+		EtcdPrefix:  config.EtcdPrefix,
+	}
+	gw, err := gateway.NewGateway(gatewayConfig)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create gateway: %w", err)
+	}
+
 	server := &GatewayServer{
-		config: config,
-		ctx:    ctx,
-		cancel: cancel,
-		logger: logger.NewLogger("GatewayServer"),
+		config:  config,
+		ctx:     ctx,
+		cancel:  cancel,
+		logger:  logger.NewLogger("GatewayServer"),
+		gateway: gw,
 	}
 
 	return server, nil
@@ -76,8 +90,10 @@ func validateConfig(config *GatewayServerConfig) error {
 func (s *GatewayServer) Start(ctx context.Context) error {
 	s.logger.Infof("Starting gateway server on %s", s.config.ListenAddress)
 
-	// TODO: Initialize connection to cluster via etcd
-	// TODO: Set up GoVerse service client for routing to nodes
+	// Start the gateway
+	if err := s.gateway.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start gateway: %w", err)
+	}
 
 	// Create gRPC server
 	s.grpcServer = grpc.NewServer()
@@ -132,6 +148,13 @@ func (s *GatewayServer) Stop() error {
 		}
 	}
 
+	// Stop the gateway
+	if s.gateway != nil {
+		if err := s.gateway.Stop(); err != nil {
+			s.logger.Errorf("Error stopping gateway: %v", err)
+		}
+	}
+
 	// Cancel context
 	s.cancel()
 
@@ -141,31 +164,40 @@ func (s *GatewayServer) Stop() error {
 
 // Register implements the Register RPC
 func (s *GatewayServer) Register(req *gateway_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
-	s.logger.Infof("Register called (not yet implemented)")
-	// TODO: Implement client registration logic
+	ctx := stream.Context()
+	clientID, err := s.gateway.Register(ctx)
+	if err != nil {
+		s.logger.Errorf("Register failed: %v", err)
+		return err
+	}
+
+	// Send RegisterResponse
+	regResp := &gateway_pb.RegisterResponse{ClientId: clientID}
+	anyResp, err := anypb.New(regResp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal RegisterResponse: %w", err)
+	}
+
+	if err := stream.Send(anyResp); err != nil {
+		return fmt.Errorf("failed to send RegisterResponse: %w", err)
+	}
+
+	// Keep stream open for push messages
+	<-ctx.Done()
 	return nil
 }
 
 // CallObject implements the CallObject RPC
 func (s *GatewayServer) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
-	s.logger.Infof("CallObject called: objectId=%s, method=%s (not yet implemented)", req.Id, req.Method)
-	// TODO: Route to appropriate node based on objectId
-	// TODO: Use GoVerse service client to call object
-	return &gateway_pb.CallObjectResponse{}, nil
+	return s.gateway.CallObject(ctx, req)
 }
 
 // CreateObject implements the CreateObject RPC
 func (s *GatewayServer) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
-	s.logger.Infof("CreateObject called: type=%s, objectId=%s (not yet implemented)", req.Type, req.Id)
-	// TODO: Route to appropriate node based on objectId
-	// TODO: Use GoVerse service client to create object
-	return &gateway_pb.CreateObjectResponse{}, nil
+	return s.gateway.CreateObject(ctx, req)
 }
 
 // DeleteObject implements the DeleteObject RPC
 func (s *GatewayServer) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
-	s.logger.Infof("DeleteObject called: objectId=%s (not yet implemented)", req.Id)
-	// TODO: Route to appropriate node based on objectId
-	// TODO: Use GoVerse service client to delete object
-	return &gateway_pb.DeleteObjectResponse{}, nil
+	return s.gateway.DeleteObject(ctx, req)
 }
