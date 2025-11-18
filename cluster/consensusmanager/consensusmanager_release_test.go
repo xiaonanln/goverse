@@ -107,6 +107,9 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 
 // TestReleaseShardsForNode_WithEtcd tests the full release flow with etcd
 func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -279,6 +282,9 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 
 // TestReleaseShardsForNode_MultipleShards tests releasing multiple shards at once
 func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -369,6 +375,9 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 
 // TestReleaseShardsForNode_RealShardIDs tests with realistic shard IDs
 func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
