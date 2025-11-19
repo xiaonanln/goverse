@@ -6,7 +6,6 @@ import (
 	"time"
 
 	gateway_pb "github.com/xiaonanln/goverse/client/proto"
-	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -29,7 +28,6 @@ type Gateway struct {
 	config            *GatewayConfig
 	logger            *logger.Logger
 	etcdManager       *etcdmanager.EtcdManager
-	consensusManager  *consensusmanager.ConsensusManager
 	shardLock         *shardlock.ShardLock
 	managementCtx     context.Context
 	managementCancel  context.CancelFunc
@@ -57,15 +55,11 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 	// Create shard lock
 	shardLock := shardlock.NewShardLock()
 
-	// Create consensus manager (no local node address for gateway)
-	consensusMgr := consensusmanager.NewConsensusManager(etcdMgr, shardLock, 0, "")
-
 	gateway := &Gateway{
-		config:           config,
-		logger:           logger.NewLogger("Gateway"),
-		etcdManager:      etcdMgr,
-		consensusManager: consensusMgr,
-		shardLock:        shardLock,
+		config:      config,
+		logger:      logger.NewLogger("Gateway"),
+		etcdManager: etcdMgr,
+		shardLock:   shardLock,
 	}
 
 	return gateway, nil
@@ -95,16 +89,6 @@ func validateGatewayConfig(config *GatewayConfig) error {
 func (g *Gateway) Start(ctx context.Context) error {
 	g.logger.Infof("Starting gateway")
 
-	// Initialize consensus manager to load initial cluster state
-	if err := g.consensusManager.Initialize(ctx); err != nil {
-		return fmt.Errorf("failed to initialize consensus manager: %w", err)
-	}
-
-	// Start consensus manager watch
-	if err := g.consensusManager.StartWatch(ctx); err != nil {
-		return fmt.Errorf("failed to start consensus manager watch: %w", err)
-	}
-
 	// Start management loop
 	if err := g.startManagementLoop(ctx); err != nil {
 		return fmt.Errorf("failed to start management loop: %w", err)
@@ -122,9 +106,6 @@ func (g *Gateway) Stop() error {
 
 	// Stop management loop
 	g.stopManagementLoop()
-
-	// Stop consensus manager watch
-	g.consensusManager.StopWatch()
 
 	// Close etcd connection
 	if err := g.etcdManager.Close(); err != nil {
@@ -218,7 +199,7 @@ func (g *Gateway) managementLoop() {
 func (g *Gateway) managementTick() {
 	startTime := time.Now()
 	// TODO: Perform periodic management tasks
-	// - Update node connections based on consensus manager state
+	// - Update node connections
 	// - Check health of connections
 	// - Update metrics
 	g.logger.Debugf("Gateway management tick took %d ms", time.Since(startTime).Milliseconds())
