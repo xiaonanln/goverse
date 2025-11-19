@@ -11,9 +11,6 @@ import (
 )
 
 func TestGatewayNodeIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
@@ -95,9 +92,6 @@ func TestGatewayNodeIntegration(t *testing.T) {
 }
 
 func TestMultiGatewayMultiNodeIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()

@@ -88,9 +88,6 @@ func TestGoroutineCount(t *testing.T) {
 
 // TestMemoryEfficiency compares memory usage between approaches
 func TestMemoryEfficiency(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping memory efficiency test in short mode")
-	}
 
 	const numTasks = 8192
 
