@@ -19,8 +19,8 @@ func main() {
 		EtcdPrefix:       "/goverse",
 	}
 
-	// Create gateway server
-	gateway, err := gateserver.NewGatewayServer(config)
+	// Create gateserver server
+	gateserver, err := gateserver.NewGatewayServer(config)
 	if err != nil {
 		log.Fatalf("Failed to create gateway server: %v", err)
 	}
@@ -36,7 +36,7 @@ func main() {
 	// Start gateway server in goroutine
 	serverDone := make(chan error, 1)
 	go func() {
-		serverDone <- gateway.Start(ctx)
+		serverDone <- gateserver.Start(ctx)
 	}()
 
 	// Wait for shutdown signal or server error
@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// Stop the gateway server
-	if err := gateway.Stop(); err != nil {
+	if err := gateserver.Stop(); err != nil {
 		log.Printf("Error stopping gateway: %v", err)
 	}
 
