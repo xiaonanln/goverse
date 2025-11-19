@@ -123,7 +123,10 @@ func NewClusterWithGate(cfg Config, gate *gateway.Gateway) (*Cluster, error) {
 func (c *Cluster) init(cfg Config) error {
 	// Initialization logic for the cluster
 	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
-	c.node.SetShardLock(c.shardLock)
+	// Note: Gateways don't need ShardLock as they don't host objects
+	if c.isNode() {
+		c.node.SetShardLock(c.shardLock)
+	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
 	if err != nil {
@@ -255,9 +258,25 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	return nil
 }
 
-// getAdvertiseAddr returns the advertise address of this node
+// getAdvertiseAddr returns the advertise address of this cluster (node or gateway)
 func (c *Cluster) getAdvertiseAddr() string {
-	return c.getAdvertiseAddr()
+	if c.node != nil {
+		return c.node.GetAdvertiseAddress()
+	}
+	if c.gate != nil {
+		return c.gate.GetAdvertiseAddress()
+	}
+	return ""
+}
+
+// isNode returns true if this cluster is a node cluster
+func (c *Cluster) isNode() bool {
+	return c.node != nil
+}
+
+// isGateway returns true if this cluster is a gateway cluster
+func (c *Cluster) isGateway() bool {
+	return c.gate != nil
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -292,10 +311,25 @@ func (c *Cluster) GetThisNode() *node.Node {
 	return c.node
 }
 
+// GetThisGateway returns the gateway instance if this cluster is a gateway cluster
+// Returns nil if this is a node cluster
+func (c *Cluster) GetThisGateway() *gateway.Gateway {
+	return c.gate
+}
+
 // String returns a string representation of the cluster
-// Format: Cluster<local-node-address,leader|member,quorum=%d>
+// Format: Cluster<local-address,type,leader|member,quorum=%d>
 func (c *Cluster) String() string {
-	nodeAddr := c.getAdvertiseAddr()
+	addr := c.getAdvertiseAddr()
+
+	var clusterType string
+	if c.isNode() {
+		clusterType = "node"
+	} else if c.isGateway() {
+		clusterType = "gateway"
+	} else {
+		clusterType = "unknown"
+	}
 
 	var role string
 	if c.IsLeader() {
@@ -306,7 +340,7 @@ func (c *Cluster) String() string {
 
 	quorum := c.getEffectiveMinQuorum()
 
-	return fmt.Sprintf("Cluster<%s,%s,quorum=%d>", nodeAddr, role, quorum)
+	return fmt.Sprintf("Cluster<%s,%s,%s,quorum=%d>", addr, clusterType, role, quorum)
 }
 
 // GetShardLock returns the cluster's ShardLock instance
@@ -385,14 +419,14 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
 
-	// Check if the object is on this node
-	if nodeAddr == c.getAdvertiseAddr() {
-		// Call locally
+	// Check if the object is on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
+		// Call locally on node
 		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
 		return c.node.CallObject(ctx, objType, id, method, request)
 	}
 
-	// Route to the appropriate node
+	// Route to the appropriate node (both node and gateway clusters can route)
 	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
@@ -451,8 +485,8 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
-	// Check if the object should be created on this node
-	if nodeAddr == c.getAdvertiseAddr() {
+	// Check if the object should be created on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(ctx, objType, objID)
@@ -510,8 +544,8 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if err != nil {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
-	// Check if the object should be deleted on this node
-	if nodeAddr == c.getAdvertiseAddr() {
+	// Check if the object should be deleted on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -569,11 +603,16 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 
 	nodeAddr := parts[0]
 
-	// Check if the client is on this node
-	if nodeAddr == c.getAdvertiseAddr() {
-		// Push locally
+	// Check if the client is on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
+		// Push locally on node
 		c.logger.Infof("%s - Pushing message to client %s locally", c, clientID)
 		return c.node.PushMessageToClient(clientID, message)
+	}
+
+	// Gateway clusters cannot push messages locally - they must route to nodes
+	if c.isGateway() && nodeAddr == c.getAdvertiseAddr() {
+		return fmt.Errorf("gateway cannot push messages to clients locally - client connections are on nodes")
 	}
 
 	// Route to the appropriate node
@@ -802,7 +841,13 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 // - CurrentNode is this node
 // - TargetNode is another node (not empty and not this node)
 // - No objects exist on this node for that shard
+// Note: This is a node-only operation. Gateways don't host objects so they skip this.
 func (c *Cluster) releaseShardOwnership(ctx context.Context) {
+	// Gateways don't host objects, so they don't need to release shard ownership
+	if c.isGateway() {
+		return
+	}
+
 	// Count objects per shard on this node
 	objectIDs := c.node.ListObjectIDs()
 	localObjectsPerShard := make(map[int]int)
@@ -823,7 +868,13 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 }
 
 // removeObjectsNotBelongingToThisNode removes objects whose shards no longer belong to this node
+// Note: This is a node-only operation. Gateways don't host objects so they skip this.
 func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
+	// Gateways don't host objects, so they don't need to remove objects
+	if c.isGateway() {
+		return
+	}
+
 	localAddr := c.getAdvertiseAddr()
 
 	// Check if cluster state is stable without cloning

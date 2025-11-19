@@ -17,15 +17,17 @@ func TestNewGateway(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayConfig{
-				EtcdAddress: "localhost:2379",
-				EtcdPrefix:  "/test-gateway",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
+				EtcdPrefix:       "/test-gateway",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid config with default prefix",
 			config: &GatewayConfig{
-				EtcdAddress: "localhost:2379",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
 		},
@@ -36,9 +38,19 @@ func TestNewGateway(t *testing.T) {
 			errContain: "config cannot be nil",
 		},
 		{
+			name: "empty advertise address",
+			config: &GatewayConfig{
+				AdvertiseAddress: "",
+				EtcdAddress:      "localhost:2379",
+			},
+			wantErr:    true,
+			errContain: "AdvertiseAddress cannot be empty",
+		},
+		{
 			name: "empty etcd address",
 			config: &GatewayConfig{
-				EtcdAddress: "",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "",
 			},
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",
@@ -82,15 +94,17 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayConfig{
-				EtcdAddress: "localhost:2379",
-				EtcdPrefix:  "/custom",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
+				EtcdPrefix:       "/custom",
 			},
 			wantErr: false,
 		},
 		{
 			name: "sets default prefix",
 			config: &GatewayConfig{
-				EtcdAddress: "localhost:2379",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
 			checkFunc: func(t *testing.T, cfg *GatewayConfig) {
@@ -106,9 +120,19 @@ func TestValidateGatewayConfig(t *testing.T) {
 			errContain: "config cannot be nil",
 		},
 		{
+			name: "empty advertise address",
+			config: &GatewayConfig{
+				AdvertiseAddress: "",
+				EtcdAddress:      "localhost:2379",
+			},
+			wantErr:    true,
+			errContain: "AdvertiseAddress cannot be empty",
+		},
+		{
 			name: "empty etcd address",
 			config: &GatewayConfig{
-				EtcdAddress: "",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "",
 			},
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",
@@ -135,8 +159,9 @@ func TestValidateGatewayConfig(t *testing.T) {
 
 func TestGatewayStartStop(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-lifecycle",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-lifecycle",
 	}
 
 	gateway, err := NewGateway(config)
@@ -161,8 +186,9 @@ func TestGatewayStartStop(t *testing.T) {
 
 func TestGatewayMultipleStops(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-multistop",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-multistop",
 	}
 
 	gateway, err := NewGateway(config)
@@ -190,8 +216,9 @@ func TestGatewayMultipleStops(t *testing.T) {
 
 func TestGatewayRegister(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-register",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-register",
 	}
 
 	gateway, err := NewGateway(config)
@@ -218,8 +245,9 @@ func TestGatewayRegister(t *testing.T) {
 
 func TestGatewayCallObject(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-callobject",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-callobject",
 	}
 
 	gateway, err := NewGateway(config)
@@ -253,8 +281,9 @@ func TestGatewayCallObject(t *testing.T) {
 
 func TestGatewayCreateObject(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-createobject",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-createobject",
 	}
 
 	gateway, err := NewGateway(config)
@@ -286,8 +315,9 @@ func TestGatewayCreateObject(t *testing.T) {
 
 func TestGatewayDeleteObject(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-deleteobject",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-deleteobject",
 	}
 
 	gateway, err := NewGateway(config)
@@ -318,8 +348,9 @@ func TestGatewayDeleteObject(t *testing.T) {
 
 func TestGatewayStartWithoutStop(t *testing.T) {
 	config := &GatewayConfig{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-nostop",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-nostop",
 	}
 
 	gateway, err := NewGateway(config)
