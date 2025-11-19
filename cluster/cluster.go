@@ -779,6 +779,9 @@ func (c *Cluster) GetLeaderNode() string {
 
 // IsLeader returns true if this node is the cluster leader
 func (c *Cluster) IsLeader() bool {
+	if !c.isNode() {
+		return false
+	}
 	leaderNode := c.GetLeaderNode()
 	return leaderNode != "" && leaderNode == c.getAdvertiseAddr()
 }
@@ -891,6 +894,10 @@ func (c *Cluster) updateMetrics() {
 
 // claimShardOwnership claims ownership of shards when cluster state is stable
 func (c *Cluster) claimShardOwnership(ctx context.Context) {
+	if c.isGateway() {
+		// Gateways don't host objects, so they don't need to claim shard ownership
+		return
+	}
 	// Claim ownership of shards where this node is the target
 	// The stability check is now performed inside ClaimShardsForNode
 	err := c.consensusManager.ClaimShardsForNode(ctx)

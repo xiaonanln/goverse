@@ -26,7 +26,29 @@ func waitForObjectCreatedOnNode(t *testing.T, n *node.Node, objID string, timeou
 		if time.Now().After(deadline) {
 			t.Fatalf("Object %s was not created on node within %v", objID, timeout)
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// waitForObjectDeletedOnNode waits for an object to be deleted from the specified node
+func waitForObjectDeletedOnNode(t *testing.T, n *node.Node, objID string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		objectFound := false
+		for _, obj := range n.ListObjects() {
+			if obj.Id == objID {
+				objectFound = true
+				break
+			}
+		}
+		if !objectFound {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Object %s was not deleted from node within %v", objID, timeout)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -43,12 +65,12 @@ func (o *TestGateNodeObject) OnCreated() {}
 // Response format: {message: string, callCount: number}
 func (o *TestGateNodeObject) Echo(ctx context.Context, req *structpb.Struct) (*structpb.Struct, error) {
 	o.callCount++
-	
+
 	message := ""
 	if req != nil && req.Fields["message"] != nil {
 		message = req.Fields["message"].GetStringValue()
 	}
-	
+
 	return &structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"message":   structpb.NewStringValue("Echo: " + message),
@@ -65,9 +87,9 @@ func (o *TestGateNodeObject) Increment(ctx context.Context, req *structpb.Struct
 	if req != nil && req.Fields["value"] != nil {
 		value = int(req.Fields["value"].GetNumberValue())
 	}
-	
+
 	o.callCount += value
-	
+
 	return &structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"result": structpb.NewNumberValue(float64(o.callCount)),
@@ -75,8 +97,15 @@ func (o *TestGateNodeObject) Increment(ctx context.Context, req *structpb.Struct
 	}, nil
 }
 
-// TestGateNodeIntegration tests creating an object via a gate cluster
-// and verifying it is created on a node cluster
+// TestGateNodeIntegration tests the complete gate-to-node integration flow:
+// 1. CreateObject via gate cluster - verifies objects are created on correct nodes
+// 2. CallObject via gate cluster - verifies methods are executed on nodes and responses returned
+// 3. State persistence - verifies object state is maintained across method calls
+// 4. Multiple methods - verifies different methods can be called on the same object
+// 5. Multiple objects - verifies independent state across different objects
+// 6. DeleteObject via gate cluster - verifies objects are properly deleted from nodes
+// 7. Delete and recreate - verifies objects can be recreated with fresh state after deletion
+//
 // This test requires a running etcd instance at localhost:2379
 func TestGateNodeIntegration(t *testing.T) {
 	if testing.Short() {
@@ -424,5 +453,160 @@ func TestGateNodeIntegration(t *testing.T) {
 		}
 
 		t.Logf("Successfully verified %d objects maintain independent state", numObjects)
+	})
+
+	t.Run("DeleteObjectViaGate", func(t *testing.T) {
+		// Create an object to delete
+		objID := "test-delete-object-1"
+
+		// Get the target node for this object
+		targetNode, err := gateCluster.GetCurrentNodeForObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("GetCurrentNodeForObject failed for %s: %v", objID, err)
+		}
+		t.Logf("Creating object %s for deletion test, target node %s", objID, targetNode)
+
+		// Create the object via the gate cluster
+		_, err = gateCluster.CreateObject(ctx, "TestGateNodeObject", objID)
+		if err != nil {
+			t.Fatalf("CreateObject via gate failed for %s: %v", objID, err)
+		}
+
+		// Wait for async object creation to complete
+		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
+
+		// Verify object exists on node before deletion
+		objectExists := false
+		for _, obj := range testNode.ListObjects() {
+			if obj.Id == objID {
+				objectExists = true
+				break
+			}
+		}
+		if !objectExists {
+			t.Fatalf("Object %s should exist on node before deletion", objID)
+		}
+		t.Logf("Verified object %s exists on node before deletion", objID)
+
+		// Delete the object via the gate cluster
+		err = gateCluster.DeleteObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate failed for %s: %v", objID, err)
+		}
+
+		// Wait for async object deletion to complete
+		waitForObjectDeletedOnNode(t, testNode, objID, 5*time.Second)
+
+		t.Logf("Successfully deleted object %s via gate and verified deletion on node", objID)
+	})
+
+	t.Run("DeleteMultipleObjectsViaGate", func(t *testing.T) {
+		// Test deleting multiple objects through the gate cluster
+		numObjects := 3
+		objectIDs := make([]string, numObjects)
+
+		// Create multiple objects
+		for i := 0; i < numObjects; i++ {
+			objID := fmt.Sprintf("test-delete-multi-%d", i+1)
+			objectIDs[i] = objID
+
+			_, err := gateCluster.CreateObject(ctx, "TestGateNodeObject", objID)
+			if err != nil {
+				t.Fatalf("CreateObject via gate failed for %s: %v", objID, err)
+			}
+
+			waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
+			t.Logf("Created object %s for deletion test", objID)
+		}
+
+		// Delete all objects
+		for _, objID := range objectIDs {
+			err := gateCluster.DeleteObject(ctx, objID)
+			if err != nil {
+				t.Fatalf("DeleteObject via gate failed for %s: %v", objID, err)
+			}
+			t.Logf("Deleted object %s via gate", objID)
+		}
+
+		// Verify all objects are deleted from the node
+		for _, objID := range objectIDs {
+			waitForObjectDeletedOnNode(t, testNode, objID, 5*time.Second)
+			t.Logf("Verified object %s deleted from node", objID)
+		}
+
+		t.Logf("Successfully deleted and verified %d objects", numObjects)
+	})
+
+	t.Run("DeleteAndRecreateObject", func(t *testing.T) {
+		// Test that we can delete and recreate an object with the same ID
+		objID := "test-delete-recreate-1"
+
+		// Create the object
+		_, err := gateCluster.CreateObject(ctx, "TestGateNodeObject", objID)
+		if err != nil {
+			t.Fatalf("CreateObject via gate failed for %s: %v", objID, err)
+		}
+
+		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
+		t.Logf("Created object %s", objID)
+
+		// Call a method to set state
+		incReq := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"value": structpb.NewNumberValue(42),
+			},
+		}
+		result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Increment", incReq)
+		if err != nil {
+			t.Fatalf("CallObject Increment via gate failed: %v", err)
+		}
+
+		incResp, ok := result.(*structpb.Struct)
+		if !ok {
+			t.Fatalf("Expected *structpb.Struct, got %T", result)
+		}
+
+		incResult := int(incResp.Fields["result"].GetNumberValue())
+		if incResult != 42 {
+			t.Fatalf("Expected result 42, got %d", incResult)
+		}
+		t.Logf("Object %s has state: callCount=%d", objID, incResult)
+
+		// Delete the object
+		err = gateCluster.DeleteObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate failed for %s: %v", objID, err)
+		}
+
+		// Wait for deletion
+		waitForObjectDeletedOnNode(t, testNode, objID, 5*time.Second)
+		t.Logf("Deleted object %s", objID)
+
+		// Recreate the object with the same ID
+		_, err = gateCluster.CreateObject(ctx, "TestGateNodeObject", objID)
+		if err != nil {
+			t.Fatalf("Failed to recreate object %s: %v", objID, err)
+		}
+
+		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
+		t.Logf("Recreated object %s", objID)
+
+		// Call the method again - state should be reset to initial values
+		result2, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Increment", incReq)
+		if err != nil {
+			t.Fatalf("CallObject Increment via gate failed after recreate: %v", err)
+		}
+
+		incResp2, ok := result2.(*structpb.Struct)
+		if !ok {
+			t.Fatalf("Expected *structpb.Struct, got %T", result2)
+		}
+
+		incResult2 := int(incResp2.Fields["result"].GetNumberValue())
+		if incResult2 != 42 {
+			t.Fatalf("Expected result 42 (fresh object), got %d", incResult2)
+		}
+
+		t.Logf("Successfully verified recreated object %s has fresh state: callCount=%d", objID, incResult2)
 	})
 }
