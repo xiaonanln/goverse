@@ -13,9 +13,10 @@ import (
 func main() {
 	// Create gateway server configuration
 	config := &gateserver.GatewayServerConfig{
-		ListenAddress: ":49000",
-		EtcdAddress:   "localhost:2379",
-		EtcdPrefix:    "/goverse",
+		ListenAddress:    ":49000",
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/goverse",
 	}
 
 	// Create gateway server
