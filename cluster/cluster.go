@@ -188,8 +188,6 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 
 // Start initializes and starts the cluster with the given node.
 // It performs the following operations in sequence:
-// 1. Sets the node on the cluster
-// 2. Sets the cluster's ShardLock on the node
 // 3. Registers the node with etcd
 // 4. Starts watching cluster state changes
 // 5. Starts node connections
@@ -198,9 +196,6 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
-	// Set the cluster's ShardLock on the node for per-cluster isolation
-	c.node.SetShardLock(c.shardLock)
-
 	// Register this node with etcd
 	if err := c.registerNode(ctx); err != nil {
 		return fmt.Errorf("failed to register node: %w", err)
@@ -262,7 +257,7 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 // getAdvertiseAddr returns the advertise address of this node
 func (c *Cluster) getAdvertiseAddr() string {
-	return c.node.GetAdvertiseAddress()
+	return c.getAdvertiseAddr()
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -300,7 +295,7 @@ func (c *Cluster) GetThisNode() *node.Node {
 // String returns a string representation of the cluster
 // Format: Cluster<local-node-address,leader|member,quorum=%d>
 func (c *Cluster) String() string {
-	nodeAddr := c.node.GetAdvertiseAddress()
+	nodeAddr := c.getAdvertiseAddr()
 
 	var role string
 	if c.IsLeader() {
@@ -391,7 +386,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Check if the object is on this node
-	if nodeAddr == c.node.GetAdvertiseAddress() {
+	if nodeAddr == c.getAdvertiseAddr() {
 		// Call locally
 		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
 		return c.node.CallObject(ctx, objType, id, method, request)
@@ -457,7 +452,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	}
 
 	// Check if the object should be created on this node
-	if nodeAddr == c.node.GetAdvertiseAddress() {
+	if nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(ctx, objType, objID)
@@ -516,7 +511,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 	// Check if the object should be deleted on this node
-	if nodeAddr == c.node.GetAdvertiseAddress() {
+	if nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -575,7 +570,7 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	nodeAddr := parts[0]
 
 	// Check if the client is on this node
-	if nodeAddr == c.node.GetAdvertiseAddress() {
+	if nodeAddr == c.getAdvertiseAddr() {
 		// Push locally
 		c.logger.Infof("%s - Pushing message to client %s locally", c, clientID)
 		return c.node.PushMessageToClient(clientID, message)
@@ -628,8 +623,8 @@ func (c *Cluster) GetConsensusManagerForTesting() *consensusmanager.ConsensusMan
 // registerNode registers this node with etcd using the shared lease API
 func (c *Cluster) registerNode(ctx context.Context) error {
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
-	key := nodesPrefix + c.node.GetAdvertiseAddress()
-	value := c.node.GetAdvertiseAddress()
+	key := nodesPrefix + c.getAdvertiseAddr()
+	value := c.getAdvertiseAddr()
 
 	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
 	if err != nil {
@@ -642,7 +637,7 @@ func (c *Cluster) registerNode(ctx context.Context) error {
 // unregisterNode unregisters this node from etcd using the shared lease API
 func (c *Cluster) unregisterNode(ctx context.Context) error {
 	nodesPrefix := c.etcdManager.GetPrefix() + "/nodes/"
-	key := nodesPrefix + c.node.GetAdvertiseAddress()
+	key := nodesPrefix + c.getAdvertiseAddr()
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
 }
 
@@ -684,7 +679,7 @@ func (c *Cluster) GetLeaderNode() string {
 // IsLeader returns true if this node is the cluster leader
 func (c *Cluster) IsLeader() bool {
 	leaderNode := c.GetLeaderNode()
-	return leaderNode != "" && leaderNode == c.node.GetAdvertiseAddress()
+	return leaderNode != "" && leaderNode == c.getAdvertiseAddr()
 }
 
 // GetShardMapping retrieves the current shard mapping
@@ -829,7 +824,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 
 // removeObjectsNotBelongingToThisNode removes objects whose shards no longer belong to this node
 func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
-	localAddr := c.node.GetAdvertiseAddress()
+	localAddr := c.getAdvertiseAddr()
 
 	// Check if cluster state is stable without cloning
 	if !c.consensusManager.IsStateStable() {
@@ -927,7 +922,7 @@ func (c *Cluster) stopNodeConnections() {
 // updateNodeConnections updates the NodeConnections with the current list of cluster nodes
 func (c *Cluster) updateNodeConnections() {
 	allNodes := c.GetNodes()
-	thisNodeAddr := c.node.GetAdvertiseAddress()
+	thisNodeAddr := c.getAdvertiseAddr()
 
 	// Filter out this node's address
 	otherNodes := make([]string, 0, len(allNodes))
