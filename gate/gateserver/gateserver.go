@@ -7,6 +7,7 @@ import (
 	"time"
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
@@ -22,7 +23,7 @@ type GatewayServerConfig struct {
 	EtcdPrefix       string // Optional: etcd key prefix (default: "/goverse")
 }
 
-// GatewayServer handles client connections and routes requests to nodes
+// GatewayServer handles gRPC requests and delegates to the gateway
 type GatewayServer struct {
 	gate_pb.UnimplementedGateServiceServer
 	config     *GatewayServerConfig
@@ -31,6 +32,7 @@ type GatewayServer struct {
 	logger     *logger.Logger
 	grpcServer *grpc.Server
 	gate       *gate.Gateway
+	cluster    *cluster.Cluster
 }
 
 // NewGatewayServer creates a new gateway server instance
@@ -53,12 +55,24 @@ func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
 		return nil, fmt.Errorf("failed to create gateway: %w", err)
 	}
 
+	// Create cluster for this gateway
+	clusterCfg := cluster.Config{
+		EtcdAddress: config.EtcdAddress,
+		EtcdPrefix:  config.EtcdPrefix,
+	}
+	c, err := cluster.NewClusterWithGate(clusterCfg, gw)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create cluster: %w", err)
+	}
+
 	server := &GatewayServer{
-		config: config,
-		ctx:    ctx,
-		cancel: cancel,
-		logger: logger.NewLogger("GatewayServer"),
-		gate:   gw,
+		config:  config,
+		ctx:     ctx,
+		cancel:  cancel,
+		logger:  logger.NewLogger("GatewayServer"),
+		gate:    gw,
+		cluster: c,
 	}
 
 	return server, nil
@@ -90,6 +104,11 @@ func validateConfig(config *GatewayServerConfig) error {
 // Start starts the gateway server
 func (s *GatewayServer) Start(ctx context.Context) error {
 	s.logger.Infof("Starting gateway server on %s", s.config.ListenAddress)
+
+	// Start the cluster first
+	if err := s.cluster.Start(ctx, nil); err != nil {
+		return fmt.Errorf("failed to start cluster: %w", err)
+	}
 
 	// Start the gateway
 	if err := s.gate.Start(ctx); err != nil {
@@ -153,6 +172,13 @@ func (s *GatewayServer) Stop() error {
 	if s.gate != nil {
 		if err := s.gate.Stop(); err != nil {
 			s.logger.Errorf("Error stopping gateway: %v", err)
+		}
+	}
+
+	// Stop the cluster
+	if s.cluster != nil {
+		if err := s.cluster.Stop(context.Background()); err != nil {
+			s.logger.Errorf("Error stopping cluster: %v", err)
 		}
 	}
 
