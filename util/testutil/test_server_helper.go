@@ -102,6 +102,7 @@ func (tsh *TestServerHelper) IsRunning() bool {
 type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
+	DeleteObject(ctx context.Context, id string) error
 	PushMessageToClient(clientID string, message proto.Message) error
 }
 
@@ -208,6 +209,25 @@ func (m *MockGoverseServer) CreateObject(ctx context.Context, req *goverse_pb.Cr
 	return &goverse_pb.CreateObjectResponse{
 		Id: createdID,
 	}, nil
+}
+
+// DeleteObject handles remote object deletion by delegating to the node
+func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.DeleteObjectRequest) (*goverse_pb.DeleteObjectResponse, error) {
+	m.mu.Lock()
+	node := m.node
+	m.mu.Unlock()
+
+	if node == nil {
+		return nil, fmt.Errorf("no node assigned to mock server")
+	}
+
+	// Call DeleteObject on the actual node
+	err := node.DeleteObject(ctx, req.Id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete object: %v", err)
+	}
+
+	return &goverse_pb.DeleteObjectResponse{}, nil
 }
 
 // ListObjects returns an empty list
