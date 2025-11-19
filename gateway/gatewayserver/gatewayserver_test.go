@@ -102,9 +102,10 @@ func TestNewGatewayServer(t *testing.T) {
 
 func TestGatewayServerStartStop(t *testing.T) {
 	config := &GatewayServerConfig{
-		ListenAddress: ":49010",
-		EtcdAddress:   "localhost:2379",
-		EtcdPrefix:    "/test-gateway-lifecycle",
+		ListenAddress:    ":49010",
+		AdvertiseAddress: "localhost:49010",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-lifecycle",
 	}
 
 	server, err := NewGatewayServer(config)
@@ -159,9 +160,10 @@ func TestGatewayServerStartStop(t *testing.T) {
 
 func TestGatewayServerMultipleStops(t *testing.T) {
 	config := &GatewayServerConfig{
-		ListenAddress: ":49011",
-		EtcdAddress:   "localhost:2379",
-		EtcdPrefix:    "/test-gateway-multistop",
+		ListenAddress:    ":49011",
+		AdvertiseAddress: "localhost:49011",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-multistop",
 	}
 
 	server, err := NewGatewayServer(config)
@@ -189,9 +191,10 @@ func TestGatewayServerMultipleStops(t *testing.T) {
 
 func TestGatewayServerRPCMethods(t *testing.T) {
 	config := &GatewayServerConfig{
-		ListenAddress: ":49012",
-		EtcdAddress:   "localhost:2379",
-		EtcdPrefix:    "/test-gateway-rpc",
+		ListenAddress:    ":49012",
+		AdvertiseAddress: "localhost:49012",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-rpc",
 	}
 
 	server, err := NewGatewayServer(config)
@@ -291,17 +294,19 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49000",
-				EtcdAddress:   "localhost:2379",
-				EtcdPrefix:    "/custom",
+				ListenAddress:    ":49000",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
+				EtcdPrefix:       "/custom",
 			},
 			wantErr: false,
 		},
 		{
 			name: "sets default prefix",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49000",
-				EtcdAddress:   "localhost:2379",
+				ListenAddress:    ":49000",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
 			checkFunc: func(t *testing.T, cfg *GatewayServerConfig) {
@@ -319,15 +324,26 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty listen address",
 			config: &GatewayServerConfig{
-				EtcdAddress: "localhost:2379",
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
 			},
 			wantErr:    true,
 			errContain: "ListenAddress cannot be empty",
 		},
 		{
-			name: "empty etcd address",
+			name: "empty advertise address",
 			config: &GatewayServerConfig{
 				ListenAddress: ":49000",
+				EtcdAddress:   "localhost:2379",
+			},
+			wantErr:    true,
+			errContain: "AdvertiseAddress cannot be empty",
+		},
+		{
+			name: "empty etcd address",
+			config: &GatewayServerConfig{
+				ListenAddress:    ":49000",
+				AdvertiseAddress: "localhost:49000",
 			},
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",
@@ -358,9 +374,10 @@ func TestGatewayServerGracefulShutdown(t *testing.T) {
 	}
 
 	config := &GatewayServerConfig{
-		ListenAddress: ":49013",
-		EtcdAddress:   "localhost:2379",
-		EtcdPrefix:    "/test-gateway-graceful",
+		ListenAddress:    ":49013",
+		AdvertiseAddress: "localhost:49013",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-graceful",
 	}
 
 	server, err := NewGatewayServer(config)
