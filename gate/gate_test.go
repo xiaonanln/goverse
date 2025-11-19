@@ -233,13 +233,40 @@ func TestGatewayRegister(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	// Register should return "not implemented" error
+	// Register should return a valid client ID
 	clientID, err := gateway.Register(ctx)
-	if err == nil {
-		t.Fatalf("Register() expected error, got clientID: %s", clientID)
+	if err != nil {
+		t.Fatalf("Register() returned error: %v", err)
 	}
-	if !contains(err.Error(), "not implemented") {
-		t.Fatalf("Register() error = %v, want error containing 'not implemented'", err)
+	if clientID == "" {
+		t.Fatalf("Register() returned empty client ID")
+	}
+
+	// Verify client ID format (should start with advertise address)
+	if !contains(clientID, "localhost:49000/") {
+		t.Fatalf("Register() clientID = %s, want to start with 'localhost:49000/'", clientID)
+	}
+
+	// Verify client proxy exists in gateway
+	clientProxy, exists := gateway.GetClient(clientID)
+	if !exists {
+		t.Fatalf("Client proxy not found after registration")
+	}
+	if clientProxy.GetID() != clientID {
+		t.Fatalf("Client proxy ID mismatch: got %s, want %s", clientProxy.GetID(), clientID)
+	}
+
+	// Verify message channel is available
+	msgChan := clientProxy.MessageChan()
+	if msgChan == nil {
+		t.Fatalf("Message channel is nil")
+	}
+
+	// Test Unregister
+	gateway.Unregister(clientID)
+	_, exists = gateway.GetClient(clientID)
+	if exists {
+		t.Fatalf("Client proxy still exists after unregister")
 	}
 }
 
@@ -374,6 +401,116 @@ func TestGatewayStartWithoutStop(t *testing.T) {
 
 	// Clean up
 	gateway.Stop()
+}
+
+func TestGatewayRegisterMultipleClients(t *testing.T) {
+	config := &GatewayConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-multiple",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	defer gateway.Stop()
+
+	ctx := context.Background()
+	err = gateway.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gateway.Start() returned error: %v", err)
+	}
+
+	// Register multiple clients
+	numClients := 5
+	clientIDs := make([]string, numClients)
+
+	for i := 0; i < numClients; i++ {
+		clientID, err := gateway.Register(ctx)
+		if err != nil {
+			t.Fatalf("Register() #%d returned error: %v", i, err)
+		}
+		clientIDs[i] = clientID
+	}
+
+	// Verify all clients are registered and have unique IDs
+	seenIDs := make(map[string]bool)
+	for i, clientID := range clientIDs {
+		if seenIDs[clientID] {
+			t.Fatalf("Duplicate client ID: %s", clientID)
+		}
+		seenIDs[clientID] = true
+
+		clientProxy, exists := gateway.GetClient(clientID)
+		if !exists {
+			t.Fatalf("Client #%d not found after registration", i)
+		}
+		if clientProxy.GetID() != clientID {
+			t.Fatalf("Client #%d ID mismatch: got %s, want %s", i, clientProxy.GetID(), clientID)
+		}
+	}
+
+	// Unregister all clients
+	for i, clientID := range clientIDs {
+		gateway.Unregister(clientID)
+		_, exists := gateway.GetClient(clientID)
+		if exists {
+			t.Fatalf("Client #%d still exists after unregister", i)
+		}
+	}
+}
+
+func TestGatewayUnregisterNonExistentClient(t *testing.T) {
+	config := &GatewayConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-unregister",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	defer gateway.Stop()
+
+	ctx := context.Background()
+	err = gateway.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gateway.Start() returned error: %v", err)
+	}
+
+	// Unregister a non-existent client should not panic or error
+	gateway.Unregister("non-existent-client")
+
+	// Should still be able to register new clients
+	clientID, err := gateway.Register(ctx)
+	if err != nil {
+		t.Fatalf("Register() after unregister non-existent returned error: %v", err)
+	}
+	if clientID == "" {
+		t.Fatalf("Register() returned empty client ID")
+	}
+}
+
+func TestGatewayGetClientNotFound(t *testing.T) {
+	config := &GatewayConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-getclient",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	defer gateway.Stop()
+
+	// Get non-existent client
+	_, exists := gateway.GetClient("non-existent-client")
+	if exists {
+		t.Fatalf("GetClient() returned true for non-existent client")
+	}
 }
 
 // Helper function to check if a string contains a substring

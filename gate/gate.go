@@ -3,9 +3,11 @@ package gate
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	gateway_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 )
 
 // GatewayConfig holds configuration for the gateway
@@ -20,6 +22,8 @@ type Gateway struct {
 	config           *GatewayConfig
 	advertiseAddress string
 	logger           *logger.Logger
+	clients          map[string]*ClientProxy // Map of clientID -> ClientProxy
+	clientsMu        sync.RWMutex            // Protects clients map
 }
 
 // NewGateway creates a new gateway instance
@@ -32,6 +36,7 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		config:           config,
 		advertiseAddress: config.AdvertiseAddress,
 		logger:           logger.NewLogger("Gateway"),
+		clients:          make(map[string]*ClientProxy),
 	}
 
 	return gateway, nil
@@ -79,10 +84,39 @@ func (g *Gateway) Stop() error {
 
 // Register handles client registration and returns a client ID
 func (g *Gateway) Register(ctx context.Context) (string, error) {
-	g.logger.Infof("Register called (not yet implemented)")
-	// TODO: Generate unique client ID
-	// TODO: Track client connection
-	return "", fmt.Errorf("not implemented")
+	// Generate unique client ID using gateway address and unique ID
+	clientID := g.advertiseAddress + "/" + uniqueid.UniqueId()
+
+	// Create a new client proxy
+	clientProxy := NewClientProxy(clientID)
+
+	// Track the client connection
+	g.clientsMu.Lock()
+	g.clients[clientID] = clientProxy
+	g.clientsMu.Unlock()
+
+	g.logger.Infof("Registered new client: %s", clientID)
+	return clientID, nil
+}
+
+// Unregister removes a client by its ID
+func (g *Gateway) Unregister(clientID string) {
+	g.clientsMu.Lock()
+	defer g.clientsMu.Unlock()
+
+	if clientProxy, exists := g.clients[clientID]; exists {
+		clientProxy.Close()
+		delete(g.clients, clientID)
+		g.logger.Infof("Unregistered client: %s", clientID)
+	}
+}
+
+// GetClient returns the client proxy for the given client ID
+func (g *Gateway) GetClient(clientID string) (*ClientProxy, bool) {
+	g.clientsMu.RLock()
+	defer g.clientsMu.RUnlock()
+	client, exists := g.clients[clientID]
+	return client, exists
 }
 
 // CallObject routes a method call to the appropriate node
