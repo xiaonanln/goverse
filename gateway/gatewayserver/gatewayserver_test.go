@@ -20,17 +20,19 @@ func TestNewGatewayServer(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49001",
-				EtcdAddress:   "localhost:2379",
-				EtcdPrefix:    "/test-gateway",
+				ListenAddress:    ":49001",
+				AdvertiseAddress: "localhost:49001",
+				EtcdAddress:      "localhost:2379",
+				EtcdPrefix:       "/test-gateway",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid config with default prefix",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49002",
-				EtcdAddress:   "localhost:2379",
+				ListenAddress:    ":49002",
+				AdvertiseAddress: "localhost:49002",
+				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
 		},
@@ -43,17 +45,29 @@ func TestNewGatewayServer(t *testing.T) {
 		{
 			name: "empty listen address",
 			config: &GatewayServerConfig{
-				ListenAddress: "",
-				EtcdAddress:   "localhost:2379",
+				ListenAddress:    "",
+				AdvertiseAddress: "localhost:49003",
+				EtcdAddress:      "localhost:2379",
 			},
 			wantErr:    true,
 			errContain: "ListenAddress cannot be empty",
 		},
 		{
+			name: "empty advertise address",
+			config: &GatewayServerConfig{
+				ListenAddress:    ":49003",
+				AdvertiseAddress: "",
+				EtcdAddress:      "localhost:2379",
+			},
+			wantErr:    true,
+			errContain: "AdvertiseAddress cannot be empty",
+		},
+		{
 			name: "empty etcd address",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49003",
-				EtcdAddress:   "",
+				ListenAddress:    ":49003",
+				AdvertiseAddress: "localhost:49003",
+				EtcdAddress:      "",
 			},
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",

@@ -10,14 +10,16 @@ import (
 
 // GatewayConfig holds configuration for the gateway
 type GatewayConfig struct {
-	EtcdAddress string // Address of etcd for cluster state
-	EtcdPrefix  string // etcd key prefix (default: "/goverse")
+	AdvertiseAddress string // Address to advertise to the cluster (e.g., "localhost:49000")
+	EtcdAddress      string // Address of etcd for cluster state
+	EtcdPrefix       string // etcd key prefix (default: "/goverse")
 }
 
 // Gateway handles the core gateway logic for routing requests to nodes
 type Gateway struct {
-	config *GatewayConfig
-	logger *logger.Logger
+	config           *GatewayConfig
+	advertiseAddress string
+	logger           *logger.Logger
 }
 
 // NewGateway creates a new gateway instance
@@ -27,8 +29,9 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 	}
 
 	gateway := &Gateway{
-		config: config,
-		logger: logger.NewLogger("Gateway"),
+		config:           config,
+		advertiseAddress: config.AdvertiseAddress,
+		logger:           logger.NewLogger("Gateway"),
 	}
 
 	return gateway, nil
@@ -38,6 +41,9 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 func validateGatewayConfig(config *GatewayConfig) error {
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
+	}
+	if config.AdvertiseAddress == "" {
+		return fmt.Errorf("AdvertiseAddress cannot be empty")
 	}
 	if config.EtcdAddress == "" {
 		return fmt.Errorf("EtcdAddress cannot be empty")
@@ -104,4 +110,9 @@ func (g *Gateway) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObject
 	// TODO: Route to appropriate node using NodeConnections
 	// TODO: Delete object via GoVerse service
 	return &gateway_pb.DeleteObjectResponse{}, fmt.Errorf("not implemented")
+}
+
+// GetAdvertiseAddress returns the advertise address of this gateway
+func (g *Gateway) GetAdvertiseAddress() string {
+	return g.advertiseAddress
 }

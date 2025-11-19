@@ -16,9 +16,10 @@ import (
 
 // GatewayServerConfig holds configuration for the gateway server
 type GatewayServerConfig struct {
-	ListenAddress string // Address to listen on for client connections (e.g., ":49000")
-	EtcdAddress   string // Address of etcd for cluster state
-	EtcdPrefix    string // Optional: etcd key prefix (default: "/goverse")
+	ListenAddress    string // Address to listen on for client connections (e.g., ":49000")
+	AdvertiseAddress string // Address to advertise to the cluster (e.g., "localhost:49000")
+	EtcdAddress      string // Address of etcd for cluster state
+	EtcdPrefix       string // Optional: etcd key prefix (default: "/goverse")
 }
 
 // GatewayServer handles client connections and routes requests to nodes
@@ -42,8 +43,9 @@ func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
 
 	// Create gateway instance
 	gatewayConfig := &gateway.GatewayConfig{
-		EtcdAddress: config.EtcdAddress,
-		EtcdPrefix:  config.EtcdPrefix,
+		AdvertiseAddress: config.AdvertiseAddress,
+		EtcdAddress:      config.EtcdAddress,
+		EtcdPrefix:       config.EtcdPrefix,
 	}
 	gw, err := gateway.NewGateway(gatewayConfig)
 	if err != nil {
@@ -69,6 +71,9 @@ func validateConfig(config *GatewayServerConfig) error {
 	}
 	if config.ListenAddress == "" {
 		return fmt.Errorf("ListenAddress cannot be empty")
+	}
+	if config.AdvertiseAddress == "" {
+		return fmt.Errorf("AdvertiseAddress cannot be empty")
 	}
 	if config.EtcdAddress == "" {
 		return fmt.Errorf("EtcdAddress cannot be empty")
