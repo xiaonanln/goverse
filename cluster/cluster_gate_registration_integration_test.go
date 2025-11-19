@@ -27,12 +27,7 @@ func TestGateRegistrationWithEtcd(t *testing.T) {
 	}
 
 	// Create cluster with gateway
-	cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	cluster, err := NewClusterWithGate(cfg, gw)
+	cluster, err := newClusterWithEtcdForTestingGate("GateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -97,12 +92,7 @@ func TestGateUnregistrationWithEtcd(t *testing.T) {
 	}
 
 	// Create cluster with gateway
-	cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	cluster, err := NewClusterWithGate(cfg, gw)
+	cluster, err := newClusterWithEtcdForTestingGate("GateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -174,13 +164,7 @@ func TestGateDiscoveryByNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway: %v", err)
 	}
-
-	gateCfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gateCluster, err := NewClusterWithGate(gateCfg, gw)
+	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -232,13 +216,7 @@ func TestMultipleGatesDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway 1: %v", err)
 	}
-
-	gate1Cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gate1Cluster, err := NewClusterWithGate(gate1Cfg, gw1)
+	gate1Cluster, err := newClusterWithEtcdForTestingGate("gate1Cluster", gw1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -260,13 +238,7 @@ func TestMultipleGatesDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway 2: %v", err)
 	}
-
-	gate2Cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gate2Cluster, err := NewClusterWithGate(gate2Cfg, gw2)
+	gate2Cluster, err := newClusterWithEtcdForTestingGate("gate2Cluster", gw2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -346,13 +318,7 @@ func TestGateDynamicDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway: %v", err)
 	}
-
-	gateCfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gateCluster, err := NewClusterWithGate(gateCfg, gw)
+	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -398,13 +364,7 @@ func TestGateLeaveDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway: %v", err)
 	}
-
-	gateCfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gateCluster, err := NewClusterWithGate(gateCfg, gw)
+	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -464,13 +424,7 @@ func TestMixedClusterWithNodesAndGates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway 1: %v", err)
 	}
-
-	gate1Cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gate1, err := NewClusterWithGate(gate1Cfg, gw1)
+	gate1, err := newClusterWithEtcdForTestingGate("gate1", gw1, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return
@@ -491,13 +445,7 @@ func TestMixedClusterWithNodesAndGates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create gateway 2: %v", err)
 	}
-
-	gate2Cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		MinQuorum:   1,
-	}
-	gate2, err := NewClusterWithGate(gate2Cfg, gw2)
+	gate2, err := newClusterWithEtcdForTestingGate("gate2", gw2, "localhost:2379", testPrefix)
 	if err != nil {
 		t.Skipf("Skipping test: etcd not available: %v", err)
 		return

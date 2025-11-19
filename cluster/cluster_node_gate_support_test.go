@@ -58,12 +58,7 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 		}
 		defer gw.Stop()
 
-		cfg := Config{
-			EtcdAddress: "localhost:2379",
-			EtcdPrefix:  "/test-gateway-cluster",
-			MinQuorum:   1,
-		}
-		c, err := NewClusterWithGate(cfg, gw)
+		c, err := newClusterWithEtcdForTestingGate("GatewayCluster", gw, "localhost:2379", "/test-gateway-cluster")
 		if err != nil {
 			t.Fatalf("Failed to create cluster with gateway: %v", err)
 		}
@@ -115,12 +110,7 @@ func TestClusterOperationsWithGateway(t *testing.T) {
 	}
 	defer gw.Stop()
 
-	cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  "/test-gateway-cluster-ops",
-		MinQuorum:   1,
-	}
-	c, err := NewClusterWithGate(cfg, gw)
+	c, err := newClusterWithEtcdForTestingGate("GatewayCluster", gw, "localhost:2379", "/test-gateway-cluster-ops")
 	if err != nil {
 		t.Fatalf("Failed to create cluster with gateway: %v", err)
 	}

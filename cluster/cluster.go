@@ -189,6 +189,29 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 	return c, nil
 }
 
+// newClusterWithEtcdForTestingGate creates a new cluster instance for testing with a gate and initializes it with etcd
+// Uses test-appropriate configuration values (shorter durations)
+func newClusterWithEtcdForTestingGate(name string, gate *gate.Gateway, etcdAddress string, etcdPrefix string) (*Cluster, error) {
+	// Create config with test values
+	cfg := Config{
+		EtcdAddress:                   etcdAddress,
+		EtcdPrefix:                    etcdPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
+	}
+
+	c, err := NewClusterWithGate(cfg, gate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Override logger with custom name for testing
+	c.logger = logger.NewLogger(name)
+
+	return c, nil
+}
+
 // Start initializes and starts the cluster with the given node.
 // It performs the following operations in sequence:
 // 3. Registers the node/gate with etcd
