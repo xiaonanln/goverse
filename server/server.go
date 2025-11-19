@@ -320,14 +320,14 @@ func (g *GateServiceImpl) CallObject(ctx context.Context, req *gate_pb.CallObjec
 func (g *GateServiceImpl) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
 	g.server.logRPC("Gateway.CreateObject", req)
 	// Empty implementation - to be filled in later
-	return &gate_pb.CreateObjectResponse{}, nil
+	return nil, fmt.Errorf("not implemented")
 }
 
 // DeleteObject implements the GateService DeleteObject method (empty implementation)
 func (g *GateServiceImpl) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
 	g.server.logRPC("Gateway.DeleteObject", req)
 	// Empty implementation - to be filled in later
-	return &gate_pb.DeleteObjectResponse{}, nil
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
