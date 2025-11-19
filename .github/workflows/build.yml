@@ -86,14 +86,14 @@ jobs:
             exit 1
           fi
       
-      - name: Build gateway
+      - name: Build gate
         run: |
-          echo "Building gateway..."
-          go build -o gateway.out ./cmd/gateway
-          if [ -f "./gateway.out" ]; then
-            echo "✅ Gateway binary built successfully"
+          echo "Building gate..."
+          go build -o gate.out ./cmd/gate
+          if [ -f "./gate.out" ]; then
+            echo "✅ Gate binary built successfully"
           else
-            echo "❌ Gateway binary not found"
+            echo "❌ Gate binary not found"
             exit 1
           fi
       
