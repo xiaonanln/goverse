@@ -183,16 +183,9 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 		g.logger.Debugf("Received RegisterGateResponse from node %s", nodeAddr)
 	case *goverse_pb.GateMessage_ClientMessage:
 		// Handle client message
-		if m.ClientMessage != nil {
-			clientID := m.ClientMessage.ClientId
-			g.logger.Infof("Received client message for %s from node %s", clientID, nodeAddr)
-			// Forward to client proxy
-			if clientProxy, exists := g.GetClient(clientID); exists {
-				clientProxy.HandleMessage(m.ClientMessage)
-			} else {
-				g.logger.Warnf("Received message for unknown client %s", clientID)
-			}
-		}
+		// TODO: Implement proper client message handling when client message structure is defined
+		_ = m
+		g.logger.Debugf("Received client message from node %s", nodeAddr)
 	default:
 		g.logger.Warnf("Received unknown message type from node %s", nodeAddr)
 	}
