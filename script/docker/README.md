@@ -2,7 +2,39 @@
 
 This directory contains scripts for managing services and running tests inside Docker containers.
 
-## Service Management Scripts
+## Backend Service Scripts (Host Machine)
+
+These scripts run etcd and PostgreSQL as Docker containers with ports exposed to localhost. They are meant to be run on the **host machine** (not inside containers).
+
+- **`start-backend.sh`** - Start etcd and PostgreSQL containers
+  - Creates and starts `goverse-etcd` container (port 2379)
+  - Creates and starts `goverse-postgres` container (port 5432)
+  - Reentrant: safe to run multiple times
+  - Waits for services to be ready before completing
+
+- **`stop-backend.sh`** - Stop etcd and PostgreSQL containers
+  - Stops both containers gracefully
+  - Reentrant: safe to run multiple times
+  - Containers are stopped but not removed (data persists)
+
+### Usage
+
+```bash
+# Start backend services on host
+./script/docker/start-backend.sh
+
+# Your services will be available at:
+# - etcd: http://localhost:2379
+# - PostgreSQL: postgresql://postgres:postgres@localhost:5432/goverse
+
+# Stop backend services
+./script/docker/stop-backend.sh
+
+# To remove containers and data completely
+docker rm goverse-etcd goverse-postgres
+```
+
+## Service Management Scripts (Inside Container)
 
 All service management scripts are **reentrant**, meaning they can be executed multiple times without causing errors or inconsistencies.
 
