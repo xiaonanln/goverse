@@ -28,11 +28,10 @@ func TestServerCreateObject_RequiresID(t *testing.T) {
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	config := &ServerConfig{
-		ListenAddress:       "localhost:47200",
-		AdvertiseAddress:    "localhost:47200",
-		ClientListenAddress: "localhost:47201",
-		EtcdAddress:         "localhost:2379",
-		EtcdPrefix:          etcdPrefix,
+		ListenAddress:    "localhost:47200",
+		AdvertiseAddress: "localhost:47200",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       etcdPrefix,
 	}
 
 	server, err := NewServer(config)
