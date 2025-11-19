@@ -15,6 +15,7 @@ service Goverse {
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
   rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
   rpc PushMessageToClient (PushMessageToClientRequest) returns (PushMessageToClientResponse);
+  rpc RegisterGate (RegisterGateRequest) returns (stream GateMessage);
 }
 
 message StatusResponse {
@@ -68,6 +69,14 @@ message PushMessageToClientRequest {
 
 message PushMessageToClientResponse {
   // Empty response - success is indicated by no error
+}
+
+message RegisterGateRequest {
+  string gate_id = 1;
+}
+
+message GateMessage {
+  google.protobuf.Any message = 1;
 }
 
 message Empty {}
