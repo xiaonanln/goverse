@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	gateway_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 )
@@ -117,33 +116,6 @@ func (g *Gateway) GetClient(clientID string) (*ClientProxy, bool) {
 	defer g.clientsMu.RUnlock()
 	client, exists := g.clients[clientID]
 	return client, exists
-}
-
-// CallObject routes a method call to the appropriate node
-func (g *Gateway) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
-	g.logger.Infof("CallObject called: objectId=%s, method=%s (not yet implemented)", req.Id, req.Method)
-	// TODO: Determine which node owns this object based on shard mapping
-	// TODO: Route to appropriate node using NodeConnections
-	// TODO: Call object method via GoVerse service
-	return &gateway_pb.CallObjectResponse{}, fmt.Errorf("not implemented")
-}
-
-// CreateObject routes an object creation request to the appropriate node
-func (g *Gateway) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
-	g.logger.Infof("CreateObject called: type=%s, objectId=%s (not yet implemented)", req.Type, req.Id)
-	// TODO: Determine which node should own this object based on shard mapping
-	// TODO: Route to appropriate node using NodeConnections
-	// TODO: Create object via GoVerse service
-	return &gateway_pb.CreateObjectResponse{Id: req.Id}, fmt.Errorf("not implemented")
-}
-
-// DeleteObject routes an object deletion request to the appropriate node
-func (g *Gateway) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
-	g.logger.Infof("DeleteObject called: objectId=%s (not yet implemented)", req.Id)
-	// TODO: Determine which node owns this object based on shard mapping
-	// TODO: Route to appropriate node using NodeConnections
-	// TODO: Delete object via GoVerse service
-	return &gateway_pb.DeleteObjectResponse{}, fmt.Errorf("not implemented")
 }
 
 // GetAdvertiseAddress returns the advertise address of this gateway
