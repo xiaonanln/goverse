@@ -481,3 +481,91 @@ func TestMixedClusterWithNodesAndGates(t *testing.T) {
 	t.Logf("Gate1 sees: %d nodes, %d gates", len(gate1.GetNodes()), len(gate1.GetGates()))
 	t.Logf("Gate2 sees: %d nodes, %d gates", len(gate2.GetNodes()), len(gate2.GetGates()))
 }
+
+// TestClusterWithTwoGatesAndThreeNodes tests a cluster with 2 gates and 3 nodes
+// This verifies that all clusters can discover each other properly via etcd
+func TestClusterWithTwoGatesAndThreeNodes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	// Create three node clusters
+	node1 := mustNewCluster(ctx, t, "localhost:47060", testPrefix)
+	defer node1.Stop(ctx)
+
+	node2 := mustNewCluster(ctx, t, "localhost:47061", testPrefix)
+	defer node2.Stop(ctx)
+
+	node3 := mustNewCluster(ctx, t, "localhost:47062", testPrefix)
+	defer node3.Stop(ctx)
+
+	// Create two gateway clusters
+	gw1Config := &gate.GatewayConfig{
+		AdvertiseAddress: "localhost:49020",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       testPrefix,
+	}
+	gw1, err := gate.NewGateway(gw1Config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway 1: %v", err)
+	}
+	gate1, err := newClusterWithEtcdForTestingGate("gate1", gw1, "localhost:2379", testPrefix)
+	if err != nil {
+		t.Skipf("Skipping test: etcd not available: %v", err)
+		return
+	}
+
+	err = gate1.Start(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to start gate cluster 1: %v", err)
+	}
+	defer gate1.Stop(ctx)
+
+	gw2Config := &gate.GatewayConfig{
+		AdvertiseAddress: "localhost:49021",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       testPrefix,
+	}
+	gw2, err := gate.NewGateway(gw2Config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway 2: %v", err)
+	}
+	gate2, err := newClusterWithEtcdForTestingGate("gate2", gw2, "localhost:2379", testPrefix)
+	if err != nil {
+		t.Skipf("Skipping test: etcd not available: %v", err)
+		return
+	}
+
+	err = gate2.Start(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to start gate cluster 2: %v", err)
+	}
+	defer gate2.Stop(ctx)
+
+	// Wait for discovery - all clusters should see each other
+	time.Sleep(1 * time.Second)
+
+	// All clusters should see 3 nodes
+	for i, cluster := range []*Cluster{node1, node2, node3, gate1, gate2} {
+		nodes := cluster.GetNodes()
+		if len(nodes) != 3 {
+			t.Fatalf("Cluster %d should see 3 nodes, got %d: %v", i+1, len(nodes), nodes)
+		}
+	}
+
+	// All clusters should see 2 gates
+	for i, cluster := range []*Cluster{node1, node2, node3, gate1, gate2} {
+		gates := cluster.GetGates()
+		if len(gates) != 2 {
+			t.Fatalf("Cluster %d should see 2 gates, got %d: %v", i+1, len(gates), gates)
+		}
+	}
+
+	t.Logf("Node1 sees: %d nodes, %d gates", len(node1.GetNodes()), len(node1.GetGates()))
+	t.Logf("Node2 sees: %d nodes, %d gates", len(node2.GetNodes()), len(node2.GetGates()))
+	t.Logf("Node3 sees: %d nodes, %d gates", len(node3.GetNodes()), len(node3.GetGates()))
+	t.Logf("Gate1 sees: %d nodes, %d gates", len(gate1.GetNodes()), len(gate1.GetGates()))
+	t.Logf("Gate2 sees: %d nodes, %d gates", len(gate2.GetNodes()), len(gate2.GetGates()))
+}
