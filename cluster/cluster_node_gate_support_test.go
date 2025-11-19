@@ -3,7 +3,7 @@ package cluster
 import (
 	"testing"
 
-	"github.com/xiaonanln/goverse/gateway"
+	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 )
 
@@ -47,12 +47,12 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 	})
 
 	t.Run("gateway cluster", func(t *testing.T) {
-		gwConfig := &gateway.GatewayConfig{
+		gwConfig := &gate.GatewayConfig{
 			AdvertiseAddress: "localhost:49000",
 			EtcdAddress:      "localhost:2379",
 			EtcdPrefix:       "/test-gateway",
 		}
-		gw, err := gateway.NewGateway(gwConfig)
+		gw, err := gate.NewGateway(gwConfig)
 		if err != nil {
 			t.Fatalf("Failed to create gateway: %v", err)
 		}
@@ -104,12 +104,12 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 
 // TestClusterOperationsWithGateway tests that node-only operations return appropriate results for gateway clusters
 func TestClusterOperationsWithGateway(t *testing.T) {
-	gwConfig := &gateway.GatewayConfig{
+	gwConfig := &gate.GatewayConfig{
 		AdvertiseAddress: "localhost:49000",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-ops",
 	}
-	gw, err := gateway.NewGateway(gwConfig)
+	gw, err := gate.NewGateway(gwConfig)
 	if err != nil {
 		t.Fatalf("Failed to create gateway: %v", err)
 	}
