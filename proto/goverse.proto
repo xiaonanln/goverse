@@ -72,11 +72,17 @@ message PushMessageToClientResponse {
 }
 
 message RegisterGateRequest {
-  string gate_id = 1;
+  string gate_addr = 1;
+}
+
+message RegisterGateResponse {
 }
 
 message GateMessage {
-  google.protobuf.Any message = 1;
+  oneof message {
+    RegisterGateResponse register_gate_response = 1;
+    google.protobuf.Any client_message = 2;
+  }
 }
 
 message Empty {}
