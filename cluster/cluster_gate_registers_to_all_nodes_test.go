@@ -89,7 +89,7 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 	// Verify that the gate has registered with all three nodes
 	// We can verify this by checking if each node's cluster has the gate connection registered
 	gateAddr := "localhost:49030"
-	
+
 	// Check node1
 	if !hasGateConnection(node1, gateAddr) {
 		t.Errorf("Node1 should have gate %s registered", gateAddr)
