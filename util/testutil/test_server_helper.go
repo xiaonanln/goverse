@@ -106,13 +106,19 @@ type nodeInterface interface {
 	PushMessageToClient(clientID string, message proto.Message) error
 }
 
+type clusterInterface interface {
+	RegisterGateConnection(gateAddr string) (chan proto.Message, error)
+	UnregisterGateConnection(gateAddr string, ch chan proto.Message)
+}
+
 // MockGoverseServer is a minimal implementation of the Goverse gRPC service for testing
 // It delegates actual operations to a provided Node instance
 type MockGoverseServer struct {
 	goverse_pb.UnimplementedGoverseServer
-	logger *logger.Logger
-	node   nodeInterface
-	mu     sync.Mutex
+	logger  *logger.Logger
+	node    nodeInterface
+	cluster clusterInterface
+	mu      sync.Mutex
 }
 
 // NewMockGoverseServer creates a new mock Goverse server
@@ -127,6 +133,13 @@ func (m *MockGoverseServer) SetNode(node nodeInterface) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.node = node
+}
+
+// SetCluster sets the cluster instance for the server to delegate to
+func (m *MockGoverseServer) SetCluster(cluster clusterInterface) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cluster = cluster
 }
 
 // Status returns a status response
@@ -264,4 +277,72 @@ func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *govers
 	}
 
 	return &goverse_pb.PushMessageToClientResponse{}, nil
+}
+
+// RegisterGate handles gate registration by delegating to the cluster
+func (m *MockGoverseServer) RegisterGate(req *goverse_pb.RegisterGateRequest, stream goverse_pb.Goverse_RegisterGateServer) error {
+	m.mu.Lock()
+	cluster := m.cluster
+	m.mu.Unlock()
+
+	gateAddr := req.GetGateAddr()
+	if gateAddr == "" {
+		return fmt.Errorf("gate_addr must be specified in RegisterGate request")
+	}
+
+	if cluster == nil {
+		return fmt.Errorf("no cluster assigned to mock server")
+	}
+
+	m.logger.Infof("Gate %s registered, starting message stream", gateAddr)
+
+	// Send RegisterGateResponse as the first message
+	registerResponse := &goverse_pb.GateMessage{
+		Message: &goverse_pb.GateMessage_RegisterGateResponse{
+			RegisterGateResponse: &goverse_pb.RegisterGateResponse{},
+		},
+	}
+	if err := stream.Send(registerResponse); err != nil {
+		m.logger.Errorf("Failed to send RegisterGateResponse to gate %s: %v", gateAddr, err)
+		return err
+	}
+
+	// Acquire message channel from cluster
+	msgChan, err := cluster.RegisterGateConnection(gateAddr)
+	if err != nil {
+		m.logger.Errorf("Failed to register gate connection for %s: %v", gateAddr, err)
+		return err
+	}
+	defer cluster.UnregisterGateConnection(gateAddr, msgChan)
+
+	// Loop to forward messages from channel to stream
+	for {
+		select {
+		case <-stream.Context().Done():
+			m.logger.Infof("Gate %s stream closed: %v", gateAddr, stream.Context().Err())
+			return nil
+		case msg, ok := <-msgChan:
+			if !ok {
+				m.logger.Infof("Gate %s message channel closed, stopping stream", gateAddr)
+				return nil
+			}
+			// Wrap message in Any and send as GateMessage
+			anyMsg := &anypb.Any{}
+			if err := anyMsg.MarshalFrom(msg); err != nil {
+				m.logger.Errorf("Failed to marshal message for gate %s: %v", gateAddr, err)
+				continue
+			}
+
+			gateMsg := &goverse_pb.GateMessage{
+				Message: &goverse_pb.GateMessage_ClientMessage{
+					ClientMessage: anyMsg,
+				},
+			}
+
+			if err := stream.Send(gateMsg); err != nil {
+				m.logger.Errorf("Failed to send message to gate %s: %v", gateAddr, err)
+				return err
+			}
+		}
+	}
 }
