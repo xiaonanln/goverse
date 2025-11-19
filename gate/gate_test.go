@@ -3,8 +3,6 @@ package gate
 import (
 	"context"
 	"testing"
-
-	gate_pb "github.com/xiaonanln/goverse/client/proto"
 )
 
 func TestNewGateway(t *testing.T) {
@@ -267,109 +265,6 @@ func TestGatewayRegister(t *testing.T) {
 	_, exists = gateway.GetClient(clientID)
 	if exists {
 		t.Fatalf("Client proxy still exists after unregister")
-	}
-}
-
-func TestGatewayCallObject(t *testing.T) {
-	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
-		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-callobject",
-	}
-
-	gateway, err := NewGateway(config)
-	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
-	}
-	defer gateway.Stop()
-
-	ctx := context.Background()
-	err = gateway.Start(ctx)
-	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
-	}
-
-	req := &gate_pb.CallObjectRequest{
-		ClientId: "test-client",
-		Method:   "TestMethod",
-		Type:     "TestObject",
-		Id:       "test-object-1",
-	}
-
-	// CallObject should return "not implemented" error
-	resp, err := gateway.CallObject(ctx, req)
-	if err == nil {
-		t.Fatalf("CallObject() expected error, got response: %v", resp)
-	}
-	if !contains(err.Error(), "not implemented") {
-		t.Fatalf("CallObject() error = %v, want error containing 'not implemented'", err)
-	}
-}
-
-func TestGatewayCreateObject(t *testing.T) {
-	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
-		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-createobject",
-	}
-
-	gateway, err := NewGateway(config)
-	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
-	}
-	defer gateway.Stop()
-
-	ctx := context.Background()
-	err = gateway.Start(ctx)
-	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
-	}
-
-	req := &gate_pb.CreateObjectRequest{
-		Type: "TestObject",
-		Id:   "test-object-1",
-	}
-
-	// CreateObject should return "not implemented" error
-	resp, err := gateway.CreateObject(ctx, req)
-	if err == nil {
-		t.Fatalf("CreateObject() expected error, got response: %v", resp)
-	}
-	if !contains(err.Error(), "not implemented") {
-		t.Fatalf("CreateObject() error = %v, want error containing 'not implemented'", err)
-	}
-}
-
-func TestGatewayDeleteObject(t *testing.T) {
-	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
-		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-deleteobject",
-	}
-
-	gateway, err := NewGateway(config)
-	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
-	}
-	defer gateway.Stop()
-
-	ctx := context.Background()
-	err = gateway.Start(ctx)
-	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
-	}
-
-	req := &gate_pb.DeleteObjectRequest{
-		Id: "test-object-1",
-	}
-
-	// DeleteObject should return "not implemented" error
-	resp, err := gateway.DeleteObject(ctx, req)
-	if err == nil {
-		t.Fatalf("DeleteObject() expected error, got response: %v", resp)
-	}
-	if !contains(err.Error(), "not implemented") {
-		t.Fatalf("DeleteObject() error = %v, want error containing 'not implemented'", err)
 	}
 }
 
