@@ -19,12 +19,12 @@ type GatewayConfig struct {
 
 // Gateway handles the core gateway logic for routing requests to nodes
 type Gateway struct {
-	config           *GatewayConfig
-	advertiseAddress string
-	logger           *logger.Logger
-	clients          map[string]*ClientProxy // Map of clientID -> ClientProxy
-	clientsMu        sync.RWMutex            // Protects clients map
-	registeredNodes  map[string]bool         // tracks which nodes this gate has registered with
+	config            *GatewayConfig
+	advertiseAddress  string
+	logger            *logger.Logger
+	clients           map[string]*ClientProxy // Map of clientID -> ClientProxy
+	clientsMu         sync.RWMutex            // Protects clients map
+	registeredNodes   map[string]bool         // tracks which nodes this gate has registered with
 	registeredNodesMu sync.RWMutex
 }
 
