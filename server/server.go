@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
-	"github.com/xiaonanln/goverse/util/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/proto"
@@ -27,7 +25,6 @@ import (
 type ServerConfig struct {
 	ListenAddress             string
 	AdvertiseAddress          string
-	ClientListenAddress       string
 	MetricsListenAddress      string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress               string
 	EtcdPrefix                string        // Optional: etcd key prefix for this cluster (default: "/goverse")
@@ -121,17 +118,10 @@ func (server *Server) Run() error {
 	}
 	defer goverseServiceListener.Close()
 
-	clientServiceListener, err := net.Listen("tcp", server.config.ClientListenAddress)
-	if err != nil {
-		return err
-	}
-	defer clientServiceListener.Close()
-
 	node := server.Node
 
 	grpcServer := grpc.NewServer()
 	goverse_pb.RegisterGoverseServer(grpcServer, server)
-	gate_pb.RegisterGateServiceServer(grpcServer, &GateServiceImpl{server: server})
 	reflection.Register(grpcServer)
 	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
 
@@ -165,7 +155,6 @@ func (server *Server) Run() error {
 	}
 
 	// Handle both signals and context cancellation for graceful shutdown
-	clientGrpcServer := grpc.NewServer()
 	go func() {
 		select {
 		case <-sigChan:
@@ -174,7 +163,6 @@ func (server *Server) Run() error {
 			server.logger.Infof("Context cancelled, stopping servers...")
 		}
 		grpcServer.GracefulStop()
-		clientGrpcServer.GracefulStop()
 		if metricsServer != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -182,16 +170,6 @@ func (server *Server) Run() error {
 				server.logger.Errorf("Metrics server shutdown error: %v", err)
 			}
 		}
-	}()
-
-	go func() {
-		server.logger.Infof("Client gRPC server listening on %s", clientServiceListener.Addr().String())
-		gate_pb.RegisterGateServiceServer(clientGrpcServer, &GateServiceImpl{server: server})
-		reflection.Register(clientGrpcServer)
-		if err := clientGrpcServer.Serve(clientServiceListener); err != nil {
-			server.logger.Errorf("Client gRPC server error: %v", err)
-		}
-		server.logger.Infof("Client gRPC server stopped")
 	}()
 
 	err = grpcServer.Serve(goverseServiceListener)
@@ -215,18 +193,6 @@ func (server *Server) Run() error {
 
 func (server *Server) logRPC(method string, req proto.Message) {
 	server.logger.Infof("RPC <<< %s(request=%v)", method, req)
-}
-
-// Helper function to send a proto.Message to the stream
-func sendMessageToStream(stream gate_pb.GateService_RegisterServer, msg proto.Message) error {
-	var anyMsg anypb.Any
-	if err := anyMsg.MarshalFrom(msg); err != nil {
-		return fmt.Errorf("failed to marshal message: %v", err)
-	}
-	if err := stream.Send(&anyMsg); err != nil {
-		return fmt.Errorf("failed to send message to stream: %v", err)
-	}
-	return nil
 }
 
 // validateObjectShardOwnership validates that an object should be on this node
@@ -253,81 +219,6 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 	// (i.e., TargetNode == CurrentNode), so no additional validation needed here
 
 	return nil
-}
-
-// Register implements the GateService Register method for client registration
-func (server *Server) registerImpl(req *gate_pb.Empty, stream gate_pb.GateService_RegisterServer) error {
-	server.logRPC("Register", req)
-	clientId, messageChan, err := server.Node.RegisterClient(stream.Context())
-	if err != nil {
-		return fmt.Errorf("failed to register client: %v", err)
-	}
-
-	// Record client connection
-	metrics.RecordClientConnected(server.config.AdvertiseAddress, "grpc")
-
-	defer func() {
-		server.Node.UnregisterClient(server.ctx, clientId)
-		// Record client disconnection
-		metrics.RecordClientDisconnected(server.config.AdvertiseAddress, "grpc")
-	}()
-
-	resp := gate_pb.RegisterResponse{
-		ClientId: clientId,
-	}
-	if err := sendMessageToStream(stream, &resp); err != nil {
-		return fmt.Errorf("failed to send RegisterResponse: %v", err)
-	}
-
-	for msg := range messageChan {
-		// Convert message to gate_pb format as needed
-		if err := sendMessageToStream(stream, msg); err != nil {
-			return fmt.Errorf("failed to send message to client %s: %v", clientId, err)
-		}
-	}
-	return nil
-}
-
-// GateServiceImpl wraps Server to implement GateService methods
-// This separate type is needed because Go doesn't support method overloading,
-// and both GateService and Goverse service have CreateObject/DeleteObject methods
-// with different parameter types
-type GateServiceImpl struct {
-	gate_pb.UnimplementedGateServiceServer
-	server *Server
-}
-
-// Register implements the GateService Register method
-func (g *GateServiceImpl) Register(req *gate_pb.Empty, stream gate_pb.GateService_RegisterServer) error {
-	return g.server.registerImpl(req, stream)
-}
-
-// CallObject implements the GateService CallObject method for client RPC calls
-func (g *GateServiceImpl) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
-	g.server.logRPC("CallObject", req)
-	resp, err := g.server.Node.CallClient(ctx, req.GetClientId(), req.GetMethod(), req.GetRequest())
-	if err != nil {
-		return nil, err
-	}
-
-	response := &gate_pb.CallObjectResponse{
-		Response: resp,
-	}
-	return response, nil
-}
-
-// CreateObject implements the GateService CreateObject method (empty implementation)
-func (g *GateServiceImpl) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
-	g.server.logRPC("Gateway.CreateObject", req)
-	// Empty implementation - to be filled in later
-	return nil, fmt.Errorf("not implemented")
-}
-
-// DeleteObject implements the GateService DeleteObject method (empty implementation)
-func (g *GateServiceImpl) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
-	g.server.logRPC("Gateway.DeleteObject", req)
-	// Empty implementation - to be filled in later
-	return nil, fmt.Errorf("not implemented")
 }
 
 func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
@@ -447,26 +338,4 @@ func (server *Server) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*
 		Objects: objectInfos,
 	}
 	return response, nil
-}
-
-func (server *Server) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
-	server.logRPC("PushMessageToClient", req)
-
-	// Unmarshal the Any message to concrete proto.Message
-	var message proto.Message
-	var err error
-	if req.Message != nil {
-		message, err = req.Message.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal message: %w", err)
-		}
-	}
-
-	// Push the message to the client on this node
-	err = server.Node.PushMessageToClient(req.GetClientId(), message)
-	if err != nil {
-		return nil, err
-	}
-
-	return &goverse_pb.PushMessageToClientResponse{}, nil
 }
