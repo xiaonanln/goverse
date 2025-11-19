@@ -1,11 +1,11 @@
-package gatewayserver
+package gateserver
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	gateway_pb "github.com/xiaonanln/goverse/client/proto"
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -134,7 +134,7 @@ func TestGatewayServerStartStop(t *testing.T) {
 	defer conn.Close()
 
 	// Create client
-	client := gateway_pb.NewGatewayServiceClient(conn)
+	client := gate_pb.NewGateServiceClient(conn)
 	if client == nil {
 		t.Fatalf("Failed to create gateway client")
 	}
@@ -218,10 +218,10 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := gateway_pb.NewGatewayServiceClient(conn)
+	client := gate_pb.NewGateServiceClient(conn)
 
 	t.Run("CreateObject", func(t *testing.T) {
-		req := &gateway_pb.CreateObjectRequest{
+		req := &gate_pb.CreateObjectRequest{
 			Type: "TestObject",
 			Id:   "test-object-1",
 		}
@@ -237,7 +237,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 	})
 
 	t.Run("CallObject", func(t *testing.T) {
-		req := &gateway_pb.CallObjectRequest{
+		req := &gate_pb.CallObjectRequest{
 			ClientId: "test-client",
 			Method:   "TestMethod",
 			Type:     "TestObject",
@@ -254,7 +254,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 	})
 
 	t.Run("DeleteObject", func(t *testing.T) {
-		req := &gateway_pb.DeleteObjectRequest{
+		req := &gate_pb.DeleteObjectRequest{
 			Id: "test-object-1",
 		}
 
@@ -268,7 +268,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 	})
 
 	t.Run("Register", func(t *testing.T) {
-		stream, err := client.Register(context.Background(), &gateway_pb.Empty{})
+		stream, err := client.Register(context.Background(), &gate_pb.Empty{})
 		if err != nil {
 			t.Fatalf("Register failed to create stream: %v", err)
 		}

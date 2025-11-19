@@ -1,4 +1,4 @@
-package gatewayserver
+package gateserver
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
-	gateway_pb "github.com/xiaonanln/goverse/client/proto"
-	"github.com/xiaonanln/goverse/gateway"
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -24,13 +24,13 @@ type GatewayServerConfig struct {
 
 // GatewayServer handles client connections and routes requests to nodes
 type GatewayServer struct {
-	gateway_pb.UnimplementedGatewayServiceServer
+	gate_pb.UnimplementedGateServiceServer
 	config     *GatewayServerConfig
 	ctx        context.Context
 	cancel     context.CancelFunc
 	logger     *logger.Logger
 	grpcServer *grpc.Server
-	gateway    *gateway.Gateway
+	gate       *gate.Gateway
 }
 
 // NewGatewayServer creates a new gateway server instance
@@ -42,23 +42,23 @@ func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create gateway instance
-	gatewayConfig := &gateway.GatewayConfig{
+	gatewayConfig := &gate.GatewayConfig{
 		AdvertiseAddress: config.AdvertiseAddress,
 		EtcdAddress:      config.EtcdAddress,
 		EtcdPrefix:       config.EtcdPrefix,
 	}
-	gw, err := gateway.NewGateway(gatewayConfig)
+	gw, err := gate.NewGateway(gatewayConfig)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create gateway: %w", err)
 	}
 
 	server := &GatewayServer{
-		config:  config,
-		ctx:     ctx,
-		cancel:  cancel,
-		logger:  logger.NewLogger("GatewayServer"),
-		gateway: gw,
+		config: config,
+		ctx:    ctx,
+		cancel: cancel,
+		logger: logger.NewLogger("GatewayServer"),
+		gate:   gw,
 	}
 
 	return server, nil
@@ -92,13 +92,13 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 	s.logger.Infof("Starting gateway server on %s", s.config.ListenAddress)
 
 	// Start the gateway
-	if err := s.gateway.Start(ctx); err != nil {
+	if err := s.gate.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start gateway: %w", err)
 	}
 
 	// Create gRPC server
 	s.grpcServer = grpc.NewServer()
-	gateway_pb.RegisterGatewayServiceServer(s.grpcServer, s)
+	gate_pb.RegisterGateServiceServer(s.grpcServer, s)
 	reflection.Register(s.grpcServer)
 
 	// Start listening
@@ -150,8 +150,8 @@ func (s *GatewayServer) Stop() error {
 	}
 
 	// Stop the gateway
-	if s.gateway != nil {
-		if err := s.gateway.Stop(); err != nil {
+	if s.gate != nil {
+		if err := s.gate.Stop(); err != nil {
 			s.logger.Errorf("Error stopping gateway: %v", err)
 		}
 	}
@@ -164,16 +164,16 @@ func (s *GatewayServer) Stop() error {
 }
 
 // Register implements the Register RPC
-func (s *GatewayServer) Register(req *gateway_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
+func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
 	ctx := stream.Context()
-	clientID, err := s.gateway.Register(ctx)
+	clientID, err := s.gate.Register(ctx)
 	if err != nil {
 		s.logger.Errorf("Register failed: %v", err)
 		return err
 	}
 
 	// Send RegisterResponse
-	regResp := &gateway_pb.RegisterResponse{ClientId: clientID}
+	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
 	anyResp, err := anypb.New(regResp)
 	if err != nil {
 		return fmt.Errorf("failed to marshal RegisterResponse: %w", err)
@@ -189,16 +189,16 @@ func (s *GatewayServer) Register(req *gateway_pb.Empty, stream grpc.ServerStream
 }
 
 // CallObject implements the CallObject RPC
-func (s *GatewayServer) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
-	return s.gateway.CallObject(ctx, req)
+func (s *GatewayServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+	return s.gate.CallObject(ctx, req)
 }
 
 // CreateObject implements the CreateObject RPC
-func (s *GatewayServer) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
-	return s.gateway.CreateObject(ctx, req)
+func (s *GatewayServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
+	return s.gate.CreateObject(ctx, req)
 }
 
 // DeleteObject implements the DeleteObject RPC
-func (s *GatewayServer) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
-	return s.gateway.DeleteObject(ctx, req)
+func (s *GatewayServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
+	return s.gate.DeleteObject(ctx, req)
 }

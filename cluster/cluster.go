@@ -12,7 +12,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
-	"github.com/xiaonanln/goverse/gateway"
+	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -34,7 +34,7 @@ const (
 
 type Cluster struct {
 	node                      *node.Node
-	gate                      *gateway.Gateway
+	gate                      *gate.Gateway
 	etcdManager               *etcdmanager.EtcdManager
 	consensusManager          *consensusmanager.ConsensusManager
 	nodeConnections           *nodeconnections.NodeConnections
@@ -102,9 +102,9 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 	return c, nil
 }
 
-func NewClusterWithGate(cfg Config, gate *gateway.Gateway) (*Cluster, error) {
+func NewClusterWithGate(cfg Config, g *gate.Gateway) (*Cluster, error) {
 	c := &Cluster{
-		gate:                      gate,
+		gate:                      g,
 		logger:                    logger.NewLogger("Cluster"),
 		clusterReadyChan:          make(chan bool),
 		etcdAddress:               cfg.EtcdAddress,
@@ -312,8 +312,8 @@ func (c *Cluster) GetThisNode() *node.Node {
 }
 
 // GetThisGateway returns the gateway instance if this cluster is a gateway cluster
-// Returns nil if this is a node cluster
-func (c *Cluster) GetThisGateway() *gateway.Gateway {
+// Returns nil if this is not a gateway cluster
+func (c *Cluster) GetThisGateway() *gate.Gateway {
 	return c.gate
 }
 

@@ -7,19 +7,19 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/xiaonanln/goverse/gateway/gatewayserver"
+	"github.com/xiaonanln/goverse/gate/gateserver"
 )
 
 func main() {
 	// Create gateway server configuration
-	config := &gatewayserver.GatewayServerConfig{
+	config := &gateserver.GatewayServerConfig{
 		ListenAddress: ":49000",
 		EtcdAddress:   "localhost:2379",
 		EtcdPrefix:    "/goverse",
 	}
 
 	// Create gateway server
-	gateway, err := gatewayserver.NewGatewayServer(config)
+	gateway, err := gateserver.NewGatewayServer(config)
 	if err != nil {
 		log.Fatalf("Failed to create gateway server: %v", err)
 	}

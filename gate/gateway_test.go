@@ -1,10 +1,10 @@
-package gateway
+package gate
 
 import (
 	"context"
 	"testing"
 
-	gateway_pb "github.com/xiaonanln/goverse/client/proto"
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
 )
 
 func TestNewGateway(t *testing.T) {
@@ -262,7 +262,7 @@ func TestGatewayCallObject(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	req := &gateway_pb.CallObjectRequest{
+	req := &gate_pb.CallObjectRequest{
 		ClientId: "test-client",
 		Method:   "TestMethod",
 		Type:     "TestObject",
@@ -298,7 +298,7 @@ func TestGatewayCreateObject(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	req := &gateway_pb.CreateObjectRequest{
+	req := &gate_pb.CreateObjectRequest{
 		Type: "TestObject",
 		Id:   "test-object-1",
 	}
@@ -332,7 +332,7 @@ func TestGatewayDeleteObject(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	req := &gateway_pb.DeleteObjectRequest{
+	req := &gate_pb.DeleteObjectRequest{
 		Id: "test-object-1",
 	}
 
