@@ -6,9 +6,8 @@ import (
 
 func TestNewServer(t *testing.T) {
 	config := &ServerConfig{
-		ListenAddress:       "localhost:7070",
-		AdvertiseAddress:    "localhost:7070",
-		ClientListenAddress: "localhost:7071",
+		ListenAddress:    "localhost:7070",
+		AdvertiseAddress: "localhost:7070",
 	}
 
 	server, err := NewServer(config)
@@ -34,9 +33,8 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 
 	// Test with empty ListenAddress - should return error
 	config := &ServerConfig{
-		ListenAddress:       "",
-		AdvertiseAddress:    "localhost:7072",
-		ClientListenAddress: "localhost:7073",
+		ListenAddress:    "",
+		AdvertiseAddress: "localhost:7072",
 	}
 	_, err = NewServer(config)
 	if err == nil {
@@ -49,9 +47,8 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 
 	// Test with empty AdvertiseAddress - should return error
 	config = &ServerConfig{
-		ListenAddress:       "localhost:7074",
-		AdvertiseAddress:    "",
-		ClientListenAddress: "localhost:7075",
+		ListenAddress:    "localhost:7074",
+		AdvertiseAddress: "",
 	}
 	_, err = NewServer(config)
 	if err == nil {

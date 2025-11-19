@@ -17,9 +17,8 @@ func TestServerDeleteObject_Success(t *testing.T) {
 
 	// Create a server without cluster (standalone mode for testing)
 	config := &ServerConfig{
-		ListenAddress:       "localhost:0", // Use any available port
-		AdvertiseAddress:    "localhost:47000",
-		ClientListenAddress: "localhost:0",
+		ListenAddress:    "localhost:0", // Use any available port
+		AdvertiseAddress: "localhost:47000",
 	}
 
 	server := &Server{
@@ -65,9 +64,8 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 
 	// Create a server
 	config := &ServerConfig{
-		ListenAddress:       "localhost:0",
-		AdvertiseAddress:    "localhost:47000",
-		ClientListenAddress: "localhost:0",
+		ListenAddress:    "localhost:0",
+		AdvertiseAddress: "localhost:47000",
 	}
 
 	server := &Server{
@@ -103,9 +101,8 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 
 	// Create a server
 	config := &ServerConfig{
-		ListenAddress:       "localhost:0",
-		AdvertiseAddress:    "localhost:47000",
-		ClientListenAddress: "localhost:0",
+		ListenAddress:    "localhost:0",
+		AdvertiseAddress: "localhost:47000",
 	}
 
 	server := &Server{

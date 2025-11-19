@@ -33,7 +33,6 @@ func TestValidateServerConfig_EmptyListenAddress(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "",
 		AdvertiseAddress:          "localhost:8080",
-		ClientListenAddress:       "localhost:8081",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -54,7 +53,6 @@ func TestValidateServerConfig_EmptyAdvertiseAddress(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:8080",
 		AdvertiseAddress:          "",
-		ClientListenAddress:       "localhost:8081",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -75,7 +73,6 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:8080",
 		AdvertiseAddress:          "localhost:8080",
-		ClientListenAddress:       "localhost:8081",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -94,7 +91,6 @@ func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9097",
 		AdvertiseAddress:          "localhost:9097",
-		ClientListenAddress:       "localhost:9098",
 		NodeStabilityDuration:     customDuration,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -124,7 +120,6 @@ func TestServerConfig_DefaultNodeStabilityDuration(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9099",
 		AdvertiseAddress:          "localhost:9099",
-		ClientListenAddress:       "localhost:9100",
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
 
@@ -152,7 +147,6 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9090",
 		AdvertiseAddress:          "localhost:9090",
-		ClientListenAddress:       "localhost:9091",
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
 	}
@@ -201,7 +195,6 @@ func TestNewServer_WithCustomEtcdPrefix(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:9095",
 		AdvertiseAddress:          "localhost:9095",
-		ClientListenAddress:       "localhost:9096",
 		EtcdAddress:               "localhost:2379",
 		EtcdPrefix:                customPrefix,
 		NodeStabilityDuration:     3 * time.Second,
@@ -321,7 +314,6 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:             "localhost:47100",
 		AdvertiseAddress:          "localhost:47100",
-		ClientListenAddress:       "localhost:47101",
 		EtcdAddress:               "localhost:2379",
 		EtcdPrefix:                etcdPrefix,
 		NodeStabilityDuration:     3 * time.Second,
