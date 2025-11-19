@@ -71,7 +71,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 
 	// Initialize cluster with etcd connection
-	c, err := cluster.NewCluster(clusterCfg, node)
+	c, err := cluster.NewClusterWithNode(clusterCfg, node)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)

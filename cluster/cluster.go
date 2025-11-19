@@ -12,6 +12,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/gateway"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -33,6 +34,7 @@ const (
 
 type Cluster struct {
 	node                      *node.Node
+	gate                      *gateway.Gateway
 	etcdManager               *etcdmanager.EtcdManager
 	consensusManager          *consensusmanager.ConsensusManager
 	nodeConnections           *nodeconnections.NodeConnections
@@ -76,15 +78,15 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 	return mgr, nil
 }
 
-// NewCluster creates a new cluster instance with the given configuration.
+// NewClusterWithNode creates a new cluster instance with the given configuration.
 // It automatically connects to etcd and initializes the etcd manager and consensus manager.
 // This function assigns the created cluster to the singleton and should be called once during application initialization.
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
-func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
+func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 	// Create a new cluster instance with its own ShardLock to ensure per-cluster isolation
 	c := &Cluster{
-		node:                      thisNode,
+		node:                      node,
 		logger:                    logger.NewLogger("Cluster"),
 		clusterReadyChan:          make(chan bool),
 		etcdAddress:               cfg.EtcdAddress,
@@ -94,36 +96,54 @@ func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(),
 	}
+	if err := c.init(cfg); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
 
+func NewClusterWithGate(cfg Config, gate *gateway.Gateway) (*Cluster, error) {
+	c := &Cluster{
+		gate:                      gate,
+		logger:                    logger.NewLogger("Cluster"),
+		clusterReadyChan:          make(chan bool),
+		etcdAddress:               cfg.EtcdAddress,
+		etcdPrefix:                cfg.EtcdPrefix,
+		minQuorum:                 cfg.MinQuorum,
+		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
+		nodeConnections:           nodeconnections.New(),
+		shardLock:                 shardlock.NewShardLock(),
+	}
+	if err := c.init(cfg); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (c *Cluster) init(cfg Config) error {
+	// Initialization logic for the cluster
 	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
-	thisNode.SetShardLock(c.shardLock)
+	c.node.SetShardLock(c.shardLock)
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.etcdManager = mgr
-
-	// Get local node address
-	localNodeAddr := ""
-	if thisNode != nil {
-		localNodeAddr = thisNode.GetAdvertiseAddress()
-	}
 
 	// Use the provided cluster state stability duration or default
 	stabilityDuration := cfg.ClusterStateStabilityDuration
 	if stabilityDuration <= 0 {
 		stabilityDuration = DefaultNodeStabilityDuration
 	}
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, localNodeAddr)
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr())
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
 		c.consensusManager.SetMinQuorum(cfg.MinQuorum)
 	}
-
-	return c, nil
+	return nil
 }
 
 // newClusterForTesting creates a new cluster instance for testing with an initialized logger
@@ -155,7 +175,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 		ShardMappingCheckInterval:     1 * time.Second,
 	}
 
-	c, err := NewCluster(cfg, node)
+	c, err := NewClusterWithNode(cfg, node)
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +258,11 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	c.logger.Infof("%s - Cluster stopped", c)
 	return nil
+}
+
+// getAdvertiseAddr returns the advertise address of this node
+func (c *Cluster) getAdvertiseAddr() string {
+	return c.node.GetAdvertiseAddress()
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability

@@ -33,7 +33,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 	}
 
 	// Create cluster with etcd
-	c, err := NewCluster(cfg, n)
+	c, err := NewClusterWithNode(cfg, n)
 	if err != nil {
 		n.Stop(ctx) // Clean up node if cluster creation fails
 		t.Fatalf("Failed to create cluster: %v", err)
