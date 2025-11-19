@@ -49,6 +49,8 @@ type Cluster struct {
 	clusterManagementRunning  bool
 	clusterReadyChan          chan bool
 	clusterReadyOnce          sync.Once
+	gateChannels              map[string]chan proto.Message
+	gateChannelsMu            sync.RWMutex
 }
 
 func SetThis(c *Cluster) {
@@ -95,6 +97,7 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(),
+		gateChannels:              make(map[string]chan proto.Message),
 	}
 	if err := c.init(cfg); err != nil {
 		return nil, err
@@ -113,6 +116,7 @@ func NewClusterWithGate(cfg Config, g *gate.Gateway) (*Cluster, error) {
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(),
+		gateChannels:              make(map[string]chan proto.Message),
 	}
 	if err := c.init(cfg); err != nil {
 		return nil, err
@@ -163,6 +167,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		minQuorum:                 1,
 		shardMappingCheckInterval: 1 * time.Second,
 		shardLock:                 shardLock,
+		gateChannels:              make(map[string]chan proto.Message),
 	}
 }
 
@@ -626,6 +631,39 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	return nil
 }
 
+// RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
+func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, error) {
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	if oldCh, ok := c.gateChannels[gateAddr]; ok {
+		c.logger.Warnf("Gate %s already registered, replacing connection", gateAddr)
+		close(oldCh)
+	}
+
+	// Create a buffered channel to prevent blocking
+	ch := make(chan proto.Message, 1024)
+	c.gateChannels[gateAddr] = ch
+	c.logger.Infof("Registered gate connection for %s", gateAddr)
+	return ch, nil
+}
+
+// UnregisterGateConnection removes a gate connection
+func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Message) {
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	if currentCh, ok := c.gateChannels[gateAddr]; ok {
+		if currentCh == ch {
+			close(currentCh)
+			delete(c.gateChannels, gateAddr)
+			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
+		} else {
+			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
+		}
+	}
+}
+
 // PushMessageToClient sends a message to a client by its ID
 // Client IDs have the format: {nodeAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target node and routes the message accordingly
@@ -645,6 +683,23 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 		c.logger.Infof("%s - Pushing message to client %s locally", c, clientID)
 		return c.node.PushMessageToClient(clientID, message)
 	}
+
+	// Check if the client is on a connected gate
+	c.gateChannelsMu.RLock()
+	gateCh, isGateConnected := c.gateChannels[nodeAddr]
+
+	if isGateConnected {
+		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, nodeAddr)
+		select {
+		case gateCh <- message:
+			c.gateChannelsMu.RUnlock()
+			return nil
+		default:
+			c.gateChannelsMu.RUnlock()
+			return fmt.Errorf("gate %s message channel is full", nodeAddr)
+		}
+	}
+	c.gateChannelsMu.RUnlock()
 
 	// Gateway clusters cannot push messages locally - they must route to nodes
 	if c.isGateway() && nodeAddr == c.getAdvertiseAddr() {

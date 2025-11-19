@@ -339,3 +339,91 @@ func (server *Server) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*
 	}
 	return response, nil
 }
+
+func (server *Server) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
+	server.logRPC("PushMessageToClient", req)
+
+	clientID := req.GetClientId()
+	if clientID == "" {
+		return nil, fmt.Errorf("client_id must be specified in PushMessageToClient request")
+	}
+
+	// Unmarshal the Any message to concrete proto.Message
+	var messageMsg proto.Message
+	var err error
+	if req.Message != nil {
+		messageMsg, err = req.Message.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+	}
+
+	err = server.Node.PushMessageToClient(clientID, messageMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &goverse_pb.PushMessageToClientResponse{}
+	return response, nil
+}
+
+func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream goverse_pb.Goverse_RegisterGateServer) error {
+	server.logRPC("RegisterGate", req)
+
+	gateAddr := req.GetGateAddr()
+	if gateAddr == "" {
+		return fmt.Errorf("gate_addr must be specified in RegisterGate request")
+	}
+
+	server.logger.Infof("Gate %s registered, starting message stream", gateAddr)
+
+	// Send RegisterGateResponse as the first message
+	registerResponse := &goverse_pb.GateMessage{
+		Message: &goverse_pb.GateMessage_RegisterGateResponse{
+			RegisterGateResponse: &goverse_pb.RegisterGateResponse{},
+		},
+	}
+	if err := stream.Send(registerResponse); err != nil {
+		server.logger.Errorf("Failed to send RegisterGateResponse to gate %s: %v", gateAddr, err)
+		return err
+	}
+
+	// Acquire message channel from cluster
+	msgChan, err := cluster.This().RegisterGateConnection(gateAddr)
+	if err != nil {
+		server.logger.Errorf("Failed to register gate connection for %s: %v", gateAddr, err)
+		return err
+	}
+	defer cluster.This().UnregisterGateConnection(gateAddr, msgChan)
+
+	// Loop to forward messages from channel to stream
+	for {
+		select {
+		case <-stream.Context().Done():
+			server.logger.Infof("Gate %s stream closed: %v", gateAddr, stream.Context().Err())
+			return nil
+		case msg, ok := <-msgChan:
+			if !ok {
+				server.logger.Infof("Gate %s message channel closed, stopping stream", gateAddr)
+				return nil
+			}
+			// Wrap message in Any and send as GateMessage
+			anyMsg, err := anypb.New(msg)
+			if err != nil {
+				server.logger.Errorf("Failed to marshal message for gate %s: %v", gateAddr, err)
+				continue
+			}
+
+			gateMsg := &goverse_pb.GateMessage{
+				Message: &goverse_pb.GateMessage_ClientMessage{
+					ClientMessage: anyMsg,
+				},
+			}
+
+			if err := stream.Send(gateMsg); err != nil {
+				server.logger.Errorf("Failed to send message to gate %s: %v", gateAddr, err)
+				return err
+			}
+		}
+	}
+}
