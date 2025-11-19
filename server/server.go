@@ -388,13 +388,14 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 		return err
 	}
 
+	cluster := server.cluster
 	// Acquire message channel from cluster
-	msgChan, err := cluster.This().RegisterGateConnection(gateAddr)
+	msgChan, err := cluster.RegisterGateConnection(gateAddr)
 	if err != nil {
 		server.logger.Errorf("Failed to register gate connection for %s: %v", gateAddr, err)
 		return err
 	}
-	defer cluster.This().UnregisterGateConnection(gateAddr, msgChan)
+	defer cluster.UnregisterGateConnection(gateAddr, msgChan)
 
 	// Loop to forward messages from channel to stream
 	for {
