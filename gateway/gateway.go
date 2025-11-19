@@ -3,35 +3,21 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"time"
 
 	gateway_pb "github.com/xiaonanln/goverse/client/proto"
-	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
-)
-
-const (
-	// DefaultManagementInterval is how often the gateway management loop runs
-	DefaultManagementInterval = 5 * time.Second
 )
 
 // GatewayConfig holds configuration for the gateway
 type GatewayConfig struct {
-	EtcdAddress        string        // Address of etcd for cluster state
-	EtcdPrefix         string        // etcd key prefix (default: "/goverse")
-	ManagementInterval time.Duration // how often the management loop runs (default: 5s)
+	EtcdAddress string // Address of etcd for cluster state
+	EtcdPrefix  string // etcd key prefix (default: "/goverse")
 }
 
 // Gateway handles the core gateway logic for routing requests to nodes
 type Gateway struct {
-	config            *GatewayConfig
-	logger            *logger.Logger
-	etcdManager       *etcdmanager.EtcdManager
-	shardLock         *shardlock.ShardLock
-	managementCtx     context.Context
-	managementCancel  context.CancelFunc
-	managementRunning bool
+	config *GatewayConfig
+	logger *logger.Logger
 }
 
 // NewGateway creates a new gateway instance
@@ -40,26 +26,9 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		return nil, fmt.Errorf("invalid gateway configuration: %w", err)
 	}
 
-	// Create etcd manager
-	etcdMgr, err := etcdmanager.NewEtcdManager(config.EtcdAddress, config.EtcdPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create etcd manager: %w", err)
-	}
-
-	// Connect to etcd
-	if err := etcdMgr.Connect(); err != nil {
-		_ = etcdMgr.Close()
-		return nil, fmt.Errorf("failed to connect to etcd: %w", err)
-	}
-
-	// Create shard lock
-	shardLock := shardlock.NewShardLock()
-
 	gateway := &Gateway{
-		config:      config,
-		logger:      logger.NewLogger("Gateway"),
-		etcdManager: etcdMgr,
-		shardLock:   shardLock,
+		config: config,
+		logger: logger.NewLogger("Gateway"),
 	}
 
 	return gateway, nil
@@ -78,9 +47,6 @@ func validateGatewayConfig(config *GatewayConfig) error {
 	if config.EtcdPrefix == "" {
 		config.EtcdPrefix = "/goverse"
 	}
-	if config.ManagementInterval <= 0 {
-		config.ManagementInterval = DefaultManagementInterval
-	}
 
 	return nil
 }
@@ -88,11 +54,6 @@ func validateGatewayConfig(config *GatewayConfig) error {
 // Start initializes the gateway and connects to the cluster
 func (g *Gateway) Start(ctx context.Context) error {
 	g.logger.Infof("Starting gateway")
-
-	// Start management loop
-	if err := g.startManagementLoop(ctx); err != nil {
-		return fmt.Errorf("failed to start management loop: %w", err)
-	}
 
 	// TODO: Set up NodeConnections for routing to nodes
 
@@ -103,14 +64,6 @@ func (g *Gateway) Start(ctx context.Context) error {
 // Stop stops the gateway and cleans up resources
 func (g *Gateway) Stop() error {
 	g.logger.Infof("Stopping gateway")
-
-	// Stop management loop
-	g.stopManagementLoop()
-
-	// Close etcd connection
-	if err := g.etcdManager.Close(); err != nil {
-		g.logger.Errorf("Error closing etcd manager: %v", err)
-	}
 
 	// TODO: Stop NodeConnections
 
@@ -151,56 +104,4 @@ func (g *Gateway) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObject
 	// TODO: Route to appropriate node using NodeConnections
 	// TODO: Delete object via GoVerse service
 	return &gateway_pb.DeleteObjectResponse{}, fmt.Errorf("not implemented")
-}
-
-// startManagementLoop starts the gateway management loop
-func (g *Gateway) startManagementLoop(ctx context.Context) error {
-	if g.managementRunning {
-		g.logger.Warnf("Management loop already running")
-		return nil
-	}
-
-	g.managementCtx, g.managementCancel = context.WithCancel(ctx)
-	g.managementRunning = true
-
-	go g.managementLoop()
-	g.logger.Infof("Started gateway management loop (interval: %v)", g.config.ManagementInterval)
-
-	return nil
-}
-
-// stopManagementLoop stops the gateway management loop
-func (g *Gateway) stopManagementLoop() {
-	if g.managementCancel != nil {
-		g.managementCancel()
-		g.managementCancel = nil
-	}
-	g.managementRunning = false
-	g.logger.Infof("Stopped gateway management loop")
-}
-
-// managementLoop is the background loop that performs periodic management tasks
-func (g *Gateway) managementLoop() {
-	ticker := time.NewTicker(g.config.ManagementInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-g.managementCtx.Done():
-			g.logger.Debugf("Gateway management loop stopped")
-			return
-		case <-ticker.C:
-			g.managementTick()
-		}
-	}
-}
-
-// managementTick performs a single tick of gateway management
-func (g *Gateway) managementTick() {
-	startTime := time.Now()
-	// TODO: Perform periodic management tasks
-	// - Update node connections
-	// - Check health of connections
-	// - Update metrics
-	g.logger.Debugf("Gateway management tick took %d ms", time.Since(startTime).Milliseconds())
 }
