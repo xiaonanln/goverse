@@ -941,6 +941,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.removeObjectsNotBelongingToThisNode(ctx)
 	c.releaseShardOwnership(ctx)
 	c.updateNodeConnections()
+	c.registerGateWithNodes(ctx)
 }
 
 func (c *Cluster) updateMetrics() {
@@ -1113,6 +1114,18 @@ func (c *Cluster) updateNodeConnections() {
 // GetNodeConnections returns the node connections manager
 func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 	return c.nodeConnections
+}
+
+// registerGateWithNodes registers this gate with all nodes that haven't been registered yet
+// This is called periodically from the cluster management loop for gateway clusters
+func (c *Cluster) registerGateWithNodes(ctx context.Context) {
+	if !c.isGateway() {
+		return
+	}
+
+	// Delegate to gate
+	allConnections := c.nodeConnections.GetAllConnections()
+	c.gate.RegisterWithNodes(ctx, allConnections)
 }
 
 func (c *Cluster) GetClusterStateStabilityDurationForTesting() time.Duration {

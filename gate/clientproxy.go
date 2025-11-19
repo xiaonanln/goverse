@@ -45,3 +45,18 @@ func (cp *ClientProxy) Close() {
 		cp.messageChan = nil
 	}
 }
+
+// HandleMessage handles a message received from a node for this client
+// It forwards the message to the client's message channel
+func (cp *ClientProxy) HandleMessage(msg proto.Message) {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+	if cp.messageChan != nil {
+		select {
+		case cp.messageChan <- msg:
+			// Message sent successfully
+		default:
+			// Channel full, drop message
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 )
@@ -23,6 +24,8 @@ type Gateway struct {
 	logger           *logger.Logger
 	clients          map[string]*ClientProxy // Map of clientID -> ClientProxy
 	clientsMu        sync.RWMutex            // Protects clients map
+	registeredNodes  map[string]bool         // tracks which nodes this gate has registered with
+	registeredNodesMu sync.RWMutex
 }
 
 // NewGateway creates a new gateway instance
@@ -36,6 +39,7 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		advertiseAddress: config.AdvertiseAddress,
 		logger:           logger.NewLogger("Gateway"),
 		clients:          make(map[string]*ClientProxy),
+		registeredNodes:  make(map[string]bool),
 	}
 
 	return gateway, nil
@@ -121,4 +125,75 @@ func (g *Gateway) GetClient(clientID string) (*ClientProxy, bool) {
 // GetAdvertiseAddress returns the advertise address of this gateway
 func (g *Gateway) GetAdvertiseAddress() string {
 	return g.advertiseAddress
+}
+
+// RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
+func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[string]goverse_pb.GoverseClient) {
+	for nodeAddr, client := range nodeConnections {
+		// Check if already registered with this node
+		g.registeredNodesMu.RLock()
+		alreadyRegistered := g.registeredNodes[nodeAddr]
+		g.registeredNodesMu.RUnlock()
+
+		if alreadyRegistered {
+			continue
+		}
+
+		// Register with this node
+		g.logger.Infof("Registering gate with node %s", nodeAddr)
+		go g.registerWithNode(ctx, nodeAddr, client)
+	}
+}
+
+// registerWithNode registers this gate with a specific node and handles the message stream
+func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client goverse_pb.GoverseClient) {
+	stream, err := client.RegisterGate(ctx, &goverse_pb.RegisterGateRequest{
+		GateAddr: g.advertiseAddress,
+	})
+	if err != nil {
+		g.logger.Errorf("Failed to call RegisterGate on node %s: %v", nodeAddr, err)
+		return
+	}
+
+	// Mark as registered
+	g.registeredNodesMu.Lock()
+	g.registeredNodes[nodeAddr] = true
+	g.registeredNodesMu.Unlock()
+	g.logger.Infof("Successfully registered gate with node %s", nodeAddr)
+
+	// Start receiving messages from the stream
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			g.logger.Errorf("Stream from node %s closed: %v", nodeAddr, err)
+			// Mark as unregistered so we can retry
+			g.registeredNodesMu.Lock()
+			delete(g.registeredNodes, nodeAddr)
+			g.registeredNodesMu.Unlock()
+			return
+		}
+		g.handleGateMessage(nodeAddr, msg)
+	}
+}
+
+// handleGateMessage handles messages received from a node via the gate stream
+func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
+	switch m := msg.Message.(type) {
+	case *goverse_pb.GateMessage_RegisterGateResponse:
+		g.logger.Debugf("Received RegisterGateResponse from node %s", nodeAddr)
+	case *goverse_pb.GateMessage_ClientMessage:
+		// Handle client message
+		if m.ClientMessage != nil {
+			clientID := m.ClientMessage.ClientId
+			g.logger.Infof("Received client message for %s from node %s", clientID, nodeAddr)
+			// Forward to client proxy
+			if clientProxy, exists := g.GetClient(clientID); exists {
+				clientProxy.HandleMessage(m.ClientMessage)
+			} else {
+				g.logger.Warnf("Received message for unknown client %s", clientID)
+			}
+		}
+	default:
+		g.logger.Warnf("Received unknown message type from node %s", nodeAddr)
+	}
 }
