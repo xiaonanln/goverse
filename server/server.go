@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	gateway_pb "github.com/xiaonanln/goverse/client/proto"
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -131,7 +131,7 @@ func (server *Server) Run() error {
 
 	grpcServer := grpc.NewServer()
 	goverse_pb.RegisterGoverseServer(grpcServer, server)
-	gateway_pb.RegisterGatewayServiceServer(grpcServer, &gatewayServiceImpl{server: server})
+	gate_pb.RegisterGateServiceServer(grpcServer, &GateServiceImpl{server: server})
 	reflection.Register(grpcServer)
 	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
 
@@ -186,7 +186,7 @@ func (server *Server) Run() error {
 
 	go func() {
 		server.logger.Infof("Client gRPC server listening on %s", clientServiceListener.Addr().String())
-		gateway_pb.RegisterGatewayServiceServer(clientGrpcServer, &gatewayServiceImpl{server: server})
+		gate_pb.RegisterGateServiceServer(clientGrpcServer, &GateServiceImpl{server: server})
 		reflection.Register(clientGrpcServer)
 		if err := clientGrpcServer.Serve(clientServiceListener); err != nil {
 			server.logger.Errorf("Client gRPC server error: %v", err)
@@ -218,7 +218,7 @@ func (server *Server) logRPC(method string, req proto.Message) {
 }
 
 // Helper function to send a proto.Message to the stream
-func sendMessageToStream(stream gateway_pb.GatewayService_RegisterServer, msg proto.Message) error {
+func sendMessageToStream(stream gate_pb.GateService_RegisterServer, msg proto.Message) error {
 	var anyMsg anypb.Any
 	if err := anyMsg.MarshalFrom(msg); err != nil {
 		return fmt.Errorf("failed to marshal message: %v", err)
@@ -255,8 +255,8 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 	return nil
 }
 
-// Register implements the GatewayService Register method for client registration
-func (server *Server) registerImpl(req *gateway_pb.Empty, stream gateway_pb.GatewayService_RegisterServer) error {
+// Register implements the GateService Register method for client registration
+func (server *Server) registerImpl(req *gate_pb.Empty, stream gate_pb.GateService_RegisterServer) error {
 	server.logRPC("Register", req)
 	clientId, messageChan, err := server.Node.RegisterClient(stream.Context())
 	if err != nil {
@@ -272,7 +272,7 @@ func (server *Server) registerImpl(req *gateway_pb.Empty, stream gateway_pb.Gate
 		metrics.RecordClientDisconnected(server.config.AdvertiseAddress, "grpc")
 	}()
 
-	resp := gateway_pb.RegisterResponse{
+	resp := gate_pb.RegisterResponse{
 		ClientId: clientId,
 	}
 	if err := sendMessageToStream(stream, &resp); err != nil {
@@ -280,7 +280,7 @@ func (server *Server) registerImpl(req *gateway_pb.Empty, stream gateway_pb.Gate
 	}
 
 	for msg := range messageChan {
-		// Convert message to gateway_pb format as needed
+		// Convert message to gate_pb format as needed
 		if err := sendMessageToStream(stream, msg); err != nil {
 			return fmt.Errorf("failed to send message to client %s: %v", clientId, err)
 		}
@@ -288,46 +288,46 @@ func (server *Server) registerImpl(req *gateway_pb.Empty, stream gateway_pb.Gate
 	return nil
 }
 
-// gatewayServiceImpl wraps Server to implement GatewayService methods
+// GateServiceImpl wraps Server to implement GateService methods
 // This separate type is needed because Go doesn't support method overloading,
-// and both GatewayService and Goverse service have CreateObject/DeleteObject methods
+// and both GateService and Goverse service have CreateObject/DeleteObject methods
 // with different parameter types
-type gatewayServiceImpl struct {
-	gateway_pb.UnimplementedGatewayServiceServer
+type GateServiceImpl struct {
+	gate_pb.UnimplementedGateServiceServer
 	server *Server
 }
 
-// Register implements the GatewayService Register method
-func (g *gatewayServiceImpl) Register(req *gateway_pb.Empty, stream gateway_pb.GatewayService_RegisterServer) error {
+// Register implements the GateService Register method
+func (g *GateServiceImpl) Register(req *gate_pb.Empty, stream gate_pb.GateService_RegisterServer) error {
 	return g.server.registerImpl(req, stream)
 }
 
-// CallObject implements the GatewayService CallObject method for client RPC calls
-func (g *gatewayServiceImpl) CallObject(ctx context.Context, req *gateway_pb.CallObjectRequest) (*gateway_pb.CallObjectResponse, error) {
+// CallObject implements the GateService CallObject method for client RPC calls
+func (g *GateServiceImpl) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
 	g.server.logRPC("CallObject", req)
 	resp, err := g.server.Node.CallClient(ctx, req.GetClientId(), req.GetMethod(), req.GetRequest())
 	if err != nil {
 		return nil, err
 	}
 
-	response := &gateway_pb.CallObjectResponse{
+	response := &gate_pb.CallObjectResponse{
 		Response: resp,
 	}
 	return response, nil
 }
 
-// CreateObject implements the GatewayService CreateObject method (empty implementation)
-func (g *gatewayServiceImpl) CreateObject(ctx context.Context, req *gateway_pb.CreateObjectRequest) (*gateway_pb.CreateObjectResponse, error) {
+// CreateObject implements the GateService CreateObject method (empty implementation)
+func (g *GateServiceImpl) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
 	g.server.logRPC("Gateway.CreateObject", req)
 	// Empty implementation - to be filled in later
-	return &gateway_pb.CreateObjectResponse{}, nil
+	return &gate_pb.CreateObjectResponse{}, nil
 }
 
-// DeleteObject implements the GatewayService DeleteObject method (empty implementation)
-func (g *gatewayServiceImpl) DeleteObject(ctx context.Context, req *gateway_pb.DeleteObjectRequest) (*gateway_pb.DeleteObjectResponse, error) {
+// DeleteObject implements the GateService DeleteObject method (empty implementation)
+func (g *GateServiceImpl) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
 	g.server.logRPC("Gateway.DeleteObject", req)
 	// Empty implementation - to be filled in later
-	return &gateway_pb.DeleteObjectResponse{}, nil
+	return &gate_pb.DeleteObjectResponse{}, nil
 }
 
 func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObjectRequest) (*goverse_pb.CallObjectResponse, error) {
