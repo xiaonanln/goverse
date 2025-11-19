@@ -191,7 +191,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 
 // Start initializes and starts the cluster with the given node.
 // It performs the following operations in sequence:
-// 3. Registers the node with etcd
+// 3. Registers the node/gate with etcd
 // 4. Starts watching cluster state changes
 // 5. Starts node connections
 // 6. Starts shard mapping management
@@ -199,9 +199,15 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
-	// Register this node with etcd
-	if err := c.registerNode(ctx); err != nil {
-		return fmt.Errorf("failed to register node: %w", err)
+	// Register this node or gateway with etcd
+	if c.isNode() {
+		if err := c.registerNode(ctx); err != nil {
+			return fmt.Errorf("failed to register node: %w", err)
+		}
+	} else if c.isGateway() {
+		if err := c.registerGate(ctx); err != nil {
+			return fmt.Errorf("failed to register gate: %w", err)
+		}
 	}
 
 	// Start watching for cluster state changes
@@ -243,9 +249,16 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	c.consensusManager.StopWatch()
 
 	// Unregister from etcd
-	if err := c.unregisterNode(ctx); err != nil {
-		c.logger.Errorf("%s - Failed to unregister node: %v", c, err)
-		// Continue with cleanup even if unregister fails
+	if c.isNode() {
+		if err := c.unregisterNode(ctx); err != nil {
+			c.logger.Errorf("%s - Failed to unregister node: %v", c, err)
+			// Continue with cleanup even if unregister fails
+		}
+	} else if c.isGateway() {
+		if err := c.unregisterGate(ctx); err != nil {
+			c.logger.Errorf("%s - Failed to unregister gate: %v", c, err)
+			// Continue with cleanup even if unregister fails
+		}
 	}
 
 	// Close etcd connection
@@ -680,6 +693,27 @@ func (c *Cluster) unregisterNode(ctx context.Context) error {
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
 }
 
+// registerGate registers this gateway with etcd using the shared lease API
+func (c *Cluster) registerGate(ctx context.Context) error {
+	gatesPrefix := c.etcdManager.GetPrefix() + "/gates/"
+	key := gatesPrefix + c.getAdvertiseAddr()
+	value := c.getAdvertiseAddr()
+
+	_, err := c.etcdManager.RegisterKeyLease(ctx, key, value, etcdmanager.NodeLeaseTTL)
+	if err != nil {
+		return fmt.Errorf("failed to register gate: %w", err)
+	}
+
+	return nil
+}
+
+// unregisterGate unregisters this gateway from etcd using the shared lease API
+func (c *Cluster) unregisterGate(ctx context.Context) error {
+	gatesPrefix := c.etcdManager.GetPrefix() + "/gates/"
+	key := gatesPrefix + c.getAdvertiseAddr()
+	return c.etcdManager.UnregisterKeyLease(ctx, key)
+}
+
 // closeEtcd closes the etcd connection
 func (c *Cluster) closeEtcd() error {
 	return c.etcdManager.Close()
@@ -706,6 +740,11 @@ func (c *Cluster) startWatching(ctx context.Context) error {
 // GetNodes returns a list of all registered nodes
 func (c *Cluster) GetNodes() []string {
 	return c.consensusManager.GetNodes()
+}
+
+// GetGates returns a list of all registered gates
+func (c *Cluster) GetGates() []string {
+	return c.consensusManager.GetGates()
 }
 
 // GetLeaderNode returns the leader node address.

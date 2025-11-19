@@ -65,6 +65,7 @@ func (sm *ShardMapping) IsFullyAssignedAndClaimed() bool {
 // ClusterState represents the current state of the cluster
 type ClusterState struct {
 	Nodes        map[string]bool
+	Gates        map[string]bool
 	ShardMapping *ShardMapping
 	Revision     int64
 	LastChange   time.Time
@@ -76,6 +77,15 @@ func (cs *ClusterState) HasNode(nodeAddr string) bool {
 		return false
 	}
 	_, ok := cs.Nodes[nodeAddr]
+	return ok
+}
+
+// HasGate returns true if the given gate address exists in the cluster state.
+func (cs *ClusterState) HasGate(gateAddr string) bool {
+	if cs == nil {
+		return false
+	}
+	_, ok := cs.Gates[gateAddr]
 	return ok
 }
 
@@ -377,6 +387,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	cm.mu.RUnlock()
 
 	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
+	gatesPrefix := cm.etcdManager.GetPrefix() + "/gates/"
 	shardPrefix := prefix + "/shard/"
 
 	// Watch from the next revision after our load to prevent missing events
@@ -405,6 +416,9 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 				// Handle node changes
 				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
 					cm.handleNodeEvent(event, nodesPrefix)
+				} else if len(key) > len(gatesPrefix) && key[:len(gatesPrefix)] == gatesPrefix {
+					// Handle gate changes
+					cm.handleGateEvent(event, gatesPrefix)
 				} else if len(key) > len(shardPrefix) && key[:len(shardPrefix)] == shardPrefix {
 					// Handle individual shard changes
 					cm.handleShardEvent(event, shardPrefix)
@@ -437,6 +451,39 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		delete(cm.state.Nodes, nodeAddress)
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Node removed: %s", nodeAddress)
+		cm.mu.Unlock()
+
+		// Asynchronously notify listeners after releasing lock to prevent deadlocks
+		// Notifications may arrive out of order if rapid changes occur
+		go cm.notifyStateChanged()
+	default:
+		cm.mu.Unlock()
+	}
+}
+
+// handleGateEvent processes gate addition/removal events
+func (cm *ConsensusManager) handleGateEvent(event *clientv3.Event, gatesPrefix string) {
+	cm.mu.Lock()
+
+	switch event.Type {
+	case clientv3.EventTypePut:
+		gateAddress := string(event.Kv.Value)
+		cm.state.Gates[gateAddress] = true
+		cm.state.LastChange = time.Now()
+		cm.logger.Infof("Gate added: %s", gateAddress)
+		cm.mu.Unlock()
+
+		// Asynchronously notify listeners after releasing lock to prevent deadlocks
+		// Notifications may arrive out of order if rapid changes occur
+		go cm.notifyStateChanged()
+
+	case clientv3.EventTypeDelete:
+		// Extract gate address from the key
+		key := string(event.Kv.Key)
+		gateAddress := key[len(gatesPrefix):]
+		delete(cm.state.Gates, gateAddress)
+		cm.state.LastChange = time.Now()
+		cm.logger.Infof("Gate removed: %s", gateAddress)
 		cm.mu.Unlock()
 
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
@@ -546,6 +593,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 
 	state := &ClusterState{
 		Nodes: make(map[string]bool),
+		Gates: make(map[string]bool),
 		ShardMapping: &ShardMapping{
 			Shards: make(map[int]ShardInfo),
 		},
@@ -554,12 +602,15 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	}
 
 	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
+	gatesPrefix := cm.etcdManager.GetPrefix() + "/gates/"
 	shardPrefix := prefix + "/shard/"
 
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		if strings.HasPrefix(key, nodesPrefix) {
 			state.Nodes[string(kv.Value)] = true
+		} else if strings.HasPrefix(key, gatesPrefix) {
+			state.Gates[string(kv.Value)] = true
 		} else if strings.HasPrefix(key, shardPrefix) {
 			// Parse shard ID from key
 			shardIDStr := key[len(shardPrefix):]
@@ -578,7 +629,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 		}
 	}
 
-	cm.logger.Infof("Loaded %d nodes and %d shards from etcd", len(state.Nodes), len(state.ShardMapping.Shards))
+	cm.logger.Infof("Loaded %d nodes, %d gates and %d shards from etcd", len(state.Nodes), len(state.Gates), len(state.ShardMapping.Shards))
 
 	return state, nil
 }
@@ -593,6 +644,18 @@ func (cm *ConsensusManager) GetNodes() []string {
 		nodes = append(nodes, node)
 	}
 	return nodes
+}
+
+// GetGates returns a copy of the current gate list
+func (cm *ConsensusManager) GetGates() []string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	gates := make([]string, 0, len(cm.state.Gates))
+	for gate := range cm.state.Gates {
+		gates = append(gates, gate)
+	}
+	return gates
 }
 
 // GetLeaderNode returns the leader node address
