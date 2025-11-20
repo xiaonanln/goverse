@@ -1,4 +1,4 @@
-package gate
+package gateserver
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
@@ -29,7 +30,7 @@ type clusterRouter interface {
 // that routes calls through a cluster to nodes for testing purposes
 type mockGateServer struct {
 	gate_pb.UnimplementedGateServiceServer
-	gate    *Gateway
+	gate    *gate.Gateway
 	cluster clusterRouter
 }
 
@@ -212,12 +213,12 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 
 	// Create a gateway
 	gateAddr := "localhost:48002"
-	gwConfig := &GatewayConfig{
+	gwConfig := &gate.GatewayConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gate-node-simple",
 	}
-	gw, err := NewGateway(gwConfig)
+	gw, err := gate.NewGateway(gwConfig)
 	if err != nil {
 		t.Fatalf("Failed to create gateway: %v", err)
 	}
