@@ -182,10 +182,30 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 	case *goverse_pb.GateMessage_RegisterGateResponse:
 		g.logger.Debugf("Received RegisterGateResponse from node %s", nodeAddr)
 	case *goverse_pb.GateMessage_ClientMessage:
-		// Handle client message
-		// TODO: Implement proper client message handling when client message structure is defined
-		_ = m
-		g.logger.Debugf("Received client message from node %s", nodeAddr)
+		// Extract client ID and message from envelope
+		envelope := m.ClientMessage
+		clientID := envelope.GetClientId()
+		
+		g.logger.Debugf("Received client message from node %s for client %s", nodeAddr, clientID)
+		
+		// Find the target client
+		client, exists := g.GetClient(clientID)
+		if !exists {
+			g.logger.Warnf("Client %s not found, dropping message from node %s", clientID, nodeAddr)
+			return
+		}
+		
+		// Unmarshal the message
+		if envelope.Message != nil {
+			msg, err := envelope.Message.UnmarshalNew()
+			if err != nil {
+				g.logger.Errorf("Failed to unmarshal message for client %s: %v", clientID, err)
+				return
+			}
+			
+			// Send to client's message channel
+			client.HandleMessage(msg)
+		}
 	default:
 		g.logger.Warnf("Received unknown message type from node %s", nodeAddr)
 	}

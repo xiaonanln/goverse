@@ -78,10 +78,16 @@ message RegisterGateRequest {
 message RegisterGateResponse {
 }
 
+// ClientMessageEnvelope wraps a message for a specific client
+message ClientMessageEnvelope {
+  string client_id = 1;
+  google.protobuf.Any message = 2;
+}
+
 message GateMessage {
   oneof message {
     RegisterGateResponse register_gate_response = 1;
-    google.protobuf.Any client_message = 2;
+    ClientMessageEnvelope client_message = 2;
   }
 }
 

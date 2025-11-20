@@ -198,6 +198,9 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 		s.logger.Errorf("Register failed: %v", err)
 		return err
 	}
+	
+	// Make sure to unregister when done
+	defer s.gate.Unregister(clientID)
 
 	// Send RegisterResponse
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
@@ -210,9 +213,39 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 		return fmt.Errorf("failed to send RegisterResponse: %w", err)
 	}
 
-	// Keep stream open for push messages
-	<-ctx.Done()
-	return nil
+	// Get the client proxy to access its message channel
+	clientProxy, exists := s.gate.GetClient(clientID)
+	if !exists {
+		return fmt.Errorf("client %s not found after registration", clientID)
+	}
+
+	// Stream messages to the client
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Infof("Client %s stream closed: %v", clientID, ctx.Err())
+			return nil
+		case msg, ok := <-clientProxy.MessageChan():
+			if !ok {
+				s.logger.Infof("Client %s message channel closed", clientID)
+				return nil
+			}
+			
+			// Marshal message to Any and send
+			anyMsg, err := anypb.New(msg)
+			if err != nil {
+				s.logger.Errorf("Failed to marshal message for client %s: %v", clientID, err)
+				continue
+			}
+			
+			if err := stream.Send(anyMsg); err != nil {
+				s.logger.Errorf("Failed to send message to client %s: %v", clientID, err)
+				return err
+			}
+			
+			s.logger.Debugf("Sent message to client %s", clientID)
+		}
+	}
 }
 
 // CallObject implements the CallObject RPC

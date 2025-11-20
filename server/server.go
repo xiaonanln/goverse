@@ -408,16 +408,16 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 				server.logger.Infof("Gate %s message channel closed, stopping stream", gateAddr)
 				return nil
 			}
-			// Wrap message in Any and send as GateMessage
-			anyMsg, err := anypb.New(msg)
-			if err != nil {
-				server.logger.Errorf("Failed to marshal message for gate %s: %v", gateAddr, err)
+			// The message should be a ClientMessageEnvelope
+			envelope, ok := msg.(*goverse_pb.ClientMessageEnvelope)
+			if !ok {
+				server.logger.Errorf("Received non-envelope message for gate %s: %T", gateAddr, msg)
 				continue
 			}
 
 			gateMsg := &goverse_pb.GateMessage{
 				Message: &goverse_pb.GateMessage_ClientMessage{
-					ClientMessage: anyMsg,
+					ClientMessage: envelope,
 				},
 			}
 
