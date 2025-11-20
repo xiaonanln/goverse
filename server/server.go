@@ -340,38 +340,6 @@ func (server *Server) ListObjects(ctx context.Context, req *goverse_pb.Empty) (*
 	return response, nil
 }
 
-func (server *Server) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
-	server.logRPC("PushMessageToClient", req)
-
-	clientID := req.GetClientId()
-	if clientID == "" {
-		return nil, fmt.Errorf("client_id must be specified in PushMessageToClient request")
-	}
-
-	// Unmarshal the Any message to concrete proto.Message
-	var messageMsg proto.Message
-	var err error
-	if req.Message != nil {
-		messageMsg, err = req.Message.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal message: %w", err)
-		}
-	}
-
-	// Route through cluster to gates (clients are always on gates)
-	if server.cluster != nil {
-		err = server.cluster.PushMessageToClient(ctx, clientID, messageMsg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to push message to client %s: %w", clientID, err)
-		}
-		response := &goverse_pb.PushMessageToClientResponse{}
-		return response, nil
-	}
-
-	// No cluster available
-	return nil, fmt.Errorf("cluster not available to push message to client %s", clientID)
-}
-
 func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream goverse_pb.Goverse_RegisterGateServer) error {
 	server.logRPC("RegisterGate", req)
 

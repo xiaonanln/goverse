@@ -45,10 +45,9 @@ func CallObject(ctx context.Context, objType, id string, method string, request 
 	return cluster.This().CallObject(ctx, objType, id, method, request)
 }
 
-// PushMessageToClient sends a message to a client via their client object
+// PushMessageToClient sends a message to a client via the gate connection
 // This allows distributed objects to push notifications/messages to connected clients
-// The client ID has the format: nodeAddress/uniqueId (e.g., "localhost:7001/abc123")
-// This method automatically routes the message to the correct node in the cluster
+// The client ID has the format: gateAddress/uniqueId (e.g., "localhost:7001/abc123")
 func PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
 	return cluster.This().PushMessageToClient(ctx, clientID, message)
 }

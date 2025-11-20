@@ -193,7 +193,7 @@ func (s *GatewayServer) Stop() error {
 // Register implements the Register RPC
 func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
 	ctx := stream.Context()
-	clientID, err := s.gate.Register(ctx)
+	clientID, clientProxy, err := s.gate.Register(ctx)
 	if err != nil {
 		s.logger.Errorf("Register failed: %v", err)
 		return err
@@ -213,13 +213,7 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 		return fmt.Errorf("failed to send RegisterResponse: %w", err)
 	}
 
-	// Get the client proxy to access its message channel
-	clientProxy, exists := s.gate.GetClient(clientID)
-	if !exists {
-		return fmt.Errorf("client %s not found after registration", clientID)
-	}
-
-	// Stream messages to the client
+	// Stream messages to the client using the returned clientProxy
 	for {
 		select {
 		case <-ctx.Done():

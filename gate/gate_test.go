@@ -232,12 +232,15 @@ func TestGatewayRegister(t *testing.T) {
 	}
 
 	// Register should return a valid client ID
-	clientID, err := gateway.Register(ctx)
+	clientID, clientProxy, err := gateway.Register(ctx)
 	if err != nil {
 		t.Fatalf("Register() returned error: %v", err)
 	}
 	if clientID == "" {
 		t.Fatalf("Register() returned empty client ID")
+	}
+	if clientProxy == nil {
+		t.Fatalf("Register() returned nil clientProxy")
 	}
 
 	// Verify client ID format (should start with advertise address)
@@ -322,7 +325,7 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 	clientIDs := make([]string, numClients)
 
 	for i := 0; i < numClients; i++ {
-		clientID, err := gateway.Register(ctx)
+		clientID, _, err := gateway.Register(ctx)
 		if err != nil {
 			t.Fatalf("Register() #%d returned error: %v", i, err)
 		}
@@ -379,7 +382,7 @@ func TestGatewayUnregisterNonExistentClient(t *testing.T) {
 	gateway.Unregister("non-existent-client")
 
 	// Should still be able to register new clients
-	clientID, err := gateway.Register(ctx)
+	clientID, _, err := gateway.Register(ctx)
 	if err != nil {
 		t.Fatalf("Register() after unregister non-existent returned error: %v", err)
 	}

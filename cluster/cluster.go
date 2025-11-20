@@ -667,7 +667,13 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 // PushMessageToClient sends a message to a client by its ID
 // Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target gate and routes the message accordingly
+// This method can only be called on a node cluster, not a gate cluster
 func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
+	// This method can only be called on node clusters
+	if c.isGateway() {
+		return fmt.Errorf("PushMessageToClient can only be called on node clusters, not gate clusters")
+	}
+
 	// Parse client ID to extract gate address
 	// Client ID format: gateAddress/uniqueId
 	parts := strings.SplitN(clientID, "/", 2)
@@ -707,43 +713,8 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 	}
 	c.gateChannelsMu.RUnlock()
 
-	// Gate not connected to this node - route to a node that might have the gate connection
-	c.logger.Infof("%s - Routing PushMessageToClient for %s to any node (gate %s not directly connected)", c, clientID, gateAddr)
-
-	// Try to find any node connection to forward the request
-	// The receiving node will route to the gate if it has a connection
-	nodes := c.nodeConnections.GetAllConnections()
-	if len(nodes) == 0 {
-		return fmt.Errorf("no nodes available to route message for client %s (gate %s)", clientID, gateAddr)
-	}
-
-	// Try the first available node
-	var lastErr error
-	for nodeAddr, client := range nodes {
-		// Marshal message to Any
-		var messageAny *anypb.Any
-		if message != nil {
-			messageAny = &anypb.Any{}
-			if err := messageAny.MarshalFrom(message); err != nil {
-				return fmt.Errorf("failed to marshal message: %w", err)
-			}
-		}
-
-		// Call PushMessageToClient on the remote node
-		req := &goverse_pb.PushMessageToClientRequest{
-			ClientId: clientID,
-			Message:  messageAny,
-		}
-
-		_, err := client.PushMessageToClient(ctx, req)
-		if err == nil {
-			c.logger.Infof("%s - Successfully pushed message to client %s via node %s", c, clientID, nodeAddr)
-			return nil
-		}
-		lastErr = err
-	}
-
-	return fmt.Errorf("failed to push message to client %s (gate %s) via any node: %w", clientID, gateAddr, lastErr)
+	// Gate not connected to this node
+	return fmt.Errorf("gate %s not connected to this node, cannot push message to client %s", gateAddr, clientID)
 }
 
 // GetEtcdManagerForTesting returns the cluster's etcd manager
