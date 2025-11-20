@@ -21,6 +21,7 @@ import (
 // that routes calls directly to a node for testing purposes
 type mockGateServer struct {
 	gate_pb.UnimplementedGateServiceServer
+	gate *Gateway
 	node *node.Node
 }
 
@@ -134,9 +135,31 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	// Register test object type on the node
 	testNode.RegisterObjectType((*TestGateNodeObject)(nil))
 
-	// Create and start mock gate gRPC server that routes to the node
+	// Create a gateway
 	gateAddr := "localhost:48002"
-	mockGate := &mockGateServer{node: testNode}
+	gwConfig := &GatewayConfig{
+		AdvertiseAddress: gateAddr,
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gate-node-simple",
+	}
+	gw, err := NewGateway(gwConfig)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	t.Cleanup(func() { gw.Stop() })
+
+	// Start the gateway
+	err = gw.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start gateway: %v", err)
+	}
+	t.Logf("Created and started gateway at %s", gateAddr)
+
+	// Create and start mock gate gRPC server that routes to the node
+	mockGate := &mockGateServer{
+		gate: gw,
+		node: testNode,
+	}
 
 	// Create gRPC server for the gate
 	grpcServer := grpc.NewServer()
