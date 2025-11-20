@@ -14,7 +14,6 @@ service Goverse {
   rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
   rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
-  rpc PushMessageToClient (PushMessageToClientRequest) returns (PushMessageToClientResponse);
   rpc RegisterGate (RegisterGateRequest) returns (stream GateMessage);
 }
 
