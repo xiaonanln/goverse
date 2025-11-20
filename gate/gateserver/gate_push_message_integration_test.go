@@ -126,10 +126,8 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	}
 
 	// Create and start gate gRPC server
-	mockGate := &mockGateServer{
-		gate:    gw,
-		cluster: clusterRouter,
-	}
+	mockGate := testutil.NewMockGateServer()
+	mockGate.SetCluster(clusterRouter)
 
 	grpcServer := grpc.NewServer()
 	gate_pb.RegisterGateServiceServer(grpcServer, mockGate)
@@ -290,10 +288,8 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		nodeServer:     mockNodeServer,
 	}
 
-	mockGate := &mockGateServer{
-		gate:    gw,
-		cluster: clusterRouter,
-	}
+	mockGate := testutil.NewMockGateServer()
+	mockGate.SetCluster(clusterRouter)
 
 	grpcServer := grpc.NewServer()
 	gate_pb.RegisterGateServiceServer(grpcServer, mockGate)

@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 )
@@ -300,7 +301,7 @@ func (m *MockGoverseServer) RegisterGate(req *goverse_pb.RegisterGateRequest, st
 			// The message should be a ClientMessageEnvelope
 			envelope, ok := msg.(*goverse_pb.ClientMessageEnvelope)
 			if !ok {
-				m.logger.Errorf("Received non-envelope message for gate %s: %T", gateAddr, msg)
+				m.logger.Errorf("Received non-envelope message for gate %s: %v", gateAddr, msg)
 				continue
 			}
 
@@ -316,4 +317,84 @@ func (m *MockGoverseServer) RegisterGate(req *goverse_pb.RegisterGateRequest, st
 			}
 		}
 	}
+}
+
+// ClusterRouter defines the interface for routing object operations through a cluster
+type ClusterRouter interface {
+	CreateObject(ctx context.Context, typeName string, objectID string) (string, error)
+	CallObject(ctx context.Context, typeName string, objectID string, method string, request proto.Message) (proto.Message, error)
+}
+
+// MockGateServer is a simple mock implementation of gate_pb.GateServiceServer
+// that routes calls through a cluster to nodes for testing purposes
+type MockGateServer struct {
+	gate_pb.UnimplementedGateServiceServer
+	cluster ClusterRouter
+	mu      sync.Mutex
+}
+
+// NewMockGateServer creates a new mock gate server
+func NewMockGateServer() *MockGateServer {
+	return &MockGateServer{}
+}
+
+// SetCluster sets the cluster router for the mock gate server
+func (m *MockGateServer) SetCluster(cluster ClusterRouter) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cluster = cluster
+}
+
+func (m *MockGateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
+	m.mu.Lock()
+	cluster := m.cluster
+	m.mu.Unlock()
+
+	if cluster == nil {
+		return nil, fmt.Errorf("no cluster assigned to mock gate server")
+	}
+
+	// Route the call through the cluster
+	objID, err := cluster.CreateObject(ctx, req.Type, req.Id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create object via cluster: %w", err)
+	}
+	return &gate_pb.CreateObjectResponse{Id: objID}, nil
+}
+
+func (m *MockGateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+	m.mu.Lock()
+	cluster := m.cluster
+	m.mu.Unlock()
+
+	if cluster == nil {
+		return nil, fmt.Errorf("no cluster assigned to mock gate server")
+	}
+
+	// Unmarshal the request from Any if present
+	var requestMsg proto.Message
+	if req.Request != nil {
+		var err error
+		requestMsg, err = req.Request.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal request: %w", err)
+		}
+	}
+
+	// Route the call through the cluster
+	responseMsg, err := cluster.CallObject(ctx, req.Type, req.Id, req.Method, requestMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call object via cluster: %w", err)
+	}
+
+	// Marshal the response back to Any
+	var responseAny *anypb.Any
+	if responseMsg != nil {
+		responseAny = &anypb.Any{}
+		if err := responseAny.MarshalFrom(responseMsg); err != nil {
+			return nil, fmt.Errorf("failed to marshal response: %w", err)
+		}
+	}
+
+	return &gate_pb.CallObjectResponse{Response: responseAny}, nil
 }
