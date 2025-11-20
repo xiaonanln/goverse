@@ -158,6 +158,61 @@ Execution:
 
 Gateways are not involved in internal object→object calls.
 
+### 3.3 Gate → Node Registration Flow
+
+To enable objects on nodes to push messages to clients connected to gateways, gateways must register with nodes:
+
+1. **Gateway startup**:
+   - Gateway starts and connects to etcd to discover nodes in the cluster.
+   - Gateway discovers all nodes via the consensus/shard mapping.
+
+2. **Gate registers with each node**:
+   - For each discovered node, the gateway calls the node's `RegisterGate` RPC with its advertise address:
+     ```protobuf
+     message RegisterGateRequest {
+       string gate_addr = 1;  // e.g., "localhost:49000"
+     }
+     ```
+   - `RegisterGate` returns a **streaming response** (`stream GateMessage`).
+
+3. **Node acknowledges registration**:
+   - Node sends `RegisterGateResponse` as the first message on the stream.
+   - Node creates a buffered channel for this gate and tracks it in memory.
+
+4. **Node streams messages to gate**:
+   - When an object on the node calls `PushMessageToClient(clientID, message)`, the node:
+     - Parses the `clientID` to extract the gate address (format: `gateAddress/uniqueId`).
+     - Looks up the gate's message channel.
+     - Sends a `ClientMessageEnvelope` wrapped in a `GateMessage` to the gate's channel:
+       ```protobuf
+       message ClientMessageEnvelope {
+         string client_id = 1;  // Full client ID
+         google.protobuf.Any message = 2;  // The message to push
+       }
+       
+       message GateMessage {
+         oneof message {
+           RegisterGateResponse register_gate_response = 1;
+           ClientMessageEnvelope client_message = 2;
+         }
+       }
+       ```
+   - The `RegisterGate` stream handler forwards the envelope to the gate.
+
+5. **Gate receives and routes messages**:
+   - Gate receives `GateMessage` on the stream.
+   - Gate extracts the `client_id` from `ClientMessageEnvelope`.
+   - Gate looks up the corresponding `ClientProxy` by `client_id`.
+   - Gate forwards the message to the client's message channel.
+   - Client receives the message via its `Register` stream.
+
+6. **Stream lifecycle**:
+   - The `RegisterGate` stream stays open as long as the gateway is connected.
+   - If the stream closes (due to network issues, gateway shutdown, etc.):
+     - Node detects the closure and unregisters the gate connection.
+     - Node cleans up the gate's message channel.
+   - Gateway can re-register with the node when the connection is re-established.
+
 ---
 
 ## 4. Chat Sample Refactor
@@ -244,6 +299,112 @@ Notes:
 
 ---
 
+## 5. Push Messaging from Objects to Clients
+
+GoVerse supports push messaging, allowing objects on nodes to send messages directly to clients connected to gateways, even when the client is not actively making a request.
+
+### 5.1 Use Cases
+
+Push messaging is useful for:
+
+- **Chat notifications**: When a user sends a message to a chat room, all members receive the message immediately.
+- **Real-time updates**: Objects can notify clients of state changes (e.g., game events, stock price updates).
+- **Asynchronous responses**: Long-running operations can notify clients when complete.
+
+### 5.2 Client Registration and Identification
+
+1. **Client connects to gateway**:
+   - Client calls the gateway's `Register` RPC.
+   - Gateway generates a unique `client_id` with format: `gateAddress/uniqueId` (e.g., `"localhost:49000/AAZEDvtPr4JHP6WtybiD"`).
+   - Gateway creates a `ClientProxy` to manage the client's connection.
+   - Gateway returns the `client_id` to the client in a `RegisterResponse`.
+
+2. **Client keeps the stream open**:
+   - The `Register` RPC returns a stream (`stream google.protobuf.Any`).
+   - Client receives pushed messages on this stream.
+   - The stream remains open for the lifetime of the client connection.
+
+### 5.3 Pushing Messages from Objects
+
+From within a GoVerse object method, you can push a message to a client:
+
+```go
+func (obj *MyObject) SomeMethod(ctx context.Context, args *SomeArgs) error {
+    // ... do some work ...
+    
+    // Push a notification to a specific client
+    notification := &MyNotification{
+        Text: "Something happened!",
+        Timestamp: time.Now().Unix(),
+    }
+    
+    err := goverseapi.PushMessageToClient(ctx, args.ClientID, notification)
+    if err != nil {
+        // Client not found or gate not connected
+        return err
+    }
+    
+    return nil
+}
+```
+
+**Requirements:**
+
+- The message must be a `proto.Message` (protobuf message).
+- The `clientID` must be in the format `gateAddress/uniqueId`.
+- The object calling `PushMessageToClient` must pass the client's ID, which it receives as part of the method arguments from the client.
+
+### 5.4 Push Message Flow
+
+When `goverseapi.PushMessageToClient(ctx, clientID, message)` is called:
+
+1. **API call**:
+   - `goverseapi.PushMessageToClient` delegates to `cluster.PushMessageToClient`.
+
+2. **Cluster routing**:
+   - Cluster parses `clientID` to extract the gate address.
+   - Cluster looks up the gate's registered channel (from `RegisterGate` connection).
+   - Cluster wraps the message in a `ClientMessageEnvelope`:
+     ```protobuf
+     message ClientMessageEnvelope {
+       string client_id = 1;  // Full client ID
+       google.protobuf.Any message = 2;  // The pushed message
+     }
+     ```
+
+3. **Send to gate**:
+   - Cluster sends the envelope to the gate's channel (buffered, non-blocking).
+   - If the gate is not connected to this node, the call returns an error.
+
+4. **Gate receives and routes**:
+   - Gate's `RegisterGate` stream handler receives the `ClientMessageEnvelope`.
+   - Gate extracts `client_id` and looks up the corresponding `ClientProxy`.
+   - Gate forwards the message to the client proxy's message channel.
+
+5. **Client receives**:
+   - Client proxy sends the message to the client via the `Register` stream.
+   - Client receives the message as a `google.protobuf.Any` and unmarshals it.
+
+### 5.5 Error Handling
+
+`PushMessageToClient` returns an error if:
+
+- The `clientID` format is invalid (missing gate address or unique ID).
+- The gate specified in `clientID` is not connected to the node.
+- The client is not registered with the gate (client disconnected).
+- The gate's message channel is full (backpressure).
+
+Objects should handle these errors gracefully, as clients may disconnect at any time.
+
+### 5.6 Design Considerations
+
+- **Client ID format**: The `gateAddress/uniqueId` format allows the node to route messages to the correct gateway without a centralized client registry.
+- **Per-gate channels**: Each gateway has a dedicated message channel on each node, enabling concurrent message delivery to multiple gateways.
+- **Buffered channels**: Channels are buffered (default 1024 messages) to prevent blocking object methods during transient network delays.
+- **No guaranteed delivery**: If a client disconnects or a gate fails, messages are dropped. Applications requiring guaranteed delivery should implement acknowledgment and retry logic at the application level.
+
+---
+
 ## 6. Access Rules and Safety (Future)
 
 While the chat sample does not emphasize security, the architecture allows more control later:
@@ -269,6 +430,8 @@ This gateway refactor design:
 - Introduces a shared **GoverseService** abstraction used by both.
 - Keeps **GoVerse objects** as the core programming model.
 - Uses a generic `CallObject` request from clients, so the gateway stays free of domain logic and simply routes calls to objects based on `object_id`.
+- Supports **push messaging** from objects to clients via `PushMessageToClient`, enabling real-time notifications and updates.
+- Implements **gate registration** via the `RegisterGate` streaming RPC, allowing nodes to push messages to clients through gateways.
 - Makes the chat sample simpler by letting clients call `ChatRoom` objects directly, without introducing extra user/session grains for now.
 
 As the `gateway` branch evolves, this document should be kept in sync with the actual behavior of `goverse-server` and the future `goverse-gateway` binary.
