@@ -2,75 +2,18 @@ package gateserver
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"testing"
 	"time"
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
-	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
-	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
-// clusterRouter defines the interface for routing object operations through a cluster
-type clusterRouter interface {
-	CreateObject(ctx context.Context, typeName string, objectID string) (string, error)
-	CallObject(ctx context.Context, typeName string, objectID string, method string, request proto.Message) (proto.Message, error)
-}
-
-// mockGateServer is a simple mock implementation of gate_pb.GateServiceServer
-// that routes calls through a cluster to nodes for testing purposes
-type mockGateServer struct {
-	gate_pb.UnimplementedGateServiceServer
-	gate    *gate.Gateway
-	cluster clusterRouter
-}
-
-func (m *mockGateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
-	// Route the call through the cluster
-	objID, err := m.cluster.CreateObject(ctx, req.Type, req.Id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create object via cluster: %w", err)
-	}
-	return &gate_pb.CreateObjectResponse{Id: objID}, nil
-}
-
-func (m *mockGateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
-	// Unmarshal the request from Any if present
-	var requestMsg proto.Message
-	if req.Request != nil {
-		var err error
-		requestMsg, err = req.Request.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal request: %w", err)
-		}
-	}
-
-	// Route the call through the cluster
-	responseMsg, err := m.cluster.CallObject(ctx, req.Type, req.Id, req.Method, requestMsg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call object via cluster: %w", err)
-	}
-
-	// Marshal the response back to Any
-	var responseAny *anypb.Any
-	if responseMsg != nil {
-		responseAny = &anypb.Any{}
-		if err := responseAny.MarshalFrom(responseMsg); err != nil {
-			return nil, fmt.Errorf("failed to marshal response: %w", err)
-		}
-	}
-
-	return &gate_pb.CallObjectResponse{Response: responseAny}, nil
-}
 
 // TestGateNodeObject is a simple test object with methods for testing
 type TestGateNodeObject struct {
@@ -116,93 +59,32 @@ func waitForObjectCreatedOnNode(t *testing.T, n *node.Node, objID string, timeou
 	}
 }
 
-// mockClusterRouter is a test implementation of clusterRouter that uses testutil helpers
-type mockClusterRouter struct {
-	t              *testing.T
-	nodeServerAddr string
-	nodeServer     *testutil.MockGoverseServer
-}
-
-func (m *mockClusterRouter) CreateObject(ctx context.Context, typeName string, objectID string) (string, error) {
-	// For this simple mock, we directly call the node server via gRPC
-	// In a real cluster, this would route through node connections based on shard mapping
-	conn, err := grpc.NewClient(m.nodeServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return "", fmt.Errorf("failed to connect to node: %w", err)
-	}
-	defer conn.Close()
-
-	client := goverse_pb.NewGoverseClient(conn)
-	resp, err := client.CreateObject(ctx, &goverse_pb.CreateObjectRequest{
-		Type: typeName,
-		Id:   objectID,
-	})
-	if err != nil {
-		return "", err
-	}
-	return resp.Id, nil
-}
-
-func (m *mockClusterRouter) CallObject(ctx context.Context, typeName string, objectID string, method string, request proto.Message) (proto.Message, error) {
-	// For this simple mock, we directly call the node server via gRPC
-	conn, err := grpc.NewClient(m.nodeServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to node: %w", err)
-	}
-	defer conn.Close()
-
-	// Marshal request to Any
-	var reqAny *anypb.Any
-	if request != nil {
-		reqAny = &anypb.Any{}
-		if err := reqAny.MarshalFrom(request); err != nil {
-			return nil, fmt.Errorf("failed to marshal request: %w", err)
-		}
-	}
-
-	client := goverse_pb.NewGoverseClient(conn)
-	resp, err := client.CallObject(ctx, &goverse_pb.CallObjectRequest{
-		Type:    typeName,
-		Id:      objectID,
-		Method:  method,
-		Request: reqAny,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Unmarshal response
-	if resp.Response != nil {
-		return resp.Response.UnmarshalNew()
-	}
-	return nil, nil
-}
-
 // TestGateNodeIntegrationSimple tests basic gate-to-node integration:
-// - Creates a mock gate gRPC server that routes calls through a cluster router to a node
+// - Creates a real GatewayServer that routes calls through cluster to a node
 // - Creates objects via the gate client and verifies they're created on the node
 // - Calls object methods via the gate client and verifies responses
 // - Uses 1 gate and 1 node for simplicity
-//
-// This test uses a simplified cluster router that connects to the node via gRPC
 func TestGateNodeIntegrationSimple(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 
 	ctx := context.Background()
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create a node
+	// Create and start a node with cluster (so it registers with etcd)
 	nodeAddr := "localhost:48001"
-	testNode := testutil.MustNewNode(ctx, t, nodeAddr)
-	t.Logf("Created node at %s", nodeAddr)
+	nodeCluster := mustNewCluster(ctx, t, nodeAddr, etcdPrefix)
+	testNode := nodeCluster.GetThisNode()
+	t.Logf("Created node cluster at %s", nodeAddr)
 
 	// Register test object type on the node
 	testNode.RegisterObjectType((*TestGateNodeObject)(nil))
 
-	// Start mock gRPC server for the node to handle requests
+	// Start mock gRPC server for the node to handle inter-node communication
 	mockNodeServer := testutil.NewMockGoverseServer()
 	mockNodeServer.SetNode(testNode)
+	mockNodeServer.SetCluster(nodeCluster)
 	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
 	err := nodeServer.Start(ctx)
 	if err != nil {
@@ -211,66 +93,43 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 	t.Logf("Started mock node server at %s", nodeAddr)
 
-	// Create a gateway
+	// Create and start the real GatewayServer
 	gateAddr := "localhost:48002"
-	gwConfig := &gate.GatewayConfig{
+	gwServerConfig := &GatewayServerConfig{
+		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gate-node-simple",
+		EtcdPrefix:       etcdPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gwServer, err := NewGatewayServer(gwServerConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gateway server: %v", err)
 	}
-	t.Cleanup(func() { gw.Stop() })
+	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gateway
-	err = gw.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start gateway: %v", err)
-	}
-	t.Logf("Created and started gateway at %s", gateAddr)
+	// Start the gateway server in a goroutine
+	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
+	t.Cleanup(gwStartCancel)
 
-	// Wait for servers to be ready
-	time.Sleep(200 * time.Millisecond)
-
-	// Create a mock cluster router that routes to the node
-	clusterRouter := &mockClusterRouter{
-		t:              t,
-		nodeServerAddr: nodeAddr,
-		nodeServer:     mockNodeServer,
-	}
-
-	// Create and start mock gate gRPC server that routes through cluster
-	mockGate := &mockGateServer{
-		gate:    gw,
-		cluster: clusterRouter,
-	}
-
-	// Create gRPC server for the gate
-	grpcServer := grpc.NewServer()
-	gate_pb.RegisterGateServiceServer(grpcServer, mockGate)
-
-	// Start listening
-	listener, err := net.Listen("tcp", gateAddr)
-	if err != nil {
-		t.Fatalf("Failed to listen on %s: %v", gateAddr, err)
-	}
-
-	// Start serving in background
+	gwStarted := make(chan error, 1)
 	go func() {
-		if err := grpcServer.Serve(listener); err != nil {
-			t.Logf("Gate server error: %v", err)
-		}
+		gwStarted <- gwServer.Start(gwStartCtx)
 	}()
-	t.Cleanup(func() {
-		grpcServer.GracefulStop()
-		listener.Close()
-	})
-	t.Logf("Started mock gate server at %s", gateAddr)
 
-	// Wait for servers to be ready
-	time.Sleep(200 * time.Millisecond)
+	// Wait for gateway to be ready
+	time.Sleep(500 * time.Millisecond)
+	select {
+	case err := <-gwStarted:
+		if err != nil {
+			t.Fatalf("Gateway server failed to start: %v", err)
+		}
+	default:
+		// Gateway is running
+	}
+	t.Logf("Started real gateway server at %s", gateAddr)
+
+	// Wait for shard mapping to be initialized and nodes to discover each other
+	time.Sleep(testutil.WaitForShardMappingTimeout)
 
 	// Create a gRPC client to connect to the gate
 	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
