@@ -2,15 +2,12 @@ package gateserver
 
 import (
 	"context"
-	"net"
 	"testing"
 	"time"
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
-	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
-	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -99,82 +96,52 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 	t.Logf("Started node server at %s", nodeAddr)
 
-	// 2. Create and start a gateway
+	// 2. Create and start the real GatewayServer
 	gateAddr := "localhost:48011"
-	gwConfig := &gate.GatewayConfig{
+	gwServerConfig := &GatewayServerConfig{
+		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gwServer, err := NewGatewayServer(gwServerConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gateway server: %v", err)
 	}
-	t.Cleanup(func() { gw.Stop() })
+	t.Cleanup(func() { gwServer.Stop() })
 
-	err = gw.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start gateway: %v", err)
-	}
-	t.Logf("Started gateway at %s", gateAddr)
+	// Start the gateway server in a goroutine
+	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
+	t.Cleanup(gwStartCancel)
 
-	// Create a mock cluster router for the gate server
-	clusterRouter := &mockClusterRouter{
-		t:              t,
-		nodeServerAddr: nodeAddr,
-		nodeServer:     mockNodeServer,
-	}
-
-	// Create and start gate gRPC server
-	mockGate := testutil.NewMockGateServer()
-	mockGate.SetCluster(clusterRouter)
-
-	grpcServer := grpc.NewServer()
-	gate_pb.RegisterGateServiceServer(grpcServer, mockGate)
-
-	gateListener, err := net.Listen("tcp", gateAddr)
-	if err != nil {
-		t.Fatalf("Failed to listen on %s: %v", gateAddr, err)
-	}
-
+	gwStarted := make(chan error, 1)
 	go func() {
-		if err := grpcServer.Serve(gateListener); err != nil {
-			t.Logf("Gate server error: %v", err)
-		}
+		gwStarted <- gwServer.Start(gwStartCtx)
 	}()
-	t.Cleanup(func() {
-		grpcServer.GracefulStop()
-		gateListener.Close()
-	})
-	t.Logf("Started gate gRPC server at %s", gateAddr)
 
-	// Wait for servers to be ready
-	time.Sleep(200 * time.Millisecond)
-
-	// 3. Gate registers to node
-	conn, err := grpc.NewClient(nodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to connect to node: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-
-	nodeConnections := map[string]goverse_pb.GoverseClient{
-		nodeAddr: goverse_pb.NewGoverseClient(conn),
-	}
-	gw.RegisterWithNodes(ctx, nodeConnections)
-	t.Logf("Gate registered with node %s", nodeAddr)
-
-	// Wait for gate registration to complete
+	// Wait for gateway to be ready
 	time.Sleep(500 * time.Millisecond)
+	select {
+	case err := <-gwStarted:
+		if err != nil {
+			t.Fatalf("Gateway server failed to start: %v", err)
+		}
+	default:
+		// Gateway is running
+	}
+	t.Logf("Started real gateway server at %s", gateAddr)
 
-	// 4. Client connects to gate and registers
-	gateConn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Wait for shard mapping to be initialized and nodes to discover each other
+	time.Sleep(testutil.WaitForShardMappingTimeout)
+
+	// 3. Client connects to gate and registers
+	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to gate: %v", err)
 	}
-	t.Cleanup(func() { gateConn.Close() })
+	t.Cleanup(func() { conn.Close() })
 
-	gateClient := gate_pb.NewGateServiceClient(gateConn)
+	gateClient := gate_pb.NewGateServiceClient(conn)
 
 	// Start client register stream
 	registerStream, err := gateClient.Register(ctx, &gate_pb.Empty{})
@@ -202,7 +169,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 		t.Fatalf("Expected client ID to start with %q, got %q", expectedPrefix, clientID)
 	}
 
-	// 5. Node pushes a message to the client via cluster routing
+	// 4. Node pushes a message to the client via cluster routing
 	testMessage := &structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"text":      structpb.NewStringValue("Hello from node!"),
@@ -217,7 +184,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	}
 	t.Logf("Node pushed message to client %s via cluster", clientID)
 
-	// 6. Client receives the message via the stream
+	// 5. Client receives the message via the stream
 	receivedMsg, err := registerStream.Recv()
 	if err != nil {
 		t.Fatalf("Failed to receive message on client stream: %v", err)
@@ -263,69 +230,45 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 	t.Logf("Started node server at %s", nodeAddr)
 
-	// 2. Create and start a gateway
+	// 2. Create and start the real GatewayServer
 	gateAddr := "localhost:48021"
-	gwConfig := &gate.GatewayConfig{
+	gwServerConfig := &GatewayServerConfig{
+		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gwServer, err := NewGatewayServer(gwServerConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gateway server: %v", err)
 	}
-	t.Cleanup(func() { gw.Stop() })
+	t.Cleanup(func() { gwServer.Stop() })
 
-	err = gw.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start gateway: %v", err)
-	}
-	t.Logf("Started gateway at %s", gateAddr)
+	// Start the gateway server in a goroutine
+	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
+	t.Cleanup(gwStartCancel)
 
-	clusterRouter := &mockClusterRouter{
-		t:              t,
-		nodeServerAddr: nodeAddr,
-		nodeServer:     mockNodeServer,
-	}
-
-	mockGate := testutil.NewMockGateServer()
-	mockGate.SetCluster(clusterRouter)
-
-	grpcServer := grpc.NewServer()
-	gate_pb.RegisterGateServiceServer(grpcServer, mockGate)
-
-	gateListener2, err := net.Listen("tcp", gateAddr)
-	if err != nil {
-		t.Fatalf("Failed to listen on %s: %v", gateAddr, err)
-	}
-
+	gwStarted := make(chan error, 1)
 	go func() {
-		if err := grpcServer.Serve(gateListener2); err != nil {
-			t.Logf("Gate server error: %v", err)
-		}
+		gwStarted <- gwServer.Start(gwStartCtx)
 	}()
-	t.Cleanup(func() {
-		grpcServer.GracefulStop()
-		gateListener2.Close()
-	})
-	t.Logf("Started gate gRPC server at %s", gateAddr)
 
-	time.Sleep(200 * time.Millisecond)
-
-	// 3. Gate registers to node
-	conn, err := grpc.NewClient(nodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to connect to node: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-
-	nodeConnections := map[string]goverse_pb.GoverseClient{
-		nodeAddr: goverse_pb.NewGoverseClient(conn),
-	}
-	gw.RegisterWithNodes(ctx, nodeConnections)
+	// Wait for gateway to be ready
 	time.Sleep(500 * time.Millisecond)
+	select {
+	case err := <-gwStarted:
+		if err != nil {
+			t.Fatalf("Gateway server failed to start: %v", err)
+		}
+	default:
+		// Gateway is running
+	}
+	t.Logf("Started real gateway server at %s", gateAddr)
 
-	// 4. Register multiple clients
+	// Wait for shard mapping to be initialized and nodes to discover each other
+	time.Sleep(testutil.WaitForShardMappingTimeout)
+
+	// 3. Register multiple clients
 	numClients := 3
 	type clientInfo struct {
 		id     string
@@ -363,7 +306,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		t.Logf("Client %d registered with ID: %s", i, clients[i].id)
 	}
 
-	// 5. Push different messages to each client via cluster routing
+	// 4. Push different messages to each client via cluster routing
 	for i, client := range clients {
 		testMessage := &structpb.Struct{
 			Fields: map[string]*structpb.Value{
@@ -379,7 +322,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		t.Logf("Pushed message to client %d (%s) via cluster", i, client.id)
 	}
 
-	// 6. Each client receives their specific message
+	// 5. Each client receives their specific message
 	for i, client := range clients {
 		receivedMsg, err := client.stream.Recv()
 		if err != nil {
