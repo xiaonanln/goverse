@@ -49,3 +49,4 @@ persistence
 periodic_persistence
 custom_stability_duration
 minquorum
+.venv/

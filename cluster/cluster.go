@@ -689,19 +689,19 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 
 	if isGateConnected {
 		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, gateAddr)
-		
+
 		// Wrap message in ClientMessageEnvelope with client ID
 		anyMsg, err := anypb.New(message)
 		if err != nil {
 			c.gateChannelsMu.RUnlock()
 			return fmt.Errorf("failed to marshal message for gate: %w", err)
 		}
-		
+
 		envelope := &goverse_pb.ClientMessageEnvelope{
 			ClientId: clientID,
 			Message:  anyMsg,
 		}
-		
+
 		select {
 		case gateCh <- envelope:
 			c.gateChannelsMu.RUnlock()
