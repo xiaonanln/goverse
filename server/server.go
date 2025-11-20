@@ -358,13 +358,26 @@ func (server *Server) PushMessageToClient(ctx context.Context, req *goverse_pb.P
 		}
 	}
 
+	// Try to push locally first (for local ClientObjects)
 	err = server.Node.PushMessageToClient(clientID, messageMsg)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		// Successfully pushed to local client
+		response := &goverse_pb.PushMessageToClientResponse{}
+		return response, nil
 	}
 
-	response := &goverse_pb.PushMessageToClientResponse{}
-	return response, nil
+	// If local push failed, try routing through cluster (for clients on gates)
+	if server.cluster != nil {
+		err = server.cluster.PushMessageToClient(ctx, clientID, messageMsg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to push message to client %s: %w", clientID, err)
+		}
+		response := &goverse_pb.PushMessageToClientResponse{}
+		return response, nil
+	}
+
+	// No cluster available, return the original error
+	return nil, fmt.Errorf("failed to push message to client %s: %w", clientID, err)
 }
 
 func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream goverse_pb.Goverse_RegisterGateServer) error {
