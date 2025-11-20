@@ -2,14 +2,65 @@ package gate
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"testing"
 	"time"
 
+	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
-	"github.com/xiaonanln/goverse/util/testutil"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+// mockGateServer is a simple mock implementation of gate_pb.GateServiceServer
+// that routes calls directly to a node for testing purposes
+type mockGateServer struct {
+	gate_pb.UnimplementedGateServiceServer
+	node *node.Node
+}
+
+func (m *mockGateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
+	// Route the call directly to the node
+	objID, err := m.node.CreateObject(ctx, req.Type, req.Id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create object on node: %w", err)
+	}
+	return &gate_pb.CreateObjectResponse{Id: objID}, nil
+}
+
+func (m *mockGateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+	// Unmarshal the request from Any if present
+	var requestMsg proto.Message
+	if req.Request != nil {
+		var err error
+		requestMsg, err = req.Request.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal request: %w", err)
+		}
+	}
+
+	// Route the call directly to the node
+	responseMsg, err := m.node.CallObject(ctx, req.Type, req.Id, req.Method, requestMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call object on node: %w", err)
+	}
+
+	// Marshal the response back to Any
+	var responseAny *anypb.Any
+	if responseMsg != nil {
+		responseAny = &anypb.Any{}
+		if err := responseAny.MarshalFrom(responseMsg); err != nil {
+			return nil, fmt.Errorf("failed to marshal response: %w", err)
+		}
+	}
+
+	return &gate_pb.CallObjectResponse{Response: responseAny}, nil
+}
 
 // TestGateNodeObject is a simple test object with methods for testing
 type TestGateNodeObject struct {
@@ -56,11 +107,13 @@ func waitForObjectCreatedOnNode(t *testing.T, n *node.Node, objID string, timeou
 }
 
 // TestGateNodeIntegrationSimple tests basic gate-to-node integration:
-// - Creates a mock gate server and a mock node server
-// - Creates an object via the gate and verifies it's created on the node
+// - Creates a mock gate gRPC server that routes calls to a node
+// - Creates objects via the gate client and verifies they're created on the node
+// - Calls object methods via the gate client and verifies responses
 // - Uses 1 gate and 1 node for simplicity
 //
-// This test does NOT require etcd - it tests direct node communication
+// This test does NOT require etcd - it uses a simple mock gate server that
+// directly routes calls to the node for testing purposes
 func TestGateNodeIntegrationSimple(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
@@ -81,90 +134,117 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	// Register test object type on the node
 	testNode.RegisterObjectType((*TestGateNodeObject)(nil))
 
-	// Start mock gRPC server for the node to handle inter-cluster communication
-	mockNodeServer := testutil.NewMockGoverseServer()
-	mockNodeServer.SetNode(testNode)
-	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
-	err = nodeServer.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node mock server: %v", err)
-	}
-	t.Cleanup(func() { nodeServer.Stop() })
-	t.Logf("Started mock node server at %s", nodeAddr)
-
-	// Create gateway (note: gateway needs etcd config but we're not using cluster features in this simple test)
+	// Create and start mock gate gRPC server that routes to the node
 	gateAddr := "localhost:48002"
-	gwConfig := &GatewayConfig{
-		AdvertiseAddress: gateAddr,
-		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gate-node-simple",
-	}
-	gw, err := NewGateway(gwConfig)
-	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
-	}
-	t.Cleanup(func() { gw.Stop() })
-	t.Logf("Created gateway at %s", gateAddr)
+	mockGate := &mockGateServer{node: testNode}
 
-	// Start the gateway
-	err = gw.Start(ctx)
+	// Create gRPC server for the gate
+	grpcServer := grpc.NewServer()
+	gate_pb.RegisterGateServiceServer(grpcServer, mockGate)
+
+	// Start listening
+	listener, err := net.Listen("tcp", gateAddr)
 	if err != nil {
-		t.Fatalf("Failed to start gateway: %v", err)
+		t.Fatalf("Failed to listen on %s: %v", gateAddr, err)
 	}
+
+	// Start serving in background
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			t.Logf("Gate server error: %v", err)
+		}
+	}()
+	t.Cleanup(func() {
+		grpcServer.GracefulStop()
+		listener.Close()
+	})
+	t.Logf("Started mock gate server at %s", gateAddr)
 
 	// Wait for servers to be ready
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
-	t.Run("CreateObjectViaNode", func(t *testing.T) {
-		// Test creating an object directly on the node
-		objID := "test-node-direct-1"
+	// Create a gRPC client to connect to the gate
+	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create gate client: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
 
-		// Create the object directly on the node
-		createdID, err := testNode.CreateObject(ctx, "TestGateNodeObject", objID)
+	gateClient := gate_pb.NewGateServiceClient(conn)
+	t.Logf("Created gate client connected to %s", gateAddr)
+
+	t.Run("CreateObjectViaGate", func(t *testing.T) {
+		// Test creating an object through the gate server
+		objID := "test-gate-object-1"
+
+		// Create the object via the gate
+		req := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID,
+		}
+		resp, err := gateClient.CreateObject(ctx, req)
 		if err != nil {
-			t.Fatalf("CreateObject on node failed for %s: %v", objID, err)
+			t.Fatalf("CreateObject via gate failed for %s: %v", objID, err)
 		}
 
-		if createdID != objID {
-			t.Fatalf("Expected object ID %s, got %s", objID, createdID)
+		if resp.Id != objID {
+			t.Fatalf("Expected object ID %s, got %s", objID, resp.Id)
 		}
 
-		// Wait for object creation
+		// Wait for object creation on the node
 		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
 
-		t.Logf("Successfully created object %s directly on node", objID)
+		t.Logf("Successfully created object %s via gate and verified on node", objID)
 	})
 
-	t.Run("CallObjectOnNode", func(t *testing.T) {
+	t.Run("CallObjectViaGate", func(t *testing.T) {
 		// First create an object to call methods on
-		objID := "test-node-call-1"
+		objID := "test-gate-call-1"
 
-		// Create the object directly on the node
-		_, err := testNode.CreateObject(ctx, "TestGateNodeObject", objID)
+		// Create the object via the gate
+		createReq := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq)
 		if err != nil {
-			t.Fatalf("CreateObject on node failed for %s: %v", objID, err)
+			t.Fatalf("CreateObject via gate failed for %s: %v", objID, err)
 		}
 
-		// Wait for object creation
+		// Wait for object creation on the node
 		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
 
-		// Test Echo method
+		// Test Echo method via the gate
 		echoReq := &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"message": structpb.NewStringValue("Hello from test"),
+				"message": structpb.NewStringValue("Hello from gate"),
 			},
 		}
-		result, err := testNode.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
+
+		// Marshal the request to Any
+		reqAny := &anypb.Any{}
+		if err := reqAny.MarshalFrom(echoReq); err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		callReq := &gate_pb.CallObjectRequest{
+			Type:    "TestGateNodeObject",
+			Id:      objID,
+			Method:  "Echo",
+			Request: reqAny,
+		}
+		callResp, err := gateClient.CallObject(ctx, callReq)
 		if err != nil {
-			t.Fatalf("CallObject Echo on node failed: %v", err)
+			t.Fatalf("CallObject Echo via gate failed: %v", err)
 		}
 
-		echoResp, ok := result.(*structpb.Struct)
-		if !ok {
-			t.Fatalf("Expected *structpb.Struct, got %T", result)
+		// Unmarshal the response
+		var echoResp structpb.Struct
+		if err := callResp.Response.UnmarshalTo(&echoResp); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		expectedMsg := "Echo: Hello from test"
+		expectedMsg := "Echo: Hello from gate"
 		actualMsg := echoResp.Fields["message"].GetStringValue()
 		if actualMsg != expectedMsg {
 			t.Fatalf("Expected message %q, got %q", expectedMsg, actualMsg)
@@ -175,7 +255,7 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 			t.Fatalf("Expected call count 1, got %d", callCount)
 		}
 
-		t.Logf("Successfully called Echo on node, response: %s (call count: %d)", actualMsg, callCount)
+		t.Logf("Successfully called Echo via gate, response: %s (call count: %d)", actualMsg, callCount)
 	})
 }
 
