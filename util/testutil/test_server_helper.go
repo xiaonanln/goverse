@@ -109,6 +109,7 @@ type nodeInterface interface {
 type clusterInterface interface {
 	RegisterGateConnection(gateAddr string) (chan proto.Message, error)
 	UnregisterGateConnection(gateAddr string, ch chan proto.Message)
+	PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error
 }
 
 // MockGoverseServer is a minimal implementation of the Goverse gRPC service for testing
@@ -250,14 +251,14 @@ func (m *MockGoverseServer) ListObjects(ctx context.Context, req *goverse_pb.Emp
 	}, nil
 }
 
-// PushMessageToClient handles remote push message by delegating to the node
+// PushMessageToClient handles remote push message by routing through cluster to gates
 func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *goverse_pb.PushMessageToClientRequest) (*goverse_pb.PushMessageToClientResponse, error) {
 	m.mu.Lock()
-	node := m.node
+	cluster := m.cluster
 	m.mu.Unlock()
 
-	if node == nil {
-		return nil, fmt.Errorf("no node assigned to mock server")
+	if cluster == nil {
+		return nil, fmt.Errorf("no cluster assigned to mock server")
 	}
 
 	// Unmarshal the message
@@ -270,8 +271,8 @@ func (m *MockGoverseServer) PushMessageToClient(ctx context.Context, req *govers
 		}
 	}
 
-	// Push message to the client on this node
-	err = node.PushMessageToClient(req.ClientId, message)
+	// Route through cluster (clients are always on gates)
+	err = cluster.PushMessageToClient(ctx, req.ClientId, message)
 	if err != nil {
 		return nil, err
 	}
