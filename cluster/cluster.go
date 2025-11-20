@@ -665,31 +665,24 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 }
 
 // PushMessageToClient sends a message to a client by its ID
-// Client IDs have the format: {nodeAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
-// This method parses the client ID to determine the target node and routes the message accordingly
+// Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
+// This method parses the client ID to determine the target gate and routes the message accordingly
 func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
-	// Parse client ID to extract node address
-	// Client ID format: nodeAddress/uniqueId
+	// Parse client ID to extract gate address
+	// Client ID format: gateAddress/uniqueId
 	parts := strings.SplitN(clientID, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return fmt.Errorf("invalid client ID format: %s (expected format: nodeAddress/uniqueId)", clientID)
+		return fmt.Errorf("invalid client ID format: %s (expected format: gateAddress/uniqueId)", clientID)
 	}
 
-	nodeAddr := parts[0]
-
-	// Check if the client is on this node (only for node clusters)
-	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
-		// Push locally on node
-		c.logger.Infof("%s - Pushing message to client %s locally", c, clientID)
-		return c.node.PushMessageToClient(clientID, message)
-	}
+	gateAddr := parts[0]
 
 	// Check if the client is on a connected gate
 	c.gateChannelsMu.RLock()
-	gateCh, isGateConnected := c.gateChannels[nodeAddr]
+	gateCh, isGateConnected := c.gateChannels[gateAddr]
 
 	if isGateConnected {
-		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, nodeAddr)
+		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, gateAddr)
 		
 		// Wrap message in ClientMessageEnvelope with client ID
 		anyMsg, err := anypb.New(message)
@@ -709,46 +702,48 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 			return nil
 		default:
 			c.gateChannelsMu.RUnlock()
-			return fmt.Errorf("gate %s message channel is full", nodeAddr)
+			return fmt.Errorf("gate %s message channel is full", gateAddr)
 		}
 	}
 	c.gateChannelsMu.RUnlock()
 
-	// Gateway clusters cannot push messages locally - they must route to nodes
-	if c.isGateway() && nodeAddr == c.getAdvertiseAddr() {
-		return fmt.Errorf("gateway cannot push messages to clients locally - client connections are on nodes")
+	// Gate not connected to this node - route to a node that might have the gate connection
+	c.logger.Infof("%s - Routing PushMessageToClient for %s to any node (gate %s not directly connected)", c, clientID, gateAddr)
+
+	// Try to find any node connection to forward the request
+	// The receiving node will route to the gate if it has a connection
+	nodes := c.nodeConnections.GetAllConnections()
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes available to route message for client %s (gate %s)", clientID, gateAddr)
 	}
 
-	// Route to the appropriate node
-	c.logger.Infof("%s - Routing PushMessageToClient for %s to node %s", c, clientID, nodeAddr)
-
-	client, err := c.nodeConnections.GetConnection(nodeAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
-	}
-
-	// Marshal message to Any
-	var messageAny *anypb.Any
-	if message != nil {
-		messageAny = &anypb.Any{}
-		if err := messageAny.MarshalFrom(message); err != nil {
-			return fmt.Errorf("failed to marshal message: %w", err)
+	// Try the first available node
+	var lastErr error
+	for nodeAddr, client := range nodes {
+		// Marshal message to Any
+		var messageAny *anypb.Any
+		if message != nil {
+			messageAny = &anypb.Any{}
+			if err := messageAny.MarshalFrom(message); err != nil {
+				return fmt.Errorf("failed to marshal message: %w", err)
+			}
 		}
+
+		// Call PushMessageToClient on the remote node
+		req := &goverse_pb.PushMessageToClientRequest{
+			ClientId: clientID,
+			Message:  messageAny,
+		}
+
+		_, err := client.PushMessageToClient(ctx, req)
+		if err == nil {
+			c.logger.Infof("%s - Successfully pushed message to client %s via node %s", c, clientID, nodeAddr)
+			return nil
+		}
+		lastErr = err
 	}
 
-	// Call PushMessageToClient on the remote node
-	req := &goverse_pb.PushMessageToClientRequest{
-		ClientId: clientID,
-		Message:  messageAny,
-	}
-
-	_, err = client.PushMessageToClient(ctx, req)
-	if err != nil {
-		return fmt.Errorf("remote PushMessageToClient failed on node %s: %w", nodeAddr, err)
-	}
-
-	c.logger.Infof("%s - Successfully pushed message to client %s on node %s", c, clientID, nodeAddr)
-	return nil
+	return fmt.Errorf("failed to push message to client %s (gate %s) via any node: %w", clientID, gateAddr, lastErr)
 }
 
 // GetEtcdManagerForTesting returns the cluster's etcd manager
