@@ -552,20 +552,32 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Execute the actual creation asynchronously to prevent deadlocks
 	// This is crucial when CreateObject is called from within an object method,
 	// as waiting for the operation to complete while holding locks can cause deadlocks
-	go func() {
-		// Call CreateObject on the remote node
-		req := &goverse_pb.CreateObjectRequest{
-			Type: objType,
-			Id:   objID,
-		}
-
+	// For gateways, execute synchronously since they don't risk deadlocks
+	// (gateways don't host objects so they don't hold object locks)
+	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
+	req := &goverse_pb.CreateObjectRequest{
+		Type: objType,
+		Id:   objID,
+	}
+	if c.isGateway() {
+		// Synchronous execution for gateways
 		_, err = client.CreateObject(ctx, req)
 		if err != nil {
-			c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
-		} else {
-			c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+			c.logger.Errorf("%s - CreateObject %s failed on remote node: %v", c, objID, err)
+			return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
 		}
-	}()
+		c.logger.Infof("%s - CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+	} else {
+		// Asynchronous execution for nodes
+		go func() {
+			_, err = client.CreateObject(ctx, req)
+			if err != nil {
+				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
+			} else {
+				c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+			}
+		}()
+	}
 
 	// Return immediately with the object ID
 	c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
