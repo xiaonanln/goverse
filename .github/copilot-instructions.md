@@ -74,7 +74,73 @@ Proto files: `proto/goverse.proto`, `client/proto/gateway.proto`, `gate/proto/ga
 - Log via `util/logger`
 - Keep code robust, simple, no over-design
 - Watch out for concurrency issues - review all shared state access
-- When starting goroutines, ensure they have proper termination/cleanup
+
+### Goroutine Safety (CRITICAL)
+
+**Always prevent resource leaks when adding goroutines:**
+- Use context cancellation (`ctx.Done()`) for graceful shutdown
+- Clean up resources with `defer` (tickers, channels, connections)
+- Avoid fire-and-forget goroutines without shutdown mechanism
+
+```go
+// GOOD: Goroutine with context and cleanup
+func (s *Service) start(ctx context.Context) {
+    ticker := time.NewTicker(interval)
+    defer ticker.Stop()
+    
+    go func() {
+        for {
+            select {
+            case <-ctx.Done():
+                return  // Clean exit
+            case <-ticker.C:
+                s.doWork()
+            }
+        }
+    }()
+}
+
+// BAD: Fire-and-forget without cleanup
+func (s *Service) start() {
+    go func() {
+        for {
+            s.doWork()
+            time.Sleep(interval)  // Runs forever!
+        }
+    }()
+}
+```
+
+### Lock Safety (CRITICAL)
+
+**Always prevent deadlocks and premature unlocks:**
+- Follow lock hierarchy strictly (see Node Locking section)
+- Use `defer` immediately after lock acquisition
+- Never hold locks across async operations or goroutine boundaries
+- Never call methods that acquire locks while holding locks (check call chain)
+
+```go
+// GOOD: Lock released before async operation
+node.mu.Lock()
+data := node.getData()
+node.mu.Unlock()
+
+go func() {
+    process(data)  // Safe: no lock held
+}()
+
+// BAD: Lock held across goroutine boundary
+node.mu.Lock()
+defer node.mu.Unlock()  // Lock held during goroutine!
+
+go func() {
+    process(node.data)  // DEADLOCK RISK
+}()
+
+// BAD: Wrong lock ordering
+node.mapMu.Lock()      // Lower lock first
+node.stopMu.RLock()    // DEADLOCK: violates hierarchy
+```
 
 ## Testing
 
