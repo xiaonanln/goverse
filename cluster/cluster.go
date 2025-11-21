@@ -456,6 +456,71 @@ func (c *Cluster) checkAndMarkReady() {
 	c.markClusterReady()
 }
 
+// CallObjectWithAny calls a method on a distributed object using an Any-typed request.
+// This is an optimized version for gateway calls that avoids unnecessary marshaling/unmarshaling.
+// For local calls, the request is unmarshaled before calling the object.
+// For remote calls, the Any is passed directly without intermediate conversion.
+func (c *Cluster) CallObjectWithAny(ctx context.Context, objType string, id string, method string, requestAny *anypb.Any) (*anypb.Any, error) {
+	// Determine which node hosts this object
+	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
+	}
+
+	// Check if the object is on this node (only for node clusters)
+	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
+		// Call locally on node - need to unmarshal for local call
+		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
+
+		var requestMsg proto.Message
+		if requestAny != nil {
+			requestMsg, err = requestAny.UnmarshalNew()
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal request for local call: %w", err)
+			}
+		}
+
+		responseMsg, err := c.node.CallObject(ctx, objType, id, method, requestMsg)
+		if err != nil {
+			return nil, err
+		}
+
+		// Marshal response back to Any
+		var responseAny *anypb.Any
+		if responseMsg != nil {
+			responseAny = &anypb.Any{}
+			if err := responseAny.MarshalFrom(responseMsg); err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+		}
+
+		return responseAny, nil
+	}
+
+	// Route to the appropriate node (both node and gateway clusters can route)
+	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
+
+	client, err := c.nodeConnections.GetConnection(nodeAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+	}
+
+	// Call CallObject on the remote node - pass Any directly without marshaling
+	req := &goverse_pb.CallObjectRequest{
+		Id:      id,
+		Method:  method,
+		Type:    objType,
+		Request: requestAny,
+	}
+
+	resp, err := client.CallObject(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
+	}
+
+	return resp.Response, nil
+}
+
 func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
