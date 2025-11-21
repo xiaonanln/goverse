@@ -50,7 +50,7 @@ func (c *ChatClient) Close() error {
 	return c.conn.Close()
 }
 
-func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, error) {
+func (c *ChatClient) CallObject(objectType, objectID, method string, arg proto.Message) (proto.Message, error) {
 	if c.clientID == "" {
 		return nil, fmt.Errorf("client is not registered")
 	}
@@ -64,11 +64,13 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 	}
 	req := &gate_pb.CallObjectRequest{
 		ClientId: c.clientID,
+		Type:     objectType,
+		Id:       objectID,
 		Method:   method,
 		Request:  anyReq,
 	}
 	resp, err := c.client.CallObject(ctx, req)
-	c.logger.Infof("Calling %s %s => %s, error=%v", method, anyReq.String(), resp.String(), err)
+	c.logger.Infof("Calling %s.%s.%s => %s, error=%v", objectType, objectID, method, resp.String(), err)
 	if err != nil {
 		return nil, fmt.Errorf("CallObject failed: %w", err)
 	}
@@ -80,12 +82,13 @@ func (c *ChatClient) Call(method string, arg proto.Message) (proto.Message, erro
 }
 
 func (c *ChatClient) ListChatrooms() error {
-	respMsg, err := c.Call("ListChatRooms", &chat_pb.Client_ListChatRoomsRequest{})
+	// Call ChatRoomMgr directly
+	respMsg, err := c.CallObject("ChatRoomMgr", "ChatRoomMgr0", "ListChatRooms", &chat_pb.ChatRoom_ListRequest{})
 	if err != nil {
 		return fmt.Errorf("Failed to list chat rooms: %w", err)
 	}
 
-	resp := respMsg.(*chat_pb.Client_ListChatRoomsResponse)
+	resp := respMsg.(*chat_pb.ChatRoom_ListResponse)
 
 	fmt.Println("Available Chatrooms:")
 	for _, room := range resp.ChatRooms {
@@ -95,17 +98,17 @@ func (c *ChatClient) ListChatrooms() error {
 }
 
 func (c *ChatClient) JoinChatroom(roomName string) error {
-	// First, try to get or create the chatroom
-	joinRequest := &chat_pb.Client_JoinChatRoomRequest{
-		RoomName: roomName,
+	// Call ChatRoom object directly
+	joinRequest := &chat_pb.ChatRoom_JoinRequest{
 		UserName: c.userName,
+		ClientId: c.clientID,
 	}
-	respMsg, err := c.Call("Join", joinRequest)
+	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+roomName, "Join", joinRequest)
 	if err != nil {
 		return fmt.Errorf("failed to join chatroom %s: %w", roomName, err)
 	}
 
-	resp := respMsg.(*chat_pb.Client_JoinChatRoomResponse)
+	resp := respMsg.(*chat_pb.ChatRoom_JoinResponse)
 	c.logger.Infof("Joined chatroom %s", resp.RoomName)
 	c.roomName = roomName
 	c.lastMsgTimestamp = 0
@@ -123,12 +126,12 @@ func (c *ChatClient) SendMessage(message string) error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	req := &chat_pb.Client_SendChatMessageRequest{
+	// Call ChatRoom object directly
+	req := &chat_pb.ChatRoom_SendChatMessageRequest{
 		UserName: c.userName,
-		RoomName: c.roomName,
 		Message:  message,
 	}
-	_, err := c.Call("SendMessage", req)
+	_, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "SendMessage", req)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -142,16 +145,17 @@ func (c *ChatClient) GetRecentMessages() error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	req := &chat_pb.Client_GetRecentMessagesRequest{
+	// Call ChatRoom object directly
+	req := &chat_pb.ChatRoom_GetRecentMessagesRequest{
 		AfterTimestamp: c.lastMsgTimestamp, // Use stored timestamp
 	}
 	c.logger.Infof("Getting messages after timestamp: %d", c.lastMsgTimestamp)
-	respMsg, err := c.Call("GetRecentMessages", req)
+	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "GetRecentMessages", req)
 	if err != nil {
 		return fmt.Errorf("failed to get recent messages: %w", err)
 	}
 
-	resp := respMsg.(*chat_pb.Client_GetRecentMessagesResponse)
+	resp := respMsg.(*chat_pb.ChatRoom_GetRecentMessagesResponse)
 	fmt.Printf("Recent messages in [%s]:\n", c.roomName)
 	for _, msg := range resp.Messages {
 		timestamp := time.Unix(msg.Timestamp, 0).Format("15:04:05")
