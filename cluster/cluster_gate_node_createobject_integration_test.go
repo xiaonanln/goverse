@@ -265,15 +265,15 @@ func TestGateNodeIntegration(t *testing.T) {
 		// Test Echo method
 		echoReq := &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"message": structpb.NewStringValue("Hello from gate"),
-			},
-		}
-		result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
-		if err != nil {
-			t.Fatalf("CallObject Echo via gate failed: %v", err)
-		}
+			"message": structpb.NewStringValue("Hello from gate"),
+		},
+	}
+	result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
+	if err != nil {
+		t.Fatalf("CallObject Echo via gate failed: %v", err)
+	}
 
-		echoResp, ok := result.(*structpb.Struct)
+	echoResp, ok := result.(*structpb.Struct)
 		if !ok {
 			t.Fatalf("Expected *structpb.Struct, got %T", result)
 		}
@@ -424,7 +424,7 @@ func TestGateNodeIntegration(t *testing.T) {
 			// Call Echo with unique message
 			echoReq := &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					"message": structpb.NewStringValue(fmt.Sprintf("Message from object %d", i)),
+					"message": structpb.NewStringValue(fmt.Sprintf("Call %d from gate", i+1)),
 				},
 			}
 			result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
@@ -553,18 +553,18 @@ func TestGateNodeIntegration(t *testing.T) {
 		// Call a method to set state
 		incReq := &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"value": structpb.NewNumberValue(42),
-			},
-		}
-		result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Increment", incReq)
-		if err != nil {
-			t.Fatalf("CallObject Increment via gate failed: %v", err)
-		}
+			"value": structpb.NewNumberValue(42),
+		},
+	}
+	result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Increment", incReq)
+	if err != nil {
+		t.Fatalf("CallObject Increment via gate failed: %v", err)
+	}
 
-		incResp, ok := result.(*structpb.Struct)
-		if !ok {
-			t.Fatalf("Expected *structpb.Struct, got %T", result)
-		}
+	incResp, ok := result.(*structpb.Struct)
+	if !ok {
+		t.Fatalf("Expected *structpb.Struct, got %T", result)
+	}
 
 		incResult := int(incResp.Fields["result"].GetNumberValue())
 		if incResult != 42 {

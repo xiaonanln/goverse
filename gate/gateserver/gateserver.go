@@ -12,7 +12,6 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -241,18 +240,9 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 
 // CallObject implements the CallObject RPC
 func (s *GatewayServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
-	// Unmarshal the request from Any if present
-	var requestMsg proto.Message
-	if req.Request != nil {
-		var err error
-		requestMsg, err = req.Request.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal request: %w", err)
-		}
-	}
-
-	// Call the object via cluster routing
-	responseMsg, err := s.cluster.CallObject(ctx, req.Type, req.Id, req.Method, requestMsg)
+	// Use CallObjectAnyRequest to pass Any directly without unmarshaling (optimization)
+	// The cluster will unmarshal only if needed (for local calls)
+	responseMsg, err := s.cluster.CallObjectAnyRequest(ctx, req.Type, req.Id, req.Method, req.Request)
 	if err != nil {
 		return nil, err
 	}
