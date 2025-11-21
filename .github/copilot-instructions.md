@@ -72,6 +72,7 @@ Proto files: `proto/goverse.proto`, `client/proto/gateway.proto`, `gate/proto/ga
 - Use `sync.Mutex` in objects, lock at method start with `defer unlock()`
 - Use `context.Context` for cancellation/timeouts
 - Log via `util/logger`
+- Keep code robust, simple, no over-design
 - Watch out for concurrency issues - review all shared state access
 - When starting goroutines, ensure they have proper termination/cleanup
 
