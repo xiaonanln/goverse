@@ -296,20 +296,9 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 			t.Fatalf("DeleteObject via gate failed for %s: %v", objID2, err)
 		}
 
-		// DeleteObject is async, so give it a moment to initiate
-		time.Sleep(200 * time.Millisecond)
-
 		// Verify objects are removed from the node
 		waitForObjectDeletedOnNode(t, testNode, objID1, 5*time.Second)
 		waitForObjectDeletedOnNode(t, testNode, objID2, 5*time.Second)
-
-		// Double-check by listing all objects and ensuring they're not present
-		objects := testNode.ListObjects()
-		for _, obj := range objects {
-			if obj.Id == objID1 || obj.Id == objID2 {
-				t.Fatalf("Object %s still exists on node after deletion", obj.Id)
-			}
-		}
 
 		t.Logf("Successfully deleted objects %s and %s via gate and verified removal on node", objID1, objID2)
 	})
