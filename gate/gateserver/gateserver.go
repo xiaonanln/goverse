@@ -214,12 +214,18 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 	}
 
 	// Stream messages to the client using the returned clientProxy
+	messageChan := clientProxy.MessageChan()
+	if messageChan == nil {
+		s.logger.Errorf("Client %s has no message channel (proxy already closed)", clientID)
+		return fmt.Errorf("client proxy already closed")
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			s.logger.Infof("Client %s stream closed: %v", clientID, ctx.Err())
 			return nil
-		case msg, ok := <-clientProxy.MessageChan():
+		case msg, ok := <-messageChan:
 			if !ok {
 				s.logger.Infof("Client %s message channel closed", clientID)
 				return nil

@@ -11,6 +11,7 @@ import (
 type ClientProxy struct {
 	id          string
 	messageChan chan proto.Message
+	closed      bool
 	mu          sync.RWMutex
 }
 
@@ -30,33 +31,45 @@ func (cp *ClientProxy) GetID() string {
 }
 
 // MessageChan returns the message channel for push notifications
-func (cp *ClientProxy) MessageChan() chan proto.Message {
+// Returns nil if the client proxy has been closed
+func (cp *ClientProxy) MessageChan() <-chan proto.Message {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
+	if cp.closed {
+		return nil
+	}
 	return cp.messageChan
 }
 
 // Close closes the message channel and cleans up resources
+// Safe to call multiple times
 func (cp *ClientProxy) Close() {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	if cp.messageChan != nil {
-		close(cp.messageChan)
-		cp.messageChan = nil
+	if !cp.closed {
+		cp.closed = true
+		if cp.messageChan != nil {
+			close(cp.messageChan)
+			cp.messageChan = nil
+		}
 	}
 }
 
 // HandleMessage handles a message received from a node for this client
 // It forwards the message to the client's message channel
-func (cp *ClientProxy) HandleMessage(msg proto.Message) {
+// Returns true if message was sent, false if dropped or client is closed
+func (cp *ClientProxy) HandleMessage(msg proto.Message) bool {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
-	if cp.messageChan != nil {
-		select {
-		case cp.messageChan <- msg:
-			// Message sent successfully
-		default:
-			// Channel full, drop message
-		}
+	if cp.closed || cp.messageChan == nil {
+		return false
+	}
+	select {
+	case cp.messageChan <- msg:
+		// Message sent successfully
+		return true
+	default:
+		// Channel full, drop message
+		return false
 	}
 }

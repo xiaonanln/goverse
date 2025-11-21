@@ -32,10 +32,10 @@ func TestClientProxyMessageChan(t *testing.T) {
 		t.Fatalf("MessageChan is nil")
 	}
 
-	// Test that we can send a message to the channel
+	// Test that we can send a message using HandleMessage and receive it
 	testMsg := &emptypb.Empty{}
 	go func() {
-		msgChan <- testMsg
+		proxy.HandleMessage(testMsg)
 	}()
 
 	// Receive the message

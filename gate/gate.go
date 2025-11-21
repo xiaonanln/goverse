@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -26,6 +27,9 @@ type Gateway struct {
 	clientsMu         sync.RWMutex                                     // Protects clients map
 	registeredNodes   map[string]goverse_pb.Goverse_RegisterGateClient // tracks active streams by node address
 	registeredNodesMu sync.RWMutex
+	ctx               context.Context    // Gateway context for lifecycle management
+	cancel            context.CancelFunc // Cancel function for gateway context
+	wg                sync.WaitGroup     // WaitGroup to track goroutines
 }
 
 // NewGateway creates a new gateway instance
@@ -34,12 +38,16 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		return nil, fmt.Errorf("invalid gateway configuration: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	gateway := &Gateway{
 		config:           config,
 		advertiseAddress: config.AdvertiseAddress,
 		logger:           logger.NewLogger("Gateway"),
 		clients:          make(map[string]*ClientProxy),
 		registeredNodes:  make(map[string]goverse_pb.Goverse_RegisterGateClient),
+		ctx:              ctx,
+		cancel:           cancel,
 	}
 
 	return gateway, nil
@@ -79,7 +87,33 @@ func (g *Gateway) Start(ctx context.Context) error {
 func (g *Gateway) Stop() error {
 	g.logger.Infof("Stopping gateway")
 
-	// TODO: Stop NodeConnections
+	// Cancel context to signal all goroutines to stop
+	if g.cancel != nil {
+		g.cancel()
+	}
+
+	// Wait for all goroutines to finish with timeout
+	done := make(chan struct{})
+	go func() {
+		g.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		g.logger.Infof("All gateway goroutines stopped")
+	case <-time.After(5 * time.Second):
+		g.logger.Warnf("Timeout waiting for gateway goroutines to stop")
+	}
+
+	// Close all client connections
+	g.clientsMu.Lock()
+	for clientID, clientProxy := range g.clients {
+		clientProxy.Close()
+		g.logger.Debugf("Closed client proxy for %s", clientID)
+	}
+	g.clients = make(map[string]*ClientProxy)
+	g.clientsMu.Unlock()
 
 	g.logger.Infof("Gateway stopped")
 	return nil
@@ -142,12 +176,15 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 
 		// Register with this node
 		g.logger.Infof("Registering gate with node %s", nodeAddr)
+		g.wg.Add(1)
 		go g.registerWithNode(ctx, nodeAddr, client)
 	}
 }
 
 // registerWithNode registers this gate with a specific node and handles the message stream
 func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client goverse_pb.GoverseClient) {
+	defer g.wg.Done()
+
 	stream, err := client.RegisterGate(ctx, &goverse_pb.RegisterGateRequest{
 		GateAddr: g.advertiseAddress,
 	})
@@ -179,24 +216,58 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 	streamCtx := stream.Context()
 
 	// Start receiving messages from the stream
+	// Use a goroutine to receive messages so we can select on context cancellation
+	msgCh := make(chan *goverse_pb.GateMessage, 10)
+	errCh := make(chan error, 1)
+	recvDone := make(chan struct{})
+
+	go func() {
+		defer close(recvDone)
+		for {
+			msg, err := stream.Recv()
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case msgCh <- msg:
+			case <-streamCtx.Done():
+				return
+			case <-g.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	defer func() {
+		// Wait for receive goroutine to finish with timeout
+		select {
+		case <-recvDone:
+		case <-time.After(100 * time.Millisecond):
+			g.logger.Warnf("Recv goroutine for node %s did not finish in time", nodeAddr)
+		}
+	}()
+
 	for {
 		select {
+		case <-g.ctx.Done():
+			g.logger.Infof("Gateway context cancelled, stopping registration with node %s", nodeAddr)
+			return
 		case <-streamCtx.Done():
 			g.logger.Infof("Stream context cancelled for node %s: %v", nodeAddr, streamCtx.Err())
 			return
 		case <-ctx.Done():
 			g.logger.Infof("Parent context cancelled, stopping registration with node %s", nodeAddr)
 			return
-		default:
-			// Continue to receive messages
-		}
-
-		msg, err := stream.Recv()
-		if err != nil {
+		case err := <-errCh:
 			g.logger.Errorf("Stream from node %s closed: %v", nodeAddr, err)
 			return
+		case msg := <-msgCh:
+			g.handleGateMessage(nodeAddr, msg)
 		}
-		g.handleGateMessage(nodeAddr, msg)
 	}
 }
 
