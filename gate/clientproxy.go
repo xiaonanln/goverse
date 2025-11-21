@@ -39,9 +39,9 @@ func (cp *ClientProxy) Close() {
 	close(cp.messageChan)
 }
 
-// HandleMessage handles a message received from a node for this client
+// PushMessage handles a message received from a node for this client
 // It forwards the message to the client's message channel
-func (cp *ClientProxy) HandleMessage(msg proto.Message) {
+func (cp *ClientProxy) PushMessage(msg proto.Message) {
 	select {
 	case cp.messageChan <- msg:
 		// Message sent successfully

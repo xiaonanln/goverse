@@ -283,7 +283,7 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 			}
 
 			// Send to client's message channel
-			client.HandleMessage(msg)
+			client.PushMessage(msg)
 		}
 	default:
 		g.logger.Warnf("Received unknown message type from node %s", nodeAddr)

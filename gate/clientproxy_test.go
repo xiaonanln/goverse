@@ -35,7 +35,7 @@ func TestClientProxyMessageChan(t *testing.T) {
 	// Test that we can send a message to the channel
 	testMsg := &emptypb.Empty{}
 	go func() {
-		msgChan <- testMsg
+		proxy.PushMessage(testMsg)
 	}()
 
 	// Receive the message
