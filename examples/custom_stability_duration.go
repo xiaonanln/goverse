@@ -40,9 +40,8 @@ func main() {
 	log.Printf("Server created with custom NodeStabilityDuration: %v", config.NodeStabilityDuration)
 	log.Printf("The cluster will wait %v for node list to stabilize before updating shard mapping", config.NodeStabilityDuration)
 
-	// Register your object and client types here
+	// Register your object types here
 	// goverseapi.RegisterObjectType((*MyObject)(nil))
-	// goverseapi.RegisterClientType((*MyClient)(nil))
 
 	// Start the server (this blocks until shutdown)
 	if err := server.Run(); err != nil {

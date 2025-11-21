@@ -66,7 +66,6 @@ func TestTypeAliases(t *testing.T) {
 	var _ *Server
 	var _ *Node
 	var _ Object
-	var _ ClientObject
 	var _ *BaseObject
 	var _ *BaseClient
 	var _ *Cluster
