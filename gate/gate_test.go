@@ -3,6 +3,11 @@ package gate
 import (
 	"context"
 	"testing"
+	"time"
+
+	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestNewGateway(t *testing.T) {
@@ -473,6 +478,257 @@ func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
 	if clientCount != 0 {
 		t.Fatalf("Gateway still has %d clients after Stop, expected 0", clientCount)
 	}
+}
+
+func TestGatewayHandleGateMessage(t *testing.T) {
+	config := &GatewayConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-handlemsg",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+	defer gateway.Stop()
+
+	ctx := context.Background()
+	err = gateway.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gateway.Start() returned error: %v", err)
+	}
+
+	// Register two clients to verify correct routing
+	clientProxy1 := gateway.Register(ctx)
+	clientID1 := clientProxy1.GetID()
+
+	clientProxy2 := gateway.Register(ctx)
+	clientID2 := clientProxy2.GetID()
+
+	t.Run("ClientMessage_RoutesToCorrectClient", func(t *testing.T) {
+		// Create messages for both clients
+		testMessage1 := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"text":   structpb.NewStringValue("Message for client 1"),
+				"client": structpb.NewStringValue("1"),
+			},
+		}
+
+		testMessage2 := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"text":   structpb.NewStringValue("Message for client 2"),
+				"client": structpb.NewStringValue("2"),
+			},
+		}
+
+		// Send message to client 1
+		anyMsg1, err := anypb.New(testMessage1)
+		if err != nil {
+			t.Fatalf("Failed to create Any message: %v", err)
+		}
+
+		envelope1 := &goverse_pb.ClientMessageEnvelope{
+			ClientId: clientID1,
+			Message:  anyMsg1,
+		}
+
+		gateMsg1 := &goverse_pb.GateMessage{
+			Message: &goverse_pb.GateMessage_ClientMessage{
+				ClientMessage: envelope1,
+			},
+		}
+
+		gateway.handleGateMessage("test-node", gateMsg1)
+
+		// Send message to client 2
+		anyMsg2, err := anypb.New(testMessage2)
+		if err != nil {
+			t.Fatalf("Failed to create Any message: %v", err)
+		}
+
+		envelope2 := &goverse_pb.ClientMessageEnvelope{
+			ClientId: clientID2,
+			Message:  anyMsg2,
+		}
+
+		gateMsg2 := &goverse_pb.GateMessage{
+			Message: &goverse_pb.GateMessage_ClientMessage{
+				ClientMessage: envelope2,
+			},
+		}
+
+		gateway.handleGateMessage("test-node", gateMsg2)
+
+		// Verify client 1 receives only its message
+		select {
+		case msg := <-clientProxy1.MessageChan():
+			receivedStruct, ok := msg.(*structpb.Struct)
+			if !ok {
+				t.Fatalf("Client 1: Expected *structpb.Struct, got %T", msg)
+			}
+			if receivedStruct.Fields["client"].GetStringValue() != "1" {
+				t.Fatalf("Client 1 received message for client %s", receivedStruct.Fields["client"].GetStringValue())
+			}
+			if receivedStruct.Fields["text"].GetStringValue() != "Message for client 1" {
+				t.Fatalf("Client 1: Expected 'Message for client 1', got %q", receivedStruct.Fields["text"].GetStringValue())
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("Timeout waiting for message on client 1 channel")
+		}
+
+		// Verify client 2 receives only its message
+		select {
+		case msg := <-clientProxy2.MessageChan():
+			receivedStruct, ok := msg.(*structpb.Struct)
+			if !ok {
+				t.Fatalf("Client 2: Expected *structpb.Struct, got %T", msg)
+			}
+			if receivedStruct.Fields["client"].GetStringValue() != "2" {
+				t.Fatalf("Client 2 received message for client %s", receivedStruct.Fields["client"].GetStringValue())
+			}
+			if receivedStruct.Fields["text"].GetStringValue() != "Message for client 2" {
+				t.Fatalf("Client 2: Expected 'Message for client 2', got %q", receivedStruct.Fields["text"].GetStringValue())
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("Timeout waiting for message on client 2 channel")
+		}
+
+		// Verify no extra messages on either channel
+		select {
+		case msg := <-clientProxy1.MessageChan():
+			t.Fatalf("Client 1 received unexpected extra message: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Good - no extra messages
+		}
+
+		select {
+		case msg := <-clientProxy2.MessageChan():
+			t.Fatalf("Client 2 received unexpected extra message: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Good - no extra messages
+		}
+	})
+
+	t.Run("ClientMessage_ClientNotFound", func(t *testing.T) {
+		// Create a message for non-existent client
+		testMessage := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"text": structpb.NewStringValue("Should be dropped"),
+			},
+		}
+
+		anyMsg, err := anypb.New(testMessage)
+		if err != nil {
+			t.Fatalf("Failed to create Any message: %v", err)
+		}
+
+		envelope := &goverse_pb.ClientMessageEnvelope{
+			ClientId: "non-existent-client",
+			Message:  anyMsg,
+		}
+
+		gateMsg := &goverse_pb.GateMessage{
+			Message: &goverse_pb.GateMessage_ClientMessage{
+				ClientMessage: envelope,
+			},
+		}
+
+		// Handle the message - should log warning and drop message
+		gateway.handleGateMessage("test-node", gateMsg)
+
+		// Verify our registered clients did NOT receive the message
+		select {
+		case msg := <-clientProxy1.MessageChan():
+			t.Fatalf("Client 1 received message intended for different client: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+
+		select {
+		case msg := <-clientProxy2.MessageChan():
+			t.Fatalf("Client 2 received message intended for different client: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+	})
+
+	t.Run("ClientMessage_NilMessage", func(t *testing.T) {
+		// Create envelope with nil message
+		envelope := &goverse_pb.ClientMessageEnvelope{
+			ClientId: clientID1,
+			Message:  nil,
+		}
+
+		gateMsg := &goverse_pb.GateMessage{
+			Message: &goverse_pb.GateMessage_ClientMessage{
+				ClientMessage: envelope,
+			},
+		}
+
+		// Handle the message - should log warning and not crash
+		gateway.handleGateMessage("test-node", gateMsg)
+
+		// Verify client did NOT receive a message
+		select {
+		case msg := <-clientProxy1.MessageChan():
+			t.Fatalf("Client 1 received message when none expected: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+	})
+
+	t.Run("RegisterGateResponse", func(t *testing.T) {
+		// Create RegisterGateResponse message
+		gateMsg := &goverse_pb.GateMessage{
+			Message: &goverse_pb.GateMessage_RegisterGateResponse{
+				RegisterGateResponse: &goverse_pb.RegisterGateResponse{},
+			},
+		}
+
+		// Handle the message - should just log
+		gateway.handleGateMessage("test-node", gateMsg)
+
+		// Verify clients did NOT receive anything
+		select {
+		case msg := <-clientProxy1.MessageChan():
+			t.Fatalf("Client 1 received RegisterGateResponse: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+
+		select {
+		case msg := <-clientProxy2.MessageChan():
+			t.Fatalf("Client 2 received RegisterGateResponse: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+	})
+
+	t.Run("UnknownMessageType", func(t *testing.T) {
+		// Create GateMessage with nil message (unknown type)
+		gateMsg := &goverse_pb.GateMessage{
+			Message: nil,
+		}
+
+		// Handle the message - should log warning and not crash
+		gateway.handleGateMessage("test-node", gateMsg)
+
+		// Verify clients did NOT receive a message
+		select {
+		case msg := <-clientProxy1.MessageChan():
+			t.Fatalf("Client 1 received unknown message: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+
+		select {
+		case msg := <-clientProxy2.MessageChan():
+			t.Fatalf("Client 2 received unknown message: %v", msg)
+		case <-time.After(50 * time.Millisecond):
+			// Expected - no message received
+		}
+	})
 }
 
 // Helper function to check if a string contains a substring
