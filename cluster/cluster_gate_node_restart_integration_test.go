@@ -27,11 +27,12 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
-	nodeAddr := "localhost:47100"
+	// Use unique ports to avoid conflicts with other tests
+	nodeAddr := "localhost:47999"
 
 	// Create a gateway cluster
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49100",
+		AdvertiseAddress: "localhost:49999",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -53,11 +54,34 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	defer gateCluster.Stop(ctx)
 
 	// Create and start the first node cluster
-	// Note: mustNewCluster registers cleanup via t.Cleanup, but we explicitly stop
-	// the node below to simulate a shutdown. The cleanup will run again at test end,
-	// but Stop should be safe to call multiple times.
+	// We don't use mustNewCluster here because we need to explicitly stop and restart
+	// the node mid-test to simulate a node restart scenario
 	t.Logf("Creating first node cluster at %s", nodeAddr)
-	nodeCluster1 := mustNewCluster(ctx, t, nodeAddr, testPrefix)
+	n1 := node.NewNode(nodeAddr)
+	err = n1.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start first node: %v", err)
+	}
+
+	cfg1 := Config{
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
+	}
+
+	nodeCluster1, err := NewClusterWithNode(cfg1, n1)
+	if err != nil {
+		n1.Stop(ctx)
+		t.Fatalf("Failed to create first cluster: %v", err)
+	}
+
+	err = nodeCluster1.Start(ctx, n1)
+	if err != nil {
+		n1.Stop(ctx)
+		t.Fatalf("Failed to start first cluster: %v", err)
+	}
 
 	// Wait for gate to discover and register with the node
 	time.Sleep(testutil.WaitForShardMappingTimeout)
@@ -89,8 +113,10 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to stop first node cluster: %v", err)
 	}
-	// Also stop the node itself
-	nodeCluster1.GetThisNode().Stop(ctx)
+	err = n1.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop first node: %v", err)
+	}
 
 	// Wait for gate to detect the node is down
 	// The node should be removed from etcd when the cluster stops
