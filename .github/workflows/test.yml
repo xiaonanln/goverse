@@ -268,3 +268,77 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
+
+  test-gate-race:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/gateway' || github.base_ref == 'gateway'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '>=1.21'
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+
+      - name: Install Go protobuf plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+      - name: Compile protobuf files
+        run: |
+          chmod +x ./script/compile-proto.sh
+          ./script/compile-proto.sh
+
+      - name: Tidy Go modules
+        run: go mod tidy
+
+      - name: Install and start etcd
+        run: |
+          sudo apt-get install -y etcd-server
+          sudo systemctl start etcd
+          sudo systemctl status etcd --no-pager
+          # Wait for etcd to be ready
+          for i in {1..10}; do
+            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
+              echo "etcd is ready"
+              break
+            fi
+            echo "Waiting for etcd to start... ($i/10)"
+            sleep 1
+          done
+
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+          sudo systemctl status postgresql --no-pager
+          # Configure PostgreSQL for testing
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          # Create database if it doesn't exist (PostgreSQL doesn't support IF NOT EXISTS for CREATE DATABASE)
+          sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw goverse || sudo -u postgres psql -c "CREATE DATABASE goverse;"
+          # Wait for PostgreSQL to be ready
+          for i in {1..10}; do
+            if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL to start... ($i/10)"
+            sleep 1
+          done
+
+      - name: Run gate and cluster tests with race detector
+        run: go test -v -p 1 -failfast -race ./gate/... ./cluster/...
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
