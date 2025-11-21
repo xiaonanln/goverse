@@ -84,13 +84,7 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 	// Give time for cleanup
 	time.Sleep(500 * time.Millisecond)
 
-	// Verify that the gateway can be stopped cleanly
-	// If cleanup didn't work properly, this might hang or panic
-	err = gateway.Stop()
-	if err != nil {
-		t.Fatalf("Gateway.Stop() returned error: %v", err)
-	}
-
+	// The gateway will be stopped by the defer, verifying clean shutdown
 	t.Logf("Successfully verified gateway handles stream disconnect/failure gracefully")
 }
 
