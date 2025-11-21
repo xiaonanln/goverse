@@ -434,7 +434,8 @@ func (c *Cluster) markClusterReady() {
 // checkAndMarkReady checks if all conditions are met to mark the cluster as ready:
 // - Node connections are running
 // - Shard mapping is available
-// If both conditions are met, it marks the cluster as ready
+// - For node clusters: all discovered gates have registered
+// If all conditions are met, it marks the cluster as ready
 func (c *Cluster) checkAndMarkReady() {
 	if c.IsReady() {
 		return
@@ -451,9 +452,47 @@ func (c *Cluster) checkAndMarkReady() {
 		return
 	}
 
-	// Both conditions met, mark cluster as ready
+	// For node clusters, check if all discovered gates have registered
+	if c.isNode() && !c.areAllGatesRegistered() {
+		c.logger.Infof("%s - Cannot mark cluster ready: not all gates have registered yet", c)
+		return
+	}
+
+	// All conditions met, mark cluster as ready
 	c.logger.Infof("%s - All conditions met, marking cluster as READY for the first time!", c)
 	c.markClusterReady()
+}
+
+// areAllGatesRegistered checks if all gates discovered in the cluster have registered with this node
+// Returns true if there are no gates in the cluster, or if all gates have registered
+// This is only relevant for node clusters, not gateway clusters
+func (c *Cluster) areAllGatesRegistered() bool {
+	// Gateway clusters don't need to wait for gate registration
+	if c.isGateway() {
+		return true
+	}
+
+	// Get all gates from consensus manager
+	discoveredGates := c.consensusManager.GetGates()
+	
+	// If there are no gates in the cluster, we're ready
+	if len(discoveredGates) == 0 {
+		return true
+	}
+
+	// Check if all discovered gates have registered
+	c.gateChannelsMu.RLock()
+	defer c.gateChannelsMu.RUnlock()
+
+	for _, gateAddr := range discoveredGates {
+		if _, registered := c.gateChannels[gateAddr]; !registered {
+			c.logger.Debugf("%s - Gate %s has not registered yet", c, gateAddr)
+			return false
+		}
+	}
+
+	c.logger.Infof("%s - All %d gates have registered", c, len(discoveredGates))
+	return true
 }
 
 func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
