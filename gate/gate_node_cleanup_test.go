@@ -50,6 +50,15 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 	gateway.nodeCancels["node2"] = cancel2
 	gateway.nodeCancelsMu.Unlock()
 
+	// Also add to registered nodes to simulate successful registrations
+	// This prevents RegisterWithNodes from creating new registrations
+	mockStream1 := &mockGateStream{ctx: ctx1}
+	mockStream2 := &mockGateStream{ctx: ctx2}
+	gateway.registeredNodesMu.Lock()
+	gateway.registeredNodes["node1"] = mockStream1
+	gateway.registeredNodes["node2"] = mockStream2
+	gateway.registeredNodesMu.Unlock()
+
 	// Verify both nodes have cancel functions
 	gateway.nodeCancelsMu.RLock()
 	initialCount := len(gateway.nodeCancels)
