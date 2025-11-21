@@ -135,40 +135,40 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	// 1. updateNodeConnections() - creates new gRPC connection to the node
 	// 2. registerGateWithNodes() - calls RegisterGate on the new connection
 	t.Logf("Waiting for gate to reconnect to restarted node...")
-	
+
 	// Wait longer to ensure multiple cluster management ticks occur
 	// Each tick should attempt to reconnect if not already connected
 	maxWaitTime := 15 * time.Second
 	deadline := time.Now().Add(maxWaitTime)
 	reconnected := false
-	
+
 	for time.Now().Before(deadline) {
 		time.Sleep(2 * time.Second)
-		
+
 		// Check if gate sees the node
 		nodes = gateCluster.GetNodes()
 		gates = nodeCluster2.GetGates()
-		
+
 		t.Logf("Status check: gate sees %d nodes, node sees %d gates", len(nodes), len(gates))
-		
+
 		if len(nodes) == 1 && len(gates) == 1 {
 			reconnected = true
 			t.Logf("Gate successfully reconnected!")
 			break
 		}
 	}
-	
+
 	if !reconnected {
 		// Print final state for debugging
 		nodes = gateCluster.GetNodes()
 		gates = nodeCluster2.GetGates()
 		gateNodeConns = gateCluster.GetNodeConnections().GetAllConnections()
-		
+
 		t.Logf("Final state after waiting %v:", maxWaitTime)
 		t.Logf("  - Gate sees %d nodes: %v", len(nodes), nodes)
 		t.Logf("  - Gate has %d connections", len(gateNodeConns))
 		t.Logf("  - Node sees %d gates: %v", len(gates), gates)
-		
+
 		t.Fatalf("Gate failed to reconnect to node within %v", maxWaitTime)
 	}
 
@@ -178,7 +178,7 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 		t.Fatalf("Gate should see 1 node after restart, got %d: %v", len(nodes), nodes)
 	}
 	t.Logf("Gate successfully rediscovered restarted node: %v", nodes)
-	
+
 	// Verify gate has connection to the node
 	gateNodeConns = gateCluster.GetNodeConnections().GetAllConnections()
 	if len(gateNodeConns) != 1 {
@@ -193,5 +193,5 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	}
 	t.Logf("Restarted node successfully registered gate: %v", gates)
 
-	t.Logf("SUCCESS: Gate successfully reconnected to node after restart")
+	t.Logf("Gate successfully reconnected to node after restart")
 }
