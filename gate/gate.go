@@ -22,9 +22,9 @@ type Gateway struct {
 	config            *GatewayConfig
 	advertiseAddress  string
 	logger            *logger.Logger
-	clients           map[string]*ClientProxy // Map of clientID -> ClientProxy
-	clientsMu         sync.RWMutex            // Protects clients map
-	registeredNodes   map[string]bool         // tracks which nodes this gate has registered with
+	clients           map[string]*ClientProxy                          // Map of clientID -> ClientProxy
+	clientsMu         sync.RWMutex                                     // Protects clients map
+	registeredNodes   map[string]goverse_pb.Goverse_RegisterGateClient // tracks active streams by node address
 	registeredNodesMu sync.RWMutex
 }
 
@@ -39,7 +39,7 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		advertiseAddress: config.AdvertiseAddress,
 		logger:           logger.NewLogger("Gateway"),
 		clients:          make(map[string]*ClientProxy),
-		registeredNodes:  make(map[string]bool),
+		registeredNodes:  make(map[string]goverse_pb.Goverse_RegisterGateClient),
 	}
 
 	return gateway, nil
@@ -130,12 +130,13 @@ func (g *Gateway) GetAdvertiseAddress() string {
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
 func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[string]goverse_pb.GoverseClient) {
 	for nodeAddr, client := range nodeConnections {
-		// Check if already registered with this node
+		// Check if already registered with this node (and stream is still active)
 		g.registeredNodesMu.RLock()
-		alreadyRegistered := g.registeredNodes[nodeAddr]
+		existingStream, registered := g.registeredNodes[nodeAddr]
 		g.registeredNodesMu.RUnlock()
 
-		if alreadyRegistered {
+		if registered && existingStream.Context().Err() == nil {
+			// Still have an active registration
 			continue
 		}
 
@@ -155,21 +156,44 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 		return
 	}
 
-	// Mark as registered
+	// Mark as registered with this specific stream
 	g.registeredNodesMu.Lock()
-	g.registeredNodes[nodeAddr] = true
+	g.registeredNodes[nodeAddr] = stream
 	g.registeredNodesMu.Unlock()
 	g.logger.Infof("Successfully registered gate with node %s", nodeAddr)
 
+	// Ensure cleanup on exit - only delete if we're still the registered stream
+	defer func() {
+		g.registeredNodesMu.Lock()
+		// Only delete if the stored stream is still ours (not replaced by a newer connection)
+		if g.registeredNodes[nodeAddr] == stream {
+			delete(g.registeredNodes, nodeAddr)
+			g.logger.Infof("Unregistered from node %s", nodeAddr)
+		} else {
+			g.logger.Infof("Not unregistering from node %s - a newer connection exists", nodeAddr)
+		}
+		g.registeredNodesMu.Unlock()
+	}()
+
+	// Use stream's context to detect when stream is closed
+	streamCtx := stream.Context()
+
 	// Start receiving messages from the stream
 	for {
+		select {
+		case <-streamCtx.Done():
+			g.logger.Infof("Stream context cancelled for node %s: %v", nodeAddr, streamCtx.Err())
+			return
+		case <-ctx.Done():
+			g.logger.Infof("Parent context cancelled, stopping registration with node %s", nodeAddr)
+			return
+		default:
+			// Continue to receive messages
+		}
+
 		msg, err := stream.Recv()
 		if err != nil {
 			g.logger.Errorf("Stream from node %s closed: %v", nodeAddr, err)
-			// Mark as unregistered so we can retry
-			g.registeredNodesMu.Lock()
-			delete(g.registeredNodes, nodeAddr)
-			g.registeredNodesMu.Unlock()
 			return
 		}
 		g.handleGateMessage(nodeAddr, msg)
@@ -185,16 +209,16 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 		// Extract client ID and message from envelope
 		envelope := m.ClientMessage
 		clientID := envelope.GetClientId()
-		
+
 		g.logger.Debugf("Received client message from node %s for client %s", nodeAddr, clientID)
-		
+
 		// Find the target client
 		client, exists := g.GetClient(clientID)
 		if !exists {
 			g.logger.Warnf("Client %s not found, dropping message from node %s", clientID, nodeAddr)
 			return
 		}
-		
+
 		// Unmarshal the message
 		if envelope.Message != nil {
 			msg, err := envelope.Message.UnmarshalNew()
@@ -202,7 +226,7 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 				g.logger.Errorf("Failed to unmarshal message for client %s: %v", clientID, err)
 				return
 			}
-			
+
 			// Send to client's message channel
 			client.HandleMessage(msg)
 		}
