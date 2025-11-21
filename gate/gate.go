@@ -175,7 +175,12 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 		nodeCtx, nodeCancel := context.WithCancel(ctx)
 		
 		// Store cancel function before starting goroutine
+		// If there's an old cancel function (from a goroutine that's exiting), replace it
 		g.nodeCancelsMu.Lock()
+		if oldCancel, exists := g.nodeCancels[nodeAddr]; exists {
+			// Cancel the old goroutine if it hasn't already exited
+			oldCancel()
+		}
 		g.nodeCancels[nodeAddr] = nodeCancel
 		g.nodeCancelsMu.Unlock()
 		
