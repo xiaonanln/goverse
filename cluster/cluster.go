@@ -276,6 +276,9 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	// Stop watching cluster state (must stop before closing etcd)
 	c.consensusManager.StopWatch()
 
+	// Clean up gate channels
+	c.cleanupGateChannels()
+
 	// Unregister from etcd
 	if c.isNode() {
 		if err := c.unregisterNode(ctx); err != nil {
@@ -656,6 +659,10 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
 func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, error) {
+	if !c.isNode() {
+		return nil, fmt.Errorf("RegisterGateConnection can only be called on node clusters, not gate clusters")
+	}
+
 	c.gateChannelsMu.Lock()
 	defer c.gateChannelsMu.Unlock()
 
@@ -673,6 +680,11 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 
 // UnregisterGateConnection removes a gate connection
 func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Message) {
+	if !c.isNode() {
+		c.logger.Warnf("UnregisterGateConnection can only be called on node clusters, not gate clusters")
+		return
+	}
+
 	c.gateChannelsMu.Lock()
 	defer c.gateChannelsMu.Unlock()
 
@@ -685,6 +697,31 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
 		}
 	}
+}
+
+// cleanupGateChannels closes all gate channels and clears the map
+// Should be called during cluster shutdown
+func (c *Cluster) cleanupGateChannels() {
+	if !c.isNode() {
+		return
+	}
+
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	for gateAddr, ch := range c.gateChannels {
+		// Use recover to handle potential double-close panics gracefully
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					c.logger.Warnf("Gate channel for %s already closed or panic during close: %v", gateAddr, r)
+				}
+			}()
+			close(ch)
+			c.logger.Infof("Closed gate channel for %s during shutdown", gateAddr)
+		}()
+	}
+	c.gateChannels = make(map[string]chan proto.Message)
 }
 
 // PushMessageToClient sends a message to a client by its ID
