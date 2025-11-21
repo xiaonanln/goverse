@@ -1,5 +1,7 @@
 # GitHub Copilot Instructions for Goverse
 
+**Meta**: Keep instructions short, clear, concise.
+
 ## Project Overview
 
 Goverse is a **distributed object runtime for Go** implementing the **virtual actor model**. Objects are stateful entities with unique IDs. The runtime handles placement, routing, lifecycle, and fault-tolerance using etcd for coordination and a fixed 8192-shard model.
@@ -70,10 +72,14 @@ Proto files: `proto/goverse.proto`, `client/proto/gateway.proto`, `gate/proto/ga
 - Use `sync.Mutex` in objects, lock at method start with `defer unlock()`
 - Use `context.Context` for cancellation/timeouts
 - Log via `util/logger`
+- Watch out for concurrency issues - review all shared state access
+- When starting goroutines, ensure they have proper termination/cleanup
 
 ## Testing
 
 **Coverage targets**: util/object/client 100%, cluster 90%+
+
+**Philosophy**: Write essential tests, but do not over-test. Focus on critical paths and edge cases.
 
 ### etcd Tests
 
