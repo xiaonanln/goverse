@@ -26,6 +26,8 @@ type Gateway struct {
 	clientsMu         sync.RWMutex                                     // Protects clients map
 	registeredNodes   map[string]goverse_pb.Goverse_RegisterGateClient // tracks active streams by node address
 	registeredNodesMu sync.RWMutex
+	nodeCancels       map[string]context.CancelFunc // tracks cancel functions for node registration goroutines
+	nodeCancelsMu     sync.RWMutex
 }
 
 // NewGateway creates a new gateway instance
@@ -40,6 +42,7 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		logger:           logger.NewLogger("Gateway"),
 		clients:          make(map[string]*ClientProxy),
 		registeredNodes:  make(map[string]goverse_pb.Goverse_RegisterGateClient),
+		nodeCancels:      make(map[string]context.CancelFunc),
 	}
 
 	return gateway, nil
@@ -79,7 +82,15 @@ func (g *Gateway) Start(ctx context.Context) error {
 func (g *Gateway) Stop() error {
 	g.logger.Infof("Stopping gateway")
 
-	// TODO: Stop NodeConnections
+	// Cancel all node registration goroutines
+	g.nodeCancelsMu.Lock()
+	for nodeAddr, cancel := range g.nodeCancels {
+		g.logger.Infof("Cancelling registration for node %s during shutdown", nodeAddr)
+		cancel()
+	}
+	// Clear the map
+	g.nodeCancels = make(map[string]context.CancelFunc)
+	g.nodeCancelsMu.Unlock()
 
 	g.logger.Infof("Gateway stopped")
 	return nil
@@ -128,7 +139,26 @@ func (g *Gateway) GetAdvertiseAddress() string {
 }
 
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
+// and cleans up registrations for nodes that are no longer in the provided connections
 func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[string]goverse_pb.GoverseClient) {
+	// Build set of desired node addresses
+	desiredNodes := make(map[string]bool)
+	for nodeAddr := range nodeConnections {
+		desiredNodes[nodeAddr] = true
+	}
+
+	// Cancel registrations for nodes that are no longer in the connections
+	g.nodeCancelsMu.Lock()
+	for nodeAddr, cancel := range g.nodeCancels {
+		if !desiredNodes[nodeAddr] {
+			g.logger.Infof("Cancelling registration for removed node %s", nodeAddr)
+			cancel()
+			delete(g.nodeCancels, nodeAddr)
+		}
+	}
+	g.nodeCancelsMu.Unlock()
+
+	// Register with new or reconnected nodes
 	for nodeAddr, client := range nodeConnections {
 		// Check if already registered with this node (and stream is still active)
 		g.registeredNodesMu.RLock()
@@ -142,12 +172,26 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 
 		// Register with this node
 		g.logger.Infof("Registering gate with node %s", nodeAddr)
-		go g.registerWithNode(ctx, nodeAddr, client)
+		nodeCtx, nodeCancel := context.WithCancel(ctx)
+		
+		// Store cancel function before starting goroutine
+		g.nodeCancelsMu.Lock()
+		g.nodeCancels[nodeAddr] = nodeCancel
+		g.nodeCancelsMu.Unlock()
+		
+		go g.registerWithNode(nodeCtx, nodeAddr, client)
 	}
 }
 
 // registerWithNode registers this gate with a specific node and handles the message stream
 func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client goverse_pb.GoverseClient) {
+	// Ensure cleanup of cancel function on exit
+	defer func() {
+		g.nodeCancelsMu.Lock()
+		delete(g.nodeCancels, nodeAddr)
+		g.nodeCancelsMu.Unlock()
+	}()
+
 	stream, err := client.RegisterGate(ctx, &goverse_pb.RegisterGateRequest{
 		GateAddr: g.advertiseAddress,
 	})
