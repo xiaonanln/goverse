@@ -233,7 +233,10 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 	errCh := make(chan error, 1)
 	recvDone := make(chan struct{})
 
+	// Track the recv goroutine with WaitGroup
+	g.wg.Add(1)
 	go func() {
+		defer g.wg.Done()
 		defer close(recvDone)
 		for {
 			msg, err := stream.Recv()

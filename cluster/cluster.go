@@ -699,8 +699,16 @@ func (c *Cluster) cleanupGateChannels() {
 	defer c.gateChannelsMu.Unlock()
 
 	for gateAddr, ch := range c.gateChannels {
-		close(ch)
-		c.logger.Infof("Closed gate channel for %s during shutdown", gateAddr)
+		// Use recover to handle potential double-close panics gracefully
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					c.logger.Warnf("Gate channel for %s already closed or panic during close: %v", gateAddr, r)
+				}
+			}()
+			close(ch)
+			c.logger.Infof("Closed gate channel for %s during shutdown", gateAddr)
+		}()
 	}
 	c.gateChannels = make(map[string]chan proto.Message)
 }
