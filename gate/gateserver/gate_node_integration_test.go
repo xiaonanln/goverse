@@ -59,6 +59,28 @@ func waitForObjectCreatedOnNode(t *testing.T, n *node.Node, objID string, timeou
 	}
 }
 
+// waitForObjectDeletedOnNode waits for an object to be deleted on the specified node
+func waitForObjectDeletedOnNode(t *testing.T, n *node.Node, objID string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		found := false
+		for _, obj := range n.ListObjects() {
+			if obj.Id == objID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Object %s was not deleted from node within %v", objID, timeout)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 // TestGateNodeIntegrationSimple tests basic gate-to-node integration:
 // - Creates a real GatewayServer that routes calls through cluster to a node
 // - Creates objects via the gate client and verifies they're created on the node
@@ -224,6 +246,72 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 		}
 
 		t.Logf("Successfully called Echo via gate, response: %s (call count: %d)", actualMsg, callCount)
+	})
+
+	t.Run("DeleteObjectViaGate", func(t *testing.T) {
+		// Create multiple objects to delete
+		objID1 := "test-gate-delete-1"
+		objID2 := "test-gate-delete-2"
+
+		// Create first object via the gate
+		createReq1 := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID1,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq1)
+		if err != nil {
+			t.Fatalf("CreateObject via gate failed for %s: %v", objID1, err)
+		}
+
+		// Create second object via the gate
+		createReq2 := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID2,
+		}
+		_, err = gateClient.CreateObject(ctx, createReq2)
+		if err != nil {
+			t.Fatalf("CreateObject via gate failed for %s: %v", objID2, err)
+		}
+
+		// Wait for objects to be created on the node
+		waitForObjectCreatedOnNode(t, testNode, objID1, 5*time.Second)
+		waitForObjectCreatedOnNode(t, testNode, objID2, 5*time.Second)
+		t.Logf("Created objects %s and %s via gate and verified on node", objID1, objID2)
+
+		// Delete first object via the gate
+		deleteReq1 := &gate_pb.DeleteObjectRequest{
+			Id: objID1,
+		}
+		_, err = gateClient.DeleteObject(ctx, deleteReq1)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate failed for %s: %v", objID1, err)
+		}
+
+		// Delete second object via the gate
+		deleteReq2 := &gate_pb.DeleteObjectRequest{
+			Id: objID2,
+		}
+		_, err = gateClient.DeleteObject(ctx, deleteReq2)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate failed for %s: %v", objID2, err)
+		}
+
+		// DeleteObject is async, so give it a moment to initiate
+		time.Sleep(200 * time.Millisecond)
+
+		// Verify objects are removed from the node
+		waitForObjectDeletedOnNode(t, testNode, objID1, 5*time.Second)
+		waitForObjectDeletedOnNode(t, testNode, objID2, 5*time.Second)
+
+		// Double-check by listing all objects and ensuring they're not present
+		objects := testNode.ListObjects()
+		for _, obj := range objects {
+			if obj.Id == objID1 || obj.Id == objID2 {
+				t.Fatalf("Object %s still exists on node after deletion", obj.Id)
+			}
+		}
+
+		t.Logf("Successfully deleted objects %s and %s via gate and verified removal on node", objID1, objID2)
 	})
 }
 
