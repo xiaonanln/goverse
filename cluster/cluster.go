@@ -541,17 +541,15 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Async routing CreateObject for %s to node %s", c, objID, nodeAddr)
+	c.logger.Infof("%s - Routing CreateObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
-		c.logger.Errorf("%s - Async CreateObject %s failed to get connection: %v", c, objID, err)
+		c.logger.Errorf("%s - CreateObject %s failed to get connection: %v", c, objID, err)
 		return "", fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
-	// Execute the actual creation asynchronously to prevent deadlocks
-	// This is crucial when CreateObject is called from within an object method,
-	// as waiting for the operation to complete while holding locks can cause deadlocks
+	// Execute the actual creation
 	// For gateways, execute synchronously since they don't risk deadlocks
 	// (gateways don't host objects so they don't hold object locks)
 	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
@@ -567,8 +565,9 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 			return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
 		}
 		c.logger.Infof("%s - CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+		return objID, nil
 	} else {
-		// Asynchronous execution for nodes
+		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
 			_, err = client.CreateObject(ctx, req)
 			if err != nil {
@@ -577,16 +576,17 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 				c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
 			}
 		}()
-	}
 
-	// Return immediately with the object ID
-	c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
-	return objID, nil
+		// Return immediately with the object ID
+		c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
+		return objID, nil
+	}
 }
 
 // DeleteObject deletes an object from the cluster.
 // It determines which node hosts the object and routes the deletion request accordingly.
-// The deletion is performed asynchronously to prevent deadlocks when called from within object methods.
+// For gateways, the deletion is performed synchronously. For nodes, it is performed
+// asynchronously to prevent deadlocks when called from within object methods.
 func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if objID == "" {
 		return fmt.Errorf("object ID must be specified")
@@ -613,34 +613,45 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Async routing DeleteObject for %s to node %s", c, objID, nodeAddr)
+	c.logger.Infof("%s - Routing DeleteObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
-		c.logger.Errorf("%s - Async DeleteObject %s failed to get connection: %v", c, objID, err)
+		c.logger.Errorf("%s - DeleteObject %s failed to get connection: %v", c, objID, err)
 		return fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
-	// Execute the actual deletion asynchronously to prevent deadlocks
-	// This is crucial when DeleteObject is called from within an object method,
-	// as waiting for the operation to complete while holding locks can cause deadlocks
-	go func() {
-		// Call DeleteObject on the remote node
-		req := &goverse_pb.DeleteObjectRequest{
-			Id: objID,
-		}
-
+	// Execute the actual deletion
+	// For gateways, execute synchronously since they don't risk deadlocks
+	// (gateways don't host objects so they don't hold object locks)
+	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
+	req := &goverse_pb.DeleteObjectRequest{
+		Id: objID,
+	}
+	if c.isGateway() {
+		// Synchronous execution for gateways
 		_, err = client.DeleteObject(ctx, req)
 		if err != nil {
-			c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
-		} else {
-			c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+			c.logger.Errorf("%s - DeleteObject %s failed on remote node: %v", c, objID, err)
+			return fmt.Errorf("remote DeleteObject failed on node %s: %w", nodeAddr, err)
 		}
-	}()
+		c.logger.Infof("%s - DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+		return nil
+	} else {
+		// Asynchronous execution for nodes to prevent deadlocks
+		go func() {
+			_, err = client.DeleteObject(ctx, req)
+			if err != nil {
+				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
+			} else {
+				c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+			}
+		}()
 
-	// Return immediately
-	c.logger.Infof("%s - DeleteObject %s initiated asynchronously", c, objID)
-	return nil
+		// Return immediately
+		c.logger.Infof("%s - DeleteObject %s initiated asynchronously", c, objID)
+		return nil
+	}
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it

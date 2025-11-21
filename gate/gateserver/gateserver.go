@@ -274,9 +274,8 @@ func (s *GatewayServer) CallObject(ctx context.Context, req *gate_pb.CallObjectR
 
 // CreateObject implements the CreateObject RPC
 func (s *GatewayServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
-	// Call the cluster to create the object using the server's lifecycle context
-	// instead of the RPC context to ensure async creation completes even after RPC returns
-	objID, err := s.cluster.CreateObject(s.ctx, req.Type, req.Id)
+	// Call the cluster to create the object
+	objID, err := s.cluster.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -286,9 +285,8 @@ func (s *GatewayServer) CreateObject(ctx context.Context, req *gate_pb.CreateObj
 
 // DeleteObject implements the DeleteObject RPC
 func (s *GatewayServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
-	// Call the cluster to delete the object using the server's lifecycle context
-	// instead of the RPC context to ensure async deletion completes even after RPC returns
-	err := s.cluster.DeleteObject(s.ctx, req.Id)
+	// Call the cluster to delete the object
+	err := s.cluster.DeleteObject(ctx, req.Id)
 	if err != nil {
 		return nil, err
 	}
