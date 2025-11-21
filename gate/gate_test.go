@@ -404,6 +404,77 @@ func TestGatewayGetClientNotFound(t *testing.T) {
 	}
 }
 
+func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
+	config := &GatewayConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gateway-cleanup",
+	}
+
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+
+	ctx := context.Background()
+	err = gateway.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gateway.Start() returned error: %v", err)
+	}
+
+	// Register multiple clients
+	numClients := 10
+	clientProxies := make([]*ClientProxy, numClients)
+	clientIDs := make([]string, numClients)
+
+	for i := 0; i < numClients; i++ {
+		clientProxies[i] = gateway.Register(ctx)
+		clientIDs[i] = clientProxies[i].GetID()
+	}
+
+	// Verify all clients are registered
+	for i, clientID := range clientIDs {
+		_, exists := gateway.GetClient(clientID)
+		if !exists {
+			t.Fatalf("Client #%d not found after registration", i)
+		}
+
+		// Verify message channel is open
+		msgChan := clientProxies[i].MessageChan()
+		if msgChan == nil {
+			t.Fatalf("Client #%d message channel is nil before Stop", i)
+		}
+	}
+
+	// Stop the gateway
+	err = gateway.Stop()
+	if err != nil {
+		t.Fatalf("Gateway.Stop() returned error: %v", err)
+	}
+
+	// Verify all clients are unregistered
+	for i, clientID := range clientIDs {
+		_, exists := gateway.GetClient(clientID)
+		if exists {
+			t.Fatalf("Client #%d still exists after Stop", i)
+		}
+
+		// Verify client proxy is closed
+		if !clientProxies[i].IsClosed() {
+			t.Fatalf("Client #%d not closed after Stop", i)
+		}
+	}
+
+	// Verify internal clients map is empty
+	gateway.clientsMu.RLock()
+	clientCount := len(gateway.clients)
+	gateway.clientsMu.RUnlock()
+
+	if clientCount != 0 {
+		t.Fatalf("Gateway still has %d clients after Stop, expected 0", clientCount)
+	}
+}
+
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||

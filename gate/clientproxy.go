@@ -33,7 +33,7 @@ func (cp *ClientProxy) GetID() string {
 }
 
 // MessageChan returns the message channel for push notifications
-// Returns nil after Close() is called
+// Returns the channel even after Close() is called
 func (cp *ClientProxy) MessageChan() chan proto.Message {
 	return cp.messageChan
 }
@@ -48,6 +48,13 @@ func (cp *ClientProxy) Close() {
 	}
 	cp.closed = true
 	close(cp.messageChan)
+}
+
+// IsClosed returns true if the client proxy has been closed
+func (cp *ClientProxy) IsClosed() bool {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+	return cp.closed
 }
 
 // PushMessage handles a message received from a node for this client

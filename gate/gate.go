@@ -86,6 +86,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 func (g *Gateway) Stop() error {
 	g.logger.Infof("Stopping gateway")
 
+	g.cleanupClientProxies()
 	g.cancelAllNodeRegistrations()
 
 	g.logger.Infof("Gateway stopped")
@@ -140,6 +141,17 @@ func (g *Gateway) GetClient(clientID string) (*ClientProxy, bool) {
 	defer g.clientsMu.RUnlock()
 	client, exists := g.clients[clientID]
 	return client, exists
+}
+
+func (g *Gateway) cleanupClientProxies() {
+	g.clientsMu.Lock()
+	defer g.clientsMu.Unlock()
+
+	for clientID, clientProxy := range g.clients {
+		clientProxy.Close()
+		delete(g.clients, clientID)
+		g.logger.Infof("Cleaned up client proxy: %s", clientID)
+	}
 }
 
 // GetAdvertiseAddress returns the advertise address of this gateway
