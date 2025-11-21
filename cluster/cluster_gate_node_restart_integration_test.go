@@ -10,6 +10,13 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
+const (
+	// Test timing constants for node restart scenario
+	nodeShutdownDetectionTimeout = 5 * time.Second  // Time to wait for gate to detect node shutdown
+	reconnectionTimeout          = 15 * time.Second // Maximum time to wait for reconnection
+	reconnectionCheckInterval    = 2 * time.Second  // Interval between reconnection checks
+)
+
 // TestGateReconnectsToNodeAfterRestart tests that when a node shuts down and restarts
 // with the same address, the gate automatically reconnects to it
 func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
@@ -46,6 +53,9 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	defer gateCluster.Stop(ctx)
 
 	// Create and start the first node cluster
+	// Note: mustNewCluster registers cleanup via t.Cleanup, but we explicitly stop
+	// the node below to simulate a shutdown. The cleanup will run again at test end,
+	// but Stop should be safe to call multiple times.
 	t.Logf("Creating first node cluster at %s", nodeAddr)
 	nodeCluster1 := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 
@@ -84,9 +94,9 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 
 	// Wait for gate to detect the node is down
 	// The node should be removed from etcd when the cluster stops
-	// Give time for lease expiration and cluster state update
+	// Give time for etcd update and cluster state propagation
 	t.Logf("Waiting for gate to detect node shutdown...")
-	time.Sleep(5 * time.Second)
+	time.Sleep(nodeShutdownDetectionTimeout)
 
 	// Verify gate no longer sees the node (or sees it as unavailable)
 	nodes = gateCluster.GetNodes()
@@ -138,12 +148,11 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 
 	// Wait longer to ensure multiple cluster management ticks occur
 	// Each tick should attempt to reconnect if not already connected
-	maxWaitTime := 15 * time.Second
-	deadline := time.Now().Add(maxWaitTime)
+	deadline := time.Now().Add(reconnectionTimeout)
 	reconnected := false
 
 	for time.Now().Before(deadline) {
-		time.Sleep(2 * time.Second)
+		time.Sleep(reconnectionCheckInterval)
 
 		// Check if gate sees the node
 		nodes = gateCluster.GetNodes()
@@ -164,12 +173,12 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 		gates = nodeCluster2.GetGates()
 		gateNodeConns = gateCluster.GetNodeConnections().GetAllConnections()
 
-		t.Logf("Final state after waiting %v:", maxWaitTime)
+		t.Logf("Final state after waiting %v:", reconnectionTimeout)
 		t.Logf("  - Gate sees %d nodes: %v", len(nodes), nodes)
 		t.Logf("  - Gate has %d connections", len(gateNodeConns))
 		t.Logf("  - Node sees %d gates: %v", len(gates), gates)
 
-		t.Fatalf("Gate failed to reconnect to node within %v", maxWaitTime)
+		t.Fatalf("Gate failed to reconnect to node within %v", reconnectionTimeout)
 	}
 
 	// Verify gate sees the node again
