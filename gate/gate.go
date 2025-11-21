@@ -207,7 +207,7 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 	myReg, exists := g.nodeRegs[nodeAddr]
 	g.nodeRegMu.RUnlock()
 
-	if !exists || myReg == nil {
+	if !exists {
 		g.logger.Errorf("No registration found for node %s when starting goroutine", nodeAddr)
 		return
 	}
@@ -217,7 +217,7 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 	defer func() {
 		g.nodeRegMu.Lock()
 		// Only delete if we're still the current registration (not replaced by a newer one)
-		if reg, exists := g.nodeRegs[nodeAddr]; exists && reg.ctx == myCtx {
+		if reg, exists := g.nodeRegs[nodeAddr]; exists && reg != nil && reg.ctx == myCtx {
 			delete(g.nodeRegs, nodeAddr)
 			g.logger.Infof("Cleaned up registration for node %s", nodeAddr)
 		}
@@ -234,7 +234,7 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 
 	// Update registration with the stream
 	g.nodeRegMu.Lock()
-	if reg, exists := g.nodeRegs[nodeAddr]; exists && reg.ctx == myCtx {
+	if reg, exists := g.nodeRegs[nodeAddr]; exists && reg != nil && reg.ctx == myCtx {
 		reg.stream = stream
 	}
 	g.nodeRegMu.Unlock()
