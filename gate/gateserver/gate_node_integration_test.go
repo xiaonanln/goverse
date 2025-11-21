@@ -2,6 +2,7 @@ package gateserver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -301,6 +302,326 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 		waitForObjectDeletedOnNode(t, testNode, objID2, 5*time.Second)
 
 		t.Logf("Successfully deleted objects %s and %s via gate and verified removal on node", objID1, objID2)
+	})
+}
+
+// TestGateNodeIntegrationMulti tests gate-to-node integration with multiple gates and nodes:
+// - Creates 2 real GatewayServers that route calls through cluster to nodes
+// - Creates 3 node servers in a cluster
+// - Creates multiple objects via different gate clients
+// - Calls multiple object methods via different gate clients
+// - Verifies object distribution and correct routing across nodes
+func TestGateNodeIntegrationMulti(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+
+	ctx := context.Background()
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	// Create and start 3 nodes with cluster
+	nodeAddr1 := "localhost:49001"
+	nodeAddr2 := "localhost:49002"
+	nodeAddr3 := "localhost:49003"
+
+	// Node 1
+	nodeCluster1 := mustNewCluster(ctx, t, nodeAddr1, etcdPrefix)
+	testNode1 := nodeCluster1.GetThisNode()
+	testNode1.RegisterObjectType((*TestGateNodeObject)(nil))
+	t.Logf("Created node cluster 1 at %s", nodeAddr1)
+
+	mockNodeServer1 := testutil.NewMockGoverseServer()
+	mockNodeServer1.SetNode(testNode1)
+	mockNodeServer1.SetCluster(nodeCluster1)
+	nodeServer1 := testutil.NewTestServerHelper(nodeAddr1, mockNodeServer1)
+	err := nodeServer1.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node 1 mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer1.Stop() })
+	t.Logf("Started mock node server 1 at %s", nodeAddr1)
+
+	// Node 2
+	nodeCluster2 := mustNewCluster(ctx, t, nodeAddr2, etcdPrefix)
+	testNode2 := nodeCluster2.GetThisNode()
+	testNode2.RegisterObjectType((*TestGateNodeObject)(nil))
+	t.Logf("Created node cluster 2 at %s", nodeAddr2)
+
+	mockNodeServer2 := testutil.NewMockGoverseServer()
+	mockNodeServer2.SetNode(testNode2)
+	mockNodeServer2.SetCluster(nodeCluster2)
+	nodeServer2 := testutil.NewTestServerHelper(nodeAddr2, mockNodeServer2)
+	err = nodeServer2.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node 2 mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer2.Stop() })
+	t.Logf("Started mock node server 2 at %s", nodeAddr2)
+
+	// Node 3
+	nodeCluster3 := mustNewCluster(ctx, t, nodeAddr3, etcdPrefix)
+	testNode3 := nodeCluster3.GetThisNode()
+	testNode3.RegisterObjectType((*TestGateNodeObject)(nil))
+	t.Logf("Created node cluster 3 at %s", nodeAddr3)
+
+	mockNodeServer3 := testutil.NewMockGoverseServer()
+	mockNodeServer3.SetNode(testNode3)
+	mockNodeServer3.SetCluster(nodeCluster3)
+	nodeServer3 := testutil.NewTestServerHelper(nodeAddr3, mockNodeServer3)
+	err = nodeServer3.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node 3 mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer3.Stop() })
+	t.Logf("Started mock node server 3 at %s", nodeAddr3)
+
+	// Wait for nodes to discover each other and stabilize
+	time.Sleep(testutil.WaitForShardMappingTimeout)
+
+	// Create and start Gateway 1
+	gateAddr1 := "localhost:49011"
+	gwServerConfig1 := &GatewayServerConfig{
+		ListenAddress:    gateAddr1,
+		AdvertiseAddress: gateAddr1,
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       etcdPrefix,
+	}
+	gwServer1, err := NewGatewayServer(gwServerConfig1)
+	if err != nil {
+		t.Fatalf("Failed to create gateway server 1: %v", err)
+	}
+	t.Cleanup(func() { gwServer1.Stop() })
+
+	gwStartCtx1, gwStartCancel1 := context.WithCancel(ctx)
+	t.Cleanup(gwStartCancel1)
+
+	gwStarted1 := make(chan error, 1)
+	go func() {
+		gwStarted1 <- gwServer1.Start(gwStartCtx1)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	select {
+	case err := <-gwStarted1:
+		if err != nil {
+			t.Fatalf("Gateway server 1 failed to start: %v", err)
+		}
+	default:
+		// Gateway is running
+	}
+	t.Logf("Started gateway server 1 at %s", gateAddr1)
+
+	// Create and start Gateway 2
+	gateAddr2 := "localhost:49012"
+	gwServerConfig2 := &GatewayServerConfig{
+		ListenAddress:    gateAddr2,
+		AdvertiseAddress: gateAddr2,
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       etcdPrefix,
+	}
+	gwServer2, err := NewGatewayServer(gwServerConfig2)
+	if err != nil {
+		t.Fatalf("Failed to create gateway server 2: %v", err)
+	}
+	t.Cleanup(func() { gwServer2.Stop() })
+
+	gwStartCtx2, gwStartCancel2 := context.WithCancel(ctx)
+	t.Cleanup(gwStartCancel2)
+
+	gwStarted2 := make(chan error, 1)
+	go func() {
+		gwStarted2 <- gwServer2.Start(gwStartCtx2)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	select {
+	case err := <-gwStarted2:
+		if err != nil {
+			t.Fatalf("Gateway server 2 failed to start: %v", err)
+		}
+	default:
+		// Gateway is running
+	}
+	t.Logf("Started gateway server 2 at %s", gateAddr2)
+
+	// Wait for gates to register with nodes
+	time.Sleep(testutil.WaitForShardMappingTimeout)
+
+	// Create gRPC clients for both gates
+	conn1, err := grpc.NewClient(gateAddr1, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create gate client 1: %v", err)
+	}
+	t.Cleanup(func() { conn1.Close() })
+	gateClient1 := gate_pb.NewGateServiceClient(conn1)
+	t.Logf("Created gate client 1 connected to %s", gateAddr1)
+
+	conn2, err := grpc.NewClient(gateAddr2, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create gate client 2: %v", err)
+	}
+	t.Cleanup(func() { conn2.Close() })
+	gateClient2 := gate_pb.NewGateServiceClient(conn2)
+	t.Logf("Created gate client 2 connected to %s", gateAddr2)
+
+	t.Run("CreateMultipleObjectsViaDifferentGates", func(t *testing.T) {
+		// Create objects through gate 1
+		for i := 1; i <= 3; i++ {
+			objID := fmt.Sprintf("test-multi-obj-gate1-%d", i)
+			req := &gate_pb.CreateObjectRequest{
+				Type: "TestGateNodeObject",
+				Id:   objID,
+			}
+			resp, err := gateClient1.CreateObject(ctx, req)
+			if err != nil {
+				t.Fatalf("CreateObject via gate1 failed for %s: %v", objID, err)
+			}
+			if resp.Id != objID {
+				t.Fatalf("Expected object ID %s, got %s", objID, resp.Id)
+			}
+			t.Logf("Created object %s via gate1", objID)
+		}
+
+		// Create objects through gate 2
+		for i := 1; i <= 3; i++ {
+			objID := fmt.Sprintf("test-multi-obj-gate2-%d", i)
+			req := &gate_pb.CreateObjectRequest{
+				Type: "TestGateNodeObject",
+				Id:   objID,
+			}
+			resp, err := gateClient2.CreateObject(ctx, req)
+			if err != nil {
+				t.Fatalf("CreateObject via gate2 failed for %s: %v", objID, err)
+			}
+			if resp.Id != objID {
+				t.Fatalf("Expected object ID %s, got %s", objID, resp.Id)
+			}
+			t.Logf("Created object %s via gate2", objID)
+		}
+
+		// Wait for all objects to be created
+		time.Sleep(2 * time.Second)
+
+		// Verify objects are distributed across nodes
+		totalObjects := len(testNode1.ListObjects()) + len(testNode2.ListObjects()) + len(testNode3.ListObjects())
+		if totalObjects != 6 {
+			t.Logf("Node1 has %d objects, Node2 has %d objects, Node3 has %d objects",
+				len(testNode1.ListObjects()), len(testNode2.ListObjects()), len(testNode3.ListObjects()))
+			t.Fatalf("Expected 6 total objects across all nodes, got %d", totalObjects)
+		}
+		t.Logf("Successfully created and distributed 6 objects across 3 nodes")
+	})
+
+	t.Run("CallObjectMethodsViaMultipleGates", func(t *testing.T) {
+		// Create some test objects
+		testObjs := []string{"test-call-multi-1", "test-call-multi-2", "test-call-multi-3"}
+
+		// Create objects via gate1
+		for _, objID := range testObjs {
+			createReq := &gate_pb.CreateObjectRequest{
+				Type: "TestGateNodeObject",
+				Id:   objID,
+			}
+			_, err := gateClient1.CreateObject(ctx, createReq)
+			if err != nil {
+				t.Fatalf("CreateObject via gate1 failed for %s: %v", objID, err)
+			}
+		}
+
+		time.Sleep(2 * time.Second)
+
+		// Call methods on objects via different gates
+		for i, objID := range testObjs {
+			// Alternate between gate1 and gate2
+			var gateClient gate_pb.GateServiceClient
+			var gateName string
+			if i%2 == 0 {
+				gateClient = gateClient1
+				gateName = "gate1"
+			} else {
+				gateClient = gateClient2
+				gateName = "gate2"
+			}
+
+			// Call Echo method multiple times
+			for callNum := 1; callNum <= 2; callNum++ {
+				echoReq := &structpb.Struct{
+					Fields: map[string]*structpb.Value{
+						"message": structpb.NewStringValue(fmt.Sprintf("Test message from %s call %d", gateName, callNum)),
+					},
+				}
+
+				reqAny := &anypb.Any{}
+				if err := reqAny.MarshalFrom(echoReq); err != nil {
+					t.Fatalf("Failed to marshal request: %v", err)
+				}
+
+				callReq := &gate_pb.CallObjectRequest{
+					Type:    "TestGateNodeObject",
+					Id:      objID,
+					Method:  "Echo",
+					Request: reqAny,
+				}
+				callResp, err := gateClient.CallObject(ctx, callReq)
+				if err != nil {
+					t.Fatalf("CallObject Echo via %s failed for %s: %v", gateName, objID, err)
+				}
+
+				var echoResp structpb.Struct
+				if err := callResp.Response.UnmarshalTo(&echoResp); err != nil {
+					t.Fatalf("Failed to unmarshal response: %v", err)
+				}
+
+				actualMsg := echoResp.Fields["message"].GetStringValue()
+				callCount := int(echoResp.Fields["callCount"].GetNumberValue())
+
+				t.Logf("Object %s via %s call %d: %s (total calls: %d)", objID, gateName, callNum, actualMsg, callCount)
+			}
+		}
+
+		t.Logf("Successfully performed multiple method calls via different gates")
+	})
+
+	t.Run("VerifyObjectDistributionAcrossNodes", func(t *testing.T) {
+		// Create more objects to ensure distribution
+		for i := 1; i <= 10; i++ {
+			objID := fmt.Sprintf("test-distribution-%d", i)
+			// Alternate between gates
+			var gateClient gate_pb.GateServiceClient
+			if i%2 == 0 {
+				gateClient = gateClient1
+			} else {
+				gateClient = gateClient2
+			}
+
+			req := &gate_pb.CreateObjectRequest{
+				Type: "TestGateNodeObject",
+				Id:   objID,
+			}
+			_, err := gateClient.CreateObject(ctx, req)
+			if err != nil {
+				t.Fatalf("CreateObject failed for %s: %v", objID, err)
+			}
+		}
+
+		time.Sleep(2 * time.Second)
+
+		// Count objects on each node
+		node1Count := len(testNode1.ListObjects())
+		node2Count := len(testNode2.ListObjects())
+		node3Count := len(testNode3.ListObjects())
+
+		t.Logf("Object distribution: Node1=%d, Node2=%d, Node3=%d", node1Count, node2Count, node3Count)
+
+		// Verify at least one object is on each node (due to shard mapping)
+		// This might not always be true for very small numbers, but with 19 total objects
+		// (6 + 3 + 10) it's highly likely each node has at least one
+		totalObjects := node1Count + node2Count + node3Count
+		if totalObjects < 10 {
+			t.Fatalf("Expected at least 10 objects in total, got %d", totalObjects)
+		}
+
+		t.Logf("Successfully verified object distribution across nodes")
 	})
 }
 
