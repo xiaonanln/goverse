@@ -516,25 +516,14 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 // CallObjectAnyRequest calls a method on a distributed object, accepting an *anypb.Any request.
 // This is an optimized version that avoids unnecessary marshal/unmarshal cycles when the request
 // is already in Any format (e.g., from a gateway that received it from a client).
-func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (proto.Message, error) {
+func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (*anypb.Any, error) {
+	if !c.isGateway() {
+		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gateway clusters")
+	}
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
-	}
-
-	// Check if the object is on this node (only for node clusters)
-	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
-		// Call locally on node - need to unmarshal for local calls
-		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
-		var requestMsg proto.Message
-		if request != nil {
-			requestMsg, err = request.UnmarshalNew()
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal request for local call: %w", err)
-			}
-		}
-		return c.node.CallObject(ctx, objType, id, method, requestMsg)
 	}
 
 	// Route to the appropriate node (both node and gateway clusters can route)
@@ -558,17 +547,7 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
 	}
 
-	// Unmarshal the response
-	if resp.Response == nil {
-		return nil, nil
-	}
-
-	response, err := resp.Response.UnmarshalNew()
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	return response, nil
+	return resp.Response, nil
 }
 
 // CreateObject creates a distributed object on the appropriate node based on sharding

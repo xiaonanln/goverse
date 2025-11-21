@@ -242,21 +242,12 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 func (s *GatewayServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
 	// Use CallObjectAnyRequest to pass Any directly without unmarshaling (optimization)
 	// The cluster will unmarshal only if needed (for local calls)
-	responseMsg, err := s.cluster.CallObjectAnyRequest(ctx, req.Type, req.Id, req.Method, req.Request)
+	response, err := s.cluster.CallObjectAnyRequest(ctx, req.Type, req.Id, req.Method, req.Request)
 	if err != nil {
 		return nil, err
 	}
 
-	// Marshal the response back to Any
-	var responseAny *anypb.Any
-	if responseMsg != nil {
-		responseAny = &anypb.Any{}
-		if err := responseAny.MarshalFrom(responseMsg); err != nil {
-			return nil, fmt.Errorf("failed to marshal response: %w", err)
-		}
-	}
-
-	return &gate_pb.CallObjectResponse{Response: responseAny}, nil
+	return &gate_pb.CallObjectResponse{Response: response}, nil
 }
 
 // CreateObject implements the CreateObject RPC
