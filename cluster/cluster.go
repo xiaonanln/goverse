@@ -273,6 +273,11 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	// Stop shard mapping management
 	c.stopShardMappingManagement()
 
+	// Clean up gate channels (for node clusters)
+	if c.isNode() {
+		c.cleanupGateChannels()
+	}
+
 	// Stop watching cluster state (must stop before closing etcd)
 	c.consensusManager.StopWatch()
 
@@ -685,6 +690,19 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
 		}
 	}
+}
+
+// cleanupGateChannels closes all gate channels and clears the map
+// Should be called during cluster shutdown
+func (c *Cluster) cleanupGateChannels() {
+	c.gateChannelsMu.Lock()
+	defer c.gateChannelsMu.Unlock()
+
+	for gateAddr, ch := range c.gateChannels {
+		close(ch)
+		c.logger.Infof("Closed gate channel for %s during shutdown", gateAddr)
+	}
+	c.gateChannels = make(map[string]chan proto.Message)
 }
 
 // PushMessageToClient sends a message to a client by its ID
