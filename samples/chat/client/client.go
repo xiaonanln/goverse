@@ -158,7 +158,8 @@ func (c *ChatClient) GetRecentMessages() error {
 	resp := respMsg.(*chat_pb.ChatRoom_GetRecentMessagesResponse)
 	fmt.Printf("Recent messages in [%s]:\n", c.roomName)
 	for _, msg := range resp.Messages {
-		timestamp := time.Unix(msg.Timestamp, 0).Format("15:04:05")
+		// Timestamp is in microseconds
+		timestamp := time.UnixMicro(msg.Timestamp).Format("15:04:05")
 		fmt.Printf("[%s] %s: %s\n", timestamp, msg.UserName, msg.Message)
 		// Update lastMsgTimestamp if this message is newer
 		if msg.Timestamp > c.lastMsgTimestamp {
@@ -188,7 +189,8 @@ func (c *ChatClient) listenForMessages(stream gate_pb.GateService_RegisterClient
 		case *chat_pb.Client_NewMessageNotification:
 			// Display the pushed message
 			chatMsg := notification.Message
-			timestamp := time.Unix(chatMsg.Timestamp, 0).Format("15:04:05")
+			// Timestamp is in microseconds
+			timestamp := time.UnixMicro(chatMsg.Timestamp).Format("15:04:05")
 			fmt.Printf("\n[%s] %s: %s\n", timestamp, chatMsg.UserName, chatMsg.Message)
 
 			// Update last message timestamp
