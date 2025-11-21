@@ -17,17 +17,22 @@ type GatewayConfig struct {
 	EtcdPrefix       string // etcd key prefix (default: "/goverse")
 }
 
+// nodeReg holds registration information for a single node
+type nodeReg struct {
+	stream goverse_pb.Goverse_RegisterGateClient // active stream to the node
+	cancel context.CancelFunc                     // cancel function for the registration goroutine
+	ctx    context.Context                        // context for the registration goroutine (used for comparison)
+}
+
 // Gateway handles the core gateway logic for routing requests to nodes
 type Gateway struct {
-	config            *GatewayConfig
-	advertiseAddress  string
-	logger            *logger.Logger
-	clients           map[string]*ClientProxy                          // Map of clientID -> ClientProxy
-	clientsMu         sync.RWMutex                                     // Protects clients map
-	registeredNodes   map[string]goverse_pb.Goverse_RegisterGateClient // tracks active streams by node address
-	registeredNodesMu sync.RWMutex
-	nodeCancels       map[string]context.CancelFunc // tracks cancel functions for node registration goroutines
-	nodeCancelsMu     sync.RWMutex
+	config           *GatewayConfig
+	advertiseAddress string
+	logger           *logger.Logger
+	clients          map[string]*ClientProxy // Map of clientID -> ClientProxy
+	clientsMu        sync.RWMutex            // Protects clients map
+	nodeRegs         map[string]*nodeReg     // tracks node registrations by node address
+	nodeRegMu        sync.RWMutex            // Protects nodeRegs map
 }
 
 // NewGateway creates a new gateway instance
@@ -41,8 +46,7 @@ func NewGateway(config *GatewayConfig) (*Gateway, error) {
 		advertiseAddress: config.AdvertiseAddress,
 		logger:           logger.NewLogger("Gateway"),
 		clients:          make(map[string]*ClientProxy),
-		registeredNodes:  make(map[string]goverse_pb.Goverse_RegisterGateClient),
-		nodeCancels:      make(map[string]context.CancelFunc),
+		nodeRegs:         make(map[string]*nodeReg),
 	}
 
 	return gateway, nil
@@ -82,18 +86,23 @@ func (g *Gateway) Start(ctx context.Context) error {
 func (g *Gateway) Stop() error {
 	g.logger.Infof("Stopping gateway")
 
-	// Cancel all node registration goroutines
-	g.nodeCancelsMu.Lock()
-	for nodeAddr, cancel := range g.nodeCancels {
-		g.logger.Infof("Cancelling registration for node %s during shutdown", nodeAddr)
-		cancel()
-	}
-	// Clear the map
-	g.nodeCancels = make(map[string]context.CancelFunc)
-	g.nodeCancelsMu.Unlock()
+	g.cancelAllNodeRegistrations()
 
 	g.logger.Infof("Gateway stopped")
 	return nil
+}
+
+// cancelAllNodeRegistrations cancels all active node registration goroutines
+func (g *Gateway) cancelAllNodeRegistrations() {
+	g.nodeRegMu.Lock()
+	defer g.nodeRegMu.Unlock()
+
+	for nodeAddr, reg := range g.nodeRegs {
+		g.logger.Infof("Cancelling registration for node %s during shutdown", nodeAddr)
+		reg.cancel()
+	}
+	// Clear the map
+	g.nodeRegs = make(map[string]*nodeReg)
 }
 
 // Register handles client registration and returns a client ID and the client proxy
@@ -148,24 +157,24 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 	}
 
 	// Cancel registrations for nodes that are no longer in the connections
-	g.nodeCancelsMu.Lock()
-	for nodeAddr, cancel := range g.nodeCancels {
+	g.nodeRegMu.Lock()
+	for nodeAddr, reg := range g.nodeRegs {
 		if !desiredNodes[nodeAddr] {
 			g.logger.Infof("Cancelling registration for removed node %s", nodeAddr)
-			cancel()
-			delete(g.nodeCancels, nodeAddr)
+			reg.cancel()
+			delete(g.nodeRegs, nodeAddr)
 		}
 	}
-	g.nodeCancelsMu.Unlock()
+	g.nodeRegMu.Unlock()
 
 	// Register with new or reconnected nodes
 	for nodeAddr, client := range nodeConnections {
 		// Check if already registered with this node (and stream is still active)
-		g.registeredNodesMu.RLock()
-		existingStream, registered := g.registeredNodes[nodeAddr]
-		g.registeredNodesMu.RUnlock()
+		g.nodeRegMu.RLock()
+		existingReg, registered := g.nodeRegs[nodeAddr]
+		g.nodeRegMu.RUnlock()
 
-		if registered && existingStream.Context().Err() == nil {
+		if registered && existingReg.stream != nil && existingReg.stream.Context().Err() == nil {
 			// Still have an active registration
 			continue
 		}
@@ -175,14 +184,17 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 		nodeCtx, nodeCancel := context.WithCancel(ctx)
 		
 		// Store cancel function before starting goroutine
-		// If there's an old cancel function (from a goroutine that's exiting), replace it
-		g.nodeCancelsMu.Lock()
-		if oldCancel, exists := g.nodeCancels[nodeAddr]; exists {
+		// If there's an old registration (from a goroutine that's exiting), replace it
+		g.nodeRegMu.Lock()
+		if oldReg, exists := g.nodeRegs[nodeAddr]; exists {
 			// Cancel the old goroutine if it hasn't already exited
-			oldCancel()
+			oldReg.cancel()
 		}
-		g.nodeCancels[nodeAddr] = nodeCancel
-		g.nodeCancelsMu.Unlock()
+		g.nodeRegs[nodeAddr] = &nodeReg{
+			ctx:    nodeCtx,
+			cancel: nodeCancel,
+		}
+		g.nodeRegMu.Unlock()
 		
 		go g.registerWithNode(nodeCtx, nodeAddr, client)
 	}
@@ -190,11 +202,21 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 
 // registerWithNode registers this gate with a specific node and handles the message stream
 func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client goverse_pb.GoverseClient) {
-	// Ensure cleanup of cancel function on exit
+	// Get the context for this goroutine to check later
+	g.nodeRegMu.RLock()
+	myReg := g.nodeRegs[nodeAddr]
+	myCtx := myReg.ctx
+	g.nodeRegMu.RUnlock()
+
+	// Ensure cleanup of registration on exit
 	defer func() {
-		g.nodeCancelsMu.Lock()
-		delete(g.nodeCancels, nodeAddr)
-		g.nodeCancelsMu.Unlock()
+		g.nodeRegMu.Lock()
+		// Only delete if we're still the current registration (not replaced by a newer one)
+		if reg, exists := g.nodeRegs[nodeAddr]; exists && reg.ctx == myCtx {
+			delete(g.nodeRegs, nodeAddr)
+			g.logger.Infof("Cleaned up registration for node %s", nodeAddr)
+		}
+		g.nodeRegMu.Unlock()
 	}()
 
 	stream, err := client.RegisterGate(ctx, &goverse_pb.RegisterGateRequest{
@@ -205,24 +227,13 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 		return
 	}
 
-	// Mark as registered with this specific stream
-	g.registeredNodesMu.Lock()
-	g.registeredNodes[nodeAddr] = stream
-	g.registeredNodesMu.Unlock()
+	// Update registration with the stream
+	g.nodeRegMu.Lock()
+	if reg, exists := g.nodeRegs[nodeAddr]; exists && reg.ctx == myCtx {
+		reg.stream = stream
+	}
+	g.nodeRegMu.Unlock()
 	g.logger.Infof("Successfully registered gate with node %s", nodeAddr)
-
-	// Ensure cleanup on exit - only delete if we're still the registered stream
-	defer func() {
-		g.registeredNodesMu.Lock()
-		// Only delete if the stored stream is still ours (not replaced by a newer connection)
-		if g.registeredNodes[nodeAddr] == stream {
-			delete(g.registeredNodes, nodeAddr)
-			g.logger.Infof("Unregistered from node %s", nodeAddr)
-		} else {
-			g.logger.Infof("Not unregistering from node %s - a newer connection exists", nodeAddr)
-		}
-		g.registeredNodesMu.Unlock()
-	}()
 
 	// Use stream's context to detect when stream is closed
 	streamCtx := stream.Context()

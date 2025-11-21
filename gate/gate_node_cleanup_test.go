@@ -40,32 +40,32 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 
 	client2 := goverse_pb.NewGoverseClient(conn)
 
-	// Manually add cancel functions to simulate active registrations
+	// Manually add registrations to simulate active registrations
 	// In real scenario these would be added by RegisterWithNodes when goroutines start
 	ctx1, cancel1 := context.WithCancel(ctx)
 	ctx2, cancel2 := context.WithCancel(ctx)
 
-	gateway.nodeCancelsMu.Lock()
-	gateway.nodeCancels["node1"] = cancel1
-	gateway.nodeCancels["node2"] = cancel2
-	gateway.nodeCancelsMu.Unlock()
-
-	// Also add to registered nodes to simulate successful registrations
-	// This prevents RegisterWithNodes from creating new registrations
 	mockStream1 := &mockGateStream{ctx: ctx1}
 	mockStream2 := &mockGateStream{ctx: ctx2}
-	gateway.registeredNodesMu.Lock()
-	gateway.registeredNodes["node1"] = mockStream1
-	gateway.registeredNodes["node2"] = mockStream2
-	gateway.registeredNodesMu.Unlock()
 
-	// Verify both nodes have cancel functions
-	gateway.nodeCancelsMu.RLock()
-	initialCount := len(gateway.nodeCancels)
-	gateway.nodeCancelsMu.RUnlock()
+	gateway.nodeRegMu.Lock()
+	gateway.nodeRegs["node1"] = &nodeReg{
+		stream: mockStream1,
+		cancel: cancel1,
+	}
+	gateway.nodeRegs["node2"] = &nodeReg{
+		stream: mockStream2,
+		cancel: cancel2,
+	}
+	gateway.nodeRegMu.Unlock()
+
+	// Verify both nodes have registrations
+	gateway.nodeRegMu.RLock()
+	initialCount := len(gateway.nodeRegs)
+	gateway.nodeRegMu.RUnlock()
 
 	if initialCount != 2 {
-		t.Errorf("Expected 2 cancel functions initially, got %d", initialCount)
+		t.Errorf("Expected 2 registrations initially, got %d", initialCount)
 	}
 
 	// Verify contexts are not cancelled yet
@@ -106,13 +106,13 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 		// Expected
 	}
 
-	// Verify node1 cancel function was removed from the map
-	gateway.nodeCancelsMu.RLock()
-	_, hasNode1 := gateway.nodeCancels["node1"]
-	gateway.nodeCancelsMu.RUnlock()
+	// Verify node1 registration was removed from the map
+	gateway.nodeRegMu.RLock()
+	_, hasNode1 := gateway.nodeRegs["node1"]
+	gateway.nodeRegMu.RUnlock()
 
 	if hasNode1 {
-		t.Error("Expected node1 cancel function to be removed from map")
+		t.Error("Expected node1 registration to be removed from map")
 	}
 }
 
@@ -146,18 +146,16 @@ func TestRegisterWithNodesIdempotent(t *testing.T) {
 
 	client1 := goverse_pb.NewGoverseClient(conn)
 
-	// Manually add a cancel function to simulate an active registration
+	// Manually add a registration to simulate an active registration
 	ctx1, cancel1 := context.WithCancel(ctx)
-	gateway.nodeCancelsMu.Lock()
-	gateway.nodeCancels["node1"] = cancel1
-	gateway.nodeCancelsMu.Unlock()
-
-	// Also add to registered nodes to simulate successful registration
-	// This will make RegisterWithNodes skip re-registration
 	mockStream := &mockGateStream{ctx: ctx1}
-	gateway.registeredNodesMu.Lock()
-	gateway.registeredNodes["node1"] = mockStream
-	gateway.registeredNodesMu.Unlock()
+
+	gateway.nodeRegMu.Lock()
+	gateway.nodeRegs["node1"] = &nodeReg{
+		stream: mockStream,
+		cancel: cancel1,
+	}
+	gateway.nodeRegMu.Unlock()
 
 	connections := map[string]goverse_pb.GoverseClient{
 		"node1": client1,
@@ -175,13 +173,13 @@ func TestRegisterWithNodesIdempotent(t *testing.T) {
 		// Expected
 	}
 
-	// Verify cancel function still exists
-	gateway.nodeCancelsMu.RLock()
-	_, hasNode1 := gateway.nodeCancels["node1"]
-	gateway.nodeCancelsMu.RUnlock()
+	// Verify registration still exists
+	gateway.nodeRegMu.RLock()
+	_, hasNode1 := gateway.nodeRegs["node1"]
+	gateway.nodeRegMu.RUnlock()
 
 	if !hasNode1 {
-		t.Error("Expected node1 cancel function to still exist after idempotent call")
+		t.Error("Expected node1 registration to still exist after idempotent call")
 	}
 }
 
@@ -215,24 +213,24 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	// Manually add cancel functions to simulate active registrations
+	// Manually add registrations to simulate active registrations
 	ctx1, cancel1 := context.WithCancel(ctx)
 	ctx2, cancel2 := context.WithCancel(ctx)
 	ctx3, cancel3 := context.WithCancel(ctx)
 
-	gateway.nodeCancelsMu.Lock()
-	gateway.nodeCancels["node1"] = cancel1
-	gateway.nodeCancels["node2"] = cancel2
-	gateway.nodeCancels["node3"] = cancel3
-	gateway.nodeCancelsMu.Unlock()
+	gateway.nodeRegMu.Lock()
+	gateway.nodeRegs["node1"] = &nodeReg{cancel: cancel1}
+	gateway.nodeRegs["node2"] = &nodeReg{cancel: cancel2}
+	gateway.nodeRegs["node3"] = &nodeReg{cancel: cancel3}
+	gateway.nodeRegMu.Unlock()
 
 	// Verify registrations were created
-	gateway.nodeCancelsMu.RLock()
-	cancelCountBefore := len(gateway.nodeCancels)
-	gateway.nodeCancelsMu.RUnlock()
+	gateway.nodeRegMu.RLock()
+	regCountBefore := len(gateway.nodeRegs)
+	gateway.nodeRegMu.RUnlock()
 
-	if cancelCountBefore != 3 {
-		t.Errorf("Expected 3 cancel functions before stop, got %d", cancelCountBefore)
+	if regCountBefore != 3 {
+		t.Errorf("Expected 3 registrations before stop, got %d", regCountBefore)
 	}
 
 	// Verify contexts are active
@@ -260,13 +258,13 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 		}
 	}
 
-	// Verify all cancel functions were cleaned up
-	gateway.nodeCancelsMu.RLock()
-	cancelCountAfter := len(gateway.nodeCancels)
-	gateway.nodeCancelsMu.RUnlock()
+	// Verify all registrations were cleaned up
+	gateway.nodeRegMu.RLock()
+	regCountAfter := len(gateway.nodeRegs)
+	gateway.nodeRegMu.RUnlock()
 
-	if cancelCountAfter != 0 {
-		t.Errorf("Expected 0 cancel functions after stop, got %d", cancelCountAfter)
+	if regCountAfter != 0 {
+		t.Errorf("Expected 0 registrations after stop, got %d", regCountAfter)
 	}
 }
 
@@ -291,21 +289,21 @@ func TestRegisterWithNodesEmptyMap(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	// Manually add cancel functions to simulate active registrations
+	// Manually add registrations to simulate active registrations
 	ctx1, cancel1 := context.WithCancel(ctx)
 	ctx2, cancel2 := context.WithCancel(ctx)
 
-	gateway.nodeCancelsMu.Lock()
-	gateway.nodeCancels["node1"] = cancel1
-	gateway.nodeCancels["node2"] = cancel2
-	gateway.nodeCancelsMu.Unlock()
+	gateway.nodeRegMu.Lock()
+	gateway.nodeRegs["node1"] = &nodeReg{cancel: cancel1}
+	gateway.nodeRegs["node2"] = &nodeReg{cancel: cancel2}
+	gateway.nodeRegMu.Unlock()
 
-	gateway.nodeCancelsMu.RLock()
-	cancelCountBefore := len(gateway.nodeCancels)
-	gateway.nodeCancelsMu.RUnlock()
+	gateway.nodeRegMu.RLock()
+	regCountBefore := len(gateway.nodeRegs)
+	gateway.nodeRegMu.RUnlock()
 
-	if cancelCountBefore != 2 {
-		t.Errorf("Expected 2 cancel functions before empty map, got %d", cancelCountBefore)
+	if regCountBefore != 2 {
+		t.Errorf("Expected 2 registrations before empty map, got %d", regCountBefore)
 	}
 
 	// Verify contexts are active
@@ -339,11 +337,11 @@ func TestRegisterWithNodesEmptyMap(t *testing.T) {
 		t.Error("Expected ctx2 to be cancelled after empty map call")
 	}
 
-	gateway.nodeCancelsMu.RLock()
-	cancelCountAfter := len(gateway.nodeCancels)
-	gateway.nodeCancelsMu.RUnlock()
+	gateway.nodeRegMu.RLock()
+	regCountAfter := len(gateway.nodeRegs)
+	gateway.nodeRegMu.RUnlock()
 
-	if cancelCountAfter != 0 {
-		t.Errorf("Expected 0 cancel functions after empty map, got %d", cancelCountAfter)
+	if regCountAfter != 0 {
+		t.Errorf("Expected 0 registrations after empty map, got %d", regCountAfter)
 	}
 }
