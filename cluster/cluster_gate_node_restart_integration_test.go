@@ -17,6 +17,17 @@ const (
 	reconnectionCheckInterval    = 2 * time.Second  // Interval between reconnection checks
 )
 
+// makeTestClusterConfig creates a standard cluster config for testing
+func makeTestClusterConfig(etcdPrefix string) Config {
+	return Config{
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    etcdPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
+	}
+}
+
 // TestGateReconnectsToNodeAfterRestart tests that when a node shuts down and restarts
 // with the same address, the gate automatically reconnects to it
 func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
@@ -63,15 +74,9 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 		t.Fatalf("Failed to start first node: %v", err)
 	}
 
-	cfg1 := Config{
-		EtcdAddress:                   "localhost:2379",
-		EtcdPrefix:                    testPrefix,
-		MinQuorum:                     1,
-		ClusterStateStabilityDuration: 3 * time.Second,
-		ShardMappingCheckInterval:     1 * time.Second,
-	}
+	clusterCfg := makeTestClusterConfig(testPrefix)
 
-	nodeCluster1, err := NewClusterWithNode(cfg1, n1)
+	nodeCluster1, err := NewClusterWithNode(clusterCfg, n1)
 	if err != nil {
 		n1.Stop(ctx)
 		t.Fatalf("Failed to create first cluster: %v", err)
@@ -147,15 +152,8 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	}
 	defer n2.Stop(ctx)
 
-	cfg := Config{
-		EtcdAddress:                   "localhost:2379",
-		EtcdPrefix:                    testPrefix,
-		MinQuorum:                     1,
-		ClusterStateStabilityDuration: 3 * time.Second,
-		ShardMappingCheckInterval:     1 * time.Second,
-	}
-
-	nodeCluster2, err := NewClusterWithNode(cfg, n2)
+	// Reuse the same cluster config for the restarted node
+	nodeCluster2, err := NewClusterWithNode(clusterCfg, n2)
 	if err != nil {
 		t.Fatalf("Failed to create second cluster: %v", err)
 	}
