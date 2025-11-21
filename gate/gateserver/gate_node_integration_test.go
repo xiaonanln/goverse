@@ -623,6 +623,107 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 
 		t.Logf("Successfully verified object distribution across nodes")
 	})
+
+	t.Run("DeleteObjectsViaMultipleGates", func(t *testing.T) {
+		// Create objects via different gates
+		objID1 := "test-multi-delete-1"
+		objID2 := "test-multi-delete-2"
+		objID3 := "test-multi-delete-3"
+		objID4 := "test-multi-delete-4"
+
+		// Create objects via gate1
+		createReq1 := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID1,
+		}
+		_, err := gateClient1.CreateObject(ctx, createReq1)
+		if err != nil {
+			t.Fatalf("CreateObject via gate1 failed for %s: %v", objID1, err)
+		}
+
+		createReq2 := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID2,
+		}
+		_, err = gateClient1.CreateObject(ctx, createReq2)
+		if err != nil {
+			t.Fatalf("CreateObject via gate1 failed for %s: %v", objID2, err)
+		}
+
+		// Create objects via gate2
+		createReq3 := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID3,
+		}
+		_, err = gateClient2.CreateObject(ctx, createReq3)
+		if err != nil {
+			t.Fatalf("CreateObject via gate2 failed for %s: %v", objID3, err)
+		}
+
+		createReq4 := &gate_pb.CreateObjectRequest{
+			Type: "TestGateNodeObject",
+			Id:   objID4,
+		}
+		_, err = gateClient2.CreateObject(ctx, createReq4)
+		if err != nil {
+			t.Fatalf("CreateObject via gate2 failed for %s: %v", objID4, err)
+		}
+
+		// Wait for objects to be created
+		time.Sleep(2 * time.Second)
+
+		// Count objects before deletion
+		initialCount := len(testNode1.ListObjects()) + len(testNode2.ListObjects()) + len(testNode3.ListObjects())
+		t.Logf("Initial total objects: %d", initialCount)
+
+		// Delete objects via gate1
+		deleteReq1 := &gate_pb.DeleteObjectRequest{
+			Id: objID1,
+		}
+		_, err = gateClient1.DeleteObject(ctx, deleteReq1)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate1 failed for %s: %v", objID1, err)
+		}
+
+		deleteReq3 := &gate_pb.DeleteObjectRequest{
+			Id: objID3,
+		}
+		_, err = gateClient1.DeleteObject(ctx, deleteReq3)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate1 failed for %s: %v", objID3, err)
+		}
+
+		// Delete objects via gate2
+		deleteReq2 := &gate_pb.DeleteObjectRequest{
+			Id: objID2,
+		}
+		_, err = gateClient2.DeleteObject(ctx, deleteReq2)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate2 failed for %s: %v", objID2, err)
+		}
+
+		deleteReq4 := &gate_pb.DeleteObjectRequest{
+			Id: objID4,
+		}
+		_, err = gateClient2.DeleteObject(ctx, deleteReq4)
+		if err != nil {
+			t.Fatalf("DeleteObject via gate2 failed for %s: %v", objID4, err)
+		}
+
+		// Wait for objects to be deleted
+		time.Sleep(2 * time.Second)
+
+		// Count objects after deletion
+		finalCount := len(testNode1.ListObjects()) + len(testNode2.ListObjects()) + len(testNode3.ListObjects())
+		t.Logf("Final total objects: %d", finalCount)
+
+		// Verify that 4 objects were deleted
+		if finalCount != initialCount-4 {
+			t.Fatalf("Expected %d objects after deletion, got %d", initialCount-4, finalCount)
+		}
+
+		t.Logf("Successfully deleted 4 objects via multiple gates and verified removal across nodes")
+	})
 }
 
 // Note: For full gate-to-node integration tests with cluster routing,
