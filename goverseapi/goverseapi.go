@@ -16,17 +16,12 @@ type ServerConfig = server.ServerConfig
 type Server = server.Server
 type Node = node.Node
 type Object = object.Object
-type ClientObject = client.ClientObject
 type BaseObject = object.BaseObject
 type BaseClient = client.BaseClient
 type Cluster = cluster.Cluster
 
 func NewServer(config *ServerConfig) (*Server, error) {
 	return server.NewServer(config)
-}
-
-func RegisterClientType(clientObj ClientObject) {
-	cluster.This().GetThisNode().RegisterClientType(clientObj)
 }
 
 func RegisterObjectType(obj Object) {

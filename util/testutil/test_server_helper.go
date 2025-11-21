@@ -103,7 +103,6 @@ type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	DeleteObject(ctx context.Context, id string) error
-	PushMessageToClient(clientID string, message proto.Message) error
 }
 
 type clusterInterface interface {

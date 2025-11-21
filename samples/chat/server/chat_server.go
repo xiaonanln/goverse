@@ -37,7 +37,11 @@ func main() {
 }
 
 func initializeChatServer() {
-	goverseapi.RegisterClientType((*ChatClient)(nil))
+	// TODO: Refactor chat sample to match GATEWAY_DESIGN.md section 4.1-4.3
+	// The ChatClient object type is part of the old client-to-node architecture.
+	// Per the design doc, clients should call ChatRoom objects directly via CallObject,
+	// without ChatClient objects on nodes. Client proxies should live in the gateway.
+	goverseapi.RegisterObjectType((*ChatClient)(nil))
 	goverseapi.RegisterObjectType((*ChatRoomMgr)(nil))
 	goverseapi.RegisterObjectType((*ChatRoom)(nil))
 
