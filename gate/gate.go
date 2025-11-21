@@ -11,6 +11,13 @@ import (
 	"github.com/xiaonanln/goverse/util/uniqueid"
 )
 
+const (
+	// shutdownTimeout is the maximum time to wait for goroutines to finish during shutdown
+	shutdownTimeout = 5 * time.Second
+	// recvGoroutineCleanupTimeout is the time to wait for stream receive goroutine to finish
+	recvGoroutineCleanupTimeout = 100 * time.Millisecond
+)
+
 // GatewayConfig holds configuration for the gateway
 type GatewayConfig struct {
 	AdvertiseAddress string // Address to advertise to the cluster (e.g., "localhost:49000")
@@ -30,6 +37,7 @@ type Gateway struct {
 	ctx               context.Context    // Gateway context for lifecycle management
 	cancel            context.CancelFunc // Cancel function for gateway context
 	wg                sync.WaitGroup     // WaitGroup to track goroutines
+	stopOnce          sync.Once          // Ensures Stop is only executed once
 }
 
 // NewGateway creates a new gateway instance
@@ -84,39 +92,43 @@ func (g *Gateway) Start(ctx context.Context) error {
 }
 
 // Stop stops the gateway and cleans up resources
+// Safe to call multiple times
 func (g *Gateway) Stop() error {
-	g.logger.Infof("Stopping gateway")
+	var err error
+	g.stopOnce.Do(func() {
+		g.logger.Infof("Stopping gateway")
 
-	// Cancel context to signal all goroutines to stop
-	if g.cancel != nil {
-		g.cancel()
-	}
+		// Cancel context to signal all goroutines to stop
+		if g.cancel != nil {
+			g.cancel()
+		}
 
-	// Wait for all goroutines to finish with timeout
-	done := make(chan struct{})
-	go func() {
-		g.wg.Wait()
-		close(done)
-	}()
+		// Wait for all goroutines to finish with timeout
+		done := make(chan struct{})
+		go func() {
+			g.wg.Wait()
+			close(done)
+		}()
 
-	select {
-	case <-done:
-		g.logger.Infof("All gateway goroutines stopped")
-	case <-time.After(5 * time.Second):
-		g.logger.Warnf("Timeout waiting for gateway goroutines to stop")
-	}
+		select {
+		case <-done:
+			g.logger.Infof("All gateway goroutines stopped")
+		case <-time.After(shutdownTimeout):
+			g.logger.Warnf("Timeout waiting for gateway goroutines to stop")
+		}
 
-	// Close all client connections
-	g.clientsMu.Lock()
-	for clientID, clientProxy := range g.clients {
-		clientProxy.Close()
-		g.logger.Debugf("Closed client proxy for %s", clientID)
-	}
-	g.clients = make(map[string]*ClientProxy)
-	g.clientsMu.Unlock()
+		// Close all client connections
+		g.clientsMu.Lock()
+		for clientID, clientProxy := range g.clients {
+			clientProxy.Close()
+			g.logger.Debugf("Closed client proxy for %s", clientID)
+		}
+		g.clients = make(map[string]*ClientProxy)
+		g.clientsMu.Unlock()
 
-	g.logger.Infof("Gateway stopped")
-	return nil
+		g.logger.Infof("Gateway stopped")
+	})
+	return err
 }
 
 // Register handles client registration and returns a client ID and the client proxy
@@ -246,7 +258,7 @@ func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client 
 		// Wait for receive goroutine to finish with timeout
 		select {
 		case <-recvDone:
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(recvGoroutineCleanupTimeout):
 			g.logger.Warnf("Recv goroutine for node %s did not finish in time", nodeAddr)
 		}
 	}()

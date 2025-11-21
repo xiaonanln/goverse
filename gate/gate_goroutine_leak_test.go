@@ -2,7 +2,9 @@ package gate
 
 import (
 	"context"
+	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -194,6 +196,72 @@ func TestGatewayMultipleStopsNoLeak(t *testing.T) {
 	err = gateway.Stop()
 	if err != nil {
 		t.Fatalf("Third Stop failed: %v", err)
+	}
+}
+
+// TestGatewayConcurrentStops verifies concurrent Stop calls are safe
+func TestGatewayConcurrentStops(t *testing.T) {
+	config := &GatewayConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test",
+	}
+	gateway, err := NewGateway(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway: %v", err)
+	}
+
+	// Create mock streams
+	streams := make([]*mockRegisterGateClient, 3)
+	for i := range streams {
+		streams[i] = newMockRegisterGateClient()
+		streams[i].msgCh <- &goverse_pb.GateMessage{
+			Message: &goverse_pb.GateMessage_RegisterGateResponse{
+				RegisterGateResponse: &goverse_pb.RegisterGateResponse{},
+			},
+		}
+	}
+
+	// Register with multiple nodes
+	nodeConnections := make(map[string]goverse_pb.GoverseClient)
+	for i := range streams {
+		stream := streams[i]
+		client := &mockGoverseClient{
+			registerGateFunc: func(ctx context.Context, in *goverse_pb.RegisterGateRequest, opts ...grpc.CallOption) (goverse_pb.Goverse_RegisterGateClient, error) {
+				return stream, nil
+			},
+		}
+		nodeConnections[fmt.Sprintf("node%d:800%d", i, i)] = client
+	}
+	gateway.RegisterWithNodes(context.Background(), nodeConnections)
+	time.Sleep(50 * time.Millisecond)
+
+	// Call Stop concurrently from multiple goroutines
+	var wg sync.WaitGroup
+	stopCount := 10
+	wg.Add(stopCount)
+	for i := 0; i < stopCount; i++ {
+		go func() {
+			defer wg.Done()
+			err := gateway.Stop()
+			if err != nil {
+				t.Errorf("Concurrent Stop failed: %v", err)
+			}
+		}()
+	}
+
+	// Wait for all Stop calls to complete
+	wg.Wait()
+
+	// Close mock streams
+	for _, stream := range streams {
+		stream.Close()
+	}
+
+	// One more Stop should still be safe
+	err = gateway.Stop()
+	if err != nil {
+		t.Fatalf("Final Stop after concurrent stops failed: %v", err)
 	}
 }
 

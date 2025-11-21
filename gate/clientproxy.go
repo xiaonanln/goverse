@@ -61,7 +61,7 @@ func (cp *ClientProxy) Close() {
 func (cp *ClientProxy) HandleMessage(msg proto.Message) bool {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
-	if cp.closed || cp.messageChan == nil {
+	if cp.closed {
 		return false
 	}
 	select {
