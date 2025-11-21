@@ -193,12 +193,7 @@ func (s *GatewayServer) Stop() error {
 // Register implements the Register RPC
 func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
 	ctx := stream.Context()
-	clientProxy, err := s.gate.Register(ctx)
-	if err != nil {
-		s.logger.Errorf("Register failed: %v", err)
-		return err
-	}
-
+	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
 
 	// Make sure to unregister when done

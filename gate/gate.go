@@ -106,7 +106,7 @@ func (g *Gateway) cancelAllNodeRegistrations() {
 }
 
 // Register handles client registration and returns the client proxy
-func (g *Gateway) Register(ctx context.Context) (*ClientProxy, error) {
+func (g *Gateway) Register(ctx context.Context) *ClientProxy {
 	// Generate unique client ID using gateway address and unique ID
 	clientID := g.advertiseAddress + "/" + uniqueid.UniqueId()
 
@@ -119,7 +119,7 @@ func (g *Gateway) Register(ctx context.Context) (*ClientProxy, error) {
 	g.clientsMu.Unlock()
 
 	g.logger.Infof("Registered new client: %s", clientID)
-	return clientProxy, nil
+	return clientProxy
 }
 
 // Unregister removes a client by its ID

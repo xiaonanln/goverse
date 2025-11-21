@@ -232,10 +232,7 @@ func TestGatewayRegister(t *testing.T) {
 	}
 
 	// Register should return a valid client proxy
-	clientProxy, err := gateway.Register(ctx)
-	if err != nil {
-		t.Fatalf("Register() returned error: %v", err)
-	}
+	clientProxy := gateway.Register(ctx)
 	if clientProxy == nil {
 		t.Fatalf("Register() returned nil clientProxy")
 	}
@@ -327,10 +324,7 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 	clientIDs := make([]string, numClients)
 
 	for i := 0; i < numClients; i++ {
-		clientProxy, err := gateway.Register(ctx)
-		if err != nil {
-			t.Fatalf("Register() #%d returned error: %v", i, err)
-		}
+		clientProxy := gateway.Register(ctx)
 		clientIDs[i] = clientProxy.GetID()
 	}
 
@@ -384,10 +378,7 @@ func TestGatewayUnregisterNonExistentClient(t *testing.T) {
 	gateway.Unregister("non-existent-client")
 
 	// Should still be able to register new clients
-	clientProxy, err := gateway.Register(ctx)
-	if err != nil {
-		t.Fatalf("Register() after unregister non-existent returned error: %v", err)
-	}
+	clientProxy := gateway.Register(ctx)
 	if clientProxy.GetID() == "" {
 		t.Fatalf("Register() returned empty client ID")
 	}
