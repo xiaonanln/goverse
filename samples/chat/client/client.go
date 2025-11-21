@@ -74,6 +74,9 @@ func (c *ChatClient) CallObject(objectType, objectID, method string, arg proto.M
 		c.logger.Infof("Calling %s.%s.%s failed: %v", objectType, objectID, method, err)
 		return nil, fmt.Errorf("CallObject failed: %w", err)
 	}
+	if resp == nil {
+		return nil, fmt.Errorf("CallObject returned nil response")
+	}
 	c.logger.Infof("Calling %s.%s.%s => %s", objectType, objectID, method, resp.String())
 	ret, err := resp.GetResponse().UnmarshalNew()
 	if err != nil {
