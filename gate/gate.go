@@ -204,9 +204,14 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 func (g *Gateway) registerWithNode(ctx context.Context, nodeAddr string, client goverse_pb.GoverseClient) {
 	// Get the context for this goroutine to check later
 	g.nodeRegMu.RLock()
-	myReg := g.nodeRegs[nodeAddr]
-	myCtx := myReg.ctx
+	myReg, exists := g.nodeRegs[nodeAddr]
 	g.nodeRegMu.RUnlock()
+
+	if !exists || myReg == nil {
+		g.logger.Errorf("No registration found for node %s when starting goroutine", nodeAddr)
+		return
+	}
+	myCtx := myReg.ctx
 
 	// Ensure cleanup of registration on exit
 	defer func() {
