@@ -70,10 +70,11 @@ func (c *ChatClient) CallObject(objectType, objectID, method string, arg proto.M
 		Request:  anyReq,
 	}
 	resp, err := c.client.CallObject(ctx, req)
-	c.logger.Infof("Calling %s.%s.%s => %s, error=%v", objectType, objectID, method, resp.String(), err)
 	if err != nil {
+		c.logger.Infof("Calling %s.%s.%s failed: %v", objectType, objectID, method, err)
 		return nil, fmt.Errorf("CallObject failed: %w", err)
 	}
+	c.logger.Infof("Calling %s.%s.%s => %s", objectType, objectID, method, resp.String())
 	ret, err := resp.GetResponse().UnmarshalNew()
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
