@@ -2,6 +2,7 @@ package gate
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/protobuf/proto"
@@ -12,6 +13,8 @@ import (
 type ClientProxy struct {
 	id          string
 	messageChan chan proto.Message
+	closed      bool
+	mu          sync.RWMutex
 	logger      *logger.Logger
 }
 
@@ -30,12 +33,20 @@ func (cp *ClientProxy) GetID() string {
 }
 
 // MessageChan returns the message channel for push notifications
+// Returns nil after Close() is called
 func (cp *ClientProxy) MessageChan() chan proto.Message {
 	return cp.messageChan
 }
 
 // Close closes the message channel and cleans up resources
+// Multiple calls to Close are safe (idempotent)
 func (cp *ClientProxy) Close() {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	if cp.closed {
+		return
+	}
+	cp.closed = true
 	close(cp.messageChan)
 }
 

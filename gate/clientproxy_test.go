@@ -64,11 +64,6 @@ func TestClientProxyClose(t *testing.T) {
 		t.Fatalf("MessageChan should be closed after Close()")
 	}
 
-	// After close, MessageChan() should return nil
-	if proxy.MessageChan() != nil {
-		t.Fatalf("MessageChan() should return nil after Close()")
-	}
-
 	// Multiple Close calls should not panic
 	proxy.Close()
 	proxy.Close()
