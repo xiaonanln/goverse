@@ -231,16 +231,18 @@ func TestGatewayRegister(t *testing.T) {
 		t.Fatalf("Gateway.Start() returned error: %v", err)
 	}
 
-	// Register should return a valid client ID
-	clientID, clientProxy, err := gateway.Register(ctx)
+	// Register should return a valid client proxy
+	clientProxy, err := gateway.Register(ctx)
 	if err != nil {
 		t.Fatalf("Register() returned error: %v", err)
 	}
-	if clientID == "" {
-		t.Fatalf("Register() returned empty client ID")
-	}
 	if clientProxy == nil {
 		t.Fatalf("Register() returned nil clientProxy")
+	}
+
+	clientID := clientProxy.GetID()
+	if clientID == "" {
+		t.Fatalf("Register() returned empty client ID")
 	}
 
 	// Verify client ID format (should start with advertise address)
@@ -249,12 +251,12 @@ func TestGatewayRegister(t *testing.T) {
 	}
 
 	// Verify client proxy exists in gateway
-	clientProxy, exists := gateway.GetClient(clientID)
+	clientProxy2, exists := gateway.GetClient(clientID)
 	if !exists {
 		t.Fatalf("Client proxy not found after registration")
 	}
-	if clientProxy.GetID() != clientID {
-		t.Fatalf("Client proxy ID mismatch: got %s, want %s", clientProxy.GetID(), clientID)
+	if clientProxy2.GetID() != clientID {
+		t.Fatalf("Client proxy ID mismatch: got %s, want %s", clientProxy2.GetID(), clientID)
 	}
 
 	// Verify message channel is available
@@ -325,11 +327,11 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 	clientIDs := make([]string, numClients)
 
 	for i := 0; i < numClients; i++ {
-		clientID, _, err := gateway.Register(ctx)
+		clientProxy, err := gateway.Register(ctx)
 		if err != nil {
 			t.Fatalf("Register() #%d returned error: %v", i, err)
 		}
-		clientIDs[i] = clientID
+		clientIDs[i] = clientProxy.GetID()
 	}
 
 	// Verify all clients are registered and have unique IDs
@@ -382,11 +384,11 @@ func TestGatewayUnregisterNonExistentClient(t *testing.T) {
 	gateway.Unregister("non-existent-client")
 
 	// Should still be able to register new clients
-	clientID, _, err := gateway.Register(ctx)
+	clientProxy, err := gateway.Register(ctx)
 	if err != nil {
 		t.Fatalf("Register() after unregister non-existent returned error: %v", err)
 	}
-	if clientID == "" {
+	if clientProxy.GetID() == "" {
 		t.Fatalf("Register() returned empty client ID")
 	}
 }

@@ -20,8 +20,8 @@ type GatewayConfig struct {
 // nodeReg holds registration information for a single node
 type nodeReg struct {
 	stream goverse_pb.Goverse_RegisterGateClient // active stream to the node
-	cancel context.CancelFunc                     // cancel function for the registration goroutine
-	ctx    context.Context                        // context for the registration goroutine (used for comparison)
+	cancel context.CancelFunc                    // cancel function for the registration goroutine
+	ctx    context.Context                       // context for the registration goroutine (used for comparison)
 }
 
 // Gateway handles the core gateway logic for routing requests to nodes
@@ -105,8 +105,8 @@ func (g *Gateway) cancelAllNodeRegistrations() {
 	g.nodeRegs = make(map[string]*nodeReg)
 }
 
-// Register handles client registration and returns a client ID and the client proxy
-func (g *Gateway) Register(ctx context.Context) (string, *ClientProxy, error) {
+// Register handles client registration and returns the client proxy
+func (g *Gateway) Register(ctx context.Context) (*ClientProxy, error) {
 	// Generate unique client ID using gateway address and unique ID
 	clientID := g.advertiseAddress + "/" + uniqueid.UniqueId()
 
@@ -119,7 +119,7 @@ func (g *Gateway) Register(ctx context.Context) (string, *ClientProxy, error) {
 	g.clientsMu.Unlock()
 
 	g.logger.Infof("Registered new client: %s", clientID)
-	return clientID, clientProxy, nil
+	return clientProxy, nil
 }
 
 // Unregister removes a client by its ID
@@ -182,7 +182,7 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 		// Register with this node
 		g.logger.Infof("Registering gate with node %s", nodeAddr)
 		nodeCtx, nodeCancel := context.WithCancel(ctx)
-		
+
 		// Store cancel function before starting goroutine
 		// If there's an old registration (from a goroutine that's exiting), replace it
 		g.nodeRegMu.Lock()
@@ -196,7 +196,7 @@ func (g *Gateway) RegisterWithNodes(ctx context.Context, nodeConnections map[str
 		}
 		g.nodeRegs[nodeAddr] = myReg
 		g.nodeRegMu.Unlock()
-		
+
 		go g.registerWithNode(nodeCtx, nodeAddr, client, myReg)
 	}
 }
