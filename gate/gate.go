@@ -296,8 +296,10 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 
 			// Send to client's message channel
 			client.PushMessage(msg)
+		} else {
+			g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
 		}
 	default:
-		g.logger.Warnf("Received unknown message type from node %s", nodeAddr)
+		g.logger.Warnf("Received unknown message type %v from node %s", msg.Message, nodeAddr)
 	}
 }
