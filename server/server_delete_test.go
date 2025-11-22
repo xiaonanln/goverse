@@ -8,17 +8,24 @@ import (
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestServerDeleteObject_Success(t *testing.T) {
+	// Get a free address for the node
+	nodeAddr, err := testutil.GetFreeAddress()
+	if err != nil {
+		t.Fatalf("Failed to get free address: %v", err)
+	}
+
 	// Create a node directly without using cluster
-	n := node.NewNode("localhost:47000")
+	n := node.NewNode(nodeAddr)
 	n.RegisterObjectType((*TestObject)(nil))
 
 	// Create a server without cluster (standalone mode for testing)
 	config := &ServerConfig{
 		ListenAddress:    "localhost:0", // Use any available port
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: nodeAddr,
 	}
 
 	server := &Server{
@@ -33,7 +40,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create an object first - directly using the node to avoid cluster checks
-	_, err := n.CreateObject(ctx, "TestObject", "test-delete-obj")
+	_, err = n.CreateObject(ctx, "TestObject", "test-delete-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -59,13 +66,19 @@ func TestServerDeleteObject_Success(t *testing.T) {
 }
 
 func TestServerDeleteObject_RequiresID(t *testing.T) {
+	// Get a free address for the node
+	nodeAddr, err := testutil.GetFreeAddress()
+	if err != nil {
+		t.Fatalf("Failed to get free address: %v", err)
+	}
+
 	// Create a node
-	n := node.NewNode("localhost:47000")
+	n := node.NewNode(nodeAddr)
 
 	// Create a server
 	config := &ServerConfig{
 		ListenAddress:    "localhost:0",
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: nodeAddr,
 	}
 
 	server := &Server{
@@ -83,7 +96,7 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 	deleteReq := &goverse_pb.DeleteObjectRequest{
 		Id: "",
 	}
-	_, err := server.DeleteObject(ctx, deleteReq)
+	_, err = server.DeleteObject(ctx, deleteReq)
 	if err == nil {
 		t.Fatal("Expected error when deleting without ID, got nil")
 	}
@@ -95,14 +108,20 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 }
 
 func TestServerDeleteObject_NotFound(t *testing.T) {
+	// Get a free address for the node
+	nodeAddr, err := testutil.GetFreeAddress()
+	if err != nil {
+		t.Fatalf("Failed to get free address: %v", err)
+	}
+
 	// Create a node
-	n := node.NewNode("localhost:47000")
+	n := node.NewNode(nodeAddr)
 	n.RegisterObjectType((*TestObject)(nil))
 
 	// Create a server
 	config := &ServerConfig{
 		ListenAddress:    "localhost:0",
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: nodeAddr,
 	}
 
 	server := &Server{
@@ -120,7 +139,7 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 	deleteReq := &goverse_pb.DeleteObjectRequest{
 		Id: "non-existent-obj",
 	}
-	_, err := server.DeleteObject(ctx, deleteReq)
+	_, err = server.DeleteObject(ctx, deleteReq)
 	if err != nil {
 		// nil is correct: DeleteObject is idempotent and should succeed for non-existent objects
 		t.Fatalf("Expected no error when deleting non-existent object (idempotent), got: %v", err)
