@@ -171,8 +171,8 @@ func TestGateNodeIntegration(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Wait for shard mapping to be initialized
-	testutil.WaitForClusterReady(t, gateCluster)
 	testutil.WaitForClusterReady(t, nodeCluster)
+	testutil.WaitForClusterReady(t, gateCluster)
 
 	// Verify shard mapping is ready
 	_ = gateCluster.GetShardMapping(ctx)
