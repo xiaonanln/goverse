@@ -150,7 +150,7 @@ resp, _ := client.CallObject(ctx, &gate_pb.CallObjectRequest{
 })
 ```
 
-This architecture provides a clean separation between client-facing gateways and object-hosting nodes, making distributed objects the primary abstraction.
+This design cleanly separates client connectivity from object management, with distributed objects serving as the core abstraction.
 
 ---
 
