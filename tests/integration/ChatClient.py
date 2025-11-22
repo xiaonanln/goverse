@@ -12,7 +12,7 @@ import sys
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 
-from client.proto import client_pb2, client_pb2_grpc
+from client.proto import gate_pb2, gate_pb2_grpc
 from samples.chat.proto import chat_pb2
 
 
@@ -20,7 +20,7 @@ class ChatClient:
     """Manages the Goverse chat client using gRPC."""
     
     channel: Optional[grpc.Channel]
-    stub: Optional[client_pb2_grpc.ClientServiceStub]
+    stub: Optional[gate_pb2_grpc.ClientServiceStub]
     stream: Optional[Any]
     stream_thread: Optional[threading.Thread]
     output_lock: threading.Lock
@@ -126,7 +126,7 @@ class ChatClient:
         request_any.Pack(request_proto)
         
         # Call the RPC
-        call_request = client_pb2.CallRequest(
+        call_request = gate_pb2.CallRequest(
             client_id=self.client_id,
             method=method,
             request=request_any
@@ -292,15 +292,15 @@ class ChatClient:
             # Connect to the server
             server_address = f'localhost:{server_port}'
             self.channel = grpc.insecure_channel(server_address)
-            self.stub = client_pb2_grpc.ClientServiceStub(self.channel)
+            self.stub = gate_pb2_grpc.ClientServiceStub(self.channel)
             self.user_name = username
             
             # Register the client (this will block until connection is established)
-            self.stream = self.stub.Register(client_pb2.Empty())
+            self.stream = self.stub.Register(gate_pb2.Empty())
             
             # Read the first message which should be RegisterResponse
             first_msg = next(self.stream)
-            reg_response = client_pb2.RegisterResponse()
+            reg_response = gate_pb2.RegisterResponse()
             first_msg.Unpack(reg_response)
             self.client_id = reg_response.client_id
             
