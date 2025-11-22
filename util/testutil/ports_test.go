@@ -8,10 +8,7 @@ import (
 )
 
 func TestGetFreePort(t *testing.T) {
-	port, err := GetFreePort()
-	if err != nil {
-		t.Fatalf("GetFreePort() returned error: %v", err)
-	}
+	port := GetFreePort()
 
 	if port <= 0 || port > 65535 {
 		t.Fatalf("GetFreePort() returned invalid port: %d", port)
@@ -26,10 +23,7 @@ func TestGetFreePort(t *testing.T) {
 }
 
 func TestGetFreeAddress(t *testing.T) {
-	addr, err := GetFreeAddress()
-	if err != nil {
-		t.Fatalf("GetFreeAddress() returned error: %v", err)
-	}
+	addr := GetFreeAddress()
 
 	if !strings.HasPrefix(addr, "localhost:") {
 		t.Fatalf("GetFreeAddress() returned invalid address format: %s", addr)
@@ -49,10 +43,7 @@ func TestGetFreePort_MultipleCalls(t *testing.T) {
 	numPorts := 5
 
 	for i := 0; i < numPorts; i++ {
-		port, err := GetFreePort()
-		if err != nil {
-			t.Fatalf("GetFreePort() call %d returned error: %v", i+1, err)
-		}
+		port := GetFreePort()
 
 		if port <= 0 || port > 65535 {
 			t.Fatalf("GetFreePort() call %d returned invalid port: %d", i+1, port)
@@ -74,10 +65,7 @@ func TestGetFreeAddress_MultipleCalls(t *testing.T) {
 	numAddresses := 5
 
 	for i := 0; i < numAddresses; i++ {
-		addr, err := GetFreeAddress()
-		if err != nil {
-			t.Fatalf("GetFreeAddress() call %d returned error: %v", i+1, err)
-		}
+		addr := GetFreeAddress()
 
 		if !strings.HasPrefix(addr, "localhost:") {
 			t.Fatalf("GetFreeAddress() call %d returned invalid address: %s", i+1, addr)

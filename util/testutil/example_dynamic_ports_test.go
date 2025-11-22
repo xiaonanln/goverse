@@ -13,10 +13,7 @@ func Example_dynamicPortsSingleServer() {
 	// This example can be run as a test: go test -v -run Example_dynamicPortsSingleServer
 
 	// Get a free address
-	addr, err := testutil.GetFreeAddress()
-	if err != nil {
-		panic(err)
-	}
+	addr := testutil.GetFreeAddress()
 
 	// addr will be something like "localhost:45678"
 	_ = addr
@@ -26,9 +23,9 @@ func Example_dynamicPortsSingleServer() {
 // for multiple test servers that need to run concurrently
 func Example_dynamicPortsMultipleServers() {
 	// Get free addresses for multiple servers
-	addr1, _ := testutil.GetFreeAddress()
-	addr2, _ := testutil.GetFreeAddress()
-	addr3, _ := testutil.GetFreeAddress()
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
 
 	// All addresses will be unique and available
 	_, _, _ = addr1, addr2, addr3
@@ -58,17 +55,14 @@ func TestDynamicPortsParallelExecution(t *testing.T) {
 	t.Run("Node1", func(t *testing.T) {
 		t.Parallel()
 
-		addr, err := testutil.GetFreeAddress()
-		if err != nil {
-			t.Fatalf("Failed to get address: %v", err)
-		}
+		addr := testutil.GetFreeAddress()
 
 		// Create mock server with dynamic port
 		mockServer := testutil.NewMockGoverseServer()
 		testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
 
 		ctx := context.Background()
-		err = testServer.Start(ctx)
+		err := testServer.Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start server: %v", err)
 		}
@@ -80,17 +74,14 @@ func TestDynamicPortsParallelExecution(t *testing.T) {
 	t.Run("Node2", func(t *testing.T) {
 		t.Parallel()
 
-		addr, err := testutil.GetFreeAddress()
-		if err != nil {
-			t.Fatalf("Failed to get address: %v", err)
-		}
+		addr := testutil.GetFreeAddress()
 
 		// Create mock server with dynamic port
 		mockServer := testutil.NewMockGoverseServer()
 		testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
 
 		ctx := context.Background()
-		err = testServer.Start(ctx)
+		err := testServer.Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start server: %v", err)
 		}
@@ -102,17 +93,14 @@ func TestDynamicPortsParallelExecution(t *testing.T) {
 	t.Run("Node3", func(t *testing.T) {
 		t.Parallel()
 
-		addr, err := testutil.GetFreeAddress()
-		if err != nil {
-			t.Fatalf("Failed to get address: %v", err)
-		}
+		addr := testutil.GetFreeAddress()
 
 		// Create mock server with dynamic port
 		mockServer := testutil.NewMockGoverseServer()
 		testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
 
 		ctx := context.Background()
-		err = testServer.Start(ctx)
+		err := testServer.Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start server: %v", err)
 		}
