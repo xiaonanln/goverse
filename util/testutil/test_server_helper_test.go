@@ -47,17 +47,14 @@ func TestTestServerHelper_DynamicPort(t *testing.T) {
 // TestTestServerHelper_SpecificPort tests that TestServerHelper works with a specific port
 func TestTestServerHelper_SpecificPort(t *testing.T) {
 	// Get a free port first
-	freeAddr, err := GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address: %v", err)
-	}
+	freeAddr := GetFreeAddress()
 
 	// Create a mock server with the specific port
 	mockServer := NewMockGoverseServer()
 	testServer := NewTestServerHelper(freeAddr, mockServer)
 
 	ctx := context.Background()
-	err = testServer.Start(ctx)
+	err := testServer.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}

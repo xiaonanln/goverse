@@ -41,14 +41,8 @@ func TestDistributedCreateObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Get free addresses for the nodes
-	addr1, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address for node1: %v", err)
-	}
-	addr2, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address for node2: %v", err)
-	}
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
 
 	// Create clusters using mustNewCluster
 	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
@@ -63,28 +57,24 @@ func TestDistributedCreateObject(t *testing.T) {
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
 
-	// Start mock gRPC servers for both nodes using dynamic port allocation
+	// Start mock gRPC servers for both nodes
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1) // Assign the actual node to the mock server
-	testServer1 := testutil.NewTestServerHelper("localhost:0", mockServer1)
-	err = testServer1.Start(ctx)
+	testServer1 := testutil.NewTestServerHelper(addr1, mockServer1)
+	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
 	t.Cleanup(func() { testServer1.Stop() })
-	actualAddr1 := testServer1.GetAddress()
-	t.Logf("Node 1 mock server started at %s (advertised as %s)", actualAddr1, addr1)
 
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2) // Assign the actual node to the mock server
-	testServer2 := testutil.NewTestServerHelper("localhost:0", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(addr2, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
 	}
 	t.Cleanup(func() { testServer2.Stop() })
-	actualAddr2 := testServer2.GetAddress()
-	t.Logf("Node 2 mock server started at %s (advertised as %s)", actualAddr2, addr2)
 
 	// Wait for servers to be ready
 	time.Sleep(500 * time.Millisecond)
@@ -227,11 +217,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	// Get free addresses for the nodes
 	addrs := make([]string, 3)
 	for i := 0; i < 3; i++ {
-		addr, err := testutil.GetFreeAddress()
-		if err != nil {
-			t.Fatalf("Failed to get free address for node %d: %v", i, err)
-		}
-		addrs[i] = addr
+		addrs[i] = testutil.GetFreeAddress()
 	}
 
 	// Create 3 clusters using mustNewCluster

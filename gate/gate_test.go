@@ -13,14 +13,8 @@ import (
 
 func TestNewGateway(t *testing.T) {
 	// Get free addresses for tests that need them
-	addr1, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address: %v", err)
-	}
-	addr2, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address: %v", err)
-	}
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
 
 	tests := []struct {
 		name       string

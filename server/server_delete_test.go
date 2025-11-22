@@ -13,10 +13,7 @@ import (
 
 func TestServerDeleteObject_Success(t *testing.T) {
 	// Get a free address for the node
-	nodeAddr, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address: %v", err)
-	}
+	nodeAddr := testutil.GetFreeAddress()
 
 	// Create a node directly without using cluster
 	n := node.NewNode(nodeAddr)
@@ -40,7 +37,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create an object first - directly using the node to avoid cluster checks
-	_, err = n.CreateObject(ctx, "TestObject", "test-delete-obj")
+	_, err := n.CreateObject(ctx, "TestObject", "test-delete-obj")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -67,10 +64,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 
 func TestServerDeleteObject_RequiresID(t *testing.T) {
 	// Get a free address for the node
-	nodeAddr, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address: %v", err)
-	}
+	nodeAddr := testutil.GetFreeAddress()
 
 	// Create a node
 	n := node.NewNode(nodeAddr)
@@ -96,7 +90,7 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 	deleteReq := &goverse_pb.DeleteObjectRequest{
 		Id: "",
 	}
-	_, err = server.DeleteObject(ctx, deleteReq)
+	_, err := server.DeleteObject(ctx, deleteReq)
 	if err == nil {
 		t.Fatal("Expected error when deleting without ID, got nil")
 	}
@@ -109,10 +103,7 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 
 func TestServerDeleteObject_NotFound(t *testing.T) {
 	// Get a free address for the node
-	nodeAddr, err := testutil.GetFreeAddress()
-	if err != nil {
-		t.Fatalf("Failed to get free address: %v", err)
-	}
+	nodeAddr := testutil.GetFreeAddress()
 
 	// Create a node
 	n := node.NewNode(nodeAddr)
@@ -139,7 +130,7 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 	deleteReq := &goverse_pb.DeleteObjectRequest{
 		Id: "non-existent-obj",
 	}
-	_, err = server.DeleteObject(ctx, deleteReq)
+	_, err := server.DeleteObject(ctx, deleteReq)
 	if err != nil {
 		// nil is correct: DeleteObject is idempotent and should succeed for non-existent objects
 		t.Fatalf("Expected no error when deleting non-existent object (idempotent), got: %v", err)
