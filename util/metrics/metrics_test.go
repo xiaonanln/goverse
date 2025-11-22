@@ -807,3 +807,273 @@ func TestShardClaimAndReleaseSequence(t *testing.T) {
 		t.Fatalf("Expected release count to be 10.0, got %f", releaseCount)
 	}
 }
+
+func TestRecordGateClientConnected(t *testing.T) {
+	// Reset metrics before test
+	GateActiveClients.Reset()
+
+	// Record client connection
+	RecordGateClientConnected("localhost:49000")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49000"))
+	if count != 1.0 {
+		t.Fatalf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record another client connection
+	RecordGateClientConnected("localhost:49000")
+	count = testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49000"))
+	if count != 2.0 {
+		t.Fatalf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record client connection for different gate
+	RecordGateClientConnected("localhost:49001")
+	count = testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49001"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for gate 49001 to be 1.0, got %f", count)
+	}
+}
+
+func TestRecordGateClientDisconnected(t *testing.T) {
+	// Reset metrics before test
+	GateActiveClients.Reset()
+
+	// Create some client connections first
+	RecordGateClientConnected("localhost:49000")
+	RecordGateClientConnected("localhost:49000")
+	RecordGateClientConnected("localhost:49000")
+
+	// Disconnect one client
+	RecordGateClientDisconnected("localhost:49000")
+
+	// Verify the metric was decremented
+	count := testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49000"))
+	if count != 2.0 {
+		t.Fatalf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Disconnect remaining clients
+	RecordGateClientDisconnected("localhost:49000")
+	RecordGateClientDisconnected("localhost:49000")
+	count = testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49000"))
+	if count != 0.0 {
+		t.Fatalf("Expected count to be 0.0, got %f", count)
+	}
+}
+
+func TestRecordGatePushedMessage(t *testing.T) {
+	// Reset metrics before test
+	GatePushedMessages.Reset()
+
+	// Record pushed messages
+	RecordGatePushedMessage("localhost:49000")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(GatePushedMessages.WithLabelValues("localhost:49000"))
+	if count != 1.0 {
+		t.Fatalf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record more pushed messages
+	RecordGatePushedMessage("localhost:49000")
+	RecordGatePushedMessage("localhost:49000")
+	count = testutil.ToFloat64(GatePushedMessages.WithLabelValues("localhost:49000"))
+	if count != 3.0 {
+		t.Fatalf("Expected count to be 3.0, got %f", count)
+	}
+
+	// Record pushed message for different gate
+	RecordGatePushedMessage("localhost:49001")
+	count = testutil.ToFloat64(GatePushedMessages.WithLabelValues("localhost:49001"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for gate 49001 to be 1.0, got %f", count)
+	}
+}
+
+func TestRecordNodeGateConnected(t *testing.T) {
+	// Reset metrics before test
+	NodeConnectedGates.Reset()
+
+	// Record gate connection
+	RecordNodeGateConnected("localhost:47000")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47000"))
+	if count != 1.0 {
+		t.Fatalf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record another gate connection
+	RecordNodeGateConnected("localhost:47000")
+	count = testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47000"))
+	if count != 2.0 {
+		t.Fatalf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record gate connection for different node
+	RecordNodeGateConnected("localhost:47001")
+	count = testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47001"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for node 47001 to be 1.0, got %f", count)
+	}
+}
+
+func TestRecordNodeGateDisconnected(t *testing.T) {
+	// Reset metrics before test
+	NodeConnectedGates.Reset()
+
+	// Create some gate connections first
+	RecordNodeGateConnected("localhost:47000")
+	RecordNodeGateConnected("localhost:47000")
+	RecordNodeGateConnected("localhost:47000")
+
+	// Disconnect one gate
+	RecordNodeGateDisconnected("localhost:47000")
+
+	// Verify the metric was decremented
+	count := testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47000"))
+	if count != 2.0 {
+		t.Fatalf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Disconnect remaining gates
+	RecordNodeGateDisconnected("localhost:47000")
+	RecordNodeGateDisconnected("localhost:47000")
+	count = testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47000"))
+	if count != 0.0 {
+		t.Fatalf("Expected count to be 0.0, got %f", count)
+	}
+}
+
+func TestRecordNodePushedMessage(t *testing.T) {
+	// Reset metrics before test
+	NodePushedMessages.Reset()
+
+	// Record pushed message from node to gate
+	RecordNodePushedMessage("localhost:47000", "localhost:49000")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47000", "localhost:49000"))
+	if count != 1.0 {
+		t.Fatalf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record more pushed messages for same node-gate pair
+	RecordNodePushedMessage("localhost:47000", "localhost:49000")
+	RecordNodePushedMessage("localhost:47000", "localhost:49000")
+	count = testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47000", "localhost:49000"))
+	if count != 3.0 {
+		t.Fatalf("Expected count to be 3.0, got %f", count)
+	}
+
+	// Record pushed message for different gate
+	RecordNodePushedMessage("localhost:47000", "localhost:49001")
+	count = testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47000", "localhost:49001"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for different gate to be 1.0, got %f", count)
+	}
+
+	// Verify original gate count unchanged
+	count = testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47000", "localhost:49000"))
+	if count != 3.0 {
+		t.Fatalf("Expected original gate count to remain 3.0, got %f", count)
+	}
+}
+
+func TestGateAndNodeMetricsRegistration(t *testing.T) {
+	// Verify that gate and node metrics are properly registered with Prometheus
+	if GateActiveClients == nil {
+		t.Fatal("GateActiveClients metric should not be nil")
+	}
+
+	if GatePushedMessages == nil {
+		t.Fatal("GatePushedMessages metric should not be nil")
+	}
+
+	if NodeConnectedGates == nil {
+		t.Fatal("NodeConnectedGates metric should not be nil")
+	}
+
+	if NodePushedMessages == nil {
+		t.Fatal("NodePushedMessages metric should not be nil")
+	}
+}
+
+func TestMultipleNodesAndGates(t *testing.T) {
+	// Reset metrics before test
+	NodeConnectedGates.Reset()
+	NodePushedMessages.Reset()
+	GateActiveClients.Reset()
+	GatePushedMessages.Reset()
+
+	// Simulate multiple nodes with multiple gates
+	RecordNodeGateConnected("localhost:47000")
+	RecordNodeGateConnected("localhost:47000")
+	RecordNodeGateConnected("localhost:47001")
+
+	// Verify each node has the correct gate count
+	count1 := testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47000"))
+	if count1 != 2.0 {
+		t.Fatalf("Expected gate count for node 47000 to be 2.0, got %f", count1)
+	}
+
+	count2 := testutil.ToFloat64(NodeConnectedGates.WithLabelValues("localhost:47001"))
+	if count2 != 1.0 {
+		t.Fatalf("Expected gate count for node 47001 to be 1.0, got %f", count2)
+	}
+
+	// Simulate messages from nodes to gates
+	RecordNodePushedMessage("localhost:47000", "localhost:49000")
+	RecordNodePushedMessage("localhost:47000", "localhost:49001")
+	RecordNodePushedMessage("localhost:47001", "localhost:49000")
+
+	// Verify message counts
+	msgCount1 := testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47000", "localhost:49000"))
+	if msgCount1 != 1.0 {
+		t.Fatalf("Expected message count for 47000->49000 to be 1.0, got %f", msgCount1)
+	}
+
+	msgCount2 := testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47000", "localhost:49001"))
+	if msgCount2 != 1.0 {
+		t.Fatalf("Expected message count for 47000->49001 to be 1.0, got %f", msgCount2)
+	}
+
+	msgCount3 := testutil.ToFloat64(NodePushedMessages.WithLabelValues("localhost:47001", "localhost:49000"))
+	if msgCount3 != 1.0 {
+		t.Fatalf("Expected message count for 47001->49000 to be 1.0, got %f", msgCount3)
+	}
+
+	// Simulate gate clients
+	RecordGateClientConnected("localhost:49000")
+	RecordGateClientConnected("localhost:49000")
+	RecordGateClientConnected("localhost:49001")
+
+	// Verify client counts
+	clientCount1 := testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49000"))
+	if clientCount1 != 2.0 {
+		t.Fatalf("Expected client count for gate 49000 to be 2.0, got %f", clientCount1)
+	}
+
+	clientCount2 := testutil.ToFloat64(GateActiveClients.WithLabelValues("localhost:49001"))
+	if clientCount2 != 1.0 {
+		t.Fatalf("Expected client count for gate 49001 to be 1.0, got %f", clientCount2)
+	}
+
+	// Simulate pushed messages from gates to clients
+	RecordGatePushedMessage("localhost:49000")
+	RecordGatePushedMessage("localhost:49000")
+	RecordGatePushedMessage("localhost:49001")
+
+	// Verify pushed message counts
+	pushedCount1 := testutil.ToFloat64(GatePushedMessages.WithLabelValues("localhost:49000"))
+	if pushedCount1 != 2.0 {
+		t.Fatalf("Expected pushed message count for gate 49000 to be 2.0, got %f", pushedCount1)
+	}
+
+	pushedCount2 := testutil.ToFloat64(GatePushedMessages.WithLabelValues("localhost:49001"))
+	if pushedCount2 != 1.0 {
+		t.Fatalf("Expected pushed message count for gate 49001 to be 1.0, got %f", pushedCount2)
+	}
+}
