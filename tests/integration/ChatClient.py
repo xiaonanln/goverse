@@ -20,7 +20,7 @@ class ChatClient:
     """Manages the Goverse chat client using gRPC."""
     
     channel: Optional[grpc.Channel]
-    stub: Optional[gate_pb2_grpc.ClientServiceStub]
+    stub: Optional[gate_pb2_grpc.GateServiceStub]
     stream: Optional[Any]
     stream_thread: Optional[threading.Thread]
     output_lock: threading.Lock
@@ -55,15 +55,15 @@ class ChatClient:
             # Connect to the server
             server_address = f'localhost:{server_port}'
             self.channel = grpc.insecure_channel(server_address)
-            self.stub = client_pb2_grpc.ClientServiceStub(self.channel)
+            self.stub = gate_pb2_grpc.GateServiceStub(self.channel)
             self.user_name = username
             
             # Register the client (this will block until connection is established)
-            self.stream = self.stub.Register(client_pb2.Empty())
+            self.stream = self.stub.Register(gate_pb2.Empty())
             
             # Read the first message which should be RegisterResponse
             first_msg = next(self.stream)
-            reg_response = client_pb2.RegisterResponse()
+            reg_response = gate_pb2.RegisterResponse()
             first_msg.Unpack(reg_response)
             self.client_id = reg_response.client_id
             
@@ -126,13 +126,15 @@ class ChatClient:
         request_any.Pack(request_proto)
         
         # Call the RPC
-        call_request = gate_pb2.CallRequest(
+        call_request = gate_pb2.CallObjectRequest(
             client_id=self.client_id,
+            type="Client",
+            id=self.client_id,
             method=method,
             request=request_any
         )
         
-        response = self.stub.Call(call_request)
+        response = self.stub.CallObject(call_request)
         return response.response
     
     def list_chatrooms(self) -> List[str]:
@@ -292,7 +294,7 @@ class ChatClient:
             # Connect to the server
             server_address = f'localhost:{server_port}'
             self.channel = grpc.insecure_channel(server_address)
-            self.stub = gate_pb2_grpc.ClientServiceStub(self.channel)
+            self.stub = gate_pb2_grpc.GateServiceStub(self.channel)
             self.user_name = username
             
             # Register the client (this will block until connection is established)

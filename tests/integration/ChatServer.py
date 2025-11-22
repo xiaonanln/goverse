@@ -53,14 +53,13 @@ class ChatServer:
             print(f"⚠️  {self.name} is already running")
             return
 
-        print(f"Starting {self.name} (ports {self.listen_port}, {self.client_port})...")
+        print(f"Starting {self.name} (port {self.listen_port})...")
         
         # Start the process (inherits GOCOVERDIR from environment if set)
         cmd: List[str] = [
             self.binary_path,
             '-listen', f'localhost:{self.listen_port}',
             '-advertise', f'localhost:{self.listen_port}',
-            '-client-listen', f'localhost:{self.client_port}'
         ]
         
         self.process = subprocess.Popen(
@@ -91,10 +90,6 @@ class ChatServer:
 
         if not check_port(self.listen_port, timeout=timeout):
             print(f"❌ {self.name} failed to start on port {self.listen_port} (ListenAddress)")
-            return False
-        
-        if not check_port(self.client_port, timeout=timeout):
-            print(f"❌ {self.name} failed to start on port {self.client_port} (ClientListenAddress)")
             return False
         
         print(f"✅ {self.name} is running and ready")
