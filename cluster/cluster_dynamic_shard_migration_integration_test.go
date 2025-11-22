@@ -85,7 +85,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	// Wait for servers to be ready and shard mapping to be initialized
 	t.Logf("Waiting for cluster ready and shard mapping initialization...")
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	for _, c := range clusters {
+		testutil.WaitForClusterReady(t, c)
+	}
 
 	// Verify leader is established
 	leaderNode := cluster1.GetLeaderNode()

@@ -152,7 +152,7 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	t.Logf("Started real gateway server at %s", gateAddr)
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, nodeCluster)
 
 	// Create a gRPC client to connect to the gate
 	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -376,7 +376,9 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	t.Logf("Started mock node server 3 at %s", nodeAddr3)
 
 	// Wait for nodes to discover each other and stabilize
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, nodeCluster1)
+	testutil.WaitForClusterReady(t, nodeCluster2)
+	testutil.WaitForClusterReady(t, nodeCluster3)
 
 	// Create and start Gateway 1
 	gateAddr1 := "localhost:49011"
@@ -445,7 +447,8 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	t.Logf("Started gateway server 2 at %s", gateAddr2)
 
 	// Wait for gates to register with nodes
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	// (gates are already ready from node cluster ready above)
+	time.Sleep(500 * time.Millisecond)
 
 	// Create gRPC clients for both gates
 	conn1, err := grpc.NewClient(gateAddr1, grpc.WithTransportCredentials(insecure.NewCredentials()))

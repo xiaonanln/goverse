@@ -132,7 +132,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	t.Logf("Started real gateway server at %s", gateAddr)
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, nodeCluster)
 
 	// 3. Client connects to gate and registers
 	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -266,7 +266,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	t.Logf("Started real gateway server at %s", gateAddr)
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, nodeCluster)
 
 	// 3. Register multiple clients
 	numClients := 3

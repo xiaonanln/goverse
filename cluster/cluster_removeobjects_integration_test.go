@@ -62,7 +62,8 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 
 	// Wait for shard mapping to be initialized
 	t.Logf("Waiting for initial shard mapping to be created...")
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Verify shard mapping is ready
 	initialMapping := cluster1.GetShardMapping(ctx)
