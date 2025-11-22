@@ -7,6 +7,7 @@ import (
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 )
 
@@ -117,6 +118,9 @@ func (g *Gateway) Register(ctx context.Context) *ClientProxy {
 	g.clients[clientID] = clientProxy
 	g.clientsMu.Unlock()
 
+	// Record metrics
+	metrics.RecordGateClientConnected(g.advertiseAddress)
+
 	g.logger.Infof("Registered new client: %s", clientID)
 	return clientProxy
 }
@@ -129,6 +133,8 @@ func (g *Gateway) Unregister(clientID string) {
 	if clientProxy, exists := g.clients[clientID]; exists {
 		clientProxy.Close()
 		delete(g.clients, clientID)
+		// Record metrics
+		metrics.RecordGateClientDisconnected(g.advertiseAddress)
 		g.logger.Infof("Unregistered client: %s", clientID)
 	}
 }
@@ -148,6 +154,8 @@ func (g *Gateway) cleanupClientProxies() {
 	for clientID, clientProxy := range g.clients {
 		clientProxy.Close()
 		delete(g.clients, clientID)
+		// Record metrics for cleanup
+		metrics.RecordGateClientDisconnected(g.advertiseAddress)
 		g.logger.Infof("Cleaned up client proxy: %s", clientID)
 	}
 }
@@ -289,6 +297,8 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 		if envelope.Message != nil {
 			// Send the google.protobuf.Any directly to client's message channel
 			client.PushMessageAny(envelope.Message)
+			// Record metric for pushed message
+			metrics.RecordGatePushedMessage(g.advertiseAddress)
 		} else {
 			g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
 		}
