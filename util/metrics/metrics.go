@@ -88,6 +88,42 @@ var (
 			Help: "Number of shards currently in migration state (TargetNode != CurrentNode)",
 		},
 	)
+
+	// GateActiveClients tracks the number of active clients connected to each gate
+	GateActiveClients = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "goverse_gate_active_clients",
+			Help: "Number of active clients connected to the gate",
+		},
+		[]string{"gate"},
+	)
+
+	// GatePushedMessages tracks the total number of messages pushed from nodes to clients via gates
+	GatePushedMessages = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_gate_pushed_messages_total",
+			Help: "Total number of messages pushed to clients via this gate",
+		},
+		[]string{"gate"},
+	)
+
+	// NodeConnectedGates tracks the number of gates connected to each node
+	NodeConnectedGates = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "goverse_node_connected_gates",
+			Help: "Number of gates connected to the node",
+		},
+		[]string{"node"},
+	)
+
+	// NodePushedMessages tracks the total number of messages pushed from nodes to gates
+	NodePushedMessages = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_node_pushed_messages_total",
+			Help: "Total number of messages pushed from node to gates by gate address",
+		},
+		[]string{"node", "gate"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -155,4 +191,34 @@ func RecordShardMigration(fromNode, toNode string) {
 // SetShardsMigrating sets the number of shards currently in migration state
 func SetShardsMigrating(count float64) {
 	ShardsMigrating.Set(count)
+}
+
+// RecordGateClientConnected increments the active client count for a gate
+func RecordGateClientConnected(gate string) {
+	GateActiveClients.WithLabelValues(gate).Inc()
+}
+
+// RecordGateClientDisconnected decrements the active client count for a gate
+func RecordGateClientDisconnected(gate string) {
+	GateActiveClients.WithLabelValues(gate).Dec()
+}
+
+// RecordGatePushedMessage increments the pushed message counter for a gate
+func RecordGatePushedMessage(gate string) {
+	GatePushedMessages.WithLabelValues(gate).Inc()
+}
+
+// RecordNodeGateConnected increments the connected gates count for a node
+func RecordNodeGateConnected(node string) {
+	NodeConnectedGates.WithLabelValues(node).Inc()
+}
+
+// RecordNodeGateDisconnected decrements the connected gates count for a node
+func RecordNodeGateDisconnected(node string) {
+	NodeConnectedGates.WithLabelValues(node).Dec()
+}
+
+// RecordNodePushedMessage increments the pushed message counter for a node to a specific gate
+func RecordNodePushedMessage(node, gate string) {
+	NodePushedMessages.WithLabelValues(node, gate).Inc()
 }

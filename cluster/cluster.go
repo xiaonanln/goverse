@@ -16,6 +16,7 @@ import (
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -706,6 +707,10 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 	if oldCh, ok := c.gateChannels[gateAddr]; ok {
 		c.logger.Warnf("Gate %s already registered, replacing connection", gateAddr)
 		close(oldCh)
+		// Gate count doesn't change, just replacing connection
+	} else {
+		// New gate connection - increment metric
+		metrics.RecordNodeGateConnected(c.node.GetAdvertiseAddress())
 	}
 
 	// Create a buffered channel to prevent blocking
@@ -729,6 +734,8 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 		if currentCh == ch {
 			close(currentCh)
 			delete(c.gateChannels, gateAddr)
+			// Record metric for gate disconnection
+			metrics.RecordNodeGateDisconnected(c.node.GetAdvertiseAddress())
 			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
 		} else {
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
@@ -755,6 +762,8 @@ func (c *Cluster) cleanupGateChannels() {
 				}
 			}()
 			close(ch)
+			// Record metric for gate disconnection during cleanup
+			metrics.RecordNodeGateDisconnected(c.node.GetAdvertiseAddress())
 			c.logger.Infof("Closed gate channel for %s during shutdown", gateAddr)
 		}()
 	}
@@ -802,6 +811,8 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 		select {
 		case gateCh <- envelope:
 			c.gateChannelsMu.RUnlock()
+			// Record metric for pushed message
+			metrics.RecordNodePushedMessage(c.node.GetAdvertiseAddress(), gateAddr)
 			return nil
 		default:
 			c.gateChannelsMu.RUnlock()
