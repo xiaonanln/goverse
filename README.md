@@ -15,7 +15,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 - Virtual objects with automatic lifecycle & activation
 - Sharded placement using etcd
-- Client-side proxies with streaming gRPC
+- Gateway architecture with streaming gRPC
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics
@@ -49,9 +49,8 @@ func (c *Counter) Add(ctx context.Context, n int) (int, error) {
 
 func main() {
     config := &goverseapi.ServerConfig{
-        ListenAddress:       "localhost:47000",
-        AdvertiseAddress:    "localhost:47000",
-        ClientListenAddress: "localhost:48000",
+        ListenAddress:    "localhost:47000",
+        AdvertiseAddress: "localhost:47000",
     }
     server, _ := goverseapi.NewServer(config)
     goverseapi.RegisterObjectType((*Counter)(nil))

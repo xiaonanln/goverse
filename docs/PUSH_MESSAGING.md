@@ -1,41 +1,36 @@
 # Push-Based Chat Messaging
 
-This document explains how the push-based messaging feature works in the Goverse chat sample.
+This document explains how the push-based messaging feature works in the Goverse chat sample using the gateway architecture.
 
 ## Overview
 
-Instead of requiring clients to poll for new messages, the chat system now pushes messages in real-time to all connected clients in a chat room. This is implemented using the existing gRPC bidirectional streaming infrastructure.
+Instead of requiring clients to poll for new messages, the chat system pushes messages in real-time to all connected clients in a chat room. This is implemented using the gateway architecture with bidirectional gRPC streaming.
 
 ## How It Works
 
-### 1. Client Registration Stream
+### 1. Gateway Registration with Nodes
 
-When a client connects to the server, it establishes a bidirectional gRPC stream via the `Register` RPC:
-
-```go
-stream, err := client.Register(ctx, &client_pb.Empty{})
-```
-
-This stream is kept open for the lifetime of the client connection. The server sends messages through this stream, and the client listens continuously.
-
-### 2. Client Message Channel
-
-Each client object (server-side) has a `MessageChan()` that returns a buffered channel:
+When a gateway starts, it connects to each node in the cluster via the `RegisterGate` streaming RPC:
 
 ```go
-type ClientObject interface {
-    object.Object
-    MessageChan() chan proto.Message
-}
+stream, err := nodeClient.RegisterGate(ctx, &goverse_pb.RegisterGateRequest{
+    GateAddr: "localhost:49000",
+})
 ```
 
-The server's `Register` method listens to this channel and forwards any messages to the client:
+This stream is kept open for the lifetime of the gateway connection. Nodes use this stream to push messages to the gateway for delivery to clients.
+
+### 2. Client Registration with Gateway
+
+When a client connects to the gateway, it establishes a bidirectional gRPC stream via the `Register` RPC:
 
 ```go
-for msg := range client.MessageChan() {
-    stream.Send(msg)
-}
+stream, err := gateClient.Register(ctx, &gate_pb.Empty{})
+regResp, _ := stream.Recv()
+clientID := regResp.(*gate_pb.RegisterResponse).ClientId  // Format: "gateAddr/uniqueId"
 ```
+
+This stream is kept open for the lifetime of the client connection. The gateway sends messages through this stream, and the client listens continuously.
 
 ### 3. Tracking Clients in Chat Rooms
 
@@ -44,18 +39,18 @@ When a user joins a chat room, the `ChatRoom` object stores the mapping between 
 ```go
 type ChatRoom struct {
     users     map[string]bool       // userName -> bool
-    clientIDs map[string]string     // userName -> clientID
+    clientIDs map[string]string     // userName -> clientID (format: "gateAddr/uniqueId")
     messages  []*chat_pb.ChatMessage
 }
 ```
 
-### 4. Pushing Messages
+### 4. Pushing Messages from Nodes to Gateways
 
 When a message is sent to a chat room, the `ChatRoom.SendMessage` method:
 
 1. Stores the message in the room's message history
 2. Iterates through all connected clients in the room
-3. Pushes the message to each client's message channel (except the sender):
+3. Pushes the message to each client via `PushMessageToClient` (except the sender):
 
 ```go
 notification := &chat_pb.Client_NewMessageNotification{
@@ -66,19 +61,25 @@ for userName, clientID := range room.clientIDs {
         continue // Don't send to sender
     }
     
-    err := goverseapi.PushMessageToClient(clientID, notification)
+    err := goverseapi.PushMessageToClient(ctx, clientID, notification)
     if err != nil {
         // Log error but don't fail - client can still poll
     }
 }
 ```
 
+The `PushMessageToClient` function:
+- Parses the `clientID` to extract the gateway address
+- Looks up the gateway's registered stream channel
+- Sends a `ClientMessageEnvelope` wrapped in a `GateMessage` to the gateway
+- The gateway receives the message and routes it to the appropriate client
+
 ### 5. Client-Side Message Listener
 
 On the client side, a goroutine continuously listens for messages on the stream:
 
 ```go
-func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterClient) {
+func (c *ChatClient) listenForMessages(stream gate_pb.GateService_RegisterClient) {
     for {
         msgAny, err := stream.Recv()
         if err != nil {
@@ -112,17 +113,21 @@ func (c *ChatClient) listenForMessages(stream client_pb.ClientService_RegisterCl
 
 ## Implementation Details
 
-### Buffered Channel
+### Gateway Message Channel
 
-The client message channel is buffered (capacity 10) to prevent blocking when pushing messages:
+Each gateway has a buffered message channel (default capacity 1024) on each node to prevent blocking when pushing messages:
 
-```go
-func (cp *BaseClient) OnCreated() {
-    cp.messageChan = make(chan proto.Message, 10)
-}
-```
+- The channel is created when the gateway registers with the node via `RegisterGate`
+- Messages are sent to the channel without blocking (non-blocking send)
+- If the buffer fills up, `PushMessageToClient` returns an error
 
-If the buffer fills up (e.g., client is not reading), the `PushMessageToClient` method will return an error, but the message send operation will still succeed.
+### Client ID Format
+
+Client IDs use the format `gateAddress/uniqueId` (e.g., `localhost:49000/AAZEDvtPr4JHP6WtybiD`):
+
+- The gateway address allows nodes to route messages to the correct gateway
+- The unique ID allows gateways to route messages to the correct client
+- No centralized client registry is needed
 
 ### Error Handling
 
@@ -148,12 +153,13 @@ python3 tests/integration/test_chat.py
 
 For manual testing with two clients:
 
-1. Start the server: `go run samples/chat/server/*.go`
-2. Open two terminals
-3. Terminal 1: `go run samples/chat/client/*.go -user alice`
-4. Terminal 2: `go run samples/chat/client/*.go -user bob`
-5. Both: `/join General`
-6. Type in one terminal and see messages appear in the other instantly!
+1. Start the node server: `go run samples/chat/server/*.go`
+2. Start the gateway: `go run cmd/gate/main.go`
+3. Open two terminals
+4. Terminal 1: `go run samples/chat/client/*.go -server localhost:49000 -user alice`
+5. Terminal 2: `go run samples/chat/client/*.go -server localhost:49000 -user bob`
+6. Both: `/join General`
+7. Type in one terminal and see messages appear in the other instantly!
 
 ## Future Enhancements
 

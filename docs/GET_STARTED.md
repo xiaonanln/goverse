@@ -59,10 +59,12 @@ go get github.com/xiaonanln/goverse
 ## Project Structure
 
 - `cmd/inspector/` – Inspector web server for cluster visualization
+- `cmd/gate/` – Gateway server binary for client connections
 - `server/` – Node server implementation with context-based shutdown
 - `node/` – Core node logic and object management
 - `object/` – Object base types and helpers (BaseObject)
-- `client/` – Client service implementation and protocol definitions (BaseClient)
+- `gate/` – Gateway implementation for handling client connections
+- `client/` – Client protocol definitions (deprecated BaseClient for backwards compatibility)
 - `cluster/` – Cluster singleton management, leadership election, and automatic shard mapping
 - `cluster/sharding/` – Shard-to-node mapping with 8192 fixed shards
 - `cluster/etcdmanager/` – etcd connection management and node registry
@@ -75,77 +77,80 @@ go get github.com/xiaonanln/goverse
 
 ---
 
-## Client Architecture
+## Gateway Architecture
 
-GoVerse features a **Client Service** system that enables seamless communication between clients and distributed objects.
+GoVerse features a **Gateway** system that enables seamless communication between clients and distributed objects.
 
 ### Core Components
 
-**1. Client Registration System**
-- Clients register with the server via `Register()` streaming RPC on the `ClientService`
-- Each client receives a unique ID and bidirectional message channel
-- Persistent connections maintained for communication
+**1. Gateway Server**
+- Separate `cmd/gate/` binary that handles client connections
+- Gateways connect to GoVerse nodes to route calls to distributed objects
+- Provides `GateService` for client-facing RPCs
 
-**2. Connection Lifecycle Management**
+**2. Client Registration System**
+- Clients register with the gateway via `Register()` streaming RPC on the `GateService`
+- Each client receives a unique ID in format `gateAddress/uniqueId` (e.g., `localhost:49000/AAZEDvtPr4JHP6WtybiD`)
+- Persistent connections maintained for bidirectional communication
+
+**3. Connection Lifecycle Management**
 ```go
-// Client-side registration
-stream, err := client.Register(ctx, &client_pb.Empty{})
+// Client-side registration with gateway
+stream, err := client.Register(ctx, &gate_pb.Empty{})
 
 // Receive registration response with client ID
 regResp, _ := stream.Recv()
-clientID := regResp.(*client_pb.RegisterResponse).ClientId
+clientID := regResp.(*gate_pb.RegisterResponse).ClientId
 ```
 
-**3. Server-Side Client Objects**
-- Each connected client is represented by a `BaseClient` object on the server
-- Clients can have custom methods that orchestrate calls to other objects
-- Example: `ChatClient` manages chat room operations and message routing
-
-**4. Method Call Interface**
-- Clients call methods via the `Call()` RPC with client ID, method name, and request
-- Server routes calls to the appropriate client object's methods
-- Client objects can then call other distributed objects using `CallObject()`
+**4. Generic Object Call Interface**
+- Clients call distributed objects via the `CallObject()` RPC with object ID, method name, and request
+- Gateway routes calls to the appropriate node based on shard mapping
+- No client-specific objects on the server; all logic lives in distributed objects
 
 **5. Push Messaging**
-- Server can push messages to clients in real-time via the registration stream
-- Use `PushMessageToClient()` to send messages from distributed objects to specific clients
+- Gateways register with each node via `RegisterGate()` streaming RPC
+- Nodes can push messages to clients via the gateway using `PushMessageToClient()`
 - Enables real-time notifications, chat messages, and event delivery
 
-### Client Connection Flow
+### Gateway Connection Flow
 
-1. **Registration**: Client connects and calls `Register()` streaming RPC
-2. **ID Assignment**: Server creates a client object with unique ID
-3. **Bidirectional Communication**: Client can call methods AND receive pushed messages
-4. **Method Invocation**: Client calls methods through `Call()` RPC
-5. **Object Orchestration**: Client object methods orchestrate calls to distributed objects
-6. **Real-time Updates**: Server pushes messages to clients as events occur
-7. **Graceful Cleanup**: Client objects cleaned up on disconnect
+1. **Gateway Startup**: Gateway connects to etcd and discovers nodes in the cluster
+2. **Gate Registration**: Gateway registers with each node via `RegisterGate()` streaming RPC
+3. **Client Registration**: Client connects to gateway and calls `Register()` to get a unique client ID
+4. **Bidirectional Communication**: Client can call objects AND receive pushed messages
+5. **Object Invocation**: Client calls distributed objects through `CallObject()` RPC
+6. **Node Routing**: Gateway routes calls to the appropriate node based on object shard
+7. **Real-time Updates**: Nodes push messages to clients via the gateway's registration stream
+8. **Graceful Cleanup**: Client connections and gateway registrations cleaned up on disconnect
 
 ### Usage Example
 
 ```go
-// Connect to server
-conn, _ := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-client := client_pb.NewClientServiceClient(conn)
+// Connect to gateway
+conn, _ := grpc.Dial(gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+client := gate_pb.NewGateServiceClient(conn)
 
 // Register and get client ID
-stream, _ := client.Register(ctx, &client_pb.Empty{})
+stream, _ := client.Register(ctx, &gate_pb.Empty{})
 regResp, _ := stream.Recv()
-clientID := regResp.(*client_pb.RegisterResponse).ClientId
+clientID := regResp.(*gate_pb.RegisterResponse).ClientId
 
-// Call methods on the client object
-anyReq, _ := anypb.New(&chat_pb.Client_JoinChatRoomRequest{
-    RoomName: "General",
+// Call distributed objects directly
+anyReq, _ := anypb.New(&chat_pb.ChatRoom_JoinRequest{
     UserName: "alice",
-})
-resp, _ := client.Call(ctx, &client_pb.CallRequest{
     ClientId: clientID,
+})
+resp, _ := client.CallObject(ctx, &gate_pb.CallObjectRequest{
+    ClientId: clientID,
+    Type:     "ChatRoom",
+    Id:       "ChatRoom-General",
     Method:   "Join",
     Request:  anyReq,
 })
 ```
 
-This architecture provides a clean separation between client connections and distributed object operations.
+This architecture provides a clean separation between client-facing gateways and object-hosting nodes, making distributed objects the primary abstraction.
 
 ---
 
@@ -232,23 +237,30 @@ fmt.Printf("Counter value: %d\n", value)
 
 ## Chat Application Example
 
-The chat system demonstrates how distributed objects work together in a real application.
+The chat system demonstrates how distributed objects work together in a real application with the gateway architecture.
 
 ### ChatRoom Object (Distributed Object)
 
 ```go
 type ChatRoom struct {
     goverseapi.BaseObject
-    users    map[string]bool
-    messages []*chat_pb.ChatMessage
-    mu       sync.Mutex
+    users     map[string]bool          // userName -> bool
+    clientIDs map[string]string        // userName -> clientID for push notifications
+    messages  []*chat_pb.ChatMessage
+    mu        sync.Mutex
 }
 
 func (room *ChatRoom) Join(ctx context.Context, req *chat_pb.ChatRoom_JoinRequest) (*chat_pb.ChatRoom_JoinResponse, error) {
     room.mu.Lock()
     defer room.mu.Unlock()
     
-    room.users[req.GetUserName()] = true
+    userName := req.GetUserName()
+    clientID := req.GetClientId()
+    
+    room.users[userName] = true
+    if clientID != "" {
+        room.clientIDs[userName] = clientID  // Store for push messaging
+    }
     
     return &chat_pb.ChatRoom_JoinResponse{
         RoomName: room.Name(),
@@ -260,41 +272,25 @@ func (room *ChatRoom) SendMessage(ctx context.Context, req *chat_pb.ChatRoom_Sen
     room.mu.Lock()
     defer room.mu.Unlock()
     
-    room.messages = append(room.messages, &chat_pb.ChatMessage{
+    chatMsg := &chat_pb.ChatMessage{
         UserName:  req.GetUserName(),
         Message:   req.GetMessage(),
         Timestamp: time.Now().UnixMicro(),
-    })
+    }
+    room.messages = append(room.messages, chatMsg)
+    
+    // Push message to all connected clients in the room
+    notification := &chat_pb.Client_NewMessageNotification{
+        Message: chatMsg,
+    }
+    for userName, clientID := range room.clientIDs {
+        if userName == req.GetUserName() {
+            continue  // Don't send to sender
+        }
+        goverseapi.PushMessageToClient(ctx, clientID, notification)
+    }
     
     return &chat_pb.Client_SendChatMessageResponse{}, nil
-}
-```
-
-### ChatClient Object (Server-side Client Proxy)
-
-```go
-type ChatClient struct {
-    goverseapi.BaseClient
-    currentChatRoom string
-}
-
-func (cc *ChatClient) Join(ctx context.Context, req *chat_pb.Client_JoinChatRoomRequest) (*chat_pb.Client_JoinChatRoomResponse, error) {
-    // Call the ChatRoom object
-    resp, err := goverseapi.CallObject(ctx, "ChatRoom-"+req.RoomName, "Join", 
-        &chat_pb.ChatRoom_JoinRequest{UserName: req.UserName})
-    
-    cc.currentChatRoom = req.RoomName
-    return resp.(*chat_pb.Client_JoinChatRoomResponse), err
-}
-
-func (cc *ChatClient) SendMessage(ctx context.Context, req *chat_pb.Client_SendChatMessageRequest) (*chat_pb.Client_SendChatMessageResponse, error) {
-    // Forward to current chat room
-    _, err := goverseapi.CallObject(ctx, "ChatRoom-"+cc.currentChatRoom, "SendMessage",
-        &chat_pb.ChatRoom_SendChatMessageRequest{
-            UserName: req.GetUserName(),
-            Message:  req.GetMessage(),
-        })
-    return nil, err
 }
 ```
 
@@ -305,17 +301,21 @@ func main() {
     config := &goverseapi.ServerConfig{
         ListenAddress:       "localhost:47000",
         AdvertiseAddress:    "localhost:47000",
-        ClientListenAddress: "localhost:48000",
     }
     server, err := goverseapi.NewServer(config)
     if err != nil {
         panic(err)
     }
     
-    // Register types and create initial objects
-    goverseapi.RegisterClientType((*ChatClient)(nil))
+    // Register object types
     goverseapi.RegisterObjectType((*ChatRoom)(nil))
-    goverseapi.CreateObject(ctx, "ChatRoom", "ChatRoom-General", nil)
+    goverseapi.RegisterObjectType((*ChatRoomMgr)(nil))
+    
+    // Create ChatRoomMgr when cluster is ready
+    go func() {
+        <-goverseapi.ClusterReady()
+        goverseapi.CreateObject(context.Background(), "ChatRoomMgr", "ChatRoomMgr0")
+    }()
     
     server.Run()
 }
@@ -324,31 +324,34 @@ func main() {
 ### Client Usage
 
 ```go
-// Connect and register
-client := client_pb.NewClientServiceClient(conn)
-stream, _ := client.Register(ctx, &client_pb.Empty{})
+// Connect to gateway
+client := gate_pb.NewGateServiceClient(conn)
+stream, _ := client.Register(ctx, &gate_pb.Empty{})
 regResp, _ := stream.Recv()
-clientID := regResp.(*client_pb.RegisterResponse).ClientId
+clientID := regResp.(*gate_pb.RegisterResponse).ClientId
 
 // Join a chat room
-anyReq, _ := anypb.New(&chat_pb.Client_JoinChatRoomRequest{
-    RoomName: "General",
+anyReq, _ := anypb.New(&chat_pb.ChatRoom_JoinRequest{
     UserName: "alice",
-})
-client.Call(ctx, &client_pb.CallRequest{
     ClientId: clientID,
+})
+client.CallObject(ctx, &gate_pb.CallObjectRequest{
+    ClientId: clientID,
+    Type:     "ChatRoom",
+    Id:       "ChatRoom-General",
     Method:   "Join",
     Request:  anyReq,
 })
 
 // Send a message
-anyReq, _ = anypb.New(&chat_pb.Client_SendChatMessageRequest{
+anyReq, _ = anypb.New(&chat_pb.ChatRoom_SendChatMessageRequest{
     UserName: "alice",
-    RoomName: "General",
     Message:  "Hello everyone!",
 })
-client.Call(ctx, &client_pb.CallRequest{
+client.CallObject(ctx, &gate_pb.CallObjectRequest{
     ClientId: clientID,
+    Type:     "ChatRoom",
+    Id:       "ChatRoom-General",
     Method:   "SendMessage",
     Request:  anyReq,
 })
@@ -358,12 +361,13 @@ client.Call(ctx, &client_pb.CallRequest{
 
 The chat system provides real-time message delivery through distributed ChatRoom objects:
 
-- **Push-based Delivery**: Messages are pushed to clients in real-time via bidirectional gRPC streams
+- **Push-based Delivery**: Messages are pushed to clients in real-time via gateway streams
+- **Gateway Routing**: Gateways register with nodes and route push messages to connected clients
 - **Polling Support**: Clients can also poll for recent messages using `GetRecentMessages()`
 - **Timestamp Tracking**: Messages include microsecond timestamps for ordering and filtering
 - **Message Persistence**: Chat history stored in distributed ChatRoom objects
 - **Multi-room Support**: Each room is an independent distributed object with its own state
-- **Client-side Orchestration**: ChatClient objects on the server coordinate operations
+- **Client ID Format**: Client IDs are in format `gateAddress/uniqueId` for efficient routing
 
 See [PUSH_MESSAGING.md](PUSH_MESSAGING.md) for implementation details.
 
@@ -375,19 +379,25 @@ See [PUSH_MESSAGING.md](PUSH_MESSAGING.md) for implementation details.
    # Open http://localhost:8080 to visualize the cluster
    ```
 
-2. **Start the chat server:**
+2. **Start the chat server (node):**
    ```bash
    go run ./samples/chat/server/
-   # Starts server on port 47000 (node-to-node) and 48000 (client connections)
+   # Starts node server on port 47000 (node-to-node communication)
    ```
 
-3. **Start multiple chat clients:**
+3. **Start the gateway:**
+   ```bash
+   go run ./cmd/gate/
+   # Starts gateway on port 49000 (client connections)
+   ```
+
+4. **Start multiple chat clients:**
    ```bash
    # Terminal 1
-   go run ./samples/chat/client/ -server=localhost:48000 -user=alice
+   go run ./samples/chat/client/ -server=localhost:49000 -user=alice
 
    # Terminal 2
-   go run ./samples/chat/client/ -server=localhost:48000 -user=bob
+   go run ./samples/chat/client/ -server=localhost:49000 -user=bob
    ```
 
 ### Client Commands
