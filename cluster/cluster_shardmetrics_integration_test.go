@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/xiaonanln/goverse/cluster/sharding"
@@ -33,7 +32,7 @@ func TestShardMetricsIntegration(t *testing.T) {
 
 	// Wait for watches to sync and shard mapping to be initialized
 	t.Logf("Waiting for shard mapping to be created...")
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
 
 	// Verify shard mapping is initialized
 	mapping1 := cluster1.GetShardMapping(ctx)

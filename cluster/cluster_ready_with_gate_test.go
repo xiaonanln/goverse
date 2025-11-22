@@ -80,13 +80,7 @@ func TestNodeReadyWithUnconnectedGate(t *testing.T) {
 
 	// Step 3: Verify that the node cluster becomes ready even without gate connection
 	// The node should become ready based on consensus state only
-	timeout := testutil.WaitForShardMappingTimeout
-	select {
-	case <-nodeCluster.ClusterReady():
-		t.Log("✓ Node cluster became ready without gate connection")
-	case <-time.After(timeout):
-		t.Fatalf("Node cluster should become ready within %v even without gate connection", timeout)
-	}
+	testutil.WaitForClusterReady(t, nodeCluster)
 
 	// Verify node cluster is ready
 	if !nodeCluster.IsReady() {
@@ -129,13 +123,7 @@ func TestNodeReadyBeforeGateRegisters(t *testing.T) {
 	t.Logf("Node cluster started at %s", nodeCluster.getAdvertiseAddr())
 
 	// Step 2: Verify that the node cluster becomes ready without any gates
-	timeout := testutil.WaitForShardMappingTimeout
-	select {
-	case <-nodeCluster.ClusterReady():
-		t.Log("✓ Node cluster became ready without any gates in system")
-	case <-time.After(timeout):
-		t.Fatalf("Node cluster should become ready within %v without gates", timeout)
-	}
+	testutil.WaitForClusterReady(t, nodeCluster)
 
 	// Verify node cluster is ready
 	if !nodeCluster.IsReady() {

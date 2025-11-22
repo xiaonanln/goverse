@@ -77,7 +77,8 @@ func TestDistributedCreateObject(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Wait for shard mapping to be initialized (cluster.Start already handles StartNodeConnections and StartShardMappingManagement)
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Verify shard mapping is ready
 	_ = cluster1.GetShardMapping(ctx)
@@ -219,7 +220,9 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	}
 
 	// Wait for nodes to discover each other and shard mapping to initialize
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	for _, c := range clusters {
+		testutil.WaitForClusterReady(t, c)
+	}
 
 	// Test shard distribution by getting target nodes for 100 object IDs
 	numObjects := 100
