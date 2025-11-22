@@ -36,6 +36,7 @@ go get github.com/xiaonanln/goverse
 - Uniquely addressable, stateful entities with custom methods
 - Each object has a unique ID and type
 - Objects can call methods on other objects using `CallObject()`
+- Objects are automatically created on first access (see [Object Call Policies](OBJECT_CALL_POLICIES.md))
 
 ### Virtual Actor Lifecycle
 - Objects are activated on demand when first accessed
