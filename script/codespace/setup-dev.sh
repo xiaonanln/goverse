@@ -3,7 +3,7 @@
 # Optimized for GitHub Codespaces but works on any Linux system
 #
 # Usage:
-#   ./script/workspace/setup-dev.sh [--yes] [--postgres] [--etcd-version X.Y.Z]
+#   ./script/codespace/setup-dev.sh [--yes] [--postgres] [--etcd-version X.Y.Z]
 # Options:
 #   --yes            : non-interactive (assume yes for apt)
 #   --postgres       : initialize local PostgreSQL cluster and create DB/user (optional)

@@ -38,10 +38,9 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 
 	t.Logf("Leader is cluster1 (localhost:50011)")
 
-	// Test 1: Wait for node list to become stable (10 seconds) plus check interval (5 seconds)
-	// Add some buffer for processing
-	t.Logf("Waiting for node list to stabilize (%v) and shard mapping to be created...", testutil.WaitForShardMappingTimeout)
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	// Test 1: Wait for node list to become stable and shard mapping to be created
+	t.Logf("Waiting for node list to stabilize and shard mapping to be created...")
+	testutil.WaitForClusterReady(t, cluster1)
 
 	// After stability period, leader should have initialized shard mapping
 	mapping1 := cluster1.GetShardMapping(ctx)
@@ -137,7 +136,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 
 	// Wait for stability and initial mapping
 	t.Logf("Waiting for initial shard mapping...")
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
 
 	_ = cluster1.GetShardMapping(ctx)
 	t.Logf("Initial shard mapping created")
@@ -164,7 +163,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Added second node, waiting for stability and shard mapping update...")
 
 	// Wait for node list to stabilize and mapping to be updated
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Get updated mapping
 	updatedMapping := cluster1.GetShardMapping(ctx)

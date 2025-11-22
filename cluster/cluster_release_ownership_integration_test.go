@@ -67,7 +67,8 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	}
 
 	// Wait for leader election and shard mapping to stabilize
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, cluster2)
 
 	// Pick a shard that belongs to node1
 	// We'll use a shard ID directly without creating objects

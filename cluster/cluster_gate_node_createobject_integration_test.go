@@ -171,7 +171,8 @@ func TestGateNodeIntegration(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Wait for shard mapping to be initialized
-	time.Sleep(testutil.WaitForShardMappingTimeout)
+	testutil.WaitForClusterReady(t, nodeCluster)
+	testutil.WaitForClusterReady(t, gateCluster)
 
 	// Verify shard mapping is ready
 	_ = gateCluster.GetShardMapping(ctx)
@@ -265,15 +266,15 @@ func TestGateNodeIntegration(t *testing.T) {
 		// Test Echo method
 		echoReq := &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-			"message": structpb.NewStringValue("Hello from gate"),
-		},
-	}
-	result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
-	if err != nil {
-		t.Fatalf("CallObject Echo via gate failed: %v", err)
-	}
+				"message": structpb.NewStringValue("Hello from gate"),
+			},
+		}
+		result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
+		if err != nil {
+			t.Fatalf("CallObject Echo via gate failed: %v", err)
+		}
 
-	echoResp, ok := result.(*structpb.Struct)
+		echoResp, ok := result.(*structpb.Struct)
 		if !ok {
 			t.Fatalf("Expected *structpb.Struct, got %T", result)
 		}
@@ -424,7 +425,7 @@ func TestGateNodeIntegration(t *testing.T) {
 			// Call Echo with unique message
 			echoReq := &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					"message": structpb.NewStringValue(fmt.Sprintf("Call %d from gate", i+1)),
+					"message": structpb.NewStringValue(fmt.Sprintf("Message from object %d", i)),
 				},
 			}
 			result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Echo", echoReq)
@@ -441,9 +442,7 @@ func TestGateNodeIntegration(t *testing.T) {
 			expectedMsg := fmt.Sprintf("Echo: Message from object %d", i)
 			if actualMsg != expectedMsg {
 				t.Fatalf("Expected message %q, got %q", expectedMsg, actualMsg)
-			}
-
-			// Each object should have its own state (call count = 1)
+			} // Each object should have its own state (call count = 1)
 			eoCallCount := int(echoResp.Fields["callCount"].GetNumberValue())
 			if eoCallCount != 1 {
 				t.Fatalf("Expected call count 1 for object %s, got %d (objects should have independent state)", objID, eoCallCount)
@@ -553,18 +552,18 @@ func TestGateNodeIntegration(t *testing.T) {
 		// Call a method to set state
 		incReq := &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-			"value": structpb.NewNumberValue(42),
-		},
-	}
-	result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Increment", incReq)
-	if err != nil {
-		t.Fatalf("CallObject Increment via gate failed: %v", err)
-	}
+				"value": structpb.NewNumberValue(42),
+			},
+		}
+		result, err := gateCluster.CallObject(ctx, "TestGateNodeObject", objID, "Increment", incReq)
+		if err != nil {
+			t.Fatalf("CallObject Increment via gate failed: %v", err)
+		}
 
-	incResp, ok := result.(*structpb.Struct)
-	if !ok {
-		t.Fatalf("Expected *structpb.Struct, got %T", result)
-	}
+		incResp, ok := result.(*structpb.Struct)
+		if !ok {
+			t.Fatalf("Expected *structpb.Struct, got %T", result)
+		}
 
 		incResult := int(incResp.Fields["result"].GetNumberValue())
 		if incResult != 42 {
