@@ -1290,9 +1290,13 @@ func (cm *ConsensusManager) IsStateStable() bool {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	// Check if local node is in the cluster
-	if !cm.state.HasNode(cm.localNodeAddress) {
-		cm.logger.Debugf("Cluster state not stable: local node %s not in cluster", cm.localNodeAddress)
+	// Check if local address (node or gate) is in the cluster
+	// Gates should check the Gates map, nodes should check the Nodes map
+	isNode := cm.state.HasNode(cm.localNodeAddress)
+	isGate := cm.state.HasGate(cm.localNodeAddress)
+	
+	if !isNode && !isGate {
+		cm.logger.Debugf("Cluster state not stable: local address %s not in cluster", cm.localNodeAddress)
 		return false
 	}
 
@@ -1300,11 +1304,13 @@ func (cm *ConsensusManager) IsStateStable() bool {
 		return false
 	}
 
-	// Check if we have the minimum required nodes
-	minQuorum := cm.getEffectiveMinQuorum()
-	if len(cm.state.Nodes) < minQuorum {
-		cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum quorum required is %d", len(cm.state.Nodes), minQuorum)
-		return false
+	// Check if we have the minimum required nodes (only for nodes, not gates)
+	if isNode {
+		minQuorum := cm.getEffectiveMinQuorum()
+		if len(cm.state.Nodes) < minQuorum {
+			cm.logger.Debugf("Cluster state not stable: Only %d nodes available, minimum quorum required is %d", len(cm.state.Nodes), minQuorum)
+			return false
+		}
 	}
 
 	return true
