@@ -82,12 +82,11 @@ After all 3 nodes join:
 
 ```go
 config := &goverseapi.ServerConfig{
-    ListenAddress:       "localhost:7001",
-    AdvertiseAddress:    "localhost:7001",
-    ClientListenAddress: "localhost:8001",
-    EtcdAddress:         "localhost:2379",
-    EtcdPrefix:          "/goverse-example",
-    MinQuorum:            3, // Require at least 3 nodes
+    ListenAddress:    "localhost:7001",
+    AdvertiseAddress: "localhost:7001",
+    EtcdAddress:      "localhost:2379",
+    EtcdPrefix:       "/goverse-example",
+    MinQuorum:        3, // Require at least 3 nodes
 }
 ```
 
