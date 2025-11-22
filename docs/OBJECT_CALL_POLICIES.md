@@ -126,15 +126,24 @@ Related to call semantics is the question of **when objects are created**:
 
 **Goverse Implementation**:
 ```go
-// Auto-creation happens inside CallObject
+// Auto-creation happens inside CallObject (simplified for illustration)
 func (node *Node) CallObject(ctx context.Context, typ, id, method string, request proto.Message) (proto.Message, error) {
+    // Acquire locks and check node state (omitted for brevity)
+    node.stopMu.RLock()
+    defer node.stopMu.RUnlock()
+    
     // Attempt to create object if it doesn't exist (idempotent)
     err := node.createObject(ctx, typ, id)
     if err != nil {
         return nil, fmt.Errorf("failed to auto-create object %s: %w", id, err)
     }
     
-    // Now object exists, proceed with method call
+    // Acquire per-object lock and retrieve object
+    unlockKey := node.keyLock.RLock(id)
+    defer unlockKey()
+    
+    // Now object exists, proceed with method invocation via reflection
+    // (full implementation includes type validation, method lookup, and metrics)
     // ...
 }
 ```
