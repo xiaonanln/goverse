@@ -48,7 +48,7 @@ func TestGateClusterCanBecomeReady(t *testing.T) {
 		t.Fatal("Gate cluster IsReady() should return true")
 	}
 
-	// Verify gate cluster sees the node
+	// Verify both clusters can see each other
 	gates := nodeCluster.GetGates()
 	if len(gates) != 1 {
 		t.Fatalf("Node should see 1 gate, got %d: %v", len(gates), gates)

@@ -1294,7 +1294,6 @@ func (cm *ConsensusManager) IsStateStable() bool {
 	// Gates should check the Gates map, nodes should check the Nodes map
 	isNode := cm.state.HasNode(cm.localNodeAddress)
 	isGate := cm.state.HasGate(cm.localNodeAddress)
-	
 	if !isNode && !isGate {
 		cm.logger.Debugf("Cluster state not stable: local address %s not in cluster", cm.localNodeAddress)
 		return false
