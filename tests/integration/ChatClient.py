@@ -91,7 +91,8 @@ class ChatClient:
                     notification = chat_pb2.Client_NewMessageNotification()
                     if msg_any.Unpack(notification):
                         chat_msg = notification.message
-                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(chat_msg.timestamp))
+                        # Timestamp is in microseconds
+                        timestamp_str = time.strftime("%H:%M:%S", time.localtime(chat_msg.timestamp // 1000000))
                         output_line = f"[{timestamp_str}] {chat_msg.user_name}: {chat_msg.message}"
                         
                         with self.output_lock:
@@ -111,10 +112,12 @@ class ChatClient:
             if self.running:
                 print(f"Fatal error in message listener: {e}")
     
-    def _call(self, method: str, request_proto: Any) -> any_pb2.Any:
-        """Call a method on the client object.
+    def _call_object(self, object_type: str, object_id: str, method: str, request_proto: Any) -> any_pb2.Any:
+        """Call a method on an object in the Goverse cluster.
         
         Args:
+            object_type: Type of the object (e.g., "ChatRoom", "ChatRoomMgr")
+            object_id: ID of the object (e.g., "ChatRoom-General", "ChatRoomMgr0")
             method: Method name to call
             request_proto: Request protobuf message
             
@@ -128,8 +131,8 @@ class ChatClient:
         # Call the RPC
         call_request = gate_pb2.CallObjectRequest(
             client_id=self.client_id,
-            type="Client",
-            id=self.client_id,
+            type=object_type,
+            id=object_id,
             method=method,
             request=request_any
         )
@@ -143,10 +146,10 @@ class ChatClient:
         Returns:
             List of chatroom names
         """
-        request = chat_pb2.Client_ListChatRoomsRequest()
-        response_any = self._call("ListChatRooms", request)
+        request = chat_pb2.ChatRoom_ListRequest()
+        response_any = self._call_object("ChatRoomMgr", "ChatRoomMgr0", "ListChatRooms", request)
         
-        response = chat_pb2.Client_ListChatRoomsResponse()
+        response = chat_pb2.ChatRoom_ListResponse()
         response_any.Unpack(response)
         
         with self.output_lock:
@@ -165,13 +168,13 @@ class ChatClient:
         Returns:
             List of recent messages in the chatroom
         """
-        request = chat_pb2.Client_JoinChatRoomRequest(
-            room_name=room_name,
-            user_name=self.user_name
+        request = chat_pb2.ChatRoom_JoinRequest(
+            user_name=self.user_name,
+            client_id=self.client_id
         )
-        response_any = self._call("Join", request)
+        response_any = self._call_object("ChatRoom", f"ChatRoom-{room_name}", "Join", request)
         
-        response = chat_pb2.Client_JoinChatRoomResponse()
+        response = chat_pb2.ChatRoom_JoinResponse()
         response_any.Unpack(response)
         
         self.room_name = room_name
@@ -180,7 +183,7 @@ class ChatClient:
         with self.output_lock:
             self.output_buffer.append(f"Joined chatroom {response.room_name}")
             for msg in response.recent_messages:
-                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
+                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp // 1000000))
                 self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
                 if msg.timestamp > self.last_msg_timestamp:
                     self.last_msg_timestamp = msg.timestamp
@@ -202,12 +205,11 @@ class ChatClient:
                 self.output_buffer.append(error_msg)
             raise RuntimeError(error_msg)
         
-        request = chat_pb2.Client_SendChatMessageRequest(
+        request = chat_pb2.ChatRoom_SendChatMessageRequest(
             user_name=self.user_name,
-            room_name=self.room_name,
             message=message
         )
-        self._call("SendMessage", request)
+        self._call_object("ChatRoom", f"ChatRoom-{self.room_name}", "SendMessage", request)
     
     def get_recent_messages(self) -> List[Any]:
         """Get recent messages from the current chatroom.
@@ -224,19 +226,18 @@ class ChatClient:
                 self.output_buffer.append(error_msg)
             raise RuntimeError(error_msg)
         
-        request = chat_pb2.Client_GetRecentMessagesRequest(
-            room_name=self.room_name,
+        request = chat_pb2.ChatRoom_GetRecentMessagesRequest(
             after_timestamp=self.last_msg_timestamp
         )
-        response_any = self._call("GetRecentMessages", request)
+        response_any = self._call_object("ChatRoom", f"ChatRoom-{self.room_name}", "GetRecentMessages", request)
         
-        response = chat_pb2.Client_GetRecentMessagesResponse()
+        response = chat_pb2.ChatRoom_GetRecentMessagesResponse()
         response_any.Unpack(response)
         
         with self.output_lock:
             self.output_buffer.append(f"Recent messages in [{self.room_name}]:")
             for msg in response.messages:
-                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp))
+                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp // 1000000))
                 self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
                 if msg.timestamp > self.last_msg_timestamp:
                     self.last_msg_timestamp = msg.timestamp
