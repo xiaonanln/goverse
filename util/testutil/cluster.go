@@ -10,6 +10,7 @@ import (
 type ClusterReadyWaiter interface {
 	// ClusterReady returns a channel that closes when the cluster is ready
 	ClusterReady() <-chan bool
+	String() string
 }
 
 // WaitForClusterReady waits for a cluster to become ready or fails the test on timeout.
@@ -27,11 +28,13 @@ type ClusterReadyWaiter interface {
 func WaitForClusterReady(t testing.TB, cluster ClusterReadyWaiter) {
 	t.Helper()
 
+	t.Logf("Waiting for cluster to become ready: %s ...", cluster.String())
+
 	select {
 	case <-cluster.ClusterReady():
 		// Cluster is ready
 		return
 	case <-time.After(WaitForShardMappingTimeout):
-		t.Fatalf("Cluster did not become ready within %v", WaitForShardMappingTimeout)
+		t.Fatalf("Cluster %s did not become ready within %v", cluster.String(), WaitForShardMappingTimeout)
 	}
 }

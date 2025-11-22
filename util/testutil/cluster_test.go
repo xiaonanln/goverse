@@ -14,6 +14,10 @@ func (m *mockClusterReady) ClusterReady() <-chan bool {
 	return m.readyChan
 }
 
+func (m *mockClusterReady) String() string {
+	return "mockClusterReady"
+}
+
 func newMockClusterReady() *mockClusterReady {
 	return &mockClusterReady{
 		readyChan: make(chan bool),
