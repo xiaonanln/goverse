@@ -44,12 +44,12 @@ Comprehensive observability features enable production operations:
 │  (Custom Objects: ChatRoom, UserProfile, GameSession, etc.)     │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
-                           │ Extends BaseObject/BaseClient
+                           │ Extends BaseObject
                            │
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                    Goverse API (goverseapi)                      │
 │  - CreateObject() / CallObject()                                │
-│  - RegisterObjectType() / RegisterClientType()                  │
+│  - RegisterObjectType()                                         │
 │  - PushMessageToClient()                                        │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
@@ -57,15 +57,15 @@ Comprehensive observability features enable production operations:
            │               │               │
            ▼               ▼               ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Server     │  │    Client    │  │   Cluster    │
-│   Runtime    │  │   Service    │  │  Management  │
+│   Server     │  │   Gateway    │  │   Cluster    │
+│   Runtime    │  │   System     │  │  Management  │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                  │
        │                 │                  │
        ▼                 ▼                  ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│     Node     │  │  BaseClient  │  │   Sharding   │
-│  Management  │  │   Objects    │  │   System     │
+│     Node     │  │    Gate      │  │   Sharding   │
+│  Management  │  │  Registration│  │   System     │
 └──────┬───────┘  └──────────────┘  └──────┬───────┘
        │                                    │
        │                                    │
@@ -107,12 +107,14 @@ Comprehensive observability features enable production operations:
 - Thread-safe ToData()/FromData() serialization hooks
 - Concurrency modes: Sequential, Concurrent, Read-only
 
-#### 4. Client Service (`client/`)
-- Client connection management via bidirectional gRPC streams
-- Server-side client objects (BaseClient) for orchestration
-- Unique client ID assignment
-- Method routing and push-based messaging
-- Graceful cleanup on client disconnect
+#### 4. Gateway System (`gate/`)
+- Gateway servers handle client connections separately from nodes
+- Gateway registration with nodes via bidirectional gRPC streams (`RegisterGate`)
+- Client registration with gateways for unique client ID assignment
+- Generic object call routing from clients to distributed objects
+- Push-based messaging from nodes through gateways to clients
+- Graceful cleanup on client disconnect and gateway shutdown
+- Legacy `client/` package retained for backwards compatibility (BaseClient)
 
 #### 5. Cluster Management (`cluster/`)
 - Cluster singleton for distributed coordination
@@ -195,21 +197,22 @@ func (room *ChatRoom) Join(ctx context.Context, req *chat_pb.JoinRequest) (*chat
 }
 ```
 
-### Client Service Architecture
+### Gateway Architecture
 
-The client service provides a clean separation between client connections and distributed objects:
+The gateway system provides a clean separation between client connections and distributed objects:
 
-1. **Client Registration**: Clients connect and receive a unique ID
-2. **Bidirectional Streams**: gRPC streams enable push and pull communication
-3. **Server-Side Proxies**: BaseClient objects orchestrate operations on behalf of clients
-4. **Message Routing**: Client methods can call distributed objects using CallObject()
-5. **Push Messaging**: Real-time notifications via client message channels
+1. **Gateway Registration**: Gateways register with nodes via `RegisterGate` streaming RPC
+2. **Client Registration**: Clients connect to gateways and receive a unique ID in format `gateAddress/uniqueId`
+3. **Generic Object Calls**: Clients call distributed objects directly via `CallObject()` RPC
+4. **Message Routing**: Gateways route calls to the appropriate nodes based on shard mapping
+5. **Push Messaging**: Nodes push messages to clients via gateway registration streams
 
 Benefits:
-- Clean API for client developers
-- Server-side logic centralization
-- Efficient resource management
-- Support for long-lived connections
+- Clean separation between client-facing gateways and object-hosting nodes
+- Distributed objects are the primary abstraction (no client-specific objects)
+- Efficient resource management and connection pooling
+- Support for long-lived connections with push messaging
+- Scalable gateway layer independent of object hosts
 
 ### Sharding and Distribution
 
@@ -422,9 +425,9 @@ INFO: DeleteObject objType=GameSession id=game-456
 
 ### 1. Real-Time Chat Systems
 - Distributed chat rooms as objects
-- Push-based message delivery
+- Push-based message delivery through gateways
 - Multi-room support with independent state
-- Client orchestration via BaseClient objects
+- Direct object calls from clients via gateway
 
 **Example**: `samples/chat/`
 
@@ -462,9 +465,6 @@ config := &goverseapi.ServerConfig{
     ListenAddress:    "localhost:47000",  // Internal gRPC port
     AdvertiseAddress: "localhost:47000",  // Address other nodes use
     
-    // Client communication
-    ClientListenAddress: "localhost:48000",  // Client gRPC port
-    
     // Cluster coordination
     EtcdAddress: "localhost:2379",  // etcd endpoint
     EtcdPrefix:  "/goverse",        // Key prefix for isolation
@@ -472,6 +472,17 @@ config := &goverseapi.ServerConfig{
     // Cluster behavior
     MinQuorum:              3,                  // Minimum nodes required
     NodeStabilityDuration:  10 * time.Second,   // Rebalancing delay
+}
+```
+
+### Gateway Configuration
+
+```go
+config := &gateserver.GatewayServerConfig{
+    ListenAddress:    ":49000",              // Client connection port
+    AdvertiseAddress: "localhost:49000",     // Address clients use
+    EtcdAddress:      "localhost:2379",      // etcd endpoint
+    EtcdPrefix:       "/goverse",            // Key prefix for isolation
 }
 ```
 

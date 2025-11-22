@@ -194,9 +194,8 @@ func (c *Counter) Get(ctx context.Context) (int, error) {
 ```go
 func main() {
     config := &goverseapi.ServerConfig{
-        ListenAddress:       "localhost:47000",
-        AdvertiseAddress:    "localhost:47000",
-        ClientListenAddress: "localhost:48000",
+        ListenAddress:    "localhost:47000",
+        AdvertiseAddress: "localhost:47000",
     }
     
     server, err := goverseapi.NewServer(config)
@@ -419,12 +418,11 @@ GoVerse allows you to configure a minimum number of nodes required for the clust
 
 ```go
 config := &goverseapi.ServerConfig{
-    ListenAddress:       "localhost:7001",
-    AdvertiseAddress:    "localhost:7001",
-    ClientListenAddress: "localhost:8001",
-    EtcdAddress:         "localhost:2379",
-    EtcdPrefix:          "/goverse",
-    MinQuorum:            3, // Require at least 3 nodes before cluster is ready
+    ListenAddress:    "localhost:7001",
+    AdvertiseAddress: "localhost:7001",
+    EtcdAddress:      "localhost:2379",
+    EtcdPrefix:       "/goverse",
+    MinQuorum:        3, // Require at least 3 nodes before cluster is ready
 }
 
 server, err := goverseapi.NewServer(config)
@@ -452,13 +450,12 @@ GoVerse allows you to configure how long the cluster waits for the node list to 
 
 ```go
 config := &goverseapi.ServerConfig{
-    ListenAddress:           "localhost:7001",
-    AdvertiseAddress:        "localhost:7001",
-    ClientListenAddress:     "localhost:8001",
-    EtcdAddress:             "localhost:2379",
-    EtcdPrefix:              "/goverse",
-    MinQuorum:               1,
-    NodeStabilityDuration:   5 * time.Second, // Wait 5s for stability (default: 10s)
+    ListenAddress:         "localhost:7001",
+    AdvertiseAddress:      "localhost:7001",
+    EtcdAddress:           "localhost:2379",
+    EtcdPrefix:            "/goverse",
+    MinQuorum:             1,
+    NodeStabilityDuration: 5 * time.Second, // Wait 5s for stability (default: 10s)
 }
 
 server, err := goverseapi.NewServer(config)

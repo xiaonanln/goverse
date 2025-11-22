@@ -92,7 +92,6 @@ The metrics are exposed via HTTP by each GoVerse server/node. Configure the metr
 config := &goverseapi.ServerConfig{
     ListenAddress:        "localhost:47000",
     AdvertiseAddress:     "localhost:47000",
-    ClientListenAddress:  "localhost:48000",
     MetricsListenAddress: ":9090",  // Metrics HTTP endpoint
     EtcdAddress:          "localhost:2379",
 }
