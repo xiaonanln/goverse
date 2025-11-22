@@ -286,16 +286,11 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 			return
 		}
 
-		// Unmarshal the message
+		// Forward the Any message directly without unmarshaling
+		// The client is responsible for unmarshaling based on the application proto types
 		if envelope.Message != nil {
-			msg, err := envelope.Message.UnmarshalNew()
-			if err != nil {
-				g.logger.Errorf("Failed to unmarshal message for client %s: %v", clientID, err)
-				return
-			}
-
-			// Send to client's message channel
-			client.PushMessage(msg)
+			// Send the google.protobuf.Any directly to client's message channel
+			client.PushMessageAny(envelope.Message)
 		} else {
 			g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
 		}

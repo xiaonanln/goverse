@@ -5,14 +5,14 @@ import (
 	"sync"
 
 	"github.com/xiaonanln/goverse/util/logger"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ClientProxy represents a client connection in the gateway
 // It holds minimal connection-local state needed for transport
 type ClientProxy struct {
 	id          string
-	messageChan chan proto.Message
+	messageChan chan *anypb.Any
 	closed      bool
 	mu          sync.RWMutex
 	logger      *logger.Logger
@@ -22,7 +22,7 @@ type ClientProxy struct {
 func NewClientProxy(id string) *ClientProxy {
 	return &ClientProxy{
 		id:          id,
-		messageChan: make(chan proto.Message, 10), // Buffered channel to avoid blocking
+		messageChan: make(chan *anypb.Any, 10), // Buffered channel to avoid blocking
 		logger:      logger.NewLogger(fmt.Sprintf("ClientProxy(%s)", id)),
 	}
 }
@@ -34,7 +34,7 @@ func (cp *ClientProxy) GetID() string {
 
 // MessageChan returns the message channel for push notifications
 // Returns the channel even after Close() is called
-func (cp *ClientProxy) MessageChan() chan proto.Message {
+func (cp *ClientProxy) MessageChan() chan *anypb.Any {
 	return cp.messageChan
 }
 
@@ -57,9 +57,9 @@ func (cp *ClientProxy) IsClosed() bool {
 	return cp.closed
 }
 
-// PushMessage handles a message received from a node for this client
-// It forwards the message to the client's message channel
-func (cp *ClientProxy) PushMessage(msg proto.Message) {
+// PushMessageAny handles a google.protobuf.Any message received from a node for this client
+// It forwards the message to the client's message channel without unmarshaling
+func (cp *ClientProxy) PushMessageAny(msg *anypb.Any) {
 	select {
 	case cp.messageChan <- msg:
 		// Message sent successfully

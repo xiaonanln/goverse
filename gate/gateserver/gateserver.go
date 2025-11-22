@@ -215,19 +215,13 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 		case <-ctx.Done():
 			s.logger.Infof("Client %s stream closed: %v", clientID, ctx.Err())
 			return nil
-		case msg, ok := <-clientProxy.MessageChan():
+		case anyMsg, ok := <-clientProxy.MessageChan():
 			if !ok {
 				s.logger.Infof("Client %s message channel closed", clientID)
 				return nil
 			}
 
-			// Marshal message to Any and send
-			anyMsg, err := anypb.New(msg)
-			if err != nil {
-				s.logger.Errorf("Failed to marshal message for client %s: %v", clientID, err)
-				continue
-			}
-
+			// Send the Any message directly (already wrapped by the node)
 			if err := stream.Send(anyMsg); err != nil {
 				s.logger.Errorf("Failed to send message to client %s: %v", clientID, err)
 				return err
