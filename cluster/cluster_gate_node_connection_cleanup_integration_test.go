@@ -124,7 +124,7 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 	// Verify gate connection count decreased
 	finalGateCount := getGateConnectionCount(nodeCluster)
 	if finalGateCount >= initialGateCount {
-		t.Errorf("Expected gate connection count to decrease after shutdown, initial=%d, final=%d", 
+		t.Errorf("Expected gate connection count to decrease after shutdown, initial=%d, final=%d",
 			initialGateCount, finalGateCount)
 	}
 	t.Logf("Node now has %d gate connection(s) after shutdown", finalGateCount)
@@ -247,7 +247,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 
 	finalGateCount := getGateConnectionCount(nodeCluster)
 	if finalGateCount >= initialGateCount {
-		t.Errorf("Expected gate connection count to decrease, initial=%d, final=%d", 
+		t.Errorf("Expected gate connection count to decrease, initial=%d, final=%d",
 			initialGateCount, finalGateCount)
 	}
 

@@ -79,6 +79,7 @@ go get github.com/xiaonanln/goverse
 Full documentation:
 - [Getting Started](docs/GET_STARTED.md) - Complete guide to building with GoVerse
 - [Object Model & Architecture](docs/GET_STARTED.md#core-concepts) - Understanding virtual actors
+- [Object Call Policies](docs/OBJECT_CALL_POLICIES.md) - Call semantics and creation policies
 - [Cluster Configuration](docs/GET_STARTED.md#cluster-configuration) - Quorum & stability settings
 - [Object Persistence](docs/GET_STARTED.md#object-persistence) - PostgreSQL integration
 - [Push Messaging](docs/PUSH_MESSAGING.md) - Real-time server-to-client delivery
