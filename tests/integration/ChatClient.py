@@ -87,6 +87,9 @@ class ChatClient:
                 try:
                     msg_any = next(self.stream)
                     
+                    # Debug: Print the type URL of received message
+                    print(f"DEBUG: Received message with type_url: {msg_any.type_url}")
+
                     # Try to unpack as NewMessageNotification
                     notification = chat_pb2.Client_NewMessageNotification()
                     if msg_any.Unpack(notification):
@@ -101,16 +104,24 @@ class ChatClient:
                         # Update last message timestamp
                         if chat_msg.timestamp > self.last_msg_timestamp:
                             self.last_msg_timestamp = chat_msg.timestamp
+                    else:
+                        print(f"DEBUG: Failed to unpack message as Client_NewMessageNotification")
+                        print(f"DEBUG: Message type_url: {msg_any.type_url}")
+                        print(f"DEBUG: Message value length: {len(msg_any.value)}")
                             
                 except StopIteration:
                     break
                 except Exception as e:
                     if self.running:
                         print(f"Error in message listener: {e}")
+                        import traceback
+                        traceback.print_exc()
                     break
         except Exception as e:
             if self.running:
                 print(f"Fatal error in message listener: {e}")
+                import traceback
+                traceback.print_exc()
     
     def _call_object(self, object_type: str, object_id: str, method: str, request_proto: Any) -> any_pb2.Any:
         """Call a method on an object in the Goverse cluster.

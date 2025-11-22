@@ -291,11 +291,11 @@ def main():
 
         # Run push messaging test
         # TODO: Fix proto unmarshaling issue in gateway for Client_NewMessageNotification
-        # push_ok = run_push_messaging_test(gateway_port=49000)
+        push_ok = run_push_messaging_test(gateway_port=49000)
 
-        # if not push_ok:
-        #     print("\n❌ Push messaging test failed!")
-        #     return 1
+        if not push_ok:
+            print("\n❌ Push messaging test failed!")
+            return 1
         
         # Run chat test
         chat_ok = run_chat_test(gateway_port=49000, num_servers=num_servers)
