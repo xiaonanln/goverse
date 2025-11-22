@@ -31,7 +31,6 @@ func waitForObjectCreated(t *testing.T, n *node.Node, objID string, timeout time
 // TestDistributedCreateObject tests shard mapping and routing logic
 // by verifying that objects are correctly assigned to nodes based on shards
 // This test requires a running etcd instance at localhost:2379
-// Note: This test does NOT run in parallel because it uses mock servers on specific ports
 func TestDistributedCreateObject(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
@@ -41,9 +40,19 @@ func TestDistributedCreateObject(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Get free addresses for the nodes
+	addr1, err := testutil.GetFreeAddress()
+	if err != nil {
+		t.Fatalf("Failed to get free address for node1: %v", err)
+	}
+	addr2, err := testutil.GetFreeAddress()
+	if err != nil {
+		t.Fatalf("Failed to get free address for node2: %v", err)
+	}
+
 	// Create clusters using mustNewCluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47002", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Register object types on the nodes (can be done after node start)
 	node1 := cluster1.GetThisNode()
@@ -54,24 +63,28 @@ func TestDistributedCreateObject(t *testing.T) {
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
 
-	// Start mock gRPC servers for both nodes
+	// Start mock gRPC servers for both nodes using dynamic port allocation
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1) // Assign the actual node to the mock server
-	testServer1 := testutil.NewTestServerHelper("localhost:47001", mockServer1)
-	err := testServer1.Start(ctx)
+	testServer1 := testutil.NewTestServerHelper("localhost:0", mockServer1)
+	err = testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
 	}
 	t.Cleanup(func() { testServer1.Stop() })
+	actualAddr1 := testServer1.GetAddress()
+	t.Logf("Node 1 mock server started at %s (advertised as %s)", actualAddr1, addr1)
 
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2) // Assign the actual node to the mock server
-	testServer2 := testutil.NewTestServerHelper("localhost:47002", mockServer2)
+	testServer2 := testutil.NewTestServerHelper("localhost:0", mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
 	}
 	t.Cleanup(func() { testServer2.Stop() })
+	actualAddr2 := testServer2.GetAddress()
+	t.Logf("Node 2 mock server started at %s (advertised as %s)", actualAddr2, addr2)
 
 	// Wait for servers to be ready
 	time.Sleep(500 * time.Millisecond)
@@ -115,9 +128,9 @@ func TestDistributedCreateObject(t *testing.T) {
 			// Verify the object was created on the correct node
 			var objectNode *node.Node
 			switch targetNode {
-			case "localhost:47001":
+			case addr1:
 				objectNode = node1
-			case "localhost:47002":
+			case addr2:
 				objectNode = node2
 			default:
 				t.Fatalf("Unknown target node: %s", targetNode)
@@ -151,9 +164,9 @@ func TestDistributedCreateObject(t *testing.T) {
 
 		var objectNode *node.Node
 		switch targetNode {
-		case "localhost:47001":
+		case addr1:
 			objectNode = node1
-		case "localhost:47002":
+		case addr2:
 			objectNode = node2
 		default:
 			t.Fatalf("Unknown target node: %s", targetNode)
@@ -211,12 +224,22 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Get free addresses for the nodes
+	addrs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		addr, err := testutil.GetFreeAddress()
+		if err != nil {
+			t.Fatalf("Failed to get free address for node %d: %v", i, err)
+		}
+		addrs[i] = addr
+	}
+
 	// Create 3 clusters using mustNewCluster
 	// Note: No object registration needed since this test only calls GetCurrentNodeForObject
 	clusters := []*Cluster{
-		mustNewCluster(ctx, t, "localhost:47011", testPrefix),
-		mustNewCluster(ctx, t, "localhost:47012", testPrefix),
-		mustNewCluster(ctx, t, "localhost:47013", testPrefix),
+		mustNewCluster(ctx, t, addrs[0], testPrefix),
+		mustNewCluster(ctx, t, addrs[1], testPrefix),
+		mustNewCluster(ctx, t, addrs[2], testPrefix),
 	}
 
 	// Wait for nodes to discover each other and shard mapping to initialize
