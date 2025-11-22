@@ -116,10 +116,11 @@ func (g *Gateway) Register(ctx context.Context) *ClientProxy {
 	// Track the client connection
 	g.clientsMu.Lock()
 	g.clients[clientID] = clientProxy
+	clientCount := len(g.clients)
 	g.clientsMu.Unlock()
 
-	// Record metrics
-	metrics.RecordGateClientConnected(g.advertiseAddress)
+	// Set metrics to current count
+	metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 
 	g.logger.Infof("Registered new client: %s", clientID)
 	return clientProxy
@@ -133,8 +134,8 @@ func (g *Gateway) Unregister(clientID string) {
 	if clientProxy, exists := g.clients[clientID]; exists {
 		clientProxy.Close()
 		delete(g.clients, clientID)
-		// Record metrics
-		metrics.RecordGateClientDisconnected(g.advertiseAddress)
+		// Set metrics to current count
+		metrics.SetGateActiveClients(g.advertiseAddress, len(g.clients))
 		g.logger.Infof("Unregistered client: %s", clientID)
 	}
 }
@@ -154,10 +155,10 @@ func (g *Gateway) cleanupClientProxies() {
 	for clientID, clientProxy := range g.clients {
 		clientProxy.Close()
 		delete(g.clients, clientID)
-		// Record metrics for cleanup
-		metrics.RecordGateClientDisconnected(g.advertiseAddress)
 		g.logger.Infof("Cleaned up client proxy: %s", clientID)
 	}
+	// Set metrics to current count (should be 0 after cleanup)
+	metrics.SetGateActiveClients(g.advertiseAddress, len(g.clients))
 }
 
 // GetAdvertiseAddress returns the advertise address of this gateway
@@ -289,6 +290,8 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 		client, exists := g.GetClient(clientID)
 		if !exists {
 			g.logger.Warnf("Client %s not found, dropping message from node %s", clientID, nodeAddr)
+			// Record dropped message metric
+			metrics.RecordGateDroppedMessage(g.advertiseAddress)
 			return
 		}
 
@@ -301,6 +304,8 @@ func (g *Gateway) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage
 			metrics.RecordGatePushedMessage(g.advertiseAddress)
 		} else {
 			g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
+			// Record dropped message metric for nil message
+			metrics.RecordGateDroppedMessage(g.advertiseAddress)
 		}
 	default:
 		g.logger.Warnf("Received unknown message type %v from node %s", msg.Message, nodeAddr)
