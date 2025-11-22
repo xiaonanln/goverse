@@ -113,13 +113,19 @@ func (c *ChatClient) listenForMessages(stream gate_pb.GateService_RegisterClient
 
 ## Implementation Details
 
-### Gateway Message Channel
+### Buffered Channels for Push Messaging
 
-Each gateway has a buffered message channel (default capacity 1024) on each node to prevent blocking when pushing messages:
+The push messaging system uses two levels of buffered channels:
 
-- The channel is created when the gateway registers with the node via `RegisterGate`
-- Messages are sent to the channel without blocking (non-blocking send)
-- If the buffer fills up, `PushMessageToClient` returns an error
+1. **Gateway Message Channel (Node → Gateway)**: Each gateway has a buffered message channel (capacity 1024) on each node:
+   - Created when the gateway registers with the node via `RegisterGate`
+   - Messages are sent to the channel without blocking (non-blocking send)
+   - If the buffer fills up, `PushMessageToClient` returns an error
+
+2. **Client Message Channel (Gateway → Client)**: Each client proxy has a buffered message channel (capacity 10):
+   - Created when the client registers with the gateway
+   - Messages are forwarded from the gateway's channel to individual client channels
+   - If the client's buffer fills up, messages may be dropped
 
 ### Client ID Format
 
