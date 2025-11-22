@@ -104,8 +104,8 @@ clientID := regResp.(*gate_pb.RegisterResponse).ClientId
 ```
 
 **4. Generic Object Call Interface**
-- Clients call distributed objects via the `CallObject()` RPC with object ID, method name, and request
-- Gateway routes calls to the appropriate node based on shard mapping
+- Clients call distributed objects via the `CallObject()` RPC with object type, ID, method name, and request
+- Gateway routes calls to the appropriate node based on object ID shard mapping
 - No client-specific objects on the server; all logic lives in distributed objects
 
 **5. Push Messaging**
