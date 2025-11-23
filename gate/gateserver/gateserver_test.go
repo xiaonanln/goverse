@@ -20,21 +20,27 @@ func TestNewGatewayServer(t *testing.T) {
 	}{
 		{
 			name: "valid config",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "localhost:2379",
-				EtcdPrefix:       "/test-gateway",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: addr,
+					EtcdAddress:      "localhost:2379",
+					EtcdPrefix:       "/test-gateway",
+				}
+			}(),
 			wantErr: false,
 		},
 		{
 			name: "valid config with default prefix",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "localhost:2379",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: addr,
+					EtcdAddress:      "localhost:2379",
+				}
+			}(),
 			wantErr: false,
 		},
 		{
@@ -45,31 +51,40 @@ func TestNewGatewayServer(t *testing.T) {
 		},
 		{
 			name: "empty listen address",
-			config: &GatewayServerConfig{
-				ListenAddress:    "",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "localhost:2379",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    "",
+					AdvertiseAddress: addr,
+					EtcdAddress:      "localhost:2379",
+				}
+			}(),
 			wantErr:    true,
 			errContain: "ListenAddress cannot be empty",
 		},
 		{
 			name: "empty advertise address",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: "",
-				EtcdAddress:      "localhost:2379",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: "",
+					EtcdAddress:      "localhost:2379",
+				}
+			}(),
 			wantErr:    true,
 			errContain: "AdvertiseAddress cannot be empty",
 		},
 		{
 			name: "empty etcd address",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: addr,
+					EtcdAddress:      "",
+				}
+			}(),
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",
 		},
@@ -297,21 +312,27 @@ func TestValidateConfig(t *testing.T) {
 	}{
 		{
 			name: "valid config",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "localhost:2379",
-				EtcdPrefix:       "/custom",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: addr,
+					EtcdAddress:      "localhost:2379",
+					EtcdPrefix:       "/custom",
+				}
+			}(),
 			wantErr: false,
 		},
 		{
 			name: "sets default prefix",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "localhost:2379",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: addr,
+					EtcdAddress:      "localhost:2379",
+				}
+			}(),
 			wantErr: false,
 			checkFunc: func(t *testing.T, cfg *GatewayServerConfig) {
 				if cfg.EtcdPrefix != "/goverse" {
@@ -327,28 +348,37 @@ func TestValidateConfig(t *testing.T) {
 		},
 		{
 			name: "empty listen address",
-			config: &GatewayServerConfig{
-				AdvertiseAddress: testutil.GetFreeAddress(),
-				EtcdAddress:      "localhost:2379",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					AdvertiseAddress: addr,
+					EtcdAddress:      "localhost:2379",
+				}
+			}(),
 			wantErr:    true,
 			errContain: "ListenAddress cannot be empty",
 		},
 		{
 			name: "empty advertise address",
-			config: &GatewayServerConfig{
-				ListenAddress: ":0",
-				EtcdAddress:   "localhost:2379",
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress: addr,
+					EtcdAddress:   "localhost:2379",
+				}
+			}(),
 			wantErr:    true,
 			errContain: "AdvertiseAddress cannot be empty",
 		},
 		{
 			name: "empty etcd address",
-			config: &GatewayServerConfig{
-				ListenAddress:    ":0",
-				AdvertiseAddress: testutil.GetFreeAddress(),
-			},
+			config: func() *GatewayServerConfig {
+				addr := testutil.GetFreeAddress()
+				return &GatewayServerConfig{
+					ListenAddress:    addr,
+					AdvertiseAddress: addr,
+				}
+			}(),
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",
 		},
