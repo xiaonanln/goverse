@@ -52,19 +52,59 @@ func setupShardMapping(t *testing.T, ctx context.Context, cm *ConsensusManager, 
 	}
 	cm.mu.Unlock()
 
-	// Store all shards in etcd and update ModRevision
+	// Store all shards in etcd and update ModRevision using worker pool for parallel writes
+	type shardJob struct {
+		shardID   int
+		shardInfo ShardInfo
+	}
+	type shardResult struct {
+		shardID   int
+		shardInfo ShardInfo
+		err       error
+	}
+
+	// Create jobs channel
+	jobs := make(chan shardJob, len(shards))
+	results := make(chan shardResult, len(shards))
+
+	// Start worker pool (use 10 workers for parallel etcd writes)
+	numWorkers := 10
+	for w := 0; w < numWorkers; w++ {
+		go func() {
+			for job := range jobs {
+				key := prefix + "/shard/" + fmt.Sprintf("%d", job.shardID)
+				value := formatShardInfo(job.shardInfo)
+				resp, err := client.Put(ctx, key, value)
+
+				result := shardResult{
+					shardID:   job.shardID,
+					shardInfo: job.shardInfo,
+					err:       err,
+				}
+				if err == nil {
+					result.shardInfo.ModRevision = resp.Header.Revision
+				}
+				results <- result
+			}
+		}()
+	}
+
+	// Send jobs
 	for shardID, shardInfo := range shards {
-		key := prefix + "/shard/" + fmt.Sprintf("%d", shardID)
-		value := formatShardInfo(shardInfo)
-		resp, err := client.Put(ctx, key, value)
-		if err != nil {
-			t.Fatalf("Failed to store shard %d in etcd: %v", shardID, err)
+		jobs <- shardJob{shardID: shardID, shardInfo: shardInfo}
+	}
+	close(jobs)
+
+	// Collect results and update in-memory state
+	for i := 0; i < len(shards); i++ {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("Failed to store shard %d in etcd: %v", result.shardID, result.err)
 		}
 
 		// Update the in-memory ModRevision with the actual value from etcd
 		cm.mu.Lock()
-		shardInfo.ModRevision = resp.Header.Revision
-		cm.state.ShardMapping.Shards[shardID] = shardInfo
+		cm.state.ShardMapping.Shards[result.shardID] = result.shardInfo
 		cm.mu.Unlock()
 	}
 }
