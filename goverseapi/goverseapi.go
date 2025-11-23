@@ -68,7 +68,7 @@ func ClusterReady() <-chan bool {
 	return cluster.This().ClusterReady()
 }
 
-// GetClientID retrieves the client ID from the call context.
+// CallerClientID retrieves the client ID from the call context.
 // Returns empty string if the call did not originate from a client via the gate.
 //
 // The client ID format is: "gateAddress/uniqueId" (e.g., "localhost:7001/abc123")
@@ -76,7 +76,7 @@ func ClusterReady() <-chan bool {
 // Usage in object methods:
 //
 //	func (obj *MyObject) MyMethod(ctx context.Context, req *MyRequest) (*MyResponse, error) {
-//	    clientID := goverseapi.GetClientID(ctx)
+//	    clientID := goverseapi.CallerClientID(ctx)
 //	    if clientID != "" {
 //	        // Call came from a client via gate
 //	    } else {
@@ -84,20 +84,30 @@ func ClusterReady() <-chan bool {
 //	    }
 //	    // ...
 //	}
-func GetClientID(ctx context.Context) string {
+func CallerClientID(ctx context.Context) string {
 	return callcontext.ClientID(ctx)
 }
 
-// HasClientID checks if the call context contains a client ID.
+// GetClientID is deprecated. Use CallerClientID instead.
+func GetClientID(ctx context.Context) string {
+	return CallerClientID(ctx)
+}
+
+// CallerIsClient checks if the call context contains a client ID.
 // Returns true if the call originated from a client via the gate.
 //
 // Usage:
 //
-//	if goverseapi.HasClientID(ctx) {
+//	if goverseapi.CallerIsClient(ctx) {
 //	    // Handle client call
 //	} else {
 //	    // Handle internal call
 //	}
-func HasClientID(ctx context.Context) bool {
+func CallerIsClient(ctx context.Context) bool {
 	return callcontext.FromClient(ctx)
+}
+
+// HasClientID is deprecated. Use CallerIsClient instead.
+func HasClientID(ctx context.Context) bool {
+	return CallerIsClient(ctx)
 }

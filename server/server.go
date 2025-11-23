@@ -286,6 +286,11 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		return nil, err
 	}
 
+	// Inject client_id into context if present in the request
+	if req.ClientId != "" {
+		ctx = callcontext.WithClientID(ctx, req.ClientId)
+	}
+
 	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId())
 	if err != nil {
 		server.logger.Errorf("CreateObject failed: %v", err)
