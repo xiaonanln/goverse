@@ -70,9 +70,10 @@ func TestClientIDInContext(t *testing.T) {
 	nodeCluster.GetThisNode().RegisterObjectType((*TestClientIDObject)(nil))
 
 	// Start mock gRPC server for the node
+	// The mock server delegates CallObject/CreateObject to the actual node and cluster
 	mockNodeServer := testutil.NewMockGoverseServer()
-	mockNodeServer.SetNode(nodeCluster.GetThisNode())
-	mockNodeServer.SetCluster(nodeCluster)
+	mockNodeServer.SetNode(nodeCluster.GetThisNode()) // Delegate object operations to the node
+	mockNodeServer.SetCluster(nodeCluster)           // Delegate cluster operations to the cluster
 	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
 	err := nodeServer.Start(ctx)
 	if err != nil {
