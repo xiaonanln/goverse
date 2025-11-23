@@ -125,8 +125,15 @@ func (nc *NodeConnections) retryConnection(nodeAddr string) {
 	// Create a cancellable context for this retry goroutine
 	retryCtx, retryCancel := context.WithCancel(nc.ctx)
 
-	// Register the cancel function immediately to ensure it's available for Stop()
+	// Check if another retry is already running for this node
 	nc.retryingNodesMu.Lock()
+	if _, exists := nc.retryingNodes[nodeAddr]; exists {
+		nc.retryingNodesMu.Unlock()
+		retryCancel() // Clean up our context
+		nc.logger.Debugf("Retry already running for node %s, skipping duplicate", nodeAddr)
+		return
+	}
+	// Register the cancel function to reserve this slot
 	nc.retryingNodes[nodeAddr] = retryCancel
 	nc.retryingNodesMu.Unlock()
 
@@ -264,19 +271,9 @@ func (nc *NodeConnections) SetNodes(nodes []string) {
 			nc.logger.Infof("Connecting to new node: %s", nodeAddr)
 			if err := nc.connectToNode(nodeAddr); err != nil {
 				nc.logger.Errorf("Failed to connect to node %s: %v, starting retry with exponential backoff", nodeAddr, err)
-
-				// Check if already retrying this node and start retry atomically
-				nc.retryingNodesMu.Lock()
-				_, alreadyRetrying := nc.retryingNodes[nodeAddr]
-				if !alreadyRetrying {
-					// Reserve the slot immediately to prevent duplicate retry goroutines
-					nc.retryingNodes[nodeAddr] = nil
-					nc.retryingNodesMu.Unlock()
-					// Start retry goroutine with exponential backoff
-					go nc.retryConnection(nodeAddr)
-				} else {
-					nc.retryingNodesMu.Unlock()
-				}
+				// Start retry goroutine with exponential backoff
+				// The goroutine will check if another retry is already running and exit if so
+				go nc.retryConnection(nodeAddr)
 			}
 		}
 	}
@@ -290,10 +287,7 @@ func (nc *NodeConnections) SetNodes(nodes []string) {
 			nc.retryingNodesMu.Lock()
 			if cancel, exists := nc.retryingNodes[nodeAddr]; exists {
 				nc.logger.Debugf("Cancelling retry goroutine for removed node %s", nodeAddr)
-				// Cancel function might be nil if retry goroutine hasn't fully started yet
-				if cancel != nil {
-					cancel()
-				}
+				cancel() // Cancel function is never nil due to check-and-register pattern
 				delete(nc.retryingNodes, nodeAddr)
 			}
 			nc.retryingNodesMu.Unlock()
