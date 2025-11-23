@@ -14,22 +14,22 @@ import (
 // TestRegisterWithNodesCleanupRemovedNodes tests that when nodes are removed
 // from the connections map, their cancel functions are invoked
 func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
-	config := &GatewayConfig{
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-cleanup",
+		EtcdPrefix:       "/test-gate-cleanup",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Create mock node connections
@@ -50,21 +50,21 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 	mockStream1 := &mockGateStream{ctx: ctx1}
 	mockStream2 := &mockGateStream{ctx: ctx2}
 
-	gateway.nodeRegMu.Lock()
-	gateway.nodeRegs["node1"] = &nodeReg{
+	gate.nodeRegMu.Lock()
+	gate.nodeRegs["node1"] = &nodeReg{
 		stream: mockStream1,
 		cancel: cancel1,
 	}
-	gateway.nodeRegs["node2"] = &nodeReg{
+	gate.nodeRegs["node2"] = &nodeReg{
 		stream: mockStream2,
 		cancel: cancel2,
 	}
-	gateway.nodeRegMu.Unlock()
+	gate.nodeRegMu.Unlock()
 
 	// Verify both nodes have registrations
-	gateway.nodeRegMu.RLock()
-	initialCount := len(gateway.nodeRegs)
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	initialCount := len(gate.nodeRegs)
+	gate.nodeRegMu.RUnlock()
 
 	if initialCount != 2 {
 		t.Errorf("Expected 2 registrations initially, got %d", initialCount)
@@ -87,7 +87,7 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 		"node2": client2,
 	}
 
-	gateway.RegisterWithNodes(ctx, connections)
+	gate.RegisterWithNodes(ctx, connections)
 
 	// Give time for processing
 	time.Sleep(50 * time.Millisecond)
@@ -109,9 +109,9 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 	}
 
 	// Verify node1 registration was removed from the map
-	gateway.nodeRegMu.RLock()
-	_, hasNode1 := gateway.nodeRegs["node1"]
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	_, hasNode1 := gate.nodeRegs["node1"]
+	gate.nodeRegMu.RUnlock()
 
 	if hasNode1 {
 		t.Error("Expected node1 registration to be removed from map")
@@ -121,22 +121,22 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 // TestRegisterWithNodesIdempotent tests that calling RegisterWithNodes multiple times
 // with the same nodes doesn't cancel existing registrations
 func TestRegisterWithNodesIdempotent(t *testing.T) {
-	config := &GatewayConfig{
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-idempotent",
+		EtcdPrefix:       "/test-gate-idempotent",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Create mock connection
@@ -153,19 +153,19 @@ func TestRegisterWithNodesIdempotent(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(ctx)
 	mockStream := &mockGateStream{ctx: ctx1}
 
-	gateway.nodeRegMu.Lock()
-	gateway.nodeRegs["node1"] = &nodeReg{
+	gate.nodeRegMu.Lock()
+	gate.nodeRegs["node1"] = &nodeReg{
 		stream: mockStream,
 		cancel: cancel1,
 	}
-	gateway.nodeRegMu.Unlock()
+	gate.nodeRegMu.Unlock()
 
 	connections := map[string]goverse_pb.GoverseClient{
 		"node1": client1,
 	}
 
 	// Call RegisterWithNodes - should not cancel existing registration
-	gateway.RegisterWithNodes(ctx, connections)
+	gate.RegisterWithNodes(ctx, connections)
 	time.Sleep(50 * time.Millisecond)
 
 	// Verify context is still active (not cancelled)
@@ -177,9 +177,9 @@ func TestRegisterWithNodesIdempotent(t *testing.T) {
 	}
 
 	// Verify registration still exists
-	gateway.nodeRegMu.RLock()
-	_, hasNode1 := gateway.nodeRegs["node1"]
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	_, hasNode1 := gate.nodeRegs["node1"]
+	gate.nodeRegMu.RUnlock()
 
 	if !hasNode1 {
 		t.Error("Expected node1 registration to still exist after idempotent call")
@@ -196,24 +196,24 @@ func (m *mockGateStream) Context() context.Context {
 	return m.ctx
 }
 
-// TestGatewayStopCancelsAllRegistrations tests that stopping the gateway
+// TestGateStopCancelsAllRegistrations tests that stopping the gate
 // cancels all active node registrations
-func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateStopCancelsAllRegistrations(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-stop-cancels",
+		EtcdPrefix:       "/test-gate-stop-cancels",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Manually add registrations to simulate active registrations
@@ -221,16 +221,16 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	ctx3, cancel3 := context.WithCancel(ctx)
 
-	gateway.nodeRegMu.Lock()
-	gateway.nodeRegs["node1"] = &nodeReg{cancel: cancel1}
-	gateway.nodeRegs["node2"] = &nodeReg{cancel: cancel2}
-	gateway.nodeRegs["node3"] = &nodeReg{cancel: cancel3}
-	gateway.nodeRegMu.Unlock()
+	gate.nodeRegMu.Lock()
+	gate.nodeRegs["node1"] = &nodeReg{cancel: cancel1}
+	gate.nodeRegs["node2"] = &nodeReg{cancel: cancel2}
+	gate.nodeRegs["node3"] = &nodeReg{cancel: cancel3}
+	gate.nodeRegMu.Unlock()
 
 	// Verify registrations were created
-	gateway.nodeRegMu.RLock()
-	regCountBefore := len(gateway.nodeRegs)
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	regCountBefore := len(gate.nodeRegs)
+	gate.nodeRegMu.RUnlock()
 
 	if regCountBefore != 3 {
 		t.Errorf("Expected 3 registrations before stop, got %d", regCountBefore)
@@ -245,10 +245,10 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 		}
 	}
 
-	// Stop the gateway
-	err = gateway.Stop()
+	// Stop the gate
+	err = gate.Stop()
 	if err != nil {
-		t.Fatalf("Gateway.Stop() returned error: %v", err)
+		t.Fatalf("Gate.Stop() returned error: %v", err)
 	}
 
 	// Verify all contexts were cancelled
@@ -262,9 +262,9 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 	}
 
 	// Verify all registrations were cleaned up
-	gateway.nodeRegMu.RLock()
-	regCountAfter := len(gateway.nodeRegs)
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	regCountAfter := len(gate.nodeRegs)
+	gate.nodeRegMu.RUnlock()
 
 	if regCountAfter != 0 {
 		t.Errorf("Expected 0 registrations after stop, got %d", regCountAfter)
@@ -274,36 +274,36 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 // TestRegisterWithNodesEmptyMap tests that calling RegisterWithNodes with an empty map
 // cleans up all existing registrations
 func TestRegisterWithNodesEmptyMap(t *testing.T) {
-	config := &GatewayConfig{
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-empty-map",
+		EtcdPrefix:       "/test-gate-empty-map",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Manually add registrations to simulate active registrations
 	ctx1, cancel1 := context.WithCancel(ctx)
 	ctx2, cancel2 := context.WithCancel(ctx)
 
-	gateway.nodeRegMu.Lock()
-	gateway.nodeRegs["node1"] = &nodeReg{cancel: cancel1}
-	gateway.nodeRegs["node2"] = &nodeReg{cancel: cancel2}
-	gateway.nodeRegMu.Unlock()
+	gate.nodeRegMu.Lock()
+	gate.nodeRegs["node1"] = &nodeReg{cancel: cancel1}
+	gate.nodeRegs["node2"] = &nodeReg{cancel: cancel2}
+	gate.nodeRegMu.Unlock()
 
-	gateway.nodeRegMu.RLock()
-	regCountBefore := len(gateway.nodeRegs)
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	regCountBefore := len(gate.nodeRegs)
+	gate.nodeRegMu.RUnlock()
 
 	if regCountBefore != 2 {
 		t.Errorf("Expected 2 registrations before empty map, got %d", regCountBefore)
@@ -323,7 +323,7 @@ func TestRegisterWithNodesEmptyMap(t *testing.T) {
 
 	// Call with empty map - should clean up all registrations
 	emptyConnections := map[string]goverse_pb.GoverseClient{}
-	gateway.RegisterWithNodes(ctx, emptyConnections)
+	gate.RegisterWithNodes(ctx, emptyConnections)
 	time.Sleep(50 * time.Millisecond)
 
 	// Verify contexts were cancelled
@@ -340,9 +340,9 @@ func TestRegisterWithNodesEmptyMap(t *testing.T) {
 		t.Error("Expected ctx2 to be cancelled after empty map call")
 	}
 
-	gateway.nodeRegMu.RLock()
-	regCountAfter := len(gateway.nodeRegs)
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	regCountAfter := len(gate.nodeRegs)
+	gate.nodeRegMu.RUnlock()
 
 	if regCountAfter != 0 {
 		t.Errorf("Expected 0 registrations after empty map, got %d", regCountAfter)

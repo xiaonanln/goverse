@@ -17,8 +17,8 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// GatewayServerConfig holds configuration for the gateway server
-type GatewayServerConfig struct {
+// GateServerConfig holds configuration for the gate server
+type GateServerConfig struct {
 	ListenAddress        string // Address to listen on for client connections (e.g., ":49000")
 	AdvertiseAddress     string // Address to advertise to the cluster (e.g., "localhost:49000")
 	MetricsListenAddress string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
@@ -26,40 +26,40 @@ type GatewayServerConfig struct {
 	EtcdPrefix           string // Optional: etcd key prefix (default: "/goverse")
 }
 
-// GatewayServer handles gRPC requests and delegates to the gateway
-type GatewayServer struct {
+// GateServer handles gRPC requests and delegates to the gate
+type GateServer struct {
 	gate_pb.UnimplementedGateServiceServer
-	config        *GatewayServerConfig
+	config        *GateServerConfig
 	ctx           context.Context
 	cancel        context.CancelFunc
 	logger        *logger.Logger
 	grpcServer    *grpc.Server
 	metricsServer *http.Server
-	gate          *gate.Gateway
+	gate          *gate.Gate
 	cluster       *cluster.Cluster
 }
 
-// NewGatewayServer creates a new gateway server instance
-func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
+// NewGateServer creates a new gate server instance
+func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 	if err := validateConfig(config); err != nil {
-		return nil, fmt.Errorf("invalid gateway configuration: %w", err)
+		return nil, fmt.Errorf("invalid gate configuration: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Create gateway instance
-	gatewayConfig := &gate.GatewayConfig{
+	// Create gate instance
+	gateConfig := &gate.GateConfig{
 		AdvertiseAddress: config.AdvertiseAddress,
 		EtcdAddress:      config.EtcdAddress,
 		EtcdPrefix:       config.EtcdPrefix,
 	}
-	gw, err := gate.NewGateway(gatewayConfig)
+	gw, err := gate.NewGate(gateConfig)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("failed to create gateway: %w", err)
+		return nil, fmt.Errorf("failed to create gate: %w", err)
 	}
 
-	// Create cluster for this gateway
+	// Create cluster for this gate
 	clusterCfg := cluster.Config{
 		EtcdAddress: config.EtcdAddress,
 		EtcdPrefix:  config.EtcdPrefix,
@@ -70,11 +70,11 @@ func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
 		return nil, fmt.Errorf("failed to create cluster: %w", err)
 	}
 
-	server := &GatewayServer{
+	server := &GateServer{
 		config:  config,
 		ctx:     ctx,
 		cancel:  cancel,
-		logger:  logger.NewLogger("GatewayServer"),
+		logger:  logger.NewLogger("GateServer"),
 		gate:    gw,
 		cluster: c,
 	}
@@ -82,8 +82,8 @@ func NewGatewayServer(config *GatewayServerConfig) (*GatewayServer, error) {
 	return server, nil
 }
 
-// validateConfig validates the gateway server configuration
-func validateConfig(config *GatewayServerConfig) error {
+// validateConfig validates the gate server configuration
+func validateConfig(config *GateServerConfig) error {
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
@@ -105,9 +105,9 @@ func validateConfig(config *GatewayServerConfig) error {
 	return nil
 }
 
-// Start starts the gateway server
-func (s *GatewayServer) Start(ctx context.Context) error {
-	s.logger.Infof("Starting gateway server on %s", s.config.ListenAddress)
+// Start starts the gate server
+func (s *GateServer) Start(ctx context.Context) error {
+	s.logger.Infof("Starting gate server on %s", s.config.ListenAddress)
 
 	// Start metrics HTTP server early if configured (independent of cluster)
 	if s.config.MetricsListenAddress != "" {
@@ -130,9 +130,9 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start cluster: %w", err)
 	}
 
-	// Start the gateway
+	// Start the gate
 	if err := s.gate.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start gateway: %w", err)
+		return fmt.Errorf("failed to start gate: %w", err)
 	}
 
 	// Create gRPC server
@@ -146,7 +146,7 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to listen on %s: %w", s.config.ListenAddress, err)
 	}
 
-	s.logger.Infof("Gateway gRPC server listening on %s", s.config.ListenAddress)
+	s.logger.Infof("Gate gRPC server listening on %s", s.config.ListenAddress)
 
 	// Start serving in a goroutine
 	go func() {
@@ -157,14 +157,14 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 
 	// Wait for context cancellation
 	<-ctx.Done()
-	s.logger.Infof("Gateway server context cancelled, initiating shutdown")
+	s.logger.Infof("Gate server context cancelled, initiating shutdown")
 
 	return nil
 }
 
-// Stop gracefully stops the gateway server
-func (s *GatewayServer) Stop() error {
-	s.logger.Infof("Stopping gateway server")
+// Stop gracefully stops the gate server
+func (s *GateServer) Stop() error {
+	s.logger.Infof("Stopping gate server")
 
 	if s.grpcServer != nil {
 		// Create a timeout context for graceful shutdown (5 seconds)
@@ -197,10 +197,10 @@ func (s *GatewayServer) Stop() error {
 		}
 	}
 
-	// Stop the gateway
+	// Stop the gate
 	if s.gate != nil {
 		if err := s.gate.Stop(); err != nil {
-			s.logger.Errorf("Error stopping gateway: %v", err)
+			s.logger.Errorf("Error stopping gate: %v", err)
 		}
 	}
 
@@ -214,12 +214,12 @@ func (s *GatewayServer) Stop() error {
 	// Cancel context
 	s.cancel()
 
-	s.logger.Infof("Gateway server stopped")
+	s.logger.Infof("Gate server stopped")
 	return nil
 }
 
 // Register implements the Register RPC
-func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
+func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
 	ctx := stream.Context()
 	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
@@ -262,7 +262,7 @@ func (s *GatewayServer) Register(req *gate_pb.Empty, stream grpc.ServerStreaming
 }
 
 // CallObject implements the CallObject RPC
-func (s *GatewayServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
 	// Use CallObjectAnyRequest to pass Any directly without unmarshaling (optimization)
 	// The cluster will unmarshal only if needed (for local calls)
 	response, err := s.cluster.CallObjectAnyRequest(ctx, req.Type, req.Id, req.Method, req.Request)
@@ -274,7 +274,7 @@ func (s *GatewayServer) CallObject(ctx context.Context, req *gate_pb.CallObjectR
 }
 
 // CreateObject implements the CreateObject RPC
-func (s *GatewayServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
+func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
 	// Call the cluster to create the object
 	objID, err := s.cluster.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {
@@ -285,7 +285,7 @@ func (s *GatewayServer) CreateObject(ctx context.Context, req *gate_pb.CreateObj
 }
 
 // DeleteObject implements the DeleteObject RPC
-func (s *GatewayServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
+func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
 	// Call the cluster to delete the object
 	err := s.cluster.DeleteObject(ctx, req.Id)
 	if err != nil {

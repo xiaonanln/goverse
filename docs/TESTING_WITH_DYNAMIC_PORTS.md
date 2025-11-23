@@ -120,7 +120,7 @@ func TestDistributedFeature(t *testing.T) {
 }
 ```
 
-### Example 3: Gateway Integration Test
+### Example 3: Gate Integration Test
 
 ```go
 func TestGateNodeIntegration(t *testing.T) {
@@ -156,14 +156,14 @@ func TestGateNodeIntegration(t *testing.T) {
 
     actualNodeAddr := nodeServer.GetAddress()
 
-    // Create gateway server
-    gwConfig := &GatewayServerConfig{
+    // Create gate server
+    gwConfig := &GateServerConfig{
         ListenAddress:    gateAddr,
         AdvertiseAddress: gateAddr,
         EtcdAddress:      "localhost:2379",
         EtcdPrefix:       etcdPrefix,
     }
-    gwServer, err := NewGatewayServer(gwConfig)
+    gwServer, err := NewGateServer(gwConfig)
     // ... rest of test
 }
 ```

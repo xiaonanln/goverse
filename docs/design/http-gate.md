@@ -1,7 +1,7 @@
-# HTTP Gateway Design
+# HTTP Gate Design
 
 > **Status**: Design Document  
-> This document describes the HTTP gateway support for Goverse, enabling HTTP clients to interact with objects and receive push notifications.
+> This document describes the HTTP gate support for Goverse, enabling HTTP clients to interact with objects and receive push notifications.
 
 ---
 
@@ -12,21 +12,21 @@ Enable HTTP clients to:
 - **Create and delete objects** via HTTP REST API
 - **Receive pushed messages** from objects in real-time via HTTP mechanisms
 
-All HTTP functionality should integrate seamlessly with the existing gateway architecture without duplicating logic.
+All HTTP functionality should integrate seamlessly with the existing gate architecture without duplicating logic.
 
 ---
 
 ## Architecture Overview
 
-The HTTP gateway runs alongside the existing gRPC gateway, sharing the same core `Gateway` and `Cluster` components:
+The HTTP gate runs alongside the existing gRPC gate, sharing the same core `Gate` and `Cluster` components:
 
 ```
-HTTP Client ──> HTTP Handler ──> Gateway ──> Cluster ──> Node ──> Objects
+HTTP Client ──> HTTP Handler ──> Gate ──> Cluster ──> Node ──> Objects
                                      ↓
 gRPC Client ──> gRPC Handler ────────┘
 ```
 
-**Key principle**: HTTP handlers are thin protocol adapters that translate HTTP requests/responses to the same internal gateway operations used by gRPC.
+**Key principle**: HTTP handlers are thin protocol adapters that translate HTTP requests/responses to the same internal gate operations used by gRPC.
 
 ---
 
@@ -37,7 +37,7 @@ gRPC Client ──> gRPC Handler ────────┘
 All object operations use a consistent URL structure with action prefixes. Requests use protobuf `Any` message encoding:
 
 ```
-Base URL: http://gateway-host:port/api/v1
+Base URL: http://gate-host:port/api/v1
 ```
 
 **Encoding**: All requests must encode protobuf messages as `google.protobuf.Any`, marshal to bytes, and send as POST data in the format:
@@ -165,7 +165,7 @@ HTTP push messaging requires special handling since HTTP is request-response bas
    Connection: keep-alive
 
    event: register
-   data: {"clientId": "gateway-addr/unique-id"}
+   data: {"clientId": "gate-addr/unique-id"}
 
    event: message
    data: {"type": "ChatMessage", "payload": {...}}
@@ -203,29 +203,29 @@ HTTP push messaging requires special handling since HTTP is request-response bas
 Add HTTP handlers to `gate/gateserver/`:
 
 ```go
-type HTTPGatewayServer struct {
-    gatewayServer *GatewayServer
+type HTTPGateServer struct {
+    gateServer *GateServer
     httpServer    *http.Server
 }
 
-func (s *HTTPGatewayServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPGateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
     // Extract type, id, method from URL path
     // Parse request body: {"request": "<base64-encoded Any bytes>"}
     // Decode base64 and unmarshal to google.protobuf.Any
-    // Call s.gatewayServer.cluster.CallObjectAnyRequest()
+    // Call s.gateServer.cluster.CallObjectAnyRequest()
     // Marshal response Any to base64 and return
 }
 
-func (s *HTTPGatewayServer) handleCreateObject(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPGateServer) handleCreateObject(w http.ResponseWriter, r *http.Request) {
     // Extract type, id from URL path
     // Parse optional request body with Any bytes
-    // Call s.gatewayServer.cluster.CreateObject()
+    // Call s.gateServer.cluster.CreateObject()
     // Return object ID
 }
 
-func (s *HTTPGatewayServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPGateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
     // Extract id from URL path
-    // Call s.gatewayServer.cluster.DeleteObject()
+    // Call s.gateServer.cluster.DeleteObject()
     // Return success response
 }
 ```
@@ -235,15 +235,15 @@ func (s *HTTPGatewayServer) handleDeleteObject(w http.ResponseWriter, r *http.Re
 Implement SSE streaming handler:
 
 ```go
-func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPGateServer) handleEventStream(w http.ResponseWriter, r *http.Request) {
     // Set SSE headers
     w.Header().Set("Content-Type", "text/event-stream")
     w.Header().Set("Cache-Control", "no-cache")
     w.Header().Set("Connection", "keep-alive")
     
-    // Register client with gateway
-    clientProxy := s.gatewayServer.gate.Register(r.Context())
-    defer s.gatewayServer.gate.Unregister(clientProxy.GetID())
+    // Register client with gate
+    clientProxy := s.gateServer.gate.Register(r.Context())
+    defer s.gateServer.gate.Unregister(clientProxy.GetID())
     
     // Send registration event
     fmt.Fprintf(w, "event: register\ndata: {\"clientId\":\"%s\"}\n\n", clientProxy.GetID())
@@ -276,7 +276,7 @@ func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Req
 - Goverse is highly protobuf-centric
 - Maintains type safety and consistency with gRPC interface
 - Clients must encode proto messages into `google.protobuf.Any`, marshal to bytes, and base64-encode for HTTP transport
-- Gateway can forward Any bytes directly to cluster without re-marshaling
+- Gate can forward Any bytes directly to cluster without re-marshaling
 - No lossy JSON conversion or schema ambiguity
 
 ### 2. URL Structure
@@ -298,14 +298,14 @@ func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Req
 - Native browser support with simple API
 - HTTP-based, works through most proxies
 - Automatic reconnection handling
-- For bidirectional needs, clients should use gRPC gateway
+- For bidirectional needs, clients should use gRPC gate
 
 ### 4. Authentication & Authorization
 
-**Approach**: HTTP middleware at gateway level
+**Approach**: HTTP middleware at gate level
 
 **Design considerations**:
-- HTTP gateway can add auth middleware (JWT, API keys, etc.)
+- HTTP gate can add auth middleware (JWT, API keys, etc.)
 - Auth context passed to objects via request context or arguments
 - Objects should not trust client-provided identity fields
 - Future: Per-object/per-method access control policies
@@ -315,7 +315,7 @@ func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Req
 **Choice**: Run HTTP server alongside gRPC server in same process.
 
 **Rationale**:
-- Share same gateway and cluster instances
+- Share same gate and cluster instances
 - Simpler deployment (one binary)
 - Option to run on different ports for separation
 
@@ -324,13 +324,13 @@ func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Req
 ## Configuration Example
 
 ```go
-type GatewayServerConfig struct {
+type GateServerConfig struct {
     // gRPC
     GRPCListenAddress    string // e.g., ":49000"
     
     // HTTP
     HTTPListenAddress    string // e.g., ":8080"
-    HTTPEnabled          bool   // Enable HTTP gateway
+    HTTPEnabled          bool   // Enable HTTP gate
     
     // Common
     AdvertiseAddress string
@@ -428,7 +428,7 @@ eventSource.addEventListener('message', (e) => {
 
 For existing gRPC clients, no changes required. HTTP support is additive:
 
-1. **Phase 1**: Deploy HTTP gateway with REST API support (call, create, delete)
+1. **Phase 1**: Deploy HTTP gate with REST API support (call, create, delete)
 2. **Phase 2**: Add SSE streaming for push notifications
 3. **Phase 3**: Build example web UI using HTTP + SSE
 
@@ -459,4 +459,4 @@ This design enables HTTP clients to fully participate in the Goverse ecosystem:
 - **Shared infrastructure** ensures consistency between HTTP and gRPC clients
 - **Incremental implementation** allows phased rollout with backward compatibility
 
-The HTTP gateway preserves Goverse's core architectural principles while making the platform accessible to web browsers and HTTP-native tooling.
+The HTTP gate preserves Goverse's core architectural principles while making the platform accessible to web browsers and HTTP-native tooling.
