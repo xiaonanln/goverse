@@ -59,6 +59,9 @@ func (tsh *TestServerHelper) Start(ctx context.Context) error {
 	tsh.listener = listener
 	tsh.running = true
 
+	// Update address with the actual bound address (important for :0 port allocation)
+	tsh.address = listener.Addr().String()
+
 	// Start serving in background
 	go func() {
 		if err := tsh.server.Serve(listener); err != nil {
@@ -97,6 +100,14 @@ func (tsh *TestServerHelper) IsRunning() bool {
 	tsh.mu.Lock()
 	defer tsh.mu.Unlock()
 	return tsh.running
+}
+
+// GetAddress returns the address the server is listening on.
+// This is particularly useful when using :0 for dynamic port allocation.
+func (tsh *TestServerHelper) GetAddress() string {
+	tsh.mu.Lock()
+	defer tsh.mu.Unlock()
+	return tsh.address
 }
 
 type nodeInterface interface {

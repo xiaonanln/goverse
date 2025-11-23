@@ -31,7 +31,6 @@ func waitForObjectCreated(t *testing.T, n *node.Node, objID string, timeout time
 // TestDistributedCreateObject tests shard mapping and routing logic
 // by verifying that objects are correctly assigned to nodes based on shards
 // This test requires a running etcd instance at localhost:2379
-// Note: This test does NOT run in parallel because it uses mock servers on specific ports
 func TestDistributedCreateObject(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
@@ -41,9 +40,13 @@ func TestDistributedCreateObject(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Get free addresses for the nodes
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
 	// Create clusters using mustNewCluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47002", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Register object types on the nodes (can be done after node start)
 	node1 := cluster1.GetThisNode()
@@ -57,7 +60,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	// Start mock gRPC servers for both nodes
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1) // Assign the actual node to the mock server
-	testServer1 := testutil.NewTestServerHelper("localhost:47001", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(addr1, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
@@ -66,7 +69,7 @@ func TestDistributedCreateObject(t *testing.T) {
 
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2) // Assign the actual node to the mock server
-	testServer2 := testutil.NewTestServerHelper("localhost:47002", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(addr2, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
@@ -115,9 +118,9 @@ func TestDistributedCreateObject(t *testing.T) {
 			// Verify the object was created on the correct node
 			var objectNode *node.Node
 			switch targetNode {
-			case "localhost:47001":
+			case addr1:
 				objectNode = node1
-			case "localhost:47002":
+			case addr2:
 				objectNode = node2
 			default:
 				t.Fatalf("Unknown target node: %s", targetNode)
@@ -151,9 +154,9 @@ func TestDistributedCreateObject(t *testing.T) {
 
 		var objectNode *node.Node
 		switch targetNode {
-		case "localhost:47001":
+		case addr1:
 			objectNode = node1
-		case "localhost:47002":
+		case addr2:
 			objectNode = node2
 		default:
 			t.Fatalf("Unknown target node: %s", targetNode)
@@ -211,12 +214,18 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Get free addresses for the nodes
+	addrs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		addrs[i] = testutil.GetFreeAddress()
+	}
+
 	// Create 3 clusters using mustNewCluster
 	// Note: No object registration needed since this test only calls GetCurrentNodeForObject
 	clusters := []*Cluster{
-		mustNewCluster(ctx, t, "localhost:47011", testPrefix),
-		mustNewCluster(ctx, t, "localhost:47012", testPrefix),
-		mustNewCluster(ctx, t, "localhost:47013", testPrefix),
+		mustNewCluster(ctx, t, addrs[0], testPrefix),
+		mustNewCluster(ctx, t, addrs[1], testPrefix),
+		mustNewCluster(ctx, t, addrs[2], testPrefix),
 	}
 
 	// Wait for nodes to discover each other and shard mapping to initialize

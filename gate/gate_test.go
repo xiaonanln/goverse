@@ -6,11 +6,16 @@ import (
 	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestNewGateway(t *testing.T) {
+	// Get free addresses for tests that need them
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
 	tests := []struct {
 		name       string
 		config     *GatewayConfig
@@ -20,7 +25,7 @@ func TestNewGateway(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: addr1,
 				EtcdAddress:      "localhost:2379",
 				EtcdPrefix:       "/test-gateway",
 			},
@@ -29,7 +34,7 @@ func TestNewGateway(t *testing.T) {
 		{
 			name: "valid config with default prefix",
 			config: &GatewayConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: addr2,
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
@@ -52,7 +57,7 @@ func TestNewGateway(t *testing.T) {
 		{
 			name: "empty etcd address",
 			config: &GatewayConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: addr1, // Reuse addr1 since this test will fail validation
 				EtcdAddress:      "",
 			},
 			wantErr:    true,
