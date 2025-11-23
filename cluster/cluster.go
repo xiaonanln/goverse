@@ -1022,7 +1022,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	// transient state changes.
 	stateChanged := c.leaderShardManagementLogic(ctx)
 	if stateChanged {
-		c.logger.Debugf("%s - Cluster state changed by leader, waiting for next cycle", c)
+		c.logger.Infof("%s - Cluster state changed by leader, waiting for next cycle", c)
 		// Ensure metrics are updated even when leader changed state to keep
 		// Prometheus/monitoring in sync with the in-memory state.
 		return
