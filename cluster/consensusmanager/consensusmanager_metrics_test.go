@@ -5,6 +5,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/metrics"
 	testutilpkg "github.com/xiaonanln/goverse/util/testutil"
