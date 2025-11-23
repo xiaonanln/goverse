@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -11,12 +12,23 @@ import (
 )
 
 func main() {
+	// Parse command line flags
+	var (
+		listenAddr        = flag.String("listen", ":49000", "Gateway listen address")
+		advertiseAddr     = flag.String("advertise", "localhost:49000", "Gateway advertise address")
+		metricsListenAddr = flag.String("metrics-listen", "", "Metrics listen address (optional, e.g., ':9091')")
+		etcdAddr          = flag.String("etcd", "localhost:2379", "Etcd address")
+		etcdPrefix        = flag.String("etcd-prefix", "/goverse", "Etcd key prefix")
+	)
+	flag.Parse()
+
 	// Create gateway server configuration
 	config := &gateserver.GatewayServerConfig{
-		ListenAddress:    ":49000",
-		AdvertiseAddress: "localhost:49000",
-		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/goverse",
+		ListenAddress:        *listenAddr,
+		AdvertiseAddress:     *advertiseAddr,
+		MetricsListenAddress: *metricsListenAddr,
+		EtcdAddress:          *etcdAddr,
+		EtcdPrefix:           *etcdPrefix,
 	}
 
 	// Create gateserver server
