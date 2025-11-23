@@ -118,7 +118,7 @@ func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 
 	// Create a consensus manager without connecting to etcd and with empty local node address
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
@@ -139,7 +139,7 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	// Set a valid local node address in the constructor
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, "localhost:47001")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, "localhost:47001", sharding.NumShards)
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
@@ -180,7 +180,7 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	otherNodeAddr := "localhost:47002"
 
 	// Create consensus manager with the local node address
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr, sharding.NumShards)
 	prefix := mgr.GetPrefix()
 
 	// Set up nodes
@@ -356,7 +356,7 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	prefix := mgr.GetPrefix()
 
 	// Create consensus manager with local node address
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr, sharding.NumShards)
 
 	// Set up nodes
 	nodes := map[string]bool{
@@ -449,7 +449,7 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	prefix := mgr.GetPrefix()
 
 	// Create consensus manager with local node address
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr, sharding.NumShards)
 
 	// Set up nodes
 	nodes := map[string]bool{
@@ -460,8 +460,8 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	// Use real shard IDs computed from object IDs
 	testObjectID1 := "TestObject-123"
 	testObjectID2 := "TestObject-456"
-	shard1 := sharding.GetShardID(testObjectID1)
-	shard2 := sharding.GetShardID(testObjectID2)
+	shard1 := sharding.GetShardID(testObjectID1, sharding.NumShards)
+	shard2 := sharding.GetShardID(testObjectID2, sharding.NumShards)
 
 	// Set up shards that should be released
 	shards := map[int]ShardInfo{

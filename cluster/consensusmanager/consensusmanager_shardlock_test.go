@@ -23,7 +23,7 @@ func TestShardLocking_ReadWriteExclusion(t *testing.T) {
 
 	// Test object ID that maps to a specific shard
 	objectID := "test-object-123"
-	shardID := sharding.GetShardID(objectID)
+	shardID := sharding.GetShardID(objectID, sharding.NumShards)
 
 	// Track operation order
 	var operationOrder []string
@@ -138,7 +138,7 @@ func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
 	t.Parallel()
 	sl := shardlock.NewShardLock()
 	objectID := "test-object-789"
-	shardID := sharding.GetShardID(objectID)
+	shardID := sharding.GetShardID(objectID, sharding.NumShards)
 
 	// Simulate ReleaseShardsForNode acquiring write lock
 	releaseStarted := make(chan bool)
@@ -192,14 +192,14 @@ func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
 	// Use object IDs that map to different shards
 	objectID1 := "test-object-1"
 	objectID2 := "test-object-2"
-	shardID1 := sharding.GetShardID(objectID1)
-	shardID2 := sharding.GetShardID(objectID2)
+	shardID1 := sharding.GetShardID(objectID1, sharding.NumShards)
+	shardID2 := sharding.GetShardID(objectID2, sharding.NumShards)
 
 	// Make sure they're different shards
 	if shardID1 == shardID2 {
 		// Try different IDs
 		objectID2 = "test-object-9999"
-		shardID2 = sharding.GetShardID(objectID2)
+		shardID2 = sharding.GetShardID(objectID2, sharding.NumShards)
 		if shardID1 == shardID2 {
 			t.Skip("Cannot find two different shard IDs for testing")
 		}
