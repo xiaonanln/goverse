@@ -47,7 +47,7 @@ func TestNewGatewayServer(t *testing.T) {
 			name: "empty listen address",
 			config: &GatewayServerConfig{
 				ListenAddress:    "",
-				AdvertiseAddress: "localhost:49003",
+				AdvertiseAddress: testutil.GetFreeAddress(),
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr:    true,
@@ -328,7 +328,7 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty listen address",
 			config: &GatewayServerConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: testutil.GetFreeAddress(),
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr:    true,
@@ -337,7 +337,7 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty advertise address",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49000",
+				ListenAddress: ":0",
 				EtcdAddress:   "localhost:2379",
 			},
 			wantErr:    true,
