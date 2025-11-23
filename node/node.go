@@ -55,6 +55,7 @@ type Node struct {
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
 	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
+	numShards             int                  // Number of shards in the cluster (set by cluster during initialization)
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
@@ -75,6 +76,7 @@ func NewNode(advertiseAddress string) *Node {
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
+		numShards:           sharding.NumShards, // Default to standard shard count
 		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
@@ -161,19 +163,12 @@ func (node *Node) GetAdvertiseAddress() string {
 // This must be called during initialization before the node is used concurrently
 func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
 	node.shardLock = sl
-	// Update inspector manager with numShards from shard lock
-	if sl != nil {
-		node.inspectorManager.SetNumShards(sl.GetNumShards())
-	}
 }
 
-// getNumShards returns the number of shards for this node
-// Returns the configured value from shardLock if set, otherwise the default
-func (node *Node) getNumShards() int {
-	if node.shardLock != nil {
-		return node.shardLock.GetNumShards()
-	}
-	return sharding.NumShards
+// SetNumShards sets the number of shards for this node
+// This must be called during initialization before the node is used concurrently
+func (node *Node) SetNumShards(numShards int) {
+	node.numShards = numShards
 }
 
 // RegisterObjectType registers a new object type with the node
@@ -462,7 +457,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.inspectorManager.NotifyObjectAdded(id, typ)
 
 	// Record metrics with shard information
-	shard := sharding.GetShardID(id, node.getNumShards())
+	shard := sharding.GetShardID(id, node.numShards)
 	metrics.RecordObjectCreated(node.advertiseAddress, typ, shard)
 
 	return nil
@@ -485,7 +480,7 @@ func (node *Node) destroyObject(id string) {
 
 	// Record metrics if object existed
 	if exists {
-		shard := sharding.GetShardID(id, node.getNumShards())
+		shard := sharding.GetShardID(id, node.numShards)
 		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shard)
 	}
 }

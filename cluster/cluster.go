@@ -44,6 +44,7 @@ type Cluster struct {
 	etcdAddress               string        // etcd server address (e.g., "localhost:2379")
 	etcdPrefix                string        // etcd key prefix for this cluster
 	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
+	numShards                 int           // number of shards in this cluster
 	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
 	clusterManagementCtx      context.Context
 	clusterManagementCancel   context.CancelFunc
@@ -87,6 +88,12 @@ func createAndConnectEtcdManager(etcdAddress string, etcdPrefix string) (*etcdma
 // If the cluster singleton is already initialized, this function will return an error.
 // This function is thread-safe.
 func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
+	// Determine number of shards
+	numShards := cfg.NumShards
+	if numShards <= 0 {
+		numShards = sharding.NumShards
+	}
+
 	// Create a new cluster instance with its own ShardLock to ensure per-cluster isolation
 	c := &Cluster{
 		node:                      node,
@@ -95,9 +102,10 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 		etcdAddress:               cfg.EtcdAddress,
 		etcdPrefix:                cfg.EtcdPrefix,
 		minQuorum:                 cfg.MinQuorum,
+		numShards:                 numShards,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
-		shardLock:                 shardlock.NewShardLock(),
+		shardLock:                 shardlock.NewShardLockWithShards(numShards),
 		gateChannels:              make(map[string]chan proto.Message),
 	}
 	if err := c.init(cfg); err != nil {
@@ -107,6 +115,12 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 }
 
 func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
+	// Determine number of shards
+	numShards := cfg.NumShards
+	if numShards <= 0 {
+		numShards = sharding.NumShards
+	}
+
 	c := &Cluster{
 		gate:                      g,
 		logger:                    logger.NewLogger("Cluster"),
@@ -114,9 +128,10 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 		etcdAddress:               cfg.EtcdAddress,
 		etcdPrefix:                cfg.EtcdPrefix,
 		minQuorum:                 cfg.MinQuorum,
+		numShards:                 numShards,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
-		shardLock:                 shardlock.NewShardLock(),
+		shardLock:                 shardlock.NewShardLockWithShards(numShards),
 		gateChannels:              make(map[string]chan proto.Message),
 	}
 	if err := c.init(cfg); err != nil {
@@ -131,6 +146,7 @@ func (c *Cluster) init(cfg Config) error {
 	// Note: Gates don't need ShardLock as they don't host objects
 	if c.isNode() {
 		c.node.SetShardLock(c.shardLock)
+		c.node.SetNumShards(c.numShards)
 	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
@@ -145,13 +161,8 @@ func (c *Cluster) init(cfg Config) error {
 	if stabilityDuration <= 0 {
 		stabilityDuration = DefaultNodeStabilityDuration
 	}
-	// Use the provided number of shards or default
-	numShards := cfg.NumShards
-	if numShards <= 0 {
-		numShards = sharding.NumShards
-	}
-	c.shardLock.SetNumShards(numShards)
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr(), numShards)
+	// Use the cluster's numShards for consensus manager
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr(), c.numShards)
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
@@ -1078,7 +1089,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 		if strings.Contains(objectID, "/") {
 			continue
 		}
-		shardID := sharding.GetShardID(objectID, c.consensusManager.GetNumShards())
+		shardID := sharding.GetShardID(objectID, c.numShards)
 		localObjectsPerShard[shardID]++
 	}
 
@@ -1115,7 +1126,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 
 	// Remove each object that should be evicted
 	for _, objectID := range objectsToEvict {
-		shardID := sharding.GetShardID(objectID, c.consensusManager.GetNumShards())
+		shardID := sharding.GetShardID(objectID, c.numShards)
 		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 
