@@ -79,7 +79,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	defer cancel()
 
 	// 1. Create and start a node with cluster
-	nodeAddr := "localhost:48010"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 	t.Logf("Created node cluster at %s", nodeAddr)
@@ -97,7 +97,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	t.Logf("Started node server at %s", nodeAddr)
 
 	// 2. Create and start the real GatewayServer
-	gateAddr := "localhost:48011"
+	gateAddr := testutil.GetFreeAddress()
 	gwServerConfig := &GatewayServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
@@ -214,7 +214,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	defer cancel()
 
 	// 1. Create and start a node with cluster
-	nodeAddr := "localhost:48020"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 	t.Logf("Created node cluster at %s", nodeAddr)
@@ -231,7 +231,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	t.Logf("Started node server at %s", nodeAddr)
 
 	// 2. Create and start the real GatewayServer
-	gateAddr := "localhost:48021"
+	gateAddr := testutil.GetFreeAddress()
 	gwServerConfig := &GatewayServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
