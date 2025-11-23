@@ -3,6 +3,7 @@ package nodeconnections
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestNew(t *testing.T) {
@@ -135,4 +136,214 @@ func TestNodeConnections_SetNodes(t *testing.T) {
 	// The method should handle the node list without error
 	// We can't verify actual connections without running servers
 	// But we can verify it doesn't panic or error
+}
+
+func TestNodeConnections_RetryOnFailedConnection(t *testing.T) {
+	nc := New()
+
+	ctx := context.Background()
+
+	err := nc.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start NodeConnections: %v", err)
+	}
+	defer nc.Stop()
+
+	// Note: grpc.NewClient doesn't fail immediately for non-existent servers
+	// It only fails when actual RPCs are made. The connection is created optimistically.
+	// This test verifies that the connection manager handles the case where
+	// grpc.NewClient succeeds (which is the normal case).
+	nodes := []string{"localhost:59999"}
+	nc.SetNodes(nodes)
+
+	// Give it a moment to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Connection should be created (grpc.NewClient succeeds even without server)
+	connCount := nc.NumConnections()
+	if connCount == 0 {
+		t.Fatal("Expected connection to be created (grpc.NewClient succeeds optimistically)")
+	}
+
+	// No retry should be running since grpc.NewClient succeeded
+	nc.retryingNodesMu.Lock()
+	retryCount := len(nc.retryingNodes)
+	nc.retryingNodesMu.Unlock()
+
+	if retryCount != 0 {
+		t.Fatalf("Expected 0 retry goroutines when grpc.NewClient succeeds, got %d", retryCount)
+	}
+}
+
+func TestNodeConnections_RetryStopsOnDisconnect(t *testing.T) {
+	// This test validates the cleanup logic when a node is removed
+	// Even though grpc.NewClient typically succeeds, this tests the
+	// cleanup path for any retry goroutines that might be running
+	nc := New()
+
+	ctx := context.Background()
+
+	err := nc.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start NodeConnections: %v", err)
+	}
+	defer nc.Stop()
+
+	nodes := []string{"localhost:59998"}
+	nc.SetNodes(nodes)
+
+	// Give it a moment to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Connection should exist
+	initialCount := nc.NumConnections()
+	if initialCount == 0 {
+		t.Fatal("Expected connection to be created")
+	}
+
+	// Now remove the node
+	nc.SetNodes([]string{})
+
+	// Give it a moment to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Connection should be removed
+	finalCount := nc.NumConnections()
+	if finalCount != 0 {
+		t.Fatalf("Expected 0 connections after node removal, got %d", finalCount)
+	}
+
+	// No retry goroutines should be running
+	nc.retryingNodesMu.Lock()
+	retryCount := len(nc.retryingNodes)
+	nc.retryingNodesMu.Unlock()
+
+	if retryCount != 0 {
+		t.Fatalf("Expected 0 retry goroutines after node removal, got %d", retryCount)
+	}
+}
+
+func TestNodeConnections_RetryStopsOnStop(t *testing.T) {
+	// This test validates that Stop() properly cleans up all retry goroutines
+	nc := New()
+
+	ctx := context.Background()
+
+	err := nc.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start NodeConnections: %v", err)
+	}
+
+	nodes := []string{"localhost:59997"}
+	nc.SetNodes(nodes)
+
+	// Give it a moment to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop the manager
+	nc.Stop()
+
+	// Verify all retry goroutines stopped and cleanup happened
+	nc.retryingNodesMu.Lock()
+	retryCountAfterStop := len(nc.retryingNodes)
+	nc.retryingNodesMu.Unlock()
+
+	if retryCountAfterStop != 0 {
+		t.Fatalf("Expected 0 retry goroutines after Stop(), got %d", retryCountAfterStop)
+	}
+
+	// Verify connections are closed
+	if nc.NumConnections() != 0 {
+		t.Fatalf("Expected 0 connections after Stop(), got %d", nc.NumConnections())
+	}
+}
+
+func TestNodeConnections_NoRetryForAlreadyConnected(t *testing.T) {
+	nc := New()
+
+	ctx := context.Background()
+
+	err := nc.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start NodeConnections: %v", err)
+	}
+	defer nc.Stop()
+
+	// First attempt - will succeed (grpc.NewClient doesn't fail immediately)
+	nodes := []string{"localhost:59996"}
+	nc.SetNodes(nodes)
+
+	// Give it a moment to process
+	time.Sleep(100 * time.Millisecond)
+
+	// If connection was established, no retry should be running
+	// (Note: grpc.NewClient succeeds even if server isn't running)
+	nc.retryingNodesMu.Lock()
+	retryCount := len(nc.retryingNodes)
+	nc.retryingNodesMu.Unlock()
+
+	// Connection should exist (even if server isn't actually running)
+	connCount := nc.NumConnections()
+	if connCount == 0 {
+		t.Fatal("Expected connection to be created (grpc.NewClient succeeds even without server)")
+	}
+
+	// No retry should be active if connection was created
+	if retryCount != 0 {
+		t.Fatalf("Expected 0 retry goroutines when connection succeeds, got %d", retryCount)
+	}
+}
+
+func TestNodeConnections_ExponentialBackoffConstants(t *testing.T) {
+	// Verify the backoff constants are set to reasonable values
+	if initialRetryDelay != 1*time.Second {
+		t.Errorf("Expected initialRetryDelay to be 1s, got %v", initialRetryDelay)
+	}
+
+	if maxRetryDelay != 30*time.Second {
+		t.Errorf("Expected maxRetryDelay to be 30s, got %v", maxRetryDelay)
+	}
+}
+
+func TestNodeConnections_SetNodesDoesNotStartRetryForExistingConnection(t *testing.T) {
+	nc := New()
+
+	ctx := context.Background()
+
+	err := nc.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start NodeConnections: %v", err)
+	}
+	defer nc.Stop()
+
+	nodes := []string{"localhost:59995"}
+	nc.SetNodes(nodes)
+
+	// Give it a moment to establish connection
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify connection exists
+	if nc.NumConnections() != 1 {
+		t.Fatalf("Expected 1 connection, got %d", nc.NumConnections())
+	}
+
+	// Call SetNodes again with the same node
+	nc.SetNodes(nodes)
+
+	// Give it a moment
+	time.Sleep(100 * time.Millisecond)
+
+	// Should still have exactly one connection, not a duplicate
+	if nc.NumConnections() != 1 {
+		t.Fatalf("Expected 1 connection after calling SetNodes twice, got %d", nc.NumConnections())
+	}
+
+	// No retry goroutines should be running
+	nc.retryingNodesMu.Lock()
+	retryCount := len(nc.retryingNodes)
+	nc.retryingNodesMu.Unlock()
+
+	if retryCount != 0 {
+		t.Fatalf("Expected 0 retry goroutines for existing connection, got %d", retryCount)
+	}
 }

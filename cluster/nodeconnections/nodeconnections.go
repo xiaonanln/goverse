@@ -4,11 +4,17 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+	initialRetryDelay = 1 * time.Second
+	maxRetryDelay     = 30 * time.Second
 )
 
 // NodeConnection represents a gRPC connection to a single node
@@ -25,13 +31,18 @@ type NodeConnections struct {
 	logger        *logger.Logger
 	ctx           context.Context
 	cancel        context.CancelFunc
+
+	// Retry state tracking
+	retryingNodes   map[string]context.CancelFunc // map of node address to retry cancel func
+	retryingNodesMu sync.Mutex
 }
 
 // New creates a new NodeConnections manager
 func New() *NodeConnections {
 	return &NodeConnections{
-		connections: make(map[string]*NodeConnection),
-		logger:      logger.NewLogger("NodeConnections"),
+		connections:   make(map[string]*NodeConnection),
+		retryingNodes: make(map[string]context.CancelFunc),
+		logger:        logger.NewLogger("NodeConnections"),
 	}
 }
 
@@ -54,6 +65,15 @@ func (nc *NodeConnections) Stop() {
 	if nc.cancel != nil {
 		nc.cancel()
 	}
+
+	// Cancel all retry goroutines
+	nc.retryingNodesMu.Lock()
+	for addr, cancel := range nc.retryingNodes {
+		nc.logger.Debugf("Cancelling retry goroutine for node %s", addr)
+		cancel()
+	}
+	nc.retryingNodes = make(map[string]context.CancelFunc)
+	nc.retryingNodesMu.Unlock()
 
 	// Close all connections
 	for addr, conn := range nc.connections {
@@ -97,6 +117,62 @@ func (nc *NodeConnections) connectToNode(nodeAddr string) error {
 
 	nc.logger.Infof("Successfully connected to node %s", nodeAddr)
 	return nil
+}
+
+// retryConnection retries connection to a node with exponential backoff
+func (nc *NodeConnections) retryConnection(nodeAddr string) {
+	// Create a cancellable context for this retry goroutine
+	retryCtx, retryCancel := context.WithCancel(nc.ctx)
+
+	// Register the cancel function
+	nc.retryingNodesMu.Lock()
+	nc.retryingNodes[nodeAddr] = retryCancel
+	nc.retryingNodesMu.Unlock()
+
+	// Ensure cleanup on exit
+	defer func() {
+		nc.retryingNodesMu.Lock()
+		delete(nc.retryingNodes, nodeAddr)
+		nc.retryingNodesMu.Unlock()
+	}()
+
+	retryDelay := initialRetryDelay
+
+	for {
+		// Check if context is cancelled
+		select {
+		case <-retryCtx.Done():
+			nc.logger.Infof("Retry loop cancelled for node %s", nodeAddr)
+			return
+		default:
+		}
+
+		// Wait before retrying
+		nc.logger.Infof("Will retry connecting to node %s in %v", nodeAddr, retryDelay)
+		select {
+		case <-time.After(retryDelay):
+			// Continue with retry
+		case <-retryCtx.Done():
+			nc.logger.Infof("Retry loop cancelled for node %s during wait", nodeAddr)
+			return
+		}
+
+		// Attempt to connect
+		err := nc.connectToNode(nodeAddr)
+		if err == nil {
+			// Connection successful, stop retrying
+			nc.logger.Infof("Successfully connected to node %s on retry", nodeAddr)
+			return
+		}
+
+		nc.logger.Warnf("Failed to connect to node %s: %v, will retry with backoff", nodeAddr, err)
+
+		// Exponential backoff
+		retryDelay = retryDelay * 2
+		if retryDelay > maxRetryDelay {
+			retryDelay = maxRetryDelay
+		}
+	}
 }
 
 // disconnectFromNode closes the connection to a specific node
@@ -177,7 +253,17 @@ func (nc *NodeConnections) SetNodes(nodes []string) {
 		if !currentNodes[nodeAddr] {
 			nc.logger.Infof("Connecting to new node: %s", nodeAddr)
 			if err := nc.connectToNode(nodeAddr); err != nil {
-				nc.logger.Errorf("Failed to connect to node %s: %v", nodeAddr, err)
+				nc.logger.Errorf("Failed to connect to node %s: %v, starting retry with exponential backoff", nodeAddr, err)
+
+				// Check if already retrying this node
+				nc.retryingNodesMu.Lock()
+				_, alreadyRetrying := nc.retryingNodes[nodeAddr]
+				nc.retryingNodesMu.Unlock()
+
+				if !alreadyRetrying {
+					// Start retry goroutine with exponential backoff
+					go nc.retryConnection(nodeAddr)
+				}
 			}
 		}
 	}
@@ -186,6 +272,16 @@ func (nc *NodeConnections) SetNodes(nodes []string) {
 	for nodeAddr := range currentNodes {
 		if !desiredNodes[nodeAddr] {
 			nc.logger.Infof("Disconnecting from removed node: %s", nodeAddr)
+
+			// Cancel any ongoing retry for this node
+			nc.retryingNodesMu.Lock()
+			if cancel, exists := nc.retryingNodes[nodeAddr]; exists {
+				nc.logger.Debugf("Cancelling retry goroutine for removed node %s", nodeAddr)
+				cancel()
+				delete(nc.retryingNodes, nodeAddr)
+			}
+			nc.retryingNodesMu.Unlock()
+
 			if err := nc.disconnectFromNode(nodeAddr); err != nil {
 				nc.logger.Errorf("Failed to disconnect from node %s: %v", nodeAddr, err)
 			}
