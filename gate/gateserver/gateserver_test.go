@@ -449,19 +449,15 @@ func TestGatewayServerMetrics(t *testing.T) {
 	// Start server
 	go server.Start(ctx)
 
-	// Wait for server to be ready - give more time for everything to start
-	time.Sleep(1 * time.Second)
-
-	// Try to fetch metrics with retries
+	// Try to fetch metrics with retries - the metrics server starts quickly
 	var resp *http.Response
-	maxRetries := 10
+	maxRetries := 20
 	for i := 0; i < maxRetries; i++ {
 		resp, err = http.Get("http://localhost:19014/metrics")
 		if err == nil {
 			break
 		}
-		t.Logf("Retry %d: waiting for metrics server to start...", i+1)
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	if err != nil {
 		t.Fatalf("Failed to fetch metrics after retries: %v", err)
