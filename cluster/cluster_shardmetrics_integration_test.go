@@ -13,6 +13,7 @@ import (
 // TestShardMetricsIntegration tests that shard metrics are properly updated when cluster state changes
 // This test requires a running etcd instance at localhost:2379
 func TestShardMetricsIntegration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

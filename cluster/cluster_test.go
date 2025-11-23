@@ -56,6 +56,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 }
 
 func TestGet(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -69,6 +70,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestSetThisNode(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -82,6 +84,7 @@ func TestSetThisNode(t *testing.T) {
 }
 
 func TestSetThisNode_Panic(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -97,6 +100,7 @@ func TestSetThisNode_Panic(t *testing.T) {
 }
 
 func TestNewCluster(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -121,6 +125,7 @@ func TestNewCluster(t *testing.T) {
 }
 
 func TestNewCluster_WithNode(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -147,6 +152,7 @@ func TestNewCluster_WithNode(t *testing.T) {
 }
 
 func TestNewCluster_WithEtcdConfig(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

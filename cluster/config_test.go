@@ -6,6 +6,7 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultConfig()
 
 	// Verify default values
@@ -32,6 +33,7 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestConfigCustomization(t *testing.T) {
+	t.Parallel()
 	// Start with defaults and customize
 	cfg := DefaultConfig()
 	cfg.EtcdAddress = "localhost:2379"
@@ -63,6 +65,7 @@ func TestConfigCustomization(t *testing.T) {
 }
 
 func TestNewClusterAppliesConfig(t *testing.T) {
+	t.Parallel()
 	// This test verifies that NewCluster properly applies config values to the cluster
 	// We can't fully test this without etcd, but we can verify the values are set
 

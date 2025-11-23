@@ -12,6 +12,7 @@ import (
 // TestCluster_ShardLockIsolation verifies that multiple cluster instances
 // have isolated shard locks and don't interfere with each other
 func TestCluster_ShardLockIsolation(t *testing.T) {
+	t.Parallel()
 	// Create two separate cluster instances
 	node1 := node.NewNode("localhost:50001")
 	node2 := node.NewNode("localhost:50002")
@@ -70,6 +71,7 @@ func TestCluster_ShardLockIsolation(t *testing.T) {
 
 // TestCluster_NodeShardLockSet verifies that the cluster sets its ShardLock on the node
 func TestCluster_NodeShardLockSet(t *testing.T) {
+	t.Parallel()
 	n := node.NewNode("localhost:50003")
 	cluster := newClusterForTesting(n, "TestCluster")
 

@@ -19,6 +19,7 @@ import (
 // 3. When gate is shutdown, the node detects disconnection via stream.Context().Done()
 // 4. Node automatically cleans up the gate connection (removes from gateChannels)
 func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -135,6 +136,7 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 // TestGateNodeConnectionCleanupWithMultipleGates tests that when multiple gates
 // connect to a node and one is shutdown, only that gate's connection is cleaned up
 func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -258,6 +260,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 // TestGateNodeReconnection tests that if a gate disconnects and reconnects,
 // the node properly updates the connection
 func TestGateNodeReconnection(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

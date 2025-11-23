@@ -32,6 +32,7 @@ func waitForObjectCreated(t *testing.T, n *node.Node, objID string, timeout time
 // by verifying that objects are correctly assigned to nodes based on shards
 // This test requires a running etcd instance at localhost:2379
 func TestDistributedCreateObject(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -206,6 +207,7 @@ func TestDistributedCreateObject(t *testing.T) {
 // This test requires a running etcd instance at localhost:2379
 // Note: This test does NOT run in parallel because it uses specific ports that may conflict with other tests
 func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

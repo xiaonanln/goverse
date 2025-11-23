@@ -10,6 +10,7 @@ import (
 
 // TestPushMessageToClient_NoNode tests that PushMessageToClient fails when thisNode is not set
 func TestPushMessageToClient_NoNode(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestPushMessageToClient_NoNode")
@@ -29,6 +30,7 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 
 // TestPushMessageToClient_InvalidClientID tests that PushMessageToClient fails with invalid client ID format
 func TestPushMessageToClient_InvalidClientID(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestPushMessageToClient_InvalidClientID")
@@ -65,6 +67,7 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 
 // TestPushMessageToClient_ClientNotFound tests pushing to a non-existent client
 func TestPushMessageToClient_ClientNotFound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestPushMessageToClient_ClientNotFound")

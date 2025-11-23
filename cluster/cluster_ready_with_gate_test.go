@@ -50,6 +50,7 @@ func mustNewGateCluster(ctx context.Context, t *testing.T, gateAddr string, etcd
 // are optional components for client connections, and node readiness should only
 // depend on consensus state (shard mapping) being available.
 func TestNodeReadyWithUnconnectedGate(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping etcd integration test in short mode")
 	}
@@ -109,6 +110,7 @@ func TestNodeReadyWithUnconnectedGate(t *testing.T) {
 // TestNodeReadyBeforeGateRegisters verifies that a node becomes ready before any gate
 // is registered in the cluster. This tests the most basic case where no gates exist yet.
 func TestNodeReadyBeforeGateRegisters(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping etcd integration test in short mode")
 	}

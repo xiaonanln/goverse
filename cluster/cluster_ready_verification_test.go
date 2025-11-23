@@ -11,6 +11,7 @@ import (
 // is only marked ready when BOTH node connections are established AND shard mapping is available.
 // This is a regression test for the issue where cluster was marked ready without waiting for node connections.
 func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

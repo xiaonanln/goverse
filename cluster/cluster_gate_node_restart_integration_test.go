@@ -31,6 +31,7 @@ func makeTestClusterConfig(etcdPrefix string) Config {
 // TestGateReconnectsToNodeAfterRestart tests that when a node shuts down and restarts
 // with the same address, the gate automatically reconnects to it
 func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

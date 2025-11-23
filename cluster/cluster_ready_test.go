@@ -9,6 +9,7 @@ import (
 )
 
 func TestClusterReadyChannel(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
 	c := newClusterForTesting(testNode, "TestClusterReady")
@@ -34,6 +35,7 @@ func TestClusterReadyChannel(t *testing.T) {
 }
 
 func TestMultipleGoroutinesWaitingOnClusterReady(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
 	c := newClusterForTesting(testNode, "TestMultipleGoroutines")
@@ -67,6 +69,7 @@ func TestMultipleGoroutinesWaitingOnClusterReady(t *testing.T) {
 }
 
 func TestMarkClusterReadyIsIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:47000")
 	c := newClusterForTesting(testNode, "TestIdempotent")
