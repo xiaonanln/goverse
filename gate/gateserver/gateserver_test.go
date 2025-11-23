@@ -2,6 +2,7 @@ package gateserver
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -473,7 +474,10 @@ func TestGatewayServerMetrics(t *testing.T) {
 
 	// Read a bit of the response to verify it's prometheus metrics
 	buf := make([]byte, 100)
-	n, _ := resp.Body.Read(buf)
+	n, err := resp.Body.Read(buf)
+	if err != nil && err != io.EOF {
+		t.Fatalf("Failed to read metrics response: %v", err)
+	}
 	if n == 0 {
 		t.Fatal("Expected metrics response body, got empty")
 	}
