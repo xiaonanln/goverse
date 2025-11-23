@@ -12,6 +12,7 @@ import (
 // TestClusterAutomaticShardMappingManagement tests automatic shard mapping management with etcd integration
 // This test requires a running etcd instance at localhost:2379
 func TestClusterAutomaticShardMappingManagement(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -106,6 +107,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 
 // TestClusterShardMappingAutoUpdate tests that shard mapping is updated when nodes change
 func TestClusterShardMappingAutoUpdate(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

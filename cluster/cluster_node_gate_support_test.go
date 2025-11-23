@@ -9,6 +9,7 @@ import (
 
 // TestClusterNodeAndGateSupport tests that cluster properly supports both node and gate
 func TestClusterNodeAndGateSupport(t *testing.T) {
+	t.Parallel()
 	t.Run("node cluster", func(t *testing.T) {
 		n := node.NewNode("localhost:47000")
 		c := newClusterForTesting(n, "TestNodeCluster")
@@ -99,6 +100,7 @@ func TestClusterNodeAndGateSupport(t *testing.T) {
 
 // TestClusterOperationsWithGate tests that node-only operations return appropriate results for gate clusters
 func TestClusterOperationsWithGate(t *testing.T) {
+	t.Parallel()
 	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49000",
 		EtcdAddress:      "localhost:2379",

@@ -10,6 +10,7 @@ import (
 // TestClusterReadyAfterNodeConnections verifies that the cluster is only marked ready
 // after node connections are established AND shard mapping is available
 func TestClusterReadyAfterNodeConnections(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -42,6 +43,7 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 
 // TestClusterReadyMultiNode verifies cluster readiness in a multi-node setup
 func TestClusterReadyMultiNode(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

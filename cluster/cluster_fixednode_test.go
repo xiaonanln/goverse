@@ -12,6 +12,7 @@ import (
 
 // TestCreateObject_FixedNodeAddress tests creating objects with fixed node addresses
 func TestCreateObject_FixedNodeAddress(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress")
@@ -58,6 +59,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 
 // TestCallObject_FixedNodeAddress tests calling object methods with fixed node addresses
 func TestCallObject_FixedNodeAddress(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress")
@@ -89,6 +91,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 // TestCreateObject_FixedNodeAddress_WrongNode tests that objects with fixed addresses
 // are not created on the wrong node
 func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_WrongNode")
@@ -113,6 +116,7 @@ func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 // TestCallObject_FixedNodeAddress_WrongNode tests that calls with fixed addresses
 // fail appropriately when routing to a different node without connections
 func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress_WrongNode")
@@ -127,6 +131,7 @@ func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 
 // TestCreateObject_FixedNodeAddress_Format tests various fixed node address formats
 func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_Format")

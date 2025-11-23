@@ -28,6 +28,7 @@ func waitForClusterReady(t *testing.T, cluster *Cluster, timeout time.Duration) 
 // an object method without causing deadlocks. The async implementation ensures that
 // the CreateObject call returns immediately without waiting for completion.
 func TestAsyncCreateObjectFromMethod(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -97,6 +98,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 // TestAsyncDeleteObjectFromMethod verifies that DeleteObject can be called from within
 // an object method without causing deadlocks.
 func TestAsyncDeleteObjectFromMethod(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -172,6 +174,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 // TestAsyncOperationsReturnImmediately verifies that CreateObject and DeleteObject
 // return immediately without waiting for the operation to complete
 func TestAsyncOperationsReturnImmediately(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

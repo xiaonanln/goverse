@@ -24,6 +24,7 @@ func (o *TestReleaseObject) OnCreated() {}
 // - TargetNode is another node
 // - No objects exist on this node for that shard
 func TestReleaseShardOwnership_Integration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

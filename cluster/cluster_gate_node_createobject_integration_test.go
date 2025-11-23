@@ -108,6 +108,7 @@ func (o *TestGateNodeObject) Increment(ctx context.Context, req *structpb.Struct
 //
 // This test requires a running etcd instance at localhost:2379
 func TestGateNodeIntegration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

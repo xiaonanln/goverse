@@ -13,6 +13,7 @@ import (
 // with all available nodes using the RegisterGate RPC, and tracks which nodes it has
 // registered with
 func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -133,6 +134,7 @@ func hasGateConnection(c *Cluster, gateAddr string) bool {
 // TestGateRegistersToMultipleNodesSimultaneously tests that a gate can register
 // with multiple nodes at the same time
 func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -211,6 +213,7 @@ func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
 // TestMultipleGatesRegisterToSameNodes tests that multiple gates can register
 // to the same set of nodes
 func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}

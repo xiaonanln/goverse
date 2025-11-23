@@ -12,6 +12,7 @@ import (
 
 // TestGateRegistrationWithEtcd tests that gates are properly registered in etcd under /gates/
 func TestGateRegistrationWithEtcd(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -77,6 +78,7 @@ func TestGateRegistrationWithEtcd(t *testing.T) {
 
 // TestGateUnregistrationWithEtcd tests that gates are properly unregistered from etcd when stopped
 func TestGateUnregistrationWithEtcd(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -151,6 +153,7 @@ func TestGateUnregistrationWithEtcd(t *testing.T) {
 
 // TestGateDiscoveryByNodes tests that nodes can discover gates in the cluster
 func TestGateDiscoveryByNodes(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -203,6 +206,7 @@ func TestGateDiscoveryByNodes(t *testing.T) {
 
 // TestMultipleGatesDiscovery tests that multiple gates can discover each other
 func TestMultipleGatesDiscovery(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -292,6 +296,7 @@ func TestMultipleGatesDiscovery(t *testing.T) {
 
 // TestGateDynamicDiscovery tests that existing clusters discover new gates dynamically
 func TestGateDynamicDiscovery(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -347,6 +352,7 @@ func TestGateDynamicDiscovery(t *testing.T) {
 
 // TestGateLeaveDetection tests that clusters detect when gates leave
 func TestGateLeaveDetection(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -404,6 +410,7 @@ func TestGateLeaveDetection(t *testing.T) {
 
 // TestMixedClusterWithNodesAndGates tests a mixed cluster with both nodes and gates
 func TestMixedClusterWithNodesAndGates(t *testing.T) {
+	t.Parallel()
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
@@ -485,6 +492,7 @@ func TestMixedClusterWithNodesAndGates(t *testing.T) {
 // TestClusterWithTwoGatesAndThreeNodes tests a cluster with 2 gates and 3 nodes
 // This verifies that all clusters can discover each other properly via etcd
 func TestClusterWithTwoGatesAndThreeNodes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
