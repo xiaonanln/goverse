@@ -125,6 +125,11 @@ func (nc *NodeConnections) retryConnection(nodeAddr string) {
 	// Create a cancellable context for this retry goroutine
 	retryCtx, retryCancel := context.WithCancel(nc.ctx)
 
+	// Register the cancel function immediately to ensure it's available for Stop()
+	nc.retryingNodesMu.Lock()
+	nc.retryingNodes[nodeAddr] = retryCancel
+	nc.retryingNodesMu.Unlock()
+
 	// Ensure cleanup on exit
 	defer func() {
 		retryCancel() // Ensure context is cancelled
@@ -140,11 +145,6 @@ func (nc *NodeConnections) retryConnection(nodeAddr string) {
 		return
 	default:
 	}
-
-	// Register the cancel function
-	nc.retryingNodesMu.Lock()
-	nc.retryingNodes[nodeAddr] = retryCancel
-	nc.retryingNodesMu.Unlock()
 
 	retryDelay := initialRetryDelay
 
@@ -265,14 +265,17 @@ func (nc *NodeConnections) SetNodes(nodes []string) {
 			if err := nc.connectToNode(nodeAddr); err != nil {
 				nc.logger.Errorf("Failed to connect to node %s: %v, starting retry with exponential backoff", nodeAddr, err)
 
-				// Check if already retrying this node
+				// Check if already retrying this node and start retry atomically
 				nc.retryingNodesMu.Lock()
 				_, alreadyRetrying := nc.retryingNodes[nodeAddr]
-				nc.retryingNodesMu.Unlock()
-
 				if !alreadyRetrying {
+					// Reserve the slot immediately to prevent duplicate retry goroutines
+					nc.retryingNodes[nodeAddr] = nil
+					nc.retryingNodesMu.Unlock()
 					// Start retry goroutine with exponential backoff
 					go nc.retryConnection(nodeAddr)
+				} else {
+					nc.retryingNodesMu.Unlock()
 				}
 			}
 		}
