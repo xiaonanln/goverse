@@ -11,6 +11,7 @@ import (
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/gate"
+	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -265,6 +266,11 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 
 // CallObject implements the CallObject RPC
 func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+	// Inject client_id into the context if present in the request
+	if req.ClientId != "" {
+		ctx = callcontext.WithClientID(ctx, req.ClientId)
+	}
+
 	// Use CallObjectAnyRequest to pass Any directly without unmarshaling (optimization)
 	// The cluster will unmarshal only if needed (for local calls)
 	response, err := s.cluster.CallObjectAnyRequest(ctx, req.Type, req.Id, req.Method, req.Request)
