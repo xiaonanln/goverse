@@ -13,6 +13,28 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// waitForObjectRemoved waits for an object to be removed from a node
+func waitForObjectRemoved(t *testing.T, n *node.Node, objID string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		found := false
+		for _, obj := range n.ListObjects() {
+			if obj.Id == objID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return // Object successfully removed
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Object %s was not removed from node within %v", objID, timeout)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 // TestClusterRemoveObjectsNotBelongingToThisNode tests that objects are removed from nodes
 // when shard mappings change, and eventually created on the new target node
 // This test requires a running etcd instance at localhost:2379
@@ -105,7 +127,22 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 		t.Logf("Created object %s (shard %d)", objID, shardIDs[i])
 	}
 
-	time.Sleep(1 * time.Second)
+	// Wait for all async object creations to complete
+	t.Logf("Waiting for all objects to be created...")
+	for _, objID := range objectIDs {
+		// Check which node should have this object
+		targetNode, err := cluster1.GetCurrentNodeForObject(ctx, objID)
+		if err != nil {
+			t.Fatalf("Failed to get target node for %s: %v", objID, err)
+		}
+		var n *node.Node
+		if targetNode == node1Addr {
+			n = node1
+		} else {
+			n = node2
+		}
+		waitForObjectCreated(t, n, objID, 5*time.Second)
+	}
 
 	// Verify all objects exist on their initial nodes
 	t.Logf("Verifying objects exist on their initial nodes...")
@@ -153,13 +190,13 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 			// Update the shard mapping to point to node2
 			// Format: "targetNode,currentNode"
 			key := fmt.Sprintf("%s%d", shardPrefix, shardID)
-			value := "localhost:47102,localhost:47101" // targetNode=node2, currentNode=node1
+			value := fmt.Sprintf("%s,%s", node2Addr, node1Addr) // targetNode=node2, currentNode=node1
 
 			_, err := etcdClient.Put(ctx, key, value)
 			if err != nil {
 				t.Fatalf("Failed to update shard %d in etcd: %v", shardID, err)
 			}
-			t.Logf("Updated shard %d mapping: localhost:47101 -> localhost:47102", shardID)
+			t.Logf("Updated shard %d mapping: %s -> %s", shardID, node1Addr, node2Addr)
 		}
 	}
 
@@ -177,25 +214,14 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	// 2. The check interval to trigger (up to 5s)
 	// 3. Cluster state to be stable (10s stability duration)
 	// Total: up to 15s + some buffer
-	waitTime := testutil.WaitForShardMappingTimeout
-	t.Logf("Waiting %v for objects to be removed from old node and created on new node...", waitTime)
-	time.Sleep(waitTime)
-
-	// Verify objects are removed from node1
-	t.Logf("Verifying objects are removed from node1...")
+	t.Logf("Waiting for objects to be removed from node1...")
 	for _, objID := range objectsToMove {
-		if objExistsOnNode(objID, node1) {
-			t.Fatalf("Object %s should have been removed from node1 but still exists", objID)
-		} else {
-			t.Logf("✓ Object %s successfully removed from node1", objID)
-		}
+		waitForObjectRemoved(t, node1, objID, testutil.WaitForShardMappingTimeout)
+		t.Logf("✓ Object %s successfully removed from node1", objID)
 	}
 
 	// Test Step 4: Verify objects can be re-created (sampling a few objects)
 	t.Logf("Testing that objects can be re-created on new target node when accessed...")
-
-	// Wait a bit longer for the shard mapping to fully propagate through watches
-	time.Sleep(2 * time.Second)
 
 	// Try to re-create a sample of moved objects (not all 50+ to avoid overwhelming the system)
 	// This tests that the system can handle object re-creation after removal
@@ -220,18 +246,26 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 			continue
 		}
 
-		// Wait for async object creation to complete (CreateObject is async)
-		time.Sleep(1 * time.Second)
-
-		// Verify the object exists somewhere
-		if objExistsOnNode(objID, node2) {
-			t.Logf("✓ Object %s successfully created on node2 (new target)", objID)
-			recreatedOnNode2++
-		} else if objExistsOnNode(objID, node1) {
-			// This can happen if the shard mapping cache hasn't propagated yet
-			t.Logf("Note: Object %s was created on node1, but will be removed again in next cycle", objID)
-		} else {
-			t.Logf("Note: Object %s not immediately visible after re-creation (may be async)", objID)
+		// Wait for async object creation to complete
+		// Try to find it on node2 (the target node)
+		deadline := time.Now().Add(5 * time.Second)
+		found := false
+		for time.Now().Before(deadline) {
+			if objExistsOnNode(objID, node2) {
+				t.Logf("✓ Object %s successfully created on node2 (new target)", objID)
+				recreatedOnNode2++
+				found = true
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		
+		if !found {
+			if objExistsOnNode(objID, node1) {
+				t.Logf("Note: Object %s was created on node1, but will be removed again in next cycle", objID)
+			} else {
+				t.Logf("Note: Object %s not visible after re-creation within timeout", objID)
+			}
 		}
 	}
 
