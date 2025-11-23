@@ -73,6 +73,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
+	t.Parallel()
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -208,6 +209,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
+	t.Parallel()
 
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

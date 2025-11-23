@@ -91,6 +91,7 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
+	t.Parallel()
 
 	ctx := context.Background()
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
@@ -315,6 +316,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
+	t.Parallel()
 
 	ctx := context.Background()
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")

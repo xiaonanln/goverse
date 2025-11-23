@@ -15,6 +15,7 @@ import (
 )
 
 func TestNewGateServer(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		config     *GateServerConfig
@@ -105,6 +106,7 @@ func TestNewGateServer(t *testing.T) {
 }
 
 func TestGateServerStartStop(t *testing.T) {
+	t.Parallel()
 	listenAddr := testutil.GetFreeAddress()
 	config := &GateServerConfig{
 		ListenAddress:    listenAddr,
@@ -164,6 +166,7 @@ func TestGateServerStartStop(t *testing.T) {
 }
 
 func TestGateServerMultipleStops(t *testing.T) {
+	t.Parallel()
 	listenAddr := testutil.GetFreeAddress()
 	config := &GateServerConfig{
 		ListenAddress:    listenAddr,
@@ -196,6 +199,7 @@ func TestGateServerMultipleStops(t *testing.T) {
 }
 
 func TestGateServerRPCMethods(t *testing.T) {
+	t.Parallel()
 	listenAddr := testutil.GetFreeAddress()
 	config := &GateServerConfig{
 		ListenAddress:    listenAddr,
@@ -291,6 +295,7 @@ func TestGateServerRPCMethods(t *testing.T) {
 }
 
 func TestValidateConfig(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		config     *GateServerConfig
@@ -379,6 +384,7 @@ func TestGateServerGracefulShutdown(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
+	t.Parallel()
 
 	listenAddr := testutil.GetFreeAddress()
 	config := &GateServerConfig{
@@ -429,6 +435,7 @@ func TestGateServerMetrics(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
+	t.Parallel()
 
 	config := &GateServerConfig{
 		ListenAddress:        ":49014",
