@@ -34,10 +34,17 @@ gRPC Client ──> gRPC Handler ────────┘
 
 ### Base Design
 
-All object operations use a consistent URL structure and JSON encoding:
+All object operations use a consistent URL structure with action prefixes. Requests use protobuf `Any` message encoding:
 
 ```
 Base URL: http://gateway-host:port/api/v1
+```
+
+**Encoding**: All requests must encode protobuf messages as `google.protobuf.Any`, marshal to bytes, and send as POST data in the format:
+```json
+{
+  "request": "<base64-encoded Any bytes>"
+}
 ```
 
 ### Endpoints
@@ -46,31 +53,33 @@ Base URL: http://gateway-host:port/api/v1
 
 **Request:**
 ```
-POST /api/v1/objects/{type}/{id}/call/{method}
+POST /api/v1/objects/call/{type}/{id}/{method}
 Content-Type: application/json
 
 {
-  "args": { ... }  // Method-specific arguments as JSON
+  "request": "<base64-encoded Any bytes>"
 }
 ```
 
 **Response:**
 ```json
 {
-  "result": { ... }  // Method-specific result as JSON
+  "response": "<base64-encoded Any bytes>"
 }
 ```
 
 **Example:**
 ```
-POST /api/v1/objects/ChatRoom/room-123/call/SendMessage
+POST /api/v1/objects/call/ChatRoom/room-123/SendMessage
 Content-Type: application/json
 
+// Client must:
+// 1. Create SendMessageArgs protobuf message
+// 2. Wrap it in google.protobuf.Any
+// 3. Marshal to bytes and base64 encode
+// 4. Send as:
 {
-  "args": {
-    "userName": "alice",
-    "message": "Hello world"
-  }
+  "request": "ChtDaGF0Um9vbS5TZW5kTWVzc2FnZUFyZ3MS..."
 }
 ```
 
@@ -78,11 +87,11 @@ Content-Type: application/json
 
 **Request:**
 ```
-POST /api/v1/objects/{type}/{id}
+POST /api/v1/objects/create/{type}/{id}
 Content-Type: application/json
 
 {
-  "args": { ... }  // Optional creation arguments
+  "request": "<base64-encoded Any bytes>"  // Optional creation arguments
 }
 ```
 
@@ -97,7 +106,8 @@ Content-Type: application/json
 
 **Request:**
 ```
-DELETE /api/v1/objects/{id}
+POST /api/v1/objects/delete/{id}
+Content-Type: application/json
 ```
 
 **Response:**
@@ -126,21 +136,18 @@ Common status codes:
 
 ---
 
-## Push Messaging Options
+## Push Messaging
 
-HTTP push messaging requires special handling since HTTP is request-response based. Three approaches are supported:
+HTTP push messaging requires special handling since HTTP is request-response based. Goverse uses **Server-Sent Events (SSE)** for HTTP push messaging.
 
-### Option 1: Server-Sent Events (SSE) - Recommended
+### Server-Sent Events (SSE)
 
-**Pros:**
-- Native browser support
+**Why SSE:**
+- Native browser support with `EventSource` API
 - Simple protocol built on HTTP
-- Automatic reconnection
+- Automatic reconnection on connection loss
 - Efficient one-way server→client streaming
-
-**Cons:**
-- One-way only (server→client)
-- Limited browser connection pool (6 connections per domain)
+- Sufficient for most push notification use cases
 
 **Design:**
 
@@ -187,61 +194,6 @@ HTTP push messaging requires special handling since HTTP is request-response bas
    });
    ```
 
-### Option 2: WebSocket
-
-**Pros:**
-- Full bidirectional communication
-- Efficient binary/text messaging
-- Widely supported
-
-**Cons:**
-- More complex protocol
-- Requires WebSocket infrastructure
-- Some proxy/firewall issues
-
-**Design:**
-
-1. **Client connection:**
-   ```
-   WebSocket: ws://gateway-host:port/api/v1/ws
-   ```
-
-2. **Protocol:**
-   - First message: `{"type": "register"}` → `{"type": "register_response", "clientId": "..."}`
-   - Pushed messages: `{"type": "message", "payload": {...}}`
-   - Keep-alive: `{"type": "ping"}` / `{"type": "pong"}`
-
-3. **Advantages over SSE:**
-   - Can send client→server messages over same connection
-   - Better for bidirectional chat applications
-
-### Option 3: Long Polling (Fallback)
-
-**Pros:**
-- Works everywhere (even through restrictive proxies)
-- Simple to implement
-
-**Cons:**
-- Less efficient (frequent reconnections)
-- Higher latency
-- More server load
-
-**Design:**
-
-1. **Client registration:**
-   ```
-   POST /api/v1/events/register
-   ```
-   Response: `{"clientId": "gateway-addr/unique-id"}`
-
-2. **Poll for messages:**
-   ```
-   GET /api/v1/events/poll?clientId={clientId}&timeout=30
-   ```
-   - Server holds connection open until message available or timeout
-   - Returns: `{"messages": [...]}`
-   - Client immediately reconnects after receiving response
-
 ---
 
 ## Implementation Strategy
@@ -257,22 +209,24 @@ type HTTPGatewayServer struct {
 }
 
 func (s *HTTPGatewayServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
-    // Extract type, id, method from URL
-    // Parse JSON request body
-    // Call s.gatewayServer.cluster.CallObject()
-    // Return JSON response
+    // Extract type, id, method from URL path
+    // Parse request body: {"request": "<base64-encoded Any bytes>"}
+    // Decode base64 and unmarshal to google.protobuf.Any
+    // Call s.gatewayServer.cluster.CallObjectAnyRequest()
+    // Marshal response Any to base64 and return
 }
 
 func (s *HTTPGatewayServer) handleCreateObject(w http.ResponseWriter, r *http.Request) {
-    // Extract type, id from URL
+    // Extract type, id from URL path
+    // Parse optional request body with Any bytes
     // Call s.gatewayServer.cluster.CreateObject()
-    // Return JSON response
+    // Return object ID
 }
 
 func (s *HTTPGatewayServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
-    // Extract id from URL
+    // Extract id from URL path
     // Call s.gatewayServer.cluster.DeleteObject()
-    // Return JSON response
+    // Return success response
 }
 ```
 
@@ -301,7 +255,7 @@ func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Req
         case <-r.Context().Done():
             return
         case msg := <-clientProxy.MessageChan():
-            // Convert protobuf message to JSON
+            // Convert protobuf message to JSON for SSE transport
             // Write as SSE event
             fmt.Fprintf(w, "event: message\ndata: %s\n\n", jsonMsg)
             w.(http.Flusher).Flush()
@@ -310,40 +264,41 @@ func (s *HTTPGatewayServer) handleEventStream(w http.ResponseWriter, r *http.Req
 }
 ```
 
-### Phase 3: WebSocket (Optional)
-
-Add WebSocket support using `gorilla/websocket` or similar library.
-
 ---
 
 ## Key Design Choices
 
-### 1. JSON vs Protobuf
+### 1. Protobuf Encoding
 
-**Choice**: Use JSON for HTTP API, convert to/from protobuf internally.
+**Choice**: Use protobuf `Any` bytes for HTTP API requests, not JSON.
 
 **Rationale**:
-- JSON is HTTP-native and developer-friendly
-- Protobuf is used internally for efficient node-to-node communication
-- Gateway performs transparent conversion
+- Goverse is highly protobuf-centric
+- Maintains type safety and consistency with gRPC interface
+- Clients must encode proto messages into `google.protobuf.Any`, marshal to bytes, and base64-encode for HTTP transport
+- Gateway can forward Any bytes directly to cluster without re-marshaling
+- No lossy JSON conversion or schema ambiguity
 
 ### 2. URL Structure
 
-**Choice**: RESTful URLs with type and ID in path: `/objects/{type}/{id}/call/{method}`
+**Choice**: Action-based URLs with operation prefix: `/objects/{action}/{type}/{id}/{method}`
 
 **Rationale**:
-- Clear, intuitive structure
-- Type-safety through explicit type parameter
-- Consistent with object model (`Type-ID` format)
+- Explicit action naming (call, create, delete) for clarity
+- All operations use POST for consistency and to avoid HTTP method limitations
+- Type and ID clearly separated in path
+- Method name at end for call operations
 
-### 3. Push Mechanism Priority
+### 3. Push Mechanism
 
-**Choice**: Prioritize SSE > WebSocket > Long Polling
+**Choice**: Use Server-Sent Events (SSE) exclusively for HTTP push messaging.
 
 **Rationale**:
-- SSE is simplest and sufficient for most use cases (server→client push)
-- WebSocket adds complexity but enables bidirectional communication
-- Long polling is fallback for restrictive environments
+- SSE is sufficient for server→client push notifications
+- Native browser support with simple API
+- HTTP-based, works through most proxies
+- Automatic reconnection handling
+- For bidirectional needs, clients should use gRPC gateway
 
 ### 4. Authentication & Authorization
 
@@ -411,23 +366,37 @@ type GatewayServerConfig struct {
 ### Chat via HTTP REST API
 
 ```javascript
+// Helper function to encode protobuf message for HTTP
+async function callObject(type, id, method, protoMessage) {
+  // 1. Wrap proto message in google.protobuf.Any
+  const anyMessage = new google.protobuf.Any();
+  anyMessage.pack(protoMessage);
+  
+  // 2. Marshal to bytes and base64 encode
+  const anyBytes = anyMessage.serializeBinary();
+  const base64Request = btoa(String.fromCharCode(...anyBytes));
+  
+  // 3. Send HTTP request
+  const response = await fetch(`/api/v1/objects/call/${type}/${id}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request: base64Request })
+  });
+  
+  return response.json();
+}
+
 // Join room
-await fetch('/api/v1/objects/ChatRoom/room-1/call/Join', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    args: { userName: 'alice', clientId: clientId }
-  })
-});
+const joinArgs = new chat.JoinArgs();
+joinArgs.setUserName('alice');
+joinArgs.setClientId(clientId);
+await callObject('ChatRoom', 'room-1', 'Join', joinArgs);
 
 // Send message
-await fetch('/api/v1/objects/ChatRoom/room-1/call/SendMessage', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    args: { userName: 'alice', message: 'Hello!' }
-  })
-});
+const sendArgs = new chat.SendMessageArgs();
+sendArgs.setUserName('alice');
+sendArgs.setMessage('Hello!');
+await callObject('ChatRoom', 'room-1', 'SendMessage', sendArgs);
 ```
 
 ### Chat with SSE Push
@@ -459,10 +428,9 @@ eventSource.addEventListener('message', (e) => {
 
 For existing gRPC clients, no changes required. HTTP support is additive:
 
-1. **Phase 1**: Deploy HTTP gateway with REST API support
+1. **Phase 1**: Deploy HTTP gateway with REST API support (call, create, delete)
 2. **Phase 2**: Add SSE streaming for push notifications
-3. **Phase 3**: (Optional) Add WebSocket for bidirectional use cases
-4. **Phase 4**: Build example web UI using HTTP + SSE
+3. **Phase 3**: Build example web UI using HTTP + SSE
 
 HTTP and gRPC clients can coexist and interact seamlessly through the same object layer.
 
@@ -484,7 +452,8 @@ HTTP and gRPC clients can coexist and interact seamlessly through the same objec
 
 This design enables HTTP clients to fully participate in the Goverse ecosystem:
 
-- **REST API** provides simple, familiar HTTP/JSON interface for object operations
+- **HTTP REST API** with action-based URLs for object operations (call, create, delete)
+- **Protobuf encoding** maintains type safety and consistency with gRPC
 - **Server-Sent Events** enable efficient real-time push notifications
 - **Thin protocol layer** maintains separation between transport and business logic
 - **Shared infrastructure** ensures consistency between HTTP and gRPC clients
