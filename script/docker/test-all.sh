@@ -16,7 +16,7 @@ echo "Running Go unit tests..."
 echo
 
 # run all go tests (no caching) and fail fast on errors
-if ! go test -v -p 1 ./... -count=1; then
+if ! go test -v -p 1 -parallel 1 ./... -count=1; then
     echo "✗ Go unit tests failed"
     exit 1
 fi
@@ -26,7 +26,7 @@ echo "✓ Go unit tests passed"
 echo
 echo "Running etcd restart tests..."
 echo
-if ! go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ ./...; then
+if ! go test -tags=etcd_restart -v -p 1 -parallel 1 -run=^.*Reconnection$ ./...; then
     echo "✗ Etcd restart tests failed"
     exit 1
 fi

@@ -44,7 +44,7 @@ if [ "$ETCD_RESTART_ONLY" = false ]; then
     echo
 
     # run all go tests (no caching) and fail fast on errors
-    if ! go test ./... -p=1 -count=1 -v -failfast $RACE_FLAG; then
+    if ! go test ./... -p 1 -parallel 1 -count=1 -v -failfast $RACE_FLAG; then
         echo "✗ Go unit tests failed"
         exit 1
     fi
@@ -56,7 +56,7 @@ if [ "$ETCD_RESTART" = true ] || [ "$ETCD_RESTART_ONLY" = true ]; then
     echo
     echo "Running etcd restart tests..."
     echo
-    if ! go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ $RACE_FLAG ./...; then
+    if ! go test -tags=etcd_restart -v -p 1 -parallel 1 -run=^.*Reconnection$ $RACE_FLAG ./...; then
         echo "✗ Etcd restart tests failed"
         exit 1
     fi
