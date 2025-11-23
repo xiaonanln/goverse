@@ -31,9 +31,9 @@ message CallObjectResponse {
 }
 
 message CreateObjectRequest {
-  string client_id = 1;
-  string type = 2;
-  string id = 3; // ID must be specified
+  string type = 1;
+  string id = 2; // ID must be specified
+  string client_id = 3; // Optional: client ID if the request originated from a client
 }
 
 message CreateObjectResponse {
