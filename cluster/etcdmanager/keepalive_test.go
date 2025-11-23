@@ -4,10 +4,13 @@ import (
 	"context"
 	"testing"
 	"time"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestKeepAliveRetry tests that the keep-alive mechanism retries when the channel closes
-func TestKeepAliveRetry(t *testing.T) {
+func TestKeepAliveRetry(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
@@ -19,7 +22,7 @@ func TestKeepAliveRetry(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	nodeAddress := "localhost:50100"
+	nodeAddress := addr
 
 	// Register node using shared lease - this will start the keep-alive loop
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"
@@ -92,7 +95,9 @@ func TestKeepAliveRetry(t *testing.T) {
 }
 
 // TestKeepAliveContextCancellation tests that keep-alive stops when context is cancelled
-func TestKeepAliveContextCancellation(t *testing.T) {
+func TestKeepAliveContextCancellation(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
@@ -104,7 +109,7 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	nodeAddress := "localhost:50101"
+	nodeAddress := addr
 
 	// Register node using shared lease
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"
@@ -155,7 +160,9 @@ func TestKeepAliveContextCancellation(t *testing.T) {
 }
 
 // TestRegisterKeyLeaseIdempotent tests that registering the same key multiple times overwrites the value
-func TestRegisterKeyLeaseIdempotent(t *testing.T) {
+func TestRegisterKeyLeaseIdempotent(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
@@ -167,7 +174,7 @@ func TestRegisterKeyLeaseIdempotent(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	nodeAddress := "localhost:50102"
+	nodeAddress := addr
 
 	// Register node first time
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"
@@ -209,7 +216,9 @@ func TestRegisterKeyLeaseIdempotent(t *testing.T) {
 }
 
 // TestCloseStopsSharedLease tests that Close() stops the shared lease loop
-func TestCloseStopsSharedLease(t *testing.T) {
+func TestCloseStopsSharedLease(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
@@ -221,7 +230,7 @@ func TestCloseStopsSharedLease(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	nodeAddress := "localhost:50103"
+	nodeAddress := addr
 
 	// Register node using shared lease
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"

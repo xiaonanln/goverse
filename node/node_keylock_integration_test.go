@@ -8,15 +8,18 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestKeyLockIntegration_CreateDeleteRace tests that create and delete operations
 // on the same object are properly serialized
-func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
+func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
@@ -69,11 +72,13 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 
 // TestKeyLockIntegration_CallDuringDelete tests that calling an object method
 // while it's being deleted is properly handled
-func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
+func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
@@ -137,11 +142,13 @@ func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
 
 // TestKeyLockIntegration_SaveDuringDelete tests that saving objects
 // while some are being deleted is properly handled
-func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
+func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -195,11 +202,13 @@ func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
 
 // TestKeyLockIntegration_ConcurrentCallsSameObject tests that multiple concurrent
 // calls to the same object work correctly
-func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
+func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
 	ctx := context.Background()
@@ -244,11 +253,13 @@ func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
 
 // TestKeyLockIntegration_CreateCallDeleteSequence tests a realistic sequence
 // of create, call, and delete operations
-func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
+func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
@@ -304,11 +315,13 @@ func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
 }
 
 // TestKeyLockIntegration_NoLockLeaks tests that per-key locks are properly cleaned up
-func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
+func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()

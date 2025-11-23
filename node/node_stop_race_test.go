@@ -7,12 +7,15 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestStop_RaceWithCreateObject tests that CreateObject operations in flight when Stop is called
 // complete safely and that new CreateObject calls after Stop fail gracefully
-func TestStop_RaceWithCreateObject(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_RaceWithCreateObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -95,8 +98,10 @@ func TestStop_RaceWithCreateObject(t *testing.T) {
 
 // TestStop_RaceWithCallObject tests that CallObject operations in flight when Stop is called
 // complete safely and that new CallObject calls after Stop fail gracefully
-func TestStop_RaceWithCallObject(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_RaceWithCallObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
@@ -175,8 +180,10 @@ func TestStop_RaceWithCallObject(t *testing.T) {
 
 // TestStop_RaceWithDeleteObject tests that DeleteObject operations in flight when Stop is called
 // complete safely and that new DeleteObject calls after Stop fail gracefully
-func TestStop_RaceWithDeleteObject(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_RaceWithDeleteObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -264,8 +271,10 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 
 // TestStop_RaceWithSaveAllObjects tests that SaveAllObjects operations in flight when Stop is called
 // complete safely and that new SaveAllObjects calls after Stop fail gracefully
-func TestStop_RaceWithSaveAllObjects(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_RaceWithSaveAllObjects(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -356,8 +365,10 @@ func TestStop_RaceWithSaveAllObjects(t *testing.T) {
 }
 
 // TestStop_NoNewOperationsAfterStop tests that no operations can start after Stop completes
-func TestStop_NoNewOperationsAfterStop(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_NoNewOperationsAfterStop(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -411,8 +422,10 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 }
 
 // TestStop_ObjectsPersistedBeforeClearing tests that objects are saved before being cleared
-func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -460,8 +473,10 @@ func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
 }
 
 // TestStop_MultipleStopCalls tests that calling Stop multiple times is safe
-func TestStop_MultipleStopCalls(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestStop_MultipleStopCalls(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))

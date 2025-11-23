@@ -7,6 +7,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestNewGoverseGraph tests the constructor
@@ -171,13 +172,15 @@ func TestAddOrUpdateObject_Duplicate(t *testing.T) {
 }
 
 // TestAddOrUpdateNode tests adding and updating nodes
-func TestAddOrUpdateNode(t *testing.T) {
+func TestAddOrUpdateNode(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := NewGoverseGraph()
 
 	node := models.GoverseNode{
 		ID:            "node1",
 		Label:         "Node 1",
-		AdvertiseAddr: "localhost:47000",
+		AdvertiseAddr: addr,
 	}
 
 	pg.AddOrUpdateNode(node)
@@ -197,19 +200,22 @@ func TestAddOrUpdateNode(t *testing.T) {
 }
 
 // TestAddOrUpdateNode_Update tests that existing nodes are updated
-func TestAddOrUpdateNode_Update(t *testing.T) {
+func TestAddOrUpdateNode_Update(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	pg := NewGoverseGraph()
 
 	node1 := models.GoverseNode{
 		ID:            "node1",
 		Label:         "Original Label",
-		AdvertiseAddr: "localhost:47000",
+		AdvertiseAddr: addr,
 	}
 
 	node2 := models.GoverseNode{
 		ID:            "node1",
 		Label:         "Updated Label",
-		AdvertiseAddr: "localhost:47001",
+		AdvertiseAddr: addr1,
 	}
 
 	pg.AddOrUpdateNode(node1)
@@ -225,7 +231,7 @@ func TestAddOrUpdateNode_Update(t *testing.T) {
 		t.Fatalf("Expected label 'Updated Label', got '%s'", nodes[0].Label)
 	}
 
-	if nodes[0].AdvertiseAddr != "localhost:47001" {
+	if nodes[0].AdvertiseAddr != addr1 {
 		t.Fatalf("Expected address 'localhost:47001', got '%s'", nodes[0].AdvertiseAddr)
 	}
 }
@@ -638,7 +644,10 @@ func TestAddObject_MultipleNodes(t *testing.T) {
 }
 
 // TestIsNodeRegistered tests checking if a node is registered
-func TestIsNodeRegistered(t *testing.T) {
+func TestIsNodeRegistered(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	pg := NewGoverseGraph()
 
 	// Test with empty graph
@@ -648,27 +657,27 @@ func TestIsNodeRegistered(t *testing.T) {
 
 	// Add a node
 	node := models.GoverseNode{
-		ID:            "localhost:47000",
+		ID:            addr,
 		Label:         "Node 1",
-		AdvertiseAddr: "localhost:47000",
+		AdvertiseAddr: addr,
 	}
 	pg.AddOrUpdateNode(node)
 
 	// Test existing node
-	if !pg.IsNodeRegistered("localhost:47000") {
+	if !pg.IsNodeRegistered(addr) {
 		t.Fatal("IsNodeRegistered() should return true for registered node")
 	}
 
 	// Test non-existent node
-	if pg.IsNodeRegistered("localhost:47001") {
+	if pg.IsNodeRegistered(addr1) {
 		t.Fatal("IsNodeRegistered() should return false for non-registered node")
 	}
 
 	// Remove the node
-	pg.RemoveNode("localhost:47000")
+	pg.RemoveNode(addr)
 
 	// Test after removal
-	if pg.IsNodeRegistered("localhost:47000") {
+	if pg.IsNodeRegistered(addr) {
 		t.Fatal("IsNodeRegistered() should return false after node removal")
 	}
 }

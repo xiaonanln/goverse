@@ -23,7 +23,10 @@ func (o *TestReleaseObject) OnCreated() {}
 // - CurrentNode is this node
 // - TargetNode is another node
 // - No objects exist on this node for that shard
-func TestReleaseShardOwnership_Integration(t *testing.T) {
+func TestReleaseShardOwnership_Integration(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -33,8 +36,8 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two nodes
-	node1 := node.NewNode("localhost:52001")
-	node2 := node.NewNode("localhost:52002")
+	node1 := node.NewNode(addr1)
+	node2 := node.NewNode(addr2)
 
 	// Register test object type
 	node1.RegisterObjectType((*TestReleaseObject)(nil))

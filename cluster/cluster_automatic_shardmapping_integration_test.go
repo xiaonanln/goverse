@@ -11,7 +11,13 @@ import (
 
 // TestClusterAutomaticShardMappingManagement tests automatic shard mapping management with etcd integration
 // This test requires a running etcd instance at localhost:2379
-func TestClusterAutomaticShardMappingManagement(t *testing.T) {
+func TestClusterAutomaticShardMappingManagement(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -22,8 +28,8 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	defer cancel()
 
 	// Create and start both clusters - node1 will be leader (smaller address)
-	cluster1 := mustNewCluster(ctx, t, "localhost:50011", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:50012", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr, testPrefix)
 
 	// Wait for watches to sync
 	time.Sleep(1000 * time.Millisecond)
@@ -105,7 +111,13 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 }
 
 // TestClusterShardMappingAutoUpdate tests that shard mapping is updated when nodes change
-func TestClusterShardMappingAutoUpdate(t *testing.T) {
+func TestClusterShardMappingAutoUpdate(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -116,7 +128,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	defer cancel()
 
 	// Create first cluster and node
-	node1 := node.NewNode("localhost:50021")
+	node1 := node.NewNode(addr2)
 	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
@@ -142,7 +154,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Initial shard mapping created")
 
 	// Now add a second node
-	node2 := node.NewNode("localhost:50022")
+	node2 := node.NewNode(addr2)
 	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
@@ -182,8 +194,8 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 		t.Fatalf("Expected shard mapping to contain 2 nodes after rebalancing, got %d nodes: %v", len(nodeSet), nodeSet)
 	}
 
-	expectedNode1 := "localhost:50021"
-	expectedNode2 := "localhost:50022"
+	expectedNode1 := addr2
+	expectedNode2 := addr2
 	if !nodeSet[expectedNode1] || !nodeSet[expectedNode2] {
 		t.Fatalf("Expected shard mapping to contain both %s and %s, got: %v", expectedNode1, expectedNode2, nodeSet)
 	}

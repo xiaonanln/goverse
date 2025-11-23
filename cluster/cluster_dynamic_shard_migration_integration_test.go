@@ -25,7 +25,11 @@ import (
 // Note: The system does NOT automatically migrate objects when shard mappings change.
 // When a node releases a shard (because TargetNode changed), objects on that shard are removed.
 // This test verifies the consistency of shard ownership during dynamic changes.
-func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
+func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -37,9 +41,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	// Create 3 clusters with nodes
 	t.Logf("Creating 3 clusters...")
-	cluster1 := mustNewCluster(ctx, t, "localhost:47101", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47102", testPrefix)
-	cluster3 := mustNewCluster(ctx, t, "localhost:47103", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
+	cluster3 := mustNewCluster(ctx, t, addr3, testPrefix)
 
 	clusters := []*Cluster{cluster1, cluster2, cluster3}
 	nodes := []*node.Node{
@@ -58,7 +62,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	t.Logf("Starting mock gRPC servers...")
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(nodes[0])
-	testServer1 := testutil.NewTestServerHelper("localhost:47101", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(addr1, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
@@ -67,7 +71,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(nodes[1])
-	testServer2 := testutil.NewTestServerHelper("localhost:47102", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(addr2, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
@@ -76,7 +80,7 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 
 	mockServer3 := testutil.NewMockGoverseServer()
 	mockServer3.SetNode(nodes[2])
-	testServer3 := testutil.NewTestServerHelper("localhost:47103", mockServer3)
+	testServer3 := testutil.NewTestServerHelper(addr3, mockServer3)
 	err = testServer3.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 3: %v", err)
@@ -149,9 +153,9 @@ func TestClusterDynamicShardMigrationConcurrency(t *testing.T) {
 	}
 
 	nodeAddresses := []string{
-		"localhost:47101",
-		"localhost:47102",
-		"localhost:47103",
+		addr1,
+		addr2,
+		addr3,
 	}
 
 	startTime := time.Now()

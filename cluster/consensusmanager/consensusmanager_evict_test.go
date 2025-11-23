@@ -5,10 +5,15 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestGetObjectsToEvict tests the GetObjectsToEvict method
-func TestGetObjectsToEvict(t *testing.T) {
+func TestGetObjectsToEvict(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
@@ -17,9 +22,9 @@ func TestGetObjectsToEvict(t *testing.T) {
 	cm.mu.Lock()
 	cm.state = &ClusterState{
 		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
-			"localhost:50003": true,
+			addr1: true,
+			addr2: true,
+			addr3: true,
 		},
 		ShardMapping: &ShardMapping{
 			Shards: make(map[int]ShardInfo),
@@ -28,20 +33,20 @@ func TestGetObjectsToEvict(t *testing.T) {
 
 	// Shard 0: CurrentNode is node1, TargetNode is node2 (should be evicted from node1)
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  "localhost:50002",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr2,
+		CurrentNode: addr1,
 	}
 
 	// Shard 1: CurrentNode is node1, TargetNode is also node1 (should NOT be evicted)
 	cm.state.ShardMapping.Shards[1] = ShardInfo{
-		TargetNode:  "localhost:50001",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr1,
+		CurrentNode: addr1,
 	}
 
 	// Shard 2: CurrentNode is node1, TargetNode is node3 (should be evicted from node1)
 	cm.state.ShardMapping.Shards[2] = ShardInfo{
-		TargetNode:  "localhost:50003",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr3,
+		CurrentNode: addr1,
 	}
 	cm.mu.Unlock()
 
@@ -64,7 +69,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 	objectIDs = append(objectIDs, "localhost:50001/client-123")
 
 	// Get objects to evict from node1
-	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
+	toEvict := cm.GetObjectsToEvict(addr1, objectIDs)
 
 	// Count how many objects should be evicted based on their shards
 	expectedEvictions := 0
@@ -90,13 +95,15 @@ func TestGetObjectsToEvict(t *testing.T) {
 }
 
 // TestGetObjectsToEvict_EmptyMapping tests with no shard mapping
-func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
+func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
 
 	objectIDs := []string{"TestObject-123"}
-	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
+	toEvict := cm.GetObjectsToEvict(addr1, objectIDs)
 
 	if len(toEvict) != 0 {
 		t.Fatalf("Expected no objects to evict with empty mapping, got %d", len(toEvict))
@@ -104,7 +111,10 @@ func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
 }
 
 // TestGetObjectsToEvict_ClientObjectsSkipped tests that client objects are skipped
-func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
+func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
@@ -113,8 +123,8 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	cm.mu.Lock()
 	cm.state = &ClusterState{
 		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
+			addr1: true,
+			addr2: true,
 		},
 		ShardMapping: &ShardMapping{
 			Shards: make(map[int]ShardInfo),
@@ -124,8 +134,8 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	// Set up all shards to need eviction
 	for i := 0; i < sharding.NumShards; i++ {
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
-			TargetNode:  "localhost:50002",
-			CurrentNode: "localhost:50001",
+			TargetNode:  addr2,
+			CurrentNode: addr1,
 		}
 	}
 	cm.mu.Unlock()
@@ -136,7 +146,7 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 		"localhost:50001/client-456",
 	}
 
-	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
+	toEvict := cm.GetObjectsToEvict(addr1, objectIDs)
 
 	if len(toEvict) != 0 {
 		t.Fatalf("Expected no client objects to be evicted, got %d", len(toEvict))
@@ -144,7 +154,10 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 }
 
 // TestGetObjectsToEvict_ShardNotExist tests eviction when shard doesn't exist
-func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
+func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
@@ -153,8 +166,8 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	cm.mu.Lock()
 	cm.state = &ClusterState{
 		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
+			addr1: true,
+			addr2: true,
 		},
 		ShardMapping: &ShardMapping{
 			Shards: make(map[int]ShardInfo),
@@ -163,8 +176,8 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 
 	// Only set up shard 0, leave shard 1 and 2 unmapped
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  "localhost:50001",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr1,
+		CurrentNode: addr1,
 	}
 	cm.mu.Unlock()
 
@@ -184,7 +197,7 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	}
 
 	// Get objects to evict from node1
-	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
+	toEvict := cm.GetObjectsToEvict(addr1, objectIDs)
 
 	// Expected: Objects from shard 1 and 2 should be evicted (no mapping exists)
 	// Object from shard 0 should NOT be evicted (both CurrentNode and TargetNode are node1)
@@ -211,7 +224,10 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 }
 
 // TestGetObjectsToEvict_CurrentNodeMismatch tests eviction when CurrentNode != localAddr
-func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
+func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
@@ -220,8 +236,8 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	cm.mu.Lock()
 	cm.state = &ClusterState{
 		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
+			addr1: true,
+			addr2: true,
 		},
 		ShardMapping: &ShardMapping{
 			Shards: make(map[int]ShardInfo),
@@ -231,20 +247,20 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	// Shard 0: Both TargetNode and CurrentNode are node2, but we're checking on node1
 	// This object should be evicted from node1
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  "localhost:50002",
-		CurrentNode: "localhost:50002",
+		TargetNode:  addr2,
+		CurrentNode: addr2,
 	}
 
 	// Shard 1: Both TargetNode and CurrentNode are node1 (should NOT be evicted)
 	cm.state.ShardMapping.Shards[1] = ShardInfo{
-		TargetNode:  "localhost:50001",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr1,
+		CurrentNode: addr1,
 	}
 
 	// Shard 2: TargetNode is node1 but CurrentNode is node2 (should be evicted)
 	cm.state.ShardMapping.Shards[2] = ShardInfo{
-		TargetNode:  "localhost:50001",
-		CurrentNode: "localhost:50002",
+		TargetNode:  addr1,
+		CurrentNode: addr2,
 	}
 	cm.mu.Unlock()
 
@@ -264,7 +280,7 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	}
 
 	// Get objects to evict from node1
-	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
+	toEvict := cm.GetObjectsToEvict(addr1, objectIDs)
 
 	// Expected: Objects from shard 0 and 2 should be evicted (CurrentNode != node1)
 	// Object from shard 1 should NOT be evicted (both CurrentNode and TargetNode are node1)
@@ -291,7 +307,10 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 }
 
 // TestGetObjectsToEvict_TargetNodeMismatch tests eviction when TargetNode != localAddr
-func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
+func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "")
@@ -300,8 +319,8 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	cm.mu.Lock()
 	cm.state = &ClusterState{
 		Nodes: map[string]bool{
-			"localhost:50001": true,
-			"localhost:50002": true,
+			addr1: true,
+			addr2: true,
 		},
 		ShardMapping: &ShardMapping{
 			Shards: make(map[int]ShardInfo),
@@ -310,19 +329,19 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 
 	// Shard 0: CurrentNode is node1, TargetNode is node2 (should be evicted - migration target is different)
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  "localhost:50002",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr2,
+		CurrentNode: addr1,
 	}
 
 	// Shard 1: Both TargetNode and CurrentNode are node1 (should NOT be evicted)
 	cm.state.ShardMapping.Shards[1] = ShardInfo{
-		TargetNode:  "localhost:50001",
-		CurrentNode: "localhost:50001",
+		TargetNode:  addr1,
+		CurrentNode: addr1,
 	}
 
 	// Shard 2: CurrentNode is empty but TargetNode is node2 (should be evicted - target is different)
 	cm.state.ShardMapping.Shards[2] = ShardInfo{
-		TargetNode:  "localhost:50002",
+		TargetNode:  addr2,
 		CurrentNode: "",
 	}
 	cm.mu.Unlock()
@@ -343,7 +362,7 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	}
 
 	// Get objects to evict from node1
-	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
+	toEvict := cm.GetObjectsToEvict(addr1, objectIDs)
 
 	// Expected: Objects from shard 0 and 2 should be evicted (TargetNode != node1)
 	// Object from shard 1 should NOT be evicted (both CurrentNode and TargetNode are node1)

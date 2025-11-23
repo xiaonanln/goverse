@@ -12,6 +12,7 @@ import (
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestInspectorService_Ping(t *testing.T) {
@@ -156,7 +157,11 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 	}
 }
 
-func TestInspectorService_RegisterNode(t *testing.T) {
+func TestInspectorService_RegisterNode(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	
+
 	tests := []struct {
 		name          string
 		req           *inspector_pb.RegisterNodeRequest
@@ -167,7 +172,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 		{
 			name: "register node with objects",
 			req: &inspector_pb.RegisterNodeRequest{
-				AdvertiseAddress: "localhost:47000",
+				AdvertiseAddress: addr1,
 				Objects: []*inspector_pb.Object{
 					{Id: "obj1", Class: "Class1"},
 					{Id: "obj2", Class: "Class2"},
@@ -180,7 +185,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 		{
 			name: "register node without objects",
 			req: &inspector_pb.RegisterNodeRequest{
-				AdvertiseAddress: "localhost:47001",
+				AdvertiseAddress: addr2,
 				Objects:          []*inspector_pb.Object{},
 			},
 			wantErr:       false,
@@ -200,7 +205,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 		{
 			name: "register node with nil objects",
 			req: &inspector_pb.RegisterNodeRequest{
-				AdvertiseAddress: "localhost:47002",
+				AdvertiseAddress: addr3,
 				Objects: []*inspector_pb.Object{
 					nil,
 					{Id: "obj3", Class: "Class3"},
@@ -241,13 +246,15 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 	}
 }
 
-func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
+func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	svc := inspector.NewService(pg)
 
 	// First registration with obj1 and obj2
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: addr1,
 		Objects: []*inspector_pb.Object{
 			{Id: "obj1", Class: "Class1"},
 			{Id: "obj2", Class: "Class2"},
@@ -264,7 +271,7 @@ func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 
 	// Second registration with only obj1 - obj2 should be removed as stale
 	_, err = svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: addr1,
 		Objects: []*inspector_pb.Object{
 			{Id: "obj1", Class: "Class1"},
 		},
@@ -283,13 +290,15 @@ func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 	}
 }
 
-func TestInspectorService_UnregisterNode(t *testing.T) {
+func TestInspectorService_UnregisterNode(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	svc := inspector.NewService(pg)
 
 	// Register a node first
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: addr1,
 		Objects: []*inspector_pb.Object{
 			{Id: "obj1", Class: "Class1"},
 		},
@@ -308,7 +317,7 @@ func TestInspectorService_UnregisterNode(t *testing.T) {
 
 	// Unregister the node
 	resp, err := svc.UnregisterNode(context.Background(), &inspector_pb.UnregisterNodeRequest{
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: addr1,
 	})
 	if err != nil {
 		t.Fatalf("UnregisterNode() error = %v", err)
@@ -330,7 +339,9 @@ func TestInspectorService_UnregisterNode(t *testing.T) {
 	}
 }
 
-func TestCreateHTTPHandler(t *testing.T) {
+func TestCreateHTTPHandler(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	handler := CreateHTTPHandler(pg, "inspector/web")
 
@@ -375,7 +386,7 @@ func TestCreateHTTPHandler(t *testing.T) {
 		// Add a node
 		svc := inspector.NewService(pg)
 		_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
-			AdvertiseAddress: "localhost:47000",
+			AdvertiseAddress: addr1,
 			Objects: []*inspector_pb.Object{
 				{Id: "obj1", Class: "Class1"},
 			},
@@ -535,13 +546,15 @@ func TestInspectorService_ShardIDPropagation(t *testing.T) {
 	}
 }
 
-func TestInspectorService_RegisterNode_WithShardIDs(t *testing.T) {
+func TestInspectorService_RegisterNode_WithShardIDs(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	svc := inspector.NewService(pg)
 
 	// Register a node with objects that have shard IDs
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
-		AdvertiseAddress: "localhost:47000",
+		AdvertiseAddress: addr1,
 		Objects: []*inspector_pb.Object{
 			{Id: "obj1", Class: "Class1", ShardId: 100},
 			{Id: "obj2", Class: "Class2", ShardId: 200},

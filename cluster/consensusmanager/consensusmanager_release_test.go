@@ -91,7 +91,9 @@ func TestReleaseShardsForNode_EmptyNode(t *testing.T) {
 }
 
 // TestReleaseShardsForNode_NoShardMapping tests releasing when no shard mapping exists
-func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
+func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -99,7 +101,7 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	// Set a valid local node address in the constructor
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, "localhost:47001")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, addr)
 
 	ctx := context.Background()
 	objectsPerShard := make(map[int]int)
@@ -112,7 +114,10 @@ func TestReleaseShardsForNode_NoShardMapping(t *testing.T) {
 }
 
 // TestReleaseShardsForNode_WithEtcd tests the full release flow with etcd
-func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
+func TestReleaseShardsForNode_WithEtcd(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -136,8 +141,8 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 	defer mgr.Close()
 
 	// Set up test nodes
-	thisNodeAddr := "localhost:47001"
-	otherNodeAddr := "localhost:47002"
+	thisNodeAddr := addr
+	otherNodeAddr := addr1
 
 	// Create consensus manager with the local node address
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 1*time.Second, thisNodeAddr)
@@ -287,7 +292,10 @@ func TestReleaseShardsForNode_WithEtcd(t *testing.T) {
 }
 
 // TestReleaseShardsForNode_MultipleShards tests releasing multiple shards at once
-func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
+func TestReleaseShardsForNode_MultipleShards(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -311,8 +319,8 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 	defer mgr.Close()
 
 	// Set up test nodes
-	thisNodeAddr := "localhost:47001"
-	otherNodeAddr := "localhost:47002"
+	thisNodeAddr := addr
+	otherNodeAddr := addr1
 	prefix := mgr.GetPrefix()
 
 	// Create consensus manager with local node address
@@ -380,7 +388,10 @@ func TestReleaseShardsForNode_MultipleShards(t *testing.T) {
 }
 
 // TestReleaseShardsForNode_RealShardIDs tests with realistic shard IDs
-func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
+func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -404,8 +415,8 @@ func TestReleaseShardsForNode_RealShardIDs(t *testing.T) {
 	defer mgr.Close()
 
 	// Set up test nodes
-	thisNodeAddr := "localhost:47001"
-	otherNodeAddr := "localhost:47002"
+	thisNodeAddr := addr
+	otherNodeAddr := addr1
 	prefix := mgr.GetPrefix()
 
 	// Create consensus manager with local node address

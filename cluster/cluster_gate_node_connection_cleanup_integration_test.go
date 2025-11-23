@@ -18,7 +18,13 @@ import (
 // 2. Node tracks the gate connection in its gateChannels map
 // 3. When gate is shutdown, the node detects disconnection via stream.Context().Done()
 // 4. Node automatically cleans up the gate connection (removes from gateChannels)
-func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
+func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -27,7 +33,7 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create and start a node cluster
-	nodeAddr := "localhost:47100"
+	nodeAddr := addr1
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -49,7 +55,7 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Step 3: Create a gateway that will connect to the node
-	gateAddr := "localhost:49100"
+	gateAddr := addr2
 	gwConfig := &gate.GatewayConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
@@ -134,7 +140,15 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 
 // TestGateNodeConnectionCleanupWithMultipleGates tests that when multiple gates
 // connect to a node and one is shutdown, only that gate's connection is cleaned up
-func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
+func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -143,7 +157,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start a node cluster
-	nodeAddr := "localhost:47101"
+	nodeAddr := addr
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -161,7 +175,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Create first gateway
-	gate1Addr := "localhost:49101"
+	gate1Addr := addr1
 	gw1Config := &gate.GatewayConfig{
 		AdvertiseAddress: gate1Addr,
 		EtcdAddress:      "localhost:2379",
@@ -185,7 +199,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	t.Logf("Started gate 1 at %s", gate1Addr)
 
 	// Create second gateway
-	gate2Addr := "localhost:49102"
+	gate2Addr := addr
 	gw2Config := &gate.GatewayConfig{
 		AdvertiseAddress: gate2Addr,
 		EtcdAddress:      "localhost:2379",
@@ -257,7 +271,13 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 
 // TestGateNodeReconnection tests that if a gate disconnects and reconnects,
 // the node properly updates the connection
-func TestGateNodeReconnection(t *testing.T) {
+func TestGateNodeReconnection(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -266,7 +286,7 @@ func TestGateNodeReconnection(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start a node cluster
-	nodeAddr := "localhost:47102"
+	nodeAddr := addr2
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -283,7 +303,7 @@ func TestGateNodeReconnection(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	gateAddr := "localhost:49103"
+	gateAddr := addr2
 
 	// First connection
 	gwConfig1 := &gate.GatewayConfig{

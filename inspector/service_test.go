@@ -7,24 +7,27 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestRemoveObject tests the RemoveObject RPC handler
-func TestRemoveObject(t *testing.T) {
+func TestRemoveObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	service := NewService(pg)
 
 	// Register a node first
 	node := models.GoverseNode{
-		ID:            "localhost:47000",
-		AdvertiseAddr: "localhost:47000",
+		ID:            addr,
+		AdvertiseAddr: addr,
 	}
 	pg.AddOrUpdateNode(node)
 
 	// Add an object
 	obj := models.GoverseObject{
 		ID:            "test-obj-1",
-		GoverseNodeID: "localhost:47000",
+		GoverseNodeID: addr,
 	}
 	pg.AddOrUpdateObject(obj)
 
@@ -38,7 +41,7 @@ func TestRemoveObject(t *testing.T) {
 	ctx := context.Background()
 	req := &inspector_pb.RemoveObjectRequest{
 		ObjectId:    "test-obj-1",
-		NodeAddress: "localhost:47000",
+		NodeAddress: addr,
 	}
 
 	_, err := service.RemoveObject(ctx, req)
@@ -54,21 +57,23 @@ func TestRemoveObject(t *testing.T) {
 }
 
 // TestRemoveObject_EmptyObjectID tests removing with empty object ID
-func TestRemoveObject_EmptyObjectID(t *testing.T) {
+func TestRemoveObject_EmptyObjectID(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	service := NewService(pg)
 
 	// Register a node
 	node := models.GoverseNode{
-		ID:            "localhost:47000",
-		AdvertiseAddr: "localhost:47000",
+		ID:            addr,
+		AdvertiseAddr: addr,
 	}
 	pg.AddOrUpdateNode(node)
 
 	ctx := context.Background()
 	req := &inspector_pb.RemoveObjectRequest{
 		ObjectId:    "",
-		NodeAddress: "localhost:47000",
+		NodeAddress: addr,
 	}
 
 	// Should not fail, just return empty
@@ -79,14 +84,16 @@ func TestRemoveObject_EmptyObjectID(t *testing.T) {
 }
 
 // TestRemoveObject_NodeNotRegistered tests removing object from unregistered node
-func TestRemoveObject_NodeNotRegistered(t *testing.T) {
+func TestRemoveObject_NodeNotRegistered(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	service := NewService(pg)
 
 	ctx := context.Background()
 	req := &inspector_pb.RemoveObjectRequest{
 		ObjectId:    "test-obj-1",
-		NodeAddress: "localhost:47000",
+		NodeAddress: addr,
 	}
 
 	// Should fail with NotFound error
@@ -97,21 +104,23 @@ func TestRemoveObject_NodeNotRegistered(t *testing.T) {
 }
 
 // TestRemoveObject_NonExistentObject tests removing non-existent object
-func TestRemoveObject_NonExistentObject(t *testing.T) {
+func TestRemoveObject_NonExistentObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	service := NewService(pg)
 
 	// Register a node
 	node := models.GoverseNode{
-		ID:            "localhost:47000",
-		AdvertiseAddr: "localhost:47000",
+		ID:            addr,
+		AdvertiseAddr: addr,
 	}
 	pg.AddOrUpdateNode(node)
 
 	ctx := context.Background()
 	req := &inspector_pb.RemoveObjectRequest{
 		ObjectId:    "non-existent-obj",
-		NodeAddress: "localhost:47000",
+		NodeAddress: addr,
 	}
 
 	// Should not fail even if object doesn't exist
@@ -122,21 +131,23 @@ func TestRemoveObject_NonExistentObject(t *testing.T) {
 }
 
 // TestRemoveObject_MultipleObjects tests removing one object from many
-func TestRemoveObject_MultipleObjects(t *testing.T) {
+func TestRemoveObject_MultipleObjects(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	pg := graph.NewGoverseGraph()
 	service := NewService(pg)
 
 	// Register a node
 	node := models.GoverseNode{
-		ID:            "localhost:47000",
-		AdvertiseAddr: "localhost:47000",
+		ID:            addr,
+		AdvertiseAddr: addr,
 	}
 	pg.AddOrUpdateNode(node)
 
 	// Add multiple objects
-	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "localhost:47000"}
-	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "localhost:47000"}
-	obj3 := models.GoverseObject{ID: "obj3", GoverseNodeID: "localhost:47000"}
+	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: addr}
+	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: addr}
+	obj3 := models.GoverseObject{ID: "obj3", GoverseNodeID: addr}
 
 	pg.AddOrUpdateObject(obj1)
 	pg.AddOrUpdateObject(obj2)
@@ -146,7 +157,7 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 	ctx := context.Background()
 	req := &inspector_pb.RemoveObjectRequest{
 		ObjectId:    "obj2",
-		NodeAddress: "localhost:47000",
+		NodeAddress: addr,
 	}
 
 	_, err := service.RemoveObject(ctx, req)

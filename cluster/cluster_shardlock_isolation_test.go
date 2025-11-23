@@ -7,14 +7,18 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestCluster_ShardLockIsolation verifies that multiple cluster instances
 // have isolated shard locks and don't interfere with each other
-func TestCluster_ShardLockIsolation(t *testing.T) {
+func TestCluster_ShardLockIsolation(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	// Create two separate cluster instances
-	node1 := node.NewNode("localhost:50001")
-	node2 := node.NewNode("localhost:50002")
+	node1 := node.NewNode(addr1)
+	node2 := node.NewNode(addr2)
 
 	cluster1 := newClusterForTesting(node1, "Cluster1")
 	cluster2 := newClusterForTesting(node2, "Cluster2")
@@ -69,8 +73,10 @@ func TestCluster_ShardLockIsolation(t *testing.T) {
 }
 
 // TestCluster_NodeShardLockSet verifies that the cluster sets its ShardLock on the node
-func TestCluster_NodeShardLockSet(t *testing.T) {
-	n := node.NewNode("localhost:50003")
+func TestCluster_NodeShardLockSet(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	n := node.NewNode(addr)
 	cluster := newClusterForTesting(n, "TestCluster")
 
 	// Verify the cluster's ShardLock was set on the node

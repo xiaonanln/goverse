@@ -6,6 +6,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestLockClusterState_Empty tests LockClusterState with empty state
@@ -31,20 +32,23 @@ func TestLockClusterState_Empty(t *testing.T) {
 }
 
 // TestLockClusterState_WithData tests LockClusterState with populated state
-func TestLockClusterState_WithData(t *testing.T) {
+func TestLockClusterState_WithData(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
+	cm.state.Nodes[addr1] = true
+	cm.state.Nodes[addr2] = true
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
 	cm.state.ShardMapping.Shards[0] = ShardInfo{
-		TargetNode:  "localhost:47001",
-		CurrentNode: "localhost:47001",
+		TargetNode:  addr1,
+		CurrentNode: addr1,
 	}
 	cm.state.Revision = 123
 	cm.mu.Unlock()
@@ -61,7 +65,7 @@ func TestLockClusterState_WithData(t *testing.T) {
 		t.Fatalf("Expected 2 nodes in state, got %d", len(state.Nodes))
 	}
 
-	if !state.Nodes["localhost:47001"] || !state.Nodes["localhost:47002"] {
+	if !state.Nodes[addr1] || !state.Nodes[addr2] {
 		t.Fatal("State should contain the correct nodes")
 	}
 
@@ -79,20 +83,22 @@ func TestLockClusterState_WithData(t *testing.T) {
 }
 
 // TestLockClusterState_LockingBehavior tests that the lock is properly held
-func TestLockClusterState_LockingBehavior(t *testing.T) {
+func TestLockClusterState_LockingBehavior(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes[addr1] = true
 	cm.mu.Unlock()
 
 	// Lock the state
 	state, unlock := cm.LockClusterState()
 
 	// Verify we can read the state
-	if !state.Nodes["localhost:47001"] {
+	if !state.Nodes[addr1] {
 		t.Fatal("State should have the original node")
 	}
 
@@ -106,24 +112,30 @@ func TestLockClusterState_LockingBehavior(t *testing.T) {
 	state2, unlock2 := cm.LockClusterState()
 	defer unlock2()
 
-	if !state2.Nodes["localhost:47001"] {
+	if !state2.Nodes[addr1] {
 		t.Fatal("State should still have the original node")
 	}
 }
 
 // TestLockClusterState_FullShardMapping tests LockClusterState with full 8192 shard mapping
-func TestLockClusterState_FullShardMapping(t *testing.T) {
+func TestLockClusterState_FullShardMapping(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	addr4 := testutil.GetFreeAddress()
+	addr5 := testutil.GetFreeAddress()
+	
+
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add nodes to internal state
 	cm.mu.Lock()
 	nodeAddrs := []string{
-		"localhost:47001",
-		"localhost:47002",
-		"localhost:47003",
-		"localhost:47004",
-		"localhost:47005",
+		addr1,
+		addr2,
+		addr,
+		addr1,
+		addr2,
 	}
 	for _, addr := range nodeAddrs {
 		cm.state.Nodes[addr] = true
@@ -189,13 +201,15 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 }
 
 // TestGetClusterStateForTesting_ReturnsClonedState tests that GetClusterStateForTesting returns a cloned copy
-func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
+func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
-	cm.state.Nodes["localhost:47001"] = true
+	cm.state.Nodes[addr1] = true
 	cm.mu.Unlock()
 
 	// Get state copy
@@ -205,7 +219,7 @@ func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
 		t.Fatal("GetClusterStateForTesting returned nil")
 	}
 
-	if !state.Nodes["localhost:47001"] {
+	if !state.Nodes[addr1] {
 		t.Fatal("State should have the original node")
 	}
 }

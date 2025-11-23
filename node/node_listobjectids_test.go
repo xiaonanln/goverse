@@ -4,13 +4,16 @@ import (
 	"context"
 	"testing"
 	"time"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestListObjectIDs tests the ListObjectIDs method
-func TestListObjectIDs(t *testing.T) {
+func TestListObjectIDs(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
-	n := NewNode("localhost:50000")
+	n := NewNode(addr)
 
 	// Initially should have no objects
 	ids := n.ListObjectIDs()
@@ -25,10 +28,12 @@ func TestListObjectIDs(t *testing.T) {
 }
 
 // TestListObjectIDs_EmptySlice tests that empty list returns nil
-func TestListObjectIDs_EmptySlice(t *testing.T) {
+func TestListObjectIDs_EmptySlice(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
-	n := NewNode("localhost:50001")
+	n := NewNode(addr)
 
 	ids := n.ListObjectIDs()
 
@@ -43,10 +48,12 @@ func TestListObjectIDs_EmptySlice(t *testing.T) {
 }
 
 // TestListObjectIDs_WithObjects tests that ListObjectIDs returns the correct object IDs
-func TestListObjectIDs_WithObjects(t *testing.T) {
+func TestListObjectIDs_WithObjects(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
-	n := NewNode("localhost:50002")
+	n := NewNode(addr)
 	n.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()

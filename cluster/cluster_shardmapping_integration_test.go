@@ -10,7 +10,10 @@ import (
 
 // TestClusterShardMappingIntegration tests shard mapping with actual etcd integration
 // This test requires a running etcd instance at localhost:2379
-func TestClusterShardMappingIntegration(t *testing.T) {
+func TestClusterShardMappingIntegration(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -20,8 +23,8 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start both clusters - node1 will be leader (smaller address)
-	cluster1 := mustNewCluster(ctx, t, "localhost:50001", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:50002", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
 	testutil.WaitForClusterReady(t, cluster1)
@@ -41,11 +44,11 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 		leader1 := cluster1.GetLeaderNode()
 		leader2 := cluster2.GetLeaderNode()
 
-		if leader1 != "localhost:50001" {
+		if leader1 != addr1 {
 			t.Fatalf("cluster1 sees leader as %s, want localhost:50001", leader1)
 		}
 
-		if leader2 != "localhost:50001" {
+		if leader2 != addr1 {
 			t.Fatalf("cluster2 sees leader as %s, want localhost:50001", leader2)
 		}
 	})

@@ -7,12 +7,15 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestObjectLifecycleSerialization verifies that objectsMu properly serializes
 // all object lifecycle operations (create, call, delete, save)
-func TestObjectLifecycleSerialization(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestObjectLifecycleSerialization(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -123,8 +126,10 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 
 // TestConcurrentCreateObjectSerialization verifies that concurrent CreateObject
 // calls for the same object ID are properly serialized and only one succeeds
-func TestConcurrentCreateObjectSerialization(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestConcurrentCreateObjectSerialization(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
@@ -180,8 +185,10 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 
 // TestSaveAllObjectsWhileCreating verifies that SaveAllObjects properly
 // serializes with concurrent CreateObject operations
-func TestSaveAllObjectsWhileCreating(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestSaveAllObjectsWhileCreating(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -230,8 +237,10 @@ func TestSaveAllObjectsWhileCreating(t *testing.T) {
 
 // TestDeleteObjectSerializesWithCallObject verifies that DeleteObject
 // properly serializes with CallObject operations
-func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
-	node := NewNode("localhost:47000")
+func TestDeleteObjectSerializesWithCallObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))

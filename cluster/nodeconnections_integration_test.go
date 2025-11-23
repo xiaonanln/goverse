@@ -10,7 +10,10 @@ import (
 
 // TestNodeConnectionsIntegration tests the NodeConnections manager with etcd node discovery
 // This test requires a running etcd instance at localhost:2379
-func TestNodeConnectionsIntegration(t *testing.T) {
+func TestNodeConnectionsIntegration(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -20,7 +23,7 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start cluster1 using the helper
-	cluster1 := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
 
 	// Get NodeConnections manager
 	nc := cluster1.GetNodeConnections()
@@ -34,7 +37,7 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 	}
 
 	// Create and start cluster2 using the helper
-	cluster2 := mustNewCluster(ctx, t, "localhost:47002", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 	_ = cluster2 // cluster2 is used via side effect (node registration)
 
 	// Wait for node2 to be discovered and connected
@@ -57,7 +60,10 @@ func TestNodeConnectionsIntegration(t *testing.T) {
 }
 
 // TestNodeConnectionsDynamicDiscovery tests that NodeConnections automatically connects to new nodes
-func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
+func TestNodeConnectionsDynamicDiscovery(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -67,7 +73,7 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start cluster1 using the helper
-	cluster1 := mustNewCluster(ctx, t, "localhost:47011", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -76,7 +82,7 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 	t.Logf("Initial connection count: %d", initialCount)
 
 	// Create and start cluster2 using the helper - this will be dynamically discovered
-	cluster2 := mustNewCluster(ctx, t, "localhost:47012", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 	_ = cluster2 // cluster2 is used via side effect (node registration)
 
 	// Wait for dynamic discovery (watcher runs every 5 seconds)
@@ -92,7 +98,10 @@ func TestNodeConnectionsDynamicDiscovery(t *testing.T) {
 
 // TestNodeConnectionsRemovalAndReaddition tests that a node can be removed and then re-added
 // This test verifies that NodeConnections properly disconnects and reconnects
-func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
+func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -102,7 +111,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start cluster1 using the helper
-	cluster1 := mustNewCluster(ctx, t, "localhost:47021", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -111,7 +120,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	t.Logf("Initial connection count: %d", initialCount)
 
 	// Step 1: Create and start cluster2 (this registers node2)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47022", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Wait for node2 to be discovered and connected
 	time.Sleep(6 * time.Second)
@@ -129,7 +138,7 @@ func TestNodeConnectionsRemovalAndReaddition(t *testing.T) {
 	t.Logf("After node2 removed, cluster1 has %d connections", countAfterRemoval)
 
 	// Step 3: Re-create and start cluster2 (re-register node2)
-	cluster2 = mustNewCluster(ctx, t, "localhost:47022", testPrefix)
+	cluster2 = mustNewCluster(ctx, t, addr2, testPrefix)
 	_ = cluster2 // cluster2 is used via side effect
 
 	// Wait for node2 to be re-discovered and reconnected

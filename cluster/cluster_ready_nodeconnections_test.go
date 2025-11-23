@@ -9,7 +9,9 @@ import (
 
 // TestClusterReadyAfterNodeConnections verifies that the cluster is only marked ready
 // after node connections are established AND shard mapping is available
-func TestClusterReadyAfterNodeConnections(t *testing.T) {
+func TestClusterReadyAfterNodeConnections(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -19,7 +21,7 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start cluster using the helper
-	cluster1 := mustNewCluster(ctx, t, "localhost:47101", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr, testPrefix)
 
 	// Wait for shard mapping to be created and cluster to be marked ready
 	// This should happen within NodeStabilityDuration + ShardMappingCheckInterval + some buffer
@@ -41,7 +43,10 @@ func TestClusterReadyAfterNodeConnections(t *testing.T) {
 }
 
 // TestClusterReadyMultiNode verifies cluster readiness in a multi-node setup
-func TestClusterReadyMultiNode(t *testing.T) {
+func TestClusterReadyMultiNode(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -51,10 +56,10 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start first cluster using the helper (will be leader)
-	cluster1 := mustNewCluster(ctx, t, "localhost:47111", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
 
 	// Create and start second cluster using the helper (will be non-leader)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47112", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Wait for both clusters to be ready (cluster.Start already handles all initialization)
 	testutil.WaitForClusterReady(t, cluster1)

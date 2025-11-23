@@ -96,7 +96,9 @@ func TestSetThisNode_Panic(t *testing.T) {
 	}
 }
 
-func TestNewCluster(t *testing.T) {
+func TestNewCluster(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -104,7 +106,7 @@ func TestNewCluster(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a new cluster instance (not the singleton) for testing
-	n := node.NewNode("localhost:50000")
+	n := node.NewNode(addr)
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running, but cluster and managers should be created
 	if err != nil {
@@ -175,7 +177,9 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 	}
 }
 
-func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
+func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -183,7 +187,7 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a new cluster with etcd initialized
-	n := node.NewNode("localhost:50001")
+	n := node.NewNode(addr)
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running
 	if err != nil {
@@ -200,12 +204,14 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	}
 }
 
-func TestClusterString(t *testing.T) {
+func TestClusterString(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Test String() with a basic cluster
-	n := node.NewNode("localhost:47000")
+	n := node.NewNode(addr)
 	cluster := newClusterForTesting(n, "TestCluster")
 
 	str := cluster.String()
@@ -213,7 +219,7 @@ func TestClusterString(t *testing.T) {
 
 	// Verify format: Cluster<local-node-address,leader|member,quorum=%d>
 	// Should contain the node address
-	if !strings.Contains(str, "localhost:47000") {
+	if !strings.Contains(str, addr) {
 		t.Fatalf("String() should contain node address 'localhost:47000', got: %s", str)
 	}
 
@@ -236,7 +242,9 @@ func TestClusterString(t *testing.T) {
 	}
 }
 
-func TestClusterString_WithQuorum(t *testing.T) {
+func TestClusterString_WithQuorum(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -253,7 +261,7 @@ func TestClusterString_WithQuorum(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := node.NewNode("localhost:47000")
+			n := node.NewNode(addr)
 			cluster := newClusterForTesting(n, "TestCluster")
 			cluster.minQuorum = tt.minQuorum
 

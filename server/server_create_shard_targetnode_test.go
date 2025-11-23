@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestServerCreateObject_ShardIDComputation verifies that the shardID computation
@@ -35,14 +36,20 @@ func TestServerCreateObject_ShardIDComputation(t *testing.T) {
 
 // TestServerCreateObject_ValidationLogic tests that the validation error message
 // format is correct for the new shard TargetNode check
-func TestServerCreateObject_ValidationLogic(t *testing.T) {
+func TestServerCreateObject_ValidationLogic(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
+	addr2 := testutil.GetFreeAddress()
+	
+
 	// This test verifies the error message format matches expectations
 	// The actual validation is tested in integration tests, but we verify
 	// the expected error message structure here
 
 	testObjectID := "test-obj-123"
-	thisNode := "localhost:47210"
-	targetNode := "localhost:47999"
+	thisNode := addr
+	targetNode := addr2
 
 	// Simulate the error message that would be returned
 	expectedError := "shard is targeted to node"

@@ -3,16 +3,19 @@ package node
 import (
 	"context"
 	"testing"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestDeleteObject_Integration is an end-to-end integration test showing the complete flow
 // of creating an object, saving it to persistence, deleting it, and verifying removal
-func TestDeleteObject_Integration(t *testing.T) {
+func TestDeleteObject_Integration(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -74,12 +77,14 @@ func TestDeleteObject_Integration(t *testing.T) {
 }
 
 // TestDeleteObject_Integration_NonPersistent demonstrates deletion of non-persistent objects
-func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
+func TestDeleteObject_Integration_NonPersistent(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestNonPersistentObject)(nil))
@@ -125,12 +130,14 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 
 // TestDeleteObject_Integration_MixedObjects demonstrates deletion in a scenario with both
 // persistent and non-persistent objects
-func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
+func TestDeleteObject_Integration_MixedObjects(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))

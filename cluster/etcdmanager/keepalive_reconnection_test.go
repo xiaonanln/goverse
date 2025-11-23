@@ -17,7 +17,9 @@ func canEtcdRestart() bool {
 }
 
 // TestRegisterKeyLeaseReconnection tests that RegisterKeyLease persists through etcd reconnection
-func TestRegisterKeyLeaseReconnection(t *testing.T) {
+func TestRegisterKeyLeaseReconnection(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
@@ -31,7 +33,7 @@ func TestRegisterKeyLeaseReconnection(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	nodeAddress := "localhost:50104"
+	nodeAddress := addr
 
 	// Register node using shared lease
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"

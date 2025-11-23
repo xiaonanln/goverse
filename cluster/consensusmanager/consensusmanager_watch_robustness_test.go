@@ -19,7 +19,10 @@ func canEtcdRestart() bool {
 }
 
 // TestWatchReconnection tests that the watch reconnects after etcd is stopped and restarted
-func TestWatchReconnection(t *testing.T) {
+func TestWatchReconnection(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -59,8 +62,8 @@ func TestWatchReconnection(t *testing.T) {
 
 	// Register a node before stopping etcd
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"
-	key := nodesPrefix + "localhost:47001"
-	_, err = mgr.RegisterKeyLease(ctx, key, "localhost:47001", etcdmanager.NodeLeaseTTL)
+	key := nodesPrefix + addr1
+	_, err = mgr.RegisterKeyLease(ctx, key, addr1, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register node: %v", err)
 	}
@@ -70,7 +73,7 @@ func TestWatchReconnection(t *testing.T) {
 
 	// Verify the node was registered
 	nodes := cm.GetNodes()
-	if len(nodes) != 1 || nodes[0] != "localhost:47001" {
+	if len(nodes) != 1 || nodes[0] != addr1 {
 		t.Fatalf("Expected 1 node (localhost:47001), got %v", nodes)
 	}
 
@@ -126,8 +129,8 @@ func TestWatchReconnection(t *testing.T) {
 	defer mgr2.Close()
 
 	nodesPrefix2 := mgr2.GetPrefix() + "/nodes/"
-	key2 := nodesPrefix2 + "localhost:47002"
-	_, err = mgr2.RegisterKeyLease(ctx, key2, "localhost:47002", etcdmanager.NodeLeaseTTL)
+	key2 := nodesPrefix2 + addr2
+	_, err = mgr2.RegisterKeyLease(ctx, key2, addr2, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register second node: %v", err)
 	}

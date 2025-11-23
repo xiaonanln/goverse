@@ -303,7 +303,11 @@ func TestNode_ListObjects(t *testing.T) {
 // 1. Start successfully
 // 2. Register its node address to etcd
 // 3. Become the sole leader
-func TestServerStartupWithEtcd(t *testing.T) {
+func TestServerStartupWithEtcd(t *testing.T) {	addr := testutil.GetFreeAddress()
+	addr := testutil.GetFreeAddress()
+
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -312,8 +316,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Create server config with unique ports and etcd prefix
 	config := &ServerConfig{
-		ListenAddress:             "localhost:47100",
-		AdvertiseAddress:          "localhost:47100",
+		ListenAddress:             addr,
+		AdvertiseAddress:          addr,
 		EtcdAddress:               "localhost:2379",
 		EtcdPrefix:                etcdPrefix,
 		NodeStabilityDuration:     3 * time.Second,

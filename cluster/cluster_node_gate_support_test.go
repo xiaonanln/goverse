@@ -5,12 +5,16 @@ import (
 
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestClusterNodeAndGatewaySupport tests that cluster properly supports both node and gateway
-func TestClusterNodeAndGatewaySupport(t *testing.T) {
+func TestClusterNodeAndGatewaySupport(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	t.Run("node cluster", func(t *testing.T) {
-		n := node.NewNode("localhost:47000")
+		n := node.NewNode(addr1)
 		c := newClusterForTesting(n, "TestNodeCluster")
 
 		// Test node cluster identification
@@ -23,7 +27,7 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 
 		// Test getAdvertiseAddr
 		addr := c.getAdvertiseAddr()
-		if addr != "localhost:47000" {
+		if addr != addr1 {
 			t.Fatalf("Expected advertise address 'localhost:47000', got '%s'", addr)
 		}
 
@@ -48,7 +52,7 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 
 	t.Run("gateway cluster", func(t *testing.T) {
 		gwConfig := &gate.GatewayConfig{
-			AdvertiseAddress: "localhost:49000",
+			AdvertiseAddress: addr2,
 			EtcdAddress:      "localhost:2379",
 			EtcdPrefix:       "/test-gateway",
 		}
@@ -73,7 +77,7 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 
 		// Test getAdvertiseAddr
 		addr := c.getAdvertiseAddr()
-		if addr != "localhost:49000" {
+		if addr != addr2 {
 			t.Fatalf("Expected advertise address 'localhost:49000', got '%s'", addr)
 		}
 
@@ -98,9 +102,11 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 }
 
 // TestClusterOperationsWithGateway tests that node-only operations return appropriate results for gateway clusters
-func TestClusterOperationsWithGateway(t *testing.T) {
+func TestClusterOperationsWithGateway(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: addr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-ops",
 	}

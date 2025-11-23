@@ -13,7 +13,10 @@ import (
 // 2. A node cluster can start and register itself
 // 3. Both clusters can see each other via etcd
 // 4. The gate cluster becomes ready (has consensus and stable state)
-func TestGateClusterCanBecomeReady(t *testing.T) {
+func TestGateClusterCanBecomeReady(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping etcd integration test in short mode")
 	}
@@ -24,11 +27,11 @@ func TestGateClusterCanBecomeReady(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start a node cluster first
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47300", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr1, testPrefix)
 	t.Logf("Node cluster started at %s", nodeCluster.getAdvertiseAddr())
 
 	// Create and start a gate cluster
-	gateCluster := mustNewGateCluster(ctx, t, "localhost:49300", testPrefix)
+	gateCluster := mustNewGateCluster(ctx, t, addr2, testPrefix)
 	t.Logf("Gate cluster started at %s", gateCluster.getAdvertiseAddr())
 
 	// Wait for both clusters to become ready

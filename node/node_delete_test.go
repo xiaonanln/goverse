@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
-func TestNode_DeleteObject_PersistentObject(t *testing.T) {
+func TestNode_DeleteObject_PersistentObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test deleting a persistent object with persistence provider
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -61,9 +64,11 @@ func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 	}
 }
 
-func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
+func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test deleting a non-persistent object
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestNonPersistentObject)(nil))
@@ -106,9 +111,11 @@ func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
 	}
 }
 
-func TestNode_DeleteObject_NoProvider(t *testing.T) {
+func TestNode_DeleteObject_NoProvider(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test deleting an object when no persistence provider is configured
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	// No provider set
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
@@ -144,9 +151,11 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 	}
 }
 
-func TestNode_DeleteObject_NotFound(t *testing.T) {
+func TestNode_DeleteObject_NotFound(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test deleting an object that doesn't exist - should be idempotent (no error)
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -165,9 +174,11 @@ func TestNode_DeleteObject_NotFound(t *testing.T) {
 	}
 }
 
-func TestNode_DeleteObject_PersistenceError(t *testing.T) {
+func TestNode_DeleteObject_PersistenceError(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test handling of persistence deletion errors
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -207,9 +218,11 @@ func TestNode_DeleteObject_PersistenceError(t *testing.T) {
 	// similar to SaveErr and LoadErr
 }
 
-func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
+func TestNode_DeleteObject_MultipleObjects(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test deleting objects when multiple objects exist
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -290,9 +303,11 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 	}
 }
 
-func TestNode_DeleteObject_ThreadSafety(t *testing.T) {
+func TestNode_DeleteObject_ThreadSafety(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	// Test that DeleteObject is thread-safe with concurrent operations
-	node := NewNode("localhost:47000")
+	node := NewNode(addr)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))

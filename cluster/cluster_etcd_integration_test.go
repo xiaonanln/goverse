@@ -13,15 +13,18 @@ import (
 
 // TestClusterEtcdIntegration tests cluster node registration and discovery through etcd
 // This test requires a running etcd instance at localhost:2379
-func TestClusterEtcdIntegration(t *testing.T) {
+func TestClusterEtcdIntegration(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
 	// Create and start both clusters
-	cluster1 := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47002", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Wait for watches to sync
 	time.Sleep(500 * time.Millisecond)
@@ -45,7 +48,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	// Verify cluster1 sees node2
 	found := false
 	for _, nodeAddr := range nodes1 {
-		if nodeAddr == "localhost:47002" {
+		if nodeAddr == addr2 {
 			found = true
 			break
 		}
@@ -57,7 +60,7 @@ func TestClusterEtcdIntegration(t *testing.T) {
 	// Verify cluster2 sees node1
 	found = false
 	for _, nodeAddr := range nodes2 {
-		if nodeAddr == "localhost:47001" {
+		if nodeAddr == addr1 {
 			found = true
 			break
 		}
@@ -68,14 +71,17 @@ func TestClusterEtcdIntegration(t *testing.T) {
 }
 
 // TestClusterEtcdDynamicDiscovery tests that clusters dynamically discover new nodes
-func TestClusterEtcdDynamicDiscovery(t *testing.T) {
+func TestClusterEtcdDynamicDiscovery(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
 	// Create and start cluster1
-	cluster1 := mustNewCluster(ctx, t, "localhost:47003", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
 
 	// Wait for registration
 	time.Sleep(500 * time.Millisecond)
@@ -83,12 +89,12 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	// Record initial node count
 	initialNodes := cluster1.GetNodes()
 	t.Logf("Cluster1 initially sees %d nodes: %v", len(initialNodes), initialNodes)
-	if len(initialNodes) != 1 || initialNodes[0] != "localhost:47003" {
+	if len(initialNodes) != 1 || initialNodes[0] != addr1 {
 		t.Fatalf("Cluster1 should initially see only itself ('localhost:47003'), got %d nodes: %v", len(initialNodes), initialNodes)
 	}
 
 	// Create and start cluster2 (dynamic discovery)
-	_ = mustNewCluster(ctx, t, "localhost:47004", testPrefix)
+	_ = mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Wait for cluster1 to discover cluster2
 	time.Sleep(1 * time.Second)
@@ -104,7 +110,7 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 	// Verify node2 is in the list
 	found := false
 	for _, nodeAddr := range updatedNodes {
-		if nodeAddr == "localhost:47004" {
+		if nodeAddr == addr2 {
 			found = true
 			break
 		}
@@ -115,18 +121,21 @@ func TestClusterEtcdDynamicDiscovery(t *testing.T) {
 }
 
 // TestClusterEtcdLeaveDetection tests that clusters detect when other nodes leave
-func TestClusterEtcdLeaveDetection(t *testing.T) {
+func TestClusterEtcdLeaveDetection(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
 	// Create and start cluster1
-	cluster1 := mustNewCluster(ctx, t, "localhost:47005", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
 
 	// Create cluster2 (we'll stop it manually later to test leave detection)
 	// For this test, we need manual control over cluster2's lifecycle
-	node2 := node.NewNode("localhost:47006")
+	node2 := node.NewNode(addr2)
 	err := node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
@@ -151,7 +160,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 	found := false
 	for _, nodeAddr := range nodes {
-		if nodeAddr == "localhost:47006" {
+		if nodeAddr == addr2 {
 			found = true
 			break
 		}
@@ -178,14 +187,18 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	t.Logf("After node2 stopped, cluster1 sees %d nodes: %v", len(nodes), nodes)
 
 	for _, nodeAddr := range nodes {
-		if nodeAddr == "localhost:47006" {
+		if nodeAddr == addr2 {
 			t.Fatal("Cluster1 should no longer see node2 after it stopped")
 		}
 	}
 }
 
 // TestClusterGetLeaderNode tests leader election across multiple nodes
-func TestClusterGetLeaderNode(t *testing.T) {
+func TestClusterGetLeaderNode(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	
+
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
@@ -195,7 +208,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	// node2 has the smallest address, so it should be the leader
 	clusters := make([]*Cluster, 3)
 	nodes := make([]*node.Node, 3)
-	addresses := []string{"localhost:47100", "localhost:47050", "localhost:47200"}
+	addresses := []string{addr3, addr2, addr1}
 
 	for i := 0; i < 3; i++ {
 		nodes[i] = node.NewNode(addresses[i])
@@ -224,7 +237,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// All clusters should see the same leader (the one with smallest address)
-	expectedLeader := "localhost:47050" // This is the smallest address
+	expectedLeader := addr2 // This is the smallest address
 
 	for i, cluster := range clusters {
 		leader := cluster.GetLeaderNode()
@@ -244,15 +257,18 @@ func TestClusterGetLeaderNode(t *testing.T) {
 }
 
 // TestClusterGetLeaderNode_DynamicChange tests leader change when current leader leaves
-func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
+func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	ctx := context.Background()
 
 	// Create two nodes - node2 has smaller address (will be initial leader)
-	node1 := node.NewNode("localhost:47300")
-	node2 := node.NewNode("localhost:47200") // Smaller address - will be leader
+	node1 := node.NewNode(addr2)
+	node2 := node.NewNode(addr1) // Smaller address - will be leader
 
 	// Start both nodes
 	err := node1.Start(ctx)
@@ -298,7 +314,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	// Initially, node2 should be the leader (smaller address)
 	initialLeader := cluster1.GetLeaderNode()
 	t.Logf("Initial leader: %s", initialLeader)
-	if initialLeader != "localhost:47200" {
+	if initialLeader != addr1 {
 		t.Fatalf("Initial leader should be localhost:47200, got %s", initialLeader)
 	}
 
@@ -314,17 +330,19 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	// Now node1 should be the leader (only remaining node)
 	newLeader := cluster1.GetLeaderNode()
 	t.Logf("New leader after node2 left: %s", newLeader)
-	if newLeader != "localhost:47300" {
+	if newLeader != addr2 {
 		t.Fatalf("After node2 left, leader should be localhost:47300, got %s", newLeader)
 	}
 }
 
-func TestClusterStopUnregistersFromEtcd(t *testing.T) {
+func TestClusterStopUnregistersFromEtcd(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create and start cluster
-	cluster := mustNewCluster(ctx, t, "localhost:47010", testPrefix)
+	cluster := mustNewCluster(ctx, t, addr1, testPrefix)
 	nodeAddr := cluster.GetThisNode().GetAdvertiseAddress()
 
 	// Create a separate etcd client for verification (independent of cluster)

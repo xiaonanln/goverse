@@ -10,7 +10,10 @@ import (
 // TestClusterShardCurrentNodeClaiming tests that nodes claim ownership of shards
 // by setting CurrentNode when they are the TargetNode and CurrentNode is empty
 // This test requires a running etcd instance at localhost:2379
-func TestClusterShardCurrentNodeClaiming(t *testing.T) {
+func TestClusterShardCurrentNodeClaiming(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -20,8 +23,8 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start both clusters - node1 will be leader (smaller address)
-	cluster1 := mustNewCluster(ctx, t, "localhost:51001", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:51002", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, addr2, testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
 	testutil.WaitForClusterReady(t, cluster1)
@@ -53,9 +56,9 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 					shardID, shardInfo.TargetNode, shardInfo.CurrentNode)
 			} else if shardInfo.CurrentNode == shardInfo.TargetNode {
 				// Good - node claimed ownership
-				if shardInfo.CurrentNode == "localhost:51001" {
+				if shardInfo.CurrentNode == addr1 {
 					node1ClaimedCount++
-				} else if shardInfo.CurrentNode == "localhost:51002" {
+				} else if shardInfo.CurrentNode == addr2 {
 					node2ClaimedCount++
 				}
 			} else {

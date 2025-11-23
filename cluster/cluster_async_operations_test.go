@@ -27,7 +27,9 @@ func waitForClusterReady(t *testing.T, cluster *Cluster, timeout time.Duration) 
 // TestAsyncCreateObjectFromMethod verifies that CreateObject can be called from within
 // an object method without causing deadlocks. The async implementation ensures that
 // the CreateObject call returns immediately without waiting for completion.
-func TestAsyncCreateObjectFromMethod(t *testing.T) {
+func TestAsyncCreateObjectFromMethod(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -36,7 +38,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a cluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47101", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr, testPrefix)
 	node1 := cluster1.GetThisNode()
 
 	// Set the cluster singleton so object methods can use This()
@@ -49,7 +51,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	// Start mock gRPC server
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47101", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
@@ -96,7 +98,9 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 
 // TestAsyncDeleteObjectFromMethod verifies that DeleteObject can be called from within
 // an object method without causing deadlocks.
-func TestAsyncDeleteObjectFromMethod(t *testing.T) {
+func TestAsyncDeleteObjectFromMethod(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -105,7 +109,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a cluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47102", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr, testPrefix)
 	node1 := cluster1.GetThisNode()
 
 	// Set the cluster singleton so object methods can use This()
@@ -118,7 +122,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	// Start mock gRPC server
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47102", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
@@ -171,7 +175,9 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 
 // TestAsyncOperationsReturnImmediately verifies that CreateObject and DeleteObject
 // return immediately without waiting for the operation to complete
-func TestAsyncOperationsReturnImmediately(t *testing.T) {
+func TestAsyncOperationsReturnImmediately(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -180,7 +186,7 @@ func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a cluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47103", testPrefix)
+	cluster1 := mustNewCluster(ctx, t, addr, testPrefix)
 	node1 := cluster1.GetThisNode()
 
 	// Set the cluster singleton so object methods can use This()
@@ -193,7 +199,7 @@ func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	// Start mock gRPC server
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47103", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)

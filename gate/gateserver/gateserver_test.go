@@ -295,6 +295,8 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 }
 
 func TestValidateConfig(t *testing.T) {
+	addr := testutil.GetFreeAddress()
+	
 	tests := []struct {
 		name       string
 		config     *GatewayServerConfig
@@ -305,8 +307,8 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49000",
-				AdvertiseAddress: "localhost:49000",
+				ListenAddress:    addr,
+				AdvertiseAddress: addr,
 				EtcdAddress:      "localhost:2379",
 				EtcdPrefix:       "/custom",
 			},
@@ -315,8 +317,8 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "sets default prefix",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49000",
-				AdvertiseAddress: "localhost:49000",
+				ListenAddress:    addr,
+				AdvertiseAddress: addr,
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
@@ -335,7 +337,7 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty listen address",
 			config: &GatewayServerConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: addr,
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr:    true,
@@ -344,7 +346,7 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty advertise address",
 			config: &GatewayServerConfig{
-				ListenAddress: ":49000",
+				ListenAddress: addr,
 				EtcdAddress:   "localhost:2379",
 			},
 			wantErr:    true,
@@ -353,8 +355,8 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty etcd address",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49000",
-				AdvertiseAddress: "localhost:49000",
+				ListenAddress:    addr,
+				AdvertiseAddress: addr,
 			},
 			wantErr:    true,
 			errContain: "EtcdAddress cannot be empty",
@@ -384,9 +386,11 @@ func TestGatewayServerGracefulShutdown(t *testing.T) {
 		t.Skip("Skipping long-running test in short mode")
 	}
 
+	gateAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayServerConfig{
-		ListenAddress:    ":49013",
-		AdvertiseAddress: "localhost:49013",
+		ListenAddress:    gateAddr,
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-graceful",
 	}
@@ -404,7 +408,7 @@ func TestGatewayServerGracefulShutdown(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Create a client connection
-	conn, err := grpc.NewClient("localhost:49013", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to gateway server: %v", err)
 	}

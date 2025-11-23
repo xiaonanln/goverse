@@ -107,7 +107,10 @@ func (o *TestGateNodeObject) Increment(ctx context.Context, req *structpb.Struct
 // 7. Delete and recreate - verifies objects can be recreated with fresh state after deletion
 //
 // This test requires a running etcd instance at localhost:2379
-func TestGateNodeIntegration(t *testing.T) {
+func TestGateNodeIntegration(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -119,7 +122,7 @@ func TestGateNodeIntegration(t *testing.T) {
 
 	// Create gate cluster
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49001",
+		AdvertiseAddress: addr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -147,7 +150,7 @@ func TestGateNodeIntegration(t *testing.T) {
 	t.Logf("Created gate cluster at localhost:49001")
 
 	// Create node cluster using mustNewCluster
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr1, testPrefix)
 	testNode := nodeCluster.GetThisNode()
 	t.Logf("Created node cluster at localhost:47001")
 
@@ -160,7 +163,7 @@ func TestGateNodeIntegration(t *testing.T) {
 	// Start mock gRPC server for the node to handle inter-cluster communication
 	mockServer := testutil.NewMockGoverseServer()
 	mockServer.SetNode(testNode) // Assign the actual node to the mock server
-	testServer := testutil.NewTestServerHelper("localhost:47001", mockServer)
+	testServer := testutil.NewTestServerHelper(addr1, mockServer)
 	err = testServer.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
@@ -199,7 +202,7 @@ func TestGateNodeIntegration(t *testing.T) {
 		}
 
 		// Verify the object was created on the node
-		if targetNode != "localhost:47001" {
+		if targetNode != addr1 {
 			t.Fatalf("Expected target node localhost:47001, got %s", targetNode)
 		}
 
@@ -232,7 +235,7 @@ func TestGateNodeIntegration(t *testing.T) {
 			}
 
 			// Verify the object was created on the correct node
-			if targetNode != "localhost:47001" {
+			if targetNode != addr1 {
 				t.Fatalf("Expected target node localhost:47001, got %s", targetNode)
 			}
 

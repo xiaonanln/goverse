@@ -49,7 +49,10 @@ func mustNewGateCluster(ctx context.Context, t *testing.T, gateAddr string, etcd
 // This is important because nodes should not wait for gates to connect - gates
 // are optional components for client connections, and node readiness should only
 // depend on consensus state (shard mapping) being available.
-func TestNodeReadyWithUnconnectedGate(t *testing.T) {
+func TestNodeReadyWithUnconnectedGate(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping etcd integration test in short mode")
 	}
@@ -60,7 +63,7 @@ func TestNodeReadyWithUnconnectedGate(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create and start a gate cluster (which will register itself in etcd)
-	gateCluster := mustNewGateCluster(ctx, t, "localhost:49200", testPrefix)
+	gateCluster := mustNewGateCluster(ctx, t, addr1, testPrefix)
 	t.Logf("Gate cluster started and registered at %s", gateCluster.getAdvertiseAddr())
 
 	// Wait for gate registration to propagate to etcd
@@ -75,7 +78,7 @@ func TestNodeReadyWithUnconnectedGate(t *testing.T) {
 
 	// Step 2: Create and start a node cluster (without connecting to the gate)
 	// The node will see the gate in etcd but won't have a gate connection yet
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47200", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr1, testPrefix)
 	t.Logf("Node cluster started at %s", nodeCluster.getAdvertiseAddr())
 
 	// Step 3: Verify that the node cluster becomes ready even without gate connection
@@ -108,7 +111,10 @@ func TestNodeReadyWithUnconnectedGate(t *testing.T) {
 
 // TestNodeReadyBeforeGateRegisters verifies that a node becomes ready before any gate
 // is registered in the cluster. This tests the most basic case where no gates exist yet.
-func TestNodeReadyBeforeGateRegisters(t *testing.T) {
+func TestNodeReadyBeforeGateRegisters(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping etcd integration test in short mode")
 	}
@@ -119,7 +125,7 @@ func TestNodeReadyBeforeGateRegisters(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create and start a node cluster (no gates in the system yet)
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47201", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr2, testPrefix)
 	t.Logf("Node cluster started at %s", nodeCluster.getAdvertiseAddr())
 
 	// Step 2: Verify that the node cluster becomes ready without any gates
@@ -139,7 +145,7 @@ func TestNodeReadyBeforeGateRegisters(t *testing.T) {
 	t.Logf("✓ Verified: Node is ready with no gates in cluster state")
 
 	// Step 3: Now register a gate and verify node remains ready
-	gateCluster := mustNewGateCluster(ctx, t, "localhost:49201", testPrefix)
+	gateCluster := mustNewGateCluster(ctx, t, addr2, testPrefix)
 	t.Logf("Gate cluster registered at %s", gateCluster.getAdvertiseAddr())
 
 	// Give the watch mechanism time to propagate gate registration

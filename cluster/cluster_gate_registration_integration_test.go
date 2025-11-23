@@ -11,13 +11,15 @@ import (
 )
 
 // TestGateRegistrationWithEtcd tests that gates are properly registered in etcd under /gates/
-func TestGateRegistrationWithEtcd(t *testing.T) {
+func TestGateRegistrationWithEtcd(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create a gateway
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49001",
+		AdvertiseAddress: addr1,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -54,7 +56,7 @@ func TestGateRegistrationWithEtcd(t *testing.T) {
 	defer etcdClient.Close()
 
 	gatesPrefix := testPrefix + "/gates/"
-	key := gatesPrefix + "localhost:49001"
+	key := gatesPrefix + addr1
 
 	resp, err := etcdClient.Get(ctx, key)
 	if err != nil {
@@ -70,19 +72,21 @@ func TestGateRegistrationWithEtcd(t *testing.T) {
 	if len(gates) != 1 {
 		t.Fatalf("Expected 1 gate, got %d", len(gates))
 	}
-	if gates[0] != "localhost:49001" {
+	if gates[0] != addr1 {
 		t.Fatalf("Expected gate localhost:49001, got %s", gates[0])
 	}
 }
 
 // TestGateUnregistrationWithEtcd tests that gates are properly unregistered from etcd when stopped
-func TestGateUnregistrationWithEtcd(t *testing.T) {
+func TestGateUnregistrationWithEtcd(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create a gateway
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49002",
+		AdvertiseAddress: addr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -118,7 +122,7 @@ func TestGateUnregistrationWithEtcd(t *testing.T) {
 	defer etcdClient.Close()
 
 	gatesPrefix := testPrefix + "/gates/"
-	key := gatesPrefix + "localhost:49002"
+	key := gatesPrefix + addr2
 
 	// Verify gate is registered
 	resp, err := etcdClient.Get(ctx, key)
@@ -150,13 +154,16 @@ func TestGateUnregistrationWithEtcd(t *testing.T) {
 }
 
 // TestGateDiscoveryByNodes tests that nodes can discover gates in the cluster
-func TestGateDiscoveryByNodes(t *testing.T) {
+func TestGateDiscoveryByNodes(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create a gateway cluster
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49003",
+		AdvertiseAddress: addr1,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -177,7 +184,7 @@ func TestGateDiscoveryByNodes(t *testing.T) {
 	defer gateCluster.Stop(ctx)
 
 	// Create a node cluster
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47020", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
 	// Wait for discovery
@@ -190,7 +197,7 @@ func TestGateDiscoveryByNodes(t *testing.T) {
 	if len(gates) != 1 {
 		t.Fatalf("Node cluster should see 1 gate, got %d", len(gates))
 	}
-	if gates[0] != "localhost:49003" {
+	if gates[0] != addr1 {
 		t.Fatalf("Expected gate localhost:49003, got %s", gates[0])
 	}
 
@@ -202,13 +209,16 @@ func TestGateDiscoveryByNodes(t *testing.T) {
 }
 
 // TestMultipleGatesDiscovery tests that multiple gates can discover each other
-func TestMultipleGatesDiscovery(t *testing.T) {
+func TestMultipleGatesDiscovery(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create first gateway
 	gw1Config := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49004",
+		AdvertiseAddress: addr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -230,7 +240,7 @@ func TestMultipleGatesDiscovery(t *testing.T) {
 
 	// Create second gateway
 	gw2Config := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49005",
+		AdvertiseAddress: addr3,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -272,12 +282,12 @@ func TestMultipleGatesDiscovery(t *testing.T) {
 	found1 := false
 	found2 := false
 	for _, g := range gates1 {
-		if g == "localhost:49005" {
+		if g == addr3 {
 			found1 = true
 		}
 	}
 	for _, g := range gates2 {
-		if g == "localhost:49004" {
+		if g == addr2 {
 			found2 = true
 		}
 	}
@@ -291,12 +301,15 @@ func TestMultipleGatesDiscovery(t *testing.T) {
 }
 
 // TestGateDynamicDiscovery tests that existing clusters discover new gates dynamically
-func TestGateDynamicDiscovery(t *testing.T) {
+func TestGateDynamicDiscovery(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create a node cluster first
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47030", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
 	// Wait for registration
@@ -310,7 +323,7 @@ func TestGateDynamicDiscovery(t *testing.T) {
 
 	// Create a gateway
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49006",
+		AdvertiseAddress: addr4,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -340,23 +353,26 @@ func TestGateDynamicDiscovery(t *testing.T) {
 	if len(updatedGates) != 1 {
 		t.Fatalf("Node should see 1 gate after it joined, got %d", len(updatedGates))
 	}
-	if updatedGates[0] != "localhost:49006" {
+	if updatedGates[0] != addr4 {
 		t.Fatalf("Expected gate localhost:49006, got %s", updatedGates[0])
 	}
 }
 
 // TestGateLeaveDetection tests that clusters detect when gates leave
-func TestGateLeaveDetection(t *testing.T) {
+func TestGateLeaveDetection(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create a node cluster
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47040", testPrefix)
+	nodeCluster := mustNewCluster(ctx, t, addr1, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
 	// Create a gateway
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49007",
+		AdvertiseAddress: addr1,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -403,20 +419,25 @@ func TestGateLeaveDetection(t *testing.T) {
 }
 
 // TestMixedClusterWithNodesAndGates tests a mixed cluster with both nodes and gates
-func TestMixedClusterWithNodesAndGates(t *testing.T) {
+func TestMixedClusterWithNodesAndGates(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	addr4 := testutil.GetFreeAddress()
+	
+
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	ctx := context.Background()
 
 	// Create two node clusters
-	node1 := mustNewCluster(ctx, t, "localhost:47050", testPrefix)
+	node1 := mustNewCluster(ctx, t, addr2, testPrefix)
 	defer node1.Stop(ctx)
 
-	node2 := mustNewCluster(ctx, t, "localhost:47051", testPrefix)
+	node2 := mustNewCluster(ctx, t, addr1, testPrefix)
 	defer node2.Stop(ctx)
 
 	// Create two gateway clusters
 	gw1Config := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49010",
+		AdvertiseAddress: addr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -437,7 +458,7 @@ func TestMixedClusterWithNodesAndGates(t *testing.T) {
 	defer gate1.Stop(ctx)
 
 	gw2Config := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49011",
+		AdvertiseAddress: addr3,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -484,7 +505,13 @@ func TestMixedClusterWithNodesAndGates(t *testing.T) {
 
 // TestClusterWithTwoGatesAndThreeNodes tests a cluster with 2 gates and 3 nodes
 // This verifies that all clusters can discover each other properly via etcd
-func TestClusterWithTwoGatesAndThreeNodes(t *testing.T) {
+func TestClusterWithTwoGatesAndThreeNodes(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	addr4 := testutil.GetFreeAddress()
+	addr5 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -492,18 +519,18 @@ func TestClusterWithTwoGatesAndThreeNodes(t *testing.T) {
 	ctx := context.Background()
 
 	// Create three node clusters
-	node1 := mustNewCluster(ctx, t, "localhost:47060", testPrefix)
+	node1 := mustNewCluster(ctx, t, addr2, testPrefix)
 	defer node1.Stop(ctx)
 
-	node2 := mustNewCluster(ctx, t, "localhost:47061", testPrefix)
+	node2 := mustNewCluster(ctx, t, addr1, testPrefix)
 	defer node2.Stop(ctx)
 
-	node3 := mustNewCluster(ctx, t, "localhost:47062", testPrefix)
+	node3 := mustNewCluster(ctx, t, addr2, testPrefix)
 	defer node3.Stop(ctx)
 
 	// Create two gateway clusters
 	gw1Config := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49020",
+		AdvertiseAddress: addr4,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -524,7 +551,7 @@ func TestClusterWithTwoGatesAndThreeNodes(t *testing.T) {
 	defer gate1.Stop(ctx)
 
 	gw2Config := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49021",
+		AdvertiseAddress: addr5,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}

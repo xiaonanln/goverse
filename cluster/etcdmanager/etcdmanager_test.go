@@ -411,7 +411,9 @@ func TestSharedLeaseResilience(t *testing.T) {
 }
 
 // TestRegisterKeyLeaseWithoutConnect tests registering without connection
-func TestRegisterKeyLeaseWithoutConnect(t *testing.T) {
+func TestRegisterKeyLeaseWithoutConnect(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	t.Parallel()
 
 	mgr, err := NewEtcdManager("localhost:2379", "")
@@ -423,8 +425,8 @@ func TestRegisterKeyLeaseWithoutConnect(t *testing.T) {
 
 	// Try to register without connecting
 	nodesPrefix := mgr.GetPrefix() + "/nodes/"
-	key := nodesPrefix + "localhost:47009"
-	_, err = mgr.RegisterKeyLease(ctx, key, "localhost:47009", NodeLeaseTTL)
+	key := nodesPrefix + addr
+	_, err = mgr.RegisterKeyLease(ctx, key, addr, NodeLeaseTTL)
 	if err == nil {
 		t.Fatal("RegisterKeyLease() should fail when not connected")
 	}

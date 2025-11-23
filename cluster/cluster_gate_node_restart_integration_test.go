@@ -30,7 +30,10 @@ func makeTestClusterConfig(etcdPrefix string) Config {
 
 // TestGateReconnectsToNodeAfterRestart tests that when a node shuts down and restarts
 // with the same address, the gate automatically reconnects to it
-func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
+func TestGateReconnectsToNodeAfterRestart(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -39,11 +42,11 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	ctx := context.Background()
 
 	// Use unique ports to avoid conflicts with other tests
-	nodeAddr := "localhost:47999"
+	nodeAddr := addr1
 
 	// Create a gateway cluster
 	gwConfig := &gate.GatewayConfig{
-		AdvertiseAddress: "localhost:49999",
+		AdvertiseAddress: addr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}

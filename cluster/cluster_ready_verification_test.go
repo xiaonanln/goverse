@@ -10,7 +10,9 @@ import (
 // TestClusterReadyRequiresBothConnectionsAndShardMapping demonstrates that the cluster
 // is only marked ready when BOTH node connections are established AND shard mapping is available.
 // This is a regression test for the issue where cluster was marked ready without waiting for node connections.
-func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
+func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
@@ -18,7 +20,7 @@ func TestClusterReadyRequiresBothConnectionsAndShardMapping(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start cluster using the helper
-	c := mustNewCluster(ctx, t, "localhost:47201", testPrefix)
+	c := mustNewCluster(ctx, t, addr, testPrefix)
 
 	// Wait for cluster to be ready (Start() initializes everything)
 	testutil.WaitForClusterReady(t, c)

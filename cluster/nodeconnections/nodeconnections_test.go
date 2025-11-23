@@ -3,6 +3,7 @@ package nodeconnections
 import (
 	"context"
 	"testing"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestNew(t *testing.T) {
@@ -74,10 +75,12 @@ func TestNodeConnections_NumConnections(t *testing.T) {
 	}
 }
 
-func TestNodeConnections_GetConnection_NotExists(t *testing.T) {
+func TestNodeConnections_GetConnection_NotExists(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	nc := New()
 
-	_, err := nc.GetConnection("localhost:50000")
+	_, err := nc.GetConnection(addr)
 	if err == nil {
 		t.Fatal("GetConnection should return error for non-existent connection")
 	}
@@ -96,20 +99,25 @@ func TestNodeConnections_GetAllConnections(t *testing.T) {
 	}
 }
 
-func TestNodeConnections_ConnectDisconnect(t *testing.T) {
+func TestNodeConnections_ConnectDisconnect(t *testing.T) {	addr := testutil.GetFreeAddress()
+	
+
 	nc := New()
 
 	// Note: We can't test actual connection establishment without a running server
 	// We test the connection management logic
 
 	// Test disconnect from non-existent node
-	err := nc.disconnectFromNode("localhost:60000")
+	err := nc.disconnectFromNode(addr2)
 	if err != nil {
 		t.Fatalf("Disconnecting from non-existent node should not error: %v", err)
 	}
 }
 
-func TestNodeConnections_SetNodes(t *testing.T) {
+func TestNodeConnections_SetNodes(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	
+
 	nc := New()
 
 	ctx := context.Background()
@@ -128,7 +136,7 @@ func TestNodeConnections_SetNodes(t *testing.T) {
 	// Test that SetNodes processes node list correctly
 	// Note: Actual connection attempts will fail without running servers, which is expected in unit tests
 	// The caller (cluster) should exclude this node's address from the list
-	nodes := []string{"localhost:50001", "localhost:50002"}
+	nodes := []string{addr, addr1}
 
 	nc.SetNodes(nodes)
 
