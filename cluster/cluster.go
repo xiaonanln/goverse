@@ -591,15 +591,15 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	}
 
 	// Execute the actual creation
-	// For gateways, execute synchronously since they don't risk deadlocks
-	// (gateways don't host objects so they don't hold object locks)
+	// For gates, execute synchronously since they don't risk deadlocks
+	// (gates don't host objects so they don't hold object locks)
 	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
 	req := &goverse_pb.CreateObjectRequest{
 		Type: objType,
 		Id:   objID,
 	}
 	if c.isGate() {
-		// Synchronous execution for gateways
+		// Synchronous execution for gates
 		_, err = client.CreateObject(ctx, req)
 		if err != nil {
 			c.logger.Errorf("%s - CreateObject %s failed on remote node: %v", c, objID, err)
@@ -626,7 +626,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 
 // DeleteObject deletes an object from the cluster.
 // It determines which node hosts the object and routes the deletion request accordingly.
-// For gateways, the deletion is performed synchronously. For nodes, it is performed
+// For gates, the deletion is performed synchronously. For nodes, it is performed
 // asynchronously to prevent deadlocks when called from within object methods.
 func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if objID == "" {
@@ -663,14 +663,14 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	}
 
 	// Execute the actual deletion
-	// For gateways, execute synchronously since they don't risk deadlocks
-	// (gateways don't host objects so they don't hold object locks)
+	// For gates, execute synchronously since they don't risk deadlocks
+	// (gates don't host objects so they don't hold object locks)
 	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
 	req := &goverse_pb.DeleteObjectRequest{
 		Id: objID,
 	}
 	if c.isGate() {
-		// Synchronous execution for gateways
+		// Synchronous execution for gates
 		_, err = client.DeleteObject(ctx, req)
 		if err != nil {
 			c.logger.Errorf("%s - DeleteObject %s failed on remote node: %v", c, objID, err)

@@ -44,12 +44,12 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create gate instance
-	gatewayConfig := &gate.GateConfig{
+	gateConfig := &gate.GateConfig{
 		AdvertiseAddress: config.AdvertiseAddress,
 		EtcdAddress:      config.EtcdAddress,
 		EtcdPrefix:       config.EtcdPrefix,
 	}
-	gw, err := gate.NewGate(gatewayConfig)
+	gw, err := gate.NewGate(gateConfig)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create gate: %w", err)

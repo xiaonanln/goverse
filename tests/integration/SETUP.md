@@ -75,33 +75,33 @@ The test infrastructure uses several helper classes:
 - **BinaryHelper.py**: Compiles Go binaries with optional coverage instrumentation
 - **Inspector.py**: Manages the inspector process for cluster visibility
 - **ChatServer.py**: Manages chat server (Goverse node) processes
-- **Gate.py**: Manages the gateway process for client connections
-- **ChatClient.py**: Python client that connects to the gateway and calls chat objects
+- **Gate.py**: Manages the gate process for client connections
+- **ChatClient.py**: Python client that connects to the gate and calls chat objects
 
 ### Component Roles
 
 1. **Inspector**: Provides HTTP/gRPC interface for cluster monitoring
 2. **Chat Server(s)**: Goverse nodes that host ChatRoom and ChatRoomMgr objects
 3. **Gate**: Handles client connections and routes calls to appropriate nodes
-4. **Chat Client**: Test client that connects to gateway and exercises chat functionality
+4. **Chat Client**: Test client that connects to gate and exercises chat functionality
 
 ## Known Issues
 
 ### Push Messaging Test (Disabled)
 
-The push messaging test is currently disabled due to a proto unmarshaling issue in the gateway:
+The push messaging test is currently disabled due to a proto unmarshaling issue in the gate:
 
 ```
 [ERROR] [Gate] Failed to unmarshal message for client: proto: not found
 ```
 
-**Issue**: The gateway cannot unmarshal `Client_NewMessageNotification` proto messages pushed from chat rooms to clients.
+**Issue**: The gate cannot unmarshal `Client_NewMessageNotification` proto messages pushed from chat rooms to clients.
 
-**Root Cause**: The gateway needs application-specific proto types registered to unmarshal push notifications. This appears to be an architecture/design issue where the gateway (which is application-agnostic) needs to handle application-specific message types.
+**Root Cause**: The gate needs application-specific proto types registered to unmarshal push notifications. This appears to be an architecture/design issue where the gate (which is application-agnostic) needs to handle application-specific message types.
 
 **Workaround**: The push messaging test is temporarily disabled. Basic chat functionality (list rooms, join, send, get messages) works correctly.
 
-**To Fix**: The gateway or cluster architecture needs to be updated to handle application-specific proto types for push messages.
+**To Fix**: The gate or cluster architecture needs to be updated to handle application-specific proto types for push messages.
 
 ## Cleanup
 
@@ -111,7 +111,7 @@ docker stop etcd-test
 docker rm etcd-test
 
 # Clean up built binaries
-rm -f /tmp/inspector /tmp/chat_server /tmp/gateway
+rm -f /tmp/inspector /tmp/chat_server /tmp/gate
 ```
 
 ## Coverage
