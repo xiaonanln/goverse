@@ -8,7 +8,8 @@ import (
 
 var (
 	// recentPorts tracks recently allocated ports to prevent immediate reuse
-	recentPorts   = make(map[int]bool)
+	// This is an append-only list where newer ports are added to the end
+	recentPorts   []int
 	recentPortsMu sync.Mutex
 )
 
@@ -19,6 +20,7 @@ var (
 // Panics if unable to allocate a port (should never happen in normal conditions).
 func GetFreePort() int {
 	const maxRetries = 100
+	const maxTrackedPorts = 1000
 
 	recentPortsMu.Lock()
 	defer recentPortsMu.Unlock()
@@ -33,15 +35,23 @@ func GetFreePort() int {
 		listener.Close()
 
 		// Check if this port was recently allocated
-		if !recentPorts[port] {
-			// Mark this port as recently used
-			recentPorts[port] = true
+		isRecent := false
+		for _, recentPort := range recentPorts {
+			if recentPort == port {
+				isRecent = true
+				break
+			}
+		}
 
-			// Clean up old entries if map gets too large (keep last 1000)
-			if len(recentPorts) > 1000 {
-				// Clear the map to prevent unbounded growth
-				recentPorts = make(map[int]bool)
-				recentPorts[port] = true
+		if !isRecent {
+			// Mark this port as recently used by adding to the list
+			recentPorts = append(recentPorts, port)
+
+			// Keep only the most recent ports (remove oldest if list is too long)
+			// This gradual cleanup maintains collision protection for recent ports
+			if len(recentPorts) > maxTrackedPorts {
+				// Remove the oldest entry (first element)
+				recentPorts = recentPorts[1:]
 			}
 
 			return port
