@@ -6,6 +6,7 @@ import (
 	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -13,8 +14,11 @@ import (
 // TestRegisterWithNodesCleanupRemovedNodes tests that when nodes are removed
 // from the connections map, their cancel functions are invoked
 func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	nodeAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-cleanup",
 	}
@@ -32,7 +36,7 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 	}
 
 	// Create mock node connections
-	conn, err := grpc.NewClient("localhost:47000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(nodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create mock connection: %v", err)
 	}
@@ -119,8 +123,11 @@ func TestRegisterWithNodesCleanupRemovedNodes(t *testing.T) {
 // TestRegisterWithNodesIdempotent tests that calling RegisterWithNodes multiple times
 // with the same nodes doesn't cancel existing registrations
 func TestRegisterWithNodesIdempotent(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	nodeAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-idempotent",
 	}
@@ -138,7 +145,7 @@ func TestRegisterWithNodesIdempotent(t *testing.T) {
 	}
 
 	// Create mock connection
-	conn, err := grpc.NewClient("localhost:47000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(nodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create mock connection: %v", err)
 	}
@@ -196,8 +203,10 @@ func (m *mockGateStream) Context() context.Context {
 // TestGatewayStopCancelsAllRegistrations tests that stopping the gateway
 // cancels all active node registrations
 func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-stop-cancels",
 	}
@@ -271,8 +280,10 @@ func TestGatewayStopCancelsAllRegistrations(t *testing.T) {
 // TestRegisterWithNodesEmptyMap tests that calling RegisterWithNodes with an empty map
 // cleans up all existing registrations
 func TestRegisterWithNodesEmptyMap(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-empty-map",
 	}

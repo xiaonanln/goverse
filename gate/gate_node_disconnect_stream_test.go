@@ -6,6 +6,7 @@ import (
 	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -28,8 +29,11 @@ import (
 // This is an integration test that verifies the gate's registerWithNode goroutine
 // properly handles stream.Recv() errors and performs cleanup when the stream closes.
 func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	nodeAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-stream-disconnect",
 	}
@@ -48,7 +52,7 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 
 	// Create mock node connection (this will fail to connect, but that's ok for this test)
 	// We just want to verify the cleanup behavior when RegisterGate call fails/stream closes
-	conn, err := grpc.NewClient("localhost:47000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(nodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create mock connection: %v", err)
 	}
@@ -56,7 +60,7 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 
 	client := goverse_pb.NewGoverseClient(conn)
 	connections := map[string]goverse_pb.GoverseClient{
-		"localhost:47000": client,
+		nodeAddr: client,
 	}
 
 	// Start registration in a goroutine since it will try to connect and may block/fail
@@ -95,8 +99,11 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 // This test specifically verifies the cleanup path in RegisterWithNodes
 // when nodes are no longer present in the provided connections map.
 func TestGateCleanupOnNodeRemoval(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	nodeAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49100",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-node-removal",
 	}
@@ -118,7 +125,7 @@ func TestGateCleanupOnNodeRemoval(t *testing.T) {
 	mockStream := &mockGateStream{ctx: ctx1}
 
 	gateway.nodeRegMu.Lock()
-	gateway.nodeRegs["localhost:47001"] = &nodeReg{
+	gateway.nodeRegs[nodeAddr] = &nodeReg{
 		stream: mockStream,
 		cancel: cancel1,
 		ctx:    ctx1,
@@ -127,7 +134,7 @@ func TestGateCleanupOnNodeRemoval(t *testing.T) {
 
 	// Verify registration exists
 	gateway.nodeRegMu.RLock()
-	_, exists := gateway.nodeRegs["localhost:47001"]
+	_, exists := gateway.nodeRegs[nodeAddr]
 	gateway.nodeRegMu.RUnlock()
 
 	if !exists {
@@ -152,7 +159,7 @@ func TestGateCleanupOnNodeRemoval(t *testing.T) {
 
 	// Verify the registration was removed
 	gateway.nodeRegMu.RLock()
-	_, exists = gateway.nodeRegs["localhost:47001"]
+	_, exists = gateway.nodeRegs[nodeAddr]
 	gateway.nodeRegMu.RUnlock()
 
 	if exists {

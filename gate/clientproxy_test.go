@@ -86,7 +86,7 @@ func TestClientProxyGetID(t *testing.T) {
 		clientID string
 	}{
 		{"simple ID", "client-1"},
-		{"gateway prefix", "localhost:49000/client-123"},
+		{"gateway prefix", "localhost:12345/client-123"},
 		{"complex ID", "gateway.example.com:8080/abc-def-123"},
 	}
 
