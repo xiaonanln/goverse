@@ -9,8 +9,8 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
-func TestRecordObjectCreated(t *testing.T) {	addr := testutil.GetFreeAddress()
-	
+func TestRecordObjectCreated(t *testing.T) {
+	addr := testutil.GetFreeAddress()
 
 	// Reset metrics before test
 	ObjectCount.Reset()
@@ -39,8 +39,8 @@ func TestRecordObjectCreated(t *testing.T) {	addr := testutil.GetFreeAddress()
 	}
 }
 
-func TestRecordObjectDeleted(t *testing.T) {	addr := testutil.GetFreeAddress()
-	
+func TestRecordObjectDeleted(t *testing.T) {
+	addr := testutil.GetFreeAddress()
 
 	// Reset metrics before test
 	ObjectCount.Reset()
@@ -60,31 +60,31 @@ func TestRecordObjectDeleted(t *testing.T) {	addr := testutil.GetFreeAddress()
 	}
 }
 
-func TestMultipleNodes(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestMultipleNodes(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	addr3 := testutil.GetFreeAddress()
-	
 
 	// Reset metrics before test
 	ObjectCount.Reset()
 
 	// Test multiple nodes with different shards
-	RecordObjectCreated(addr, "TestObject", 0)
-	RecordObjectCreated(addr, "TestObject", 1)
-	RecordObjectCreated(addr1, "AnotherType", 2)
+	RecordObjectCreated(addr1, "TestObject", 0)
+	RecordObjectCreated(addr2, "TestObject", 1)
+	RecordObjectCreated(addr3, "AnotherType", 2)
 
 	// Verify each node has the correct count
-	count1 := testutil.ToFloat64(ObjectCount.WithLabelValues(addr, "TestObject", "0"))
+	count1 := testutil.ToFloat64(ObjectCount.WithLabelValues(addr1, "TestObject", "0"))
 	if count1 != 1.0 {
 		t.Fatalf("Expected count for node 47000 to be 1.0, got %f", count1)
 	}
 
-	count2 := testutil.ToFloat64(ObjectCount.WithLabelValues(addr, "TestObject", "1"))
+	count2 := testutil.ToFloat64(ObjectCount.WithLabelValues(addr2, "TestObject", "1"))
 	if count2 != 1.0 {
 		t.Fatalf("Expected count for node 47001 to be 1.0, got %f", count2)
 	}
 
-	count3 := testutil.ToFloat64(ObjectCount.WithLabelValues(addr1, "AnotherType", "2"))
+	count3 := testutil.ToFloat64(ObjectCount.WithLabelValues(addr3, "AnotherType", "2"))
 	if count3 != 1.0 {
 		t.Fatalf("Expected count for node 47002 to be 1.0, got %f", count3)
 	}
@@ -101,32 +101,32 @@ func TestMetricsRegistration(t *testing.T) {
 	}
 }
 
-func TestSetAssignedShardCount(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestSetAssignedShardCount(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
-	
 
 	// Reset metrics before test
 	AssignedShardsTotal.Reset()
 
 	// Set shard count for a node
-	SetAssignedShardCount(addr, 100)
+	SetAssignedShardCount(addr1, 100)
 
 	// Verify the metric was recorded
-	count := testutil.ToFloat64(AssignedShardsTotal.WithLabelValues(addr))
+	count := testutil.ToFloat64(AssignedShardsTotal.WithLabelValues(addr1))
 	if count != 100.0 {
 		t.Fatalf("Expected shard count to be 100.0, got %f", count)
 	}
 
 	// Update shard count
-	SetAssignedShardCount(addr, 150)
-	count = testutil.ToFloat64(AssignedShardsTotal.WithLabelValues(addr))
+	SetAssignedShardCount(addr1, 150)
+	count = testutil.ToFloat64(AssignedShardsTotal.WithLabelValues(addr1))
 	if count != 150.0 {
 		t.Fatalf("Expected shard count to be 150.0, got %f", count)
 	}
 
 	// Set shard count for another node
-	SetAssignedShardCount(addr, 50)
-	count = testutil.ToFloat64(AssignedShardsTotal.WithLabelValues(addr))
+	SetAssignedShardCount(addr2, 50)
+	count = testutil.ToFloat64(AssignedShardsTotal.WithLabelValues(addr2))
 	if count != 50.0 {
 		t.Fatalf("Expected shard count for node 47001 to be 50.0, got %f", count)
 	}

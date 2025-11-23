@@ -36,7 +36,8 @@ func TestServerCreateObject_ShardIDComputation(t *testing.T) {
 
 // TestServerCreateObject_ValidationLogic tests that the validation error message
 // format is correct for the new shard TargetNode check
-func TestServerCreateObject_ValidationLogic(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestServerCreateObject_ValidationLogic(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 

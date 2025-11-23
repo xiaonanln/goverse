@@ -20,7 +20,7 @@ func (obj *TestObject) OnCreated() {
 }
 
 // TestServerCreateObject_RequiresID tests that Server.CreateObject requires a non-empty ID
-func TestServerCreateObject_RequiresID(t *testing.T) {	addr := testutil.GetFreeAddress()
+func TestServerCreateObject_RequiresID(t *testing.T) {
 	addr := testutil.GetFreeAddress()
 
 	

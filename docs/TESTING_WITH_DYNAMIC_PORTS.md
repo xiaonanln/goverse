@@ -25,22 +25,18 @@ Use the dynamic port allocation utilities in `util/testutil`:
 ### 1. Get a Free Port Number
 
 ```go
-port, err := testutil.GetFreePort()
-if err != nil {
-    t.Fatalf("Failed to get free port: %v", err)
-}
-// Use: localhost:12345 (actual port will vary)
+port := testutil.GetFreePort()
+// Returns: 12345 (actual port will vary)
 ```
 
 ### 2. Get a Free Address (Recommended)
 
 ```go
-addr, err := testutil.GetFreeAddress()
-if err != nil {
-    t.Fatalf("Failed to get free address: %v", err)
-}
+addr := testutil.GetFreeAddress()
 // Returns: "localhost:12345" (port will vary)
 ```
+
+**Note**: These functions panic if unable to allocate a port (should never happen in normal conditions).
 
 ### 3. Use TestServerHelper with Dynamic Ports
 
@@ -70,10 +66,7 @@ actualAddr := testServer.GetAddress()
 ```go
 func TestMyNodeFeature(t *testing.T) {
     // Get a free address for the node
-    nodeAddr, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get free address: %v", err)
-    }
+    nodeAddr := testutil.GetFreeAddress()
 
     // Create node with dynamic address
     n := node.NewNode(nodeAddr)
@@ -90,14 +83,8 @@ func TestDistributedFeature(t *testing.T) {
     ctx := context.Background()
 
     // Get free addresses for multiple nodes
-    addr1, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get address for node1: %v", err)
-    }
-    addr2, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get address for node2: %v", err)
-    }
+    addr1 := testutil.GetFreeAddress()
+    addr2 := testutil.GetFreeAddress()
 
     // Create nodes
     node1 := node.NewNode(addr1)
@@ -132,15 +119,8 @@ func TestGateNodeIntegration(t *testing.T) {
     etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
     // Get free addresses
-    nodeAddr, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get node address: %v", err)
-    }
-
-    gateAddr, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get gate address: %v", err)
-    }
+    nodeAddr := testutil.GetFreeAddress()
+    gateAddr := testutil.GetFreeAddress()
 
     // Create node cluster
     nodeCluster := mustNewCluster(ctx, t, nodeAddr, etcdPrefix)
@@ -197,10 +177,7 @@ import (
 nodeAddr := "localhost:47000"
 
 // After
-nodeAddr, err := testutil.GetFreeAddress()
-if err != nil {
-    t.Fatalf("Failed to get free address: %v", err)
-}
+nodeAddr := testutil.GetFreeAddress()
 ```
 
 ### Step 3: Update TestServerHelper usage

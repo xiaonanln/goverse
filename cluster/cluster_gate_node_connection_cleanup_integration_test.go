@@ -18,7 +18,8 @@ import (
 // 2. Node tracks the gate connection in its gateChannels map
 // 3. When gate is shutdown, the node detects disconnection via stream.Context().Done()
 // 4. Node automatically cleans up the gate connection (removes from gateChannels)
-func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 
@@ -140,7 +141,8 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {	addr1 := testut
 
 // TestGateNodeConnectionCleanupWithMultipleGates tests that when multiple gates
 // connect to a node and one is shutdown, only that gate's connection is cleaned up
-func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	addr3 := testutil.GetFreeAddress()
@@ -271,7 +273,8 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {	addr1 := tes
 
 // TestGateNodeReconnection tests that if a gate disconnects and reconnects,
 // the node properly updates the connection
-func TestGateNodeReconnection(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestGateNodeReconnection(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 

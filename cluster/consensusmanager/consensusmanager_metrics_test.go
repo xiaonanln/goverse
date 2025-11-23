@@ -32,7 +32,8 @@ func TestUpdateShardMetrics_EmptyState(t *testing.T) {
 	// Note: With no nodes, no metrics are reported
 }
 
-func TestUpdateShardMetrics_WithShards(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestUpdateShardMetrics_WithShards(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	
 
@@ -74,7 +75,8 @@ func TestUpdateShardMetrics_WithShards(t *testing.T) {	addr1 := testutil.GetFree
 	}
 }
 
-func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	addr3 := testutil.GetFreeAddress()
 	
@@ -120,7 +122,8 @@ func TestUpdateShardMetrics_NodeWithNoShards(t *testing.T) {	addr1 := testutil.G
 	}
 }
 
-func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	
 
@@ -160,7 +163,8 @@ func TestUpdateShardMetrics_UnclaimedShards(t *testing.T) {	addr1 := testutil.Ge
 	}
 }
 
-func TestUpdateShardMetrics_ShardMigration(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestUpdateShardMetrics_ShardMigration(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	
 
@@ -205,7 +209,8 @@ func TestUpdateShardMetrics_ShardMigration(t *testing.T) {	addr1 := testutil.Get
 	}
 }
 
-func TestUpdateShardMetrics_NoMigrations(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestUpdateShardMetrics_NoMigrations(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	
 
@@ -240,7 +245,8 @@ func TestUpdateShardMetrics_NoMigrations(t *testing.T) {	addr1 := testutil.GetFr
 	}
 }
 
-func TestUpdateShardMetrics_MultipleMigrations(t *testing.T) {	addr1 := testutil.GetFreeAddress()
+func TestUpdateShardMetrics_MultipleMigrations(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 	addr3 := testutil.GetFreeAddress()
 	
