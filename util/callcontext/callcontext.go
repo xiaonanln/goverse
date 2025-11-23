@@ -18,16 +18,16 @@ func WithClientID(ctx context.Context, clientID string) context.Context {
 	return context.WithValue(ctx, clientIDKey, clientID)
 }
 
-// GetClientID retrieves the client ID from the context
+// ClientID retrieves the client ID from the context
 // Returns empty string if no client ID is present
-func GetClientID(ctx context.Context) string {
+func ClientID(ctx context.Context) string {
 	if clientID, ok := ctx.Value(clientIDKey).(string); ok {
 		return clientID
 	}
 	return ""
 }
 
-// HasClientID checks if the context contains a client ID
-func HasClientID(ctx context.Context) bool {
+// FromClient checks if the context contains a client ID
+func FromClient(ctx context.Context) bool {
 	return ctx.Value(clientIDKey) != nil
 }

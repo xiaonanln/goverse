@@ -266,7 +266,7 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 
 // CallObject implements the CallObject RPC
 func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
-	// Inject client_id into the context if present in the request
+	// Inject client_id into the context so it can be passed to the node
 	if req.ClientId != "" {
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}

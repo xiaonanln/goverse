@@ -85,7 +85,7 @@ func ClusterReady() <-chan bool {
 //	    // ...
 //	}
 func GetClientID(ctx context.Context) string {
-	return callcontext.GetClientID(ctx)
+	return callcontext.ClientID(ctx)
 }
 
 // HasClientID checks if the call context contains a client ID.
@@ -99,5 +99,5 @@ func GetClientID(ctx context.Context) string {
 //	    // Handle internal call
 //	}
 func HasClientID(ctx context.Context) bool {
-	return callcontext.HasClientID(ctx)
+	return callcontext.FromClient(ctx)
 }
