@@ -78,8 +78,11 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Get dynamic addresses
+	nodeAddr := testutil.GetFreeAddress()
+	gateAddr := testutil.GetFreeAddress()
+
 	// 1. Create and start a node with cluster
-	nodeAddr := "localhost:48010"
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 	t.Logf("Created node cluster at %s", nodeAddr)
@@ -94,10 +97,9 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 		t.Fatalf("Failed to start node mock server: %v", err)
 	}
 	t.Cleanup(func() { nodeServer.Stop() })
-	t.Logf("Started node server at %s", nodeAddr)
+	t.Logf("Started node server at %s", nodeServer.GetAddress())
 
 	// 2. Create and start the real GatewayServer
-	gateAddr := "localhost:48011"
 	gwServerConfig := &GatewayServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
@@ -213,8 +215,11 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Get dynamic addresses
+	nodeAddr := testutil.GetFreeAddress()
+	gateAddr := testutil.GetFreeAddress()
+
 	// 1. Create and start a node with cluster
-	nodeAddr := "localhost:48020"
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 	t.Logf("Created node cluster at %s", nodeAddr)
@@ -228,10 +233,9 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		t.Fatalf("Failed to start node mock server: %v", err)
 	}
 	t.Cleanup(func() { nodeServer.Stop() })
-	t.Logf("Started node server at %s", nodeAddr)
+	t.Logf("Started node server at %s", nodeServer.GetAddress())
 
 	// 2. Create and start the real GatewayServer
-	gateAddr := "localhost:48021"
 	gwServerConfig := &GatewayServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,

@@ -95,8 +95,11 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	ctx := context.Background()
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
+	// Get dynamic addresses
+	nodeAddr := testutil.GetFreeAddress()
+	gateAddr := testutil.GetFreeAddress()
+
 	// Create and start a node with cluster (so it registers with etcd)
-	nodeAddr := "localhost:48001"
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, etcdPrefix)
 	testNode := nodeCluster.GetThisNode()
 	t.Logf("Created node cluster at %s", nodeAddr)
@@ -114,10 +117,9 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 		t.Fatalf("Failed to start node mock server: %v", err)
 	}
 	t.Cleanup(func() { nodeServer.Stop() })
-	t.Logf("Started mock node server at %s", nodeAddr)
+	t.Logf("Started mock node server at %s", nodeServer.GetAddress())
 
 	// Create and start the real GatewayServer
-	gateAddr := "localhost:48002"
 	gwServerConfig := &GatewayServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
@@ -319,10 +321,12 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	ctx := context.Background()
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create and start 3 nodes with cluster
-	nodeAddr1 := "localhost:49001"
-	nodeAddr2 := "localhost:49002"
-	nodeAddr3 := "localhost:49003"
+	// Get dynamic addresses for 3 nodes and 2 gates
+	nodeAddr1 := testutil.GetFreeAddress()
+	nodeAddr2 := testutil.GetFreeAddress()
+	nodeAddr3 := testutil.GetFreeAddress()
+	gateAddr1 := testutil.GetFreeAddress()
+	gateAddr2 := testutil.GetFreeAddress()
 
 	// Node 1
 	nodeCluster1 := mustNewCluster(ctx, t, nodeAddr1, etcdPrefix)
@@ -339,7 +343,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		t.Fatalf("Failed to start node 1 mock server: %v", err)
 	}
 	t.Cleanup(func() { nodeServer1.Stop() })
-	t.Logf("Started mock node server 1 at %s", nodeAddr1)
+	t.Logf("Started mock node server 1 at %s", nodeServer1.GetAddress())
 
 	// Node 2
 	nodeCluster2 := mustNewCluster(ctx, t, nodeAddr2, etcdPrefix)
@@ -356,7 +360,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		t.Fatalf("Failed to start node 2 mock server: %v", err)
 	}
 	t.Cleanup(func() { nodeServer2.Stop() })
-	t.Logf("Started mock node server 2 at %s", nodeAddr2)
+	t.Logf("Started mock node server 2 at %s", nodeServer2.GetAddress())
 
 	// Node 3
 	nodeCluster3 := mustNewCluster(ctx, t, nodeAddr3, etcdPrefix)
@@ -373,7 +377,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		t.Fatalf("Failed to start node 3 mock server: %v", err)
 	}
 	t.Cleanup(func() { nodeServer3.Stop() })
-	t.Logf("Started mock node server 3 at %s", nodeAddr3)
+	t.Logf("Started mock node server 3 at %s", nodeServer3.GetAddress())
 
 	// Wait for nodes to discover each other and stabilize
 	testutil.WaitForClusterReady(t, nodeCluster1)
@@ -381,7 +385,6 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	testutil.WaitForClusterReady(t, nodeCluster3)
 
 	// Create and start Gateway 1
-	gateAddr1 := "localhost:49011"
 	gwServerConfig1 := &GatewayServerConfig{
 		ListenAddress:    gateAddr1,
 		AdvertiseAddress: gateAddr1,
@@ -414,7 +417,6 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	t.Logf("Started gateway server 1 at %s", gateAddr1)
 
 	// Create and start Gateway 2
-	gateAddr2 := "localhost:49012"
 	gwServerConfig2 := &GatewayServerConfig{
 		ListenAddress:    gateAddr2,
 		AdvertiseAddress: gateAddr2,

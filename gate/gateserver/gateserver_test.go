@@ -6,11 +6,16 @@ import (
 	"time"
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestNewGatewayServer(t *testing.T) {
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+	addr3 := testutil.GetFreeAddress()
+	
 	tests := []struct {
 		name       string
 		config     *GatewayServerConfig
@@ -20,8 +25,8 @@ func TestNewGatewayServer(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49001",
-				AdvertiseAddress: "localhost:49001",
+				ListenAddress:    addr1,
+				AdvertiseAddress: addr1,
 				EtcdAddress:      "localhost:2379",
 				EtcdPrefix:       "/test-gateway",
 			},
@@ -30,8 +35,8 @@ func TestNewGatewayServer(t *testing.T) {
 		{
 			name: "valid config with default prefix",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49002",
-				AdvertiseAddress: "localhost:49002",
+				ListenAddress:    addr2,
+				AdvertiseAddress: addr2,
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
@@ -46,7 +51,7 @@ func TestNewGatewayServer(t *testing.T) {
 			name: "empty listen address",
 			config: &GatewayServerConfig{
 				ListenAddress:    "",
-				AdvertiseAddress: "localhost:49003",
+				AdvertiseAddress: addr3,
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr:    true,
@@ -55,7 +60,7 @@ func TestNewGatewayServer(t *testing.T) {
 		{
 			name: "empty advertise address",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49003",
+				ListenAddress:    addr3,
 				AdvertiseAddress: "",
 				EtcdAddress:      "localhost:2379",
 			},
@@ -65,8 +70,8 @@ func TestNewGatewayServer(t *testing.T) {
 		{
 			name: "empty etcd address",
 			config: &GatewayServerConfig{
-				ListenAddress:    ":49003",
-				AdvertiseAddress: "localhost:49003",
+				ListenAddress:    addr3,
+				AdvertiseAddress: addr3,
 				EtcdAddress:      "",
 			},
 			wantErr:    true,
@@ -101,9 +106,11 @@ func TestNewGatewayServer(t *testing.T) {
 }
 
 func TestGatewayServerStartStop(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayServerConfig{
-		ListenAddress:    ":49010",
-		AdvertiseAddress: "localhost:49010",
+		ListenAddress:    gateAddr,
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-lifecycle",
 	}
@@ -127,7 +134,7 @@ func TestGatewayServerStartStop(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify server is listening by attempting connection
-	conn, err := grpc.NewClient("localhost:49010", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to gateway server: %v", err)
 	}
@@ -159,9 +166,11 @@ func TestGatewayServerStartStop(t *testing.T) {
 }
 
 func TestGatewayServerMultipleStops(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayServerConfig{
-		ListenAddress:    ":49011",
-		AdvertiseAddress: "localhost:49011",
+		ListenAddress:    gateAddr,
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-multistop",
 	}
@@ -190,9 +199,11 @@ func TestGatewayServerMultipleStops(t *testing.T) {
 }
 
 func TestGatewayServerRPCMethods(t *testing.T) {
+	gateAddr := testutil.GetFreeAddress()
+	
 	config := &GatewayServerConfig{
-		ListenAddress:    ":49012",
-		AdvertiseAddress: "localhost:49012",
+		ListenAddress:    gateAddr,
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-rpc",
 	}
@@ -212,7 +223,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Connect to server
-	conn, err := grpc.NewClient("localhost:49012", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to gateway server: %v", err)
 	}
