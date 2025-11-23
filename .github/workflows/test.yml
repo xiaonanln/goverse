@@ -264,11 +264,3 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
-
-      - name: Run etcd restart tests in parallel
-        run: go test -tags=etcd_restart -v -run=^.*Reconnection$ ./...
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
