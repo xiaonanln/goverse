@@ -37,7 +37,8 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a cluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47101", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	cluster1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
 	node1 := cluster1.GetThisNode()
 
 	// Set the cluster singleton so object methods can use This()
@@ -50,7 +51,7 @@ func TestAsyncCreateObjectFromMethod(t *testing.T) {
 	// Start mock gRPC server
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47101", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
@@ -107,7 +108,8 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a cluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47102", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	cluster1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
 	node1 := cluster1.GetThisNode()
 
 	// Set the cluster singleton so object methods can use This()
@@ -120,7 +122,7 @@ func TestAsyncDeleteObjectFromMethod(t *testing.T) {
 	// Start mock gRPC server
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47102", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
@@ -183,7 +185,8 @@ func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a cluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47103", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	cluster1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
 	node1 := cluster1.GetThisNode()
 
 	// Set the cluster singleton so object methods can use This()
@@ -196,7 +199,7 @@ func TestAsyncOperationsReturnImmediately(t *testing.T) {
 	// Start mock gRPC server
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47103", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
