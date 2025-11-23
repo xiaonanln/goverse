@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewClientProxy(t *testing.T) {
-	clientID := "test-gateway/test-client-123"
+	clientID := "test-gate/test-client-123"
 	proxy := NewClientProxy(clientID)
 
 	if proxy == nil {
@@ -25,7 +25,7 @@ func TestNewClientProxy(t *testing.T) {
 }
 
 func TestClientProxyMessageChan(t *testing.T) {
-	clientID := "test-gateway/test-client-123"
+	clientID := "test-gate/test-client-123"
 	proxy := NewClientProxy(clientID)
 
 	msgChan := proxy.MessageChan()
@@ -57,7 +57,7 @@ func TestClientProxyMessageChan(t *testing.T) {
 }
 
 func TestClientProxyClose(t *testing.T) {
-	clientID := "test-gateway/test-client-123"
+	clientID := "test-gate/test-client-123"
 	proxy := NewClientProxy(clientID)
 
 	msgChan := proxy.MessageChan()
@@ -86,8 +86,8 @@ func TestClientProxyGetID(t *testing.T) {
 		clientID string
 	}{
 		{"simple ID", "client-1"},
-		{"gateway prefix", "localhost:49000/client-123"},
-		{"complex ID", "gateway.example.com:8080/abc-def-123"},
+		{"gate prefix", "localhost:49000/client-123"},
+		{"complex ID", "gate.example.com:8080/abc-def-123"},
 	}
 
 	for _, tt := range tests {

@@ -7,8 +7,8 @@ import (
 	"github.com/xiaonanln/goverse/node"
 )
 
-// TestClusterNodeAndGatewaySupport tests that cluster properly supports both node and gateway
-func TestClusterNodeAndGatewaySupport(t *testing.T) {
+// TestClusterNodeAndGateSupport tests that cluster properly supports both node and gate
+func TestClusterNodeAndGateSupport(t *testing.T) {
 	t.Run("node cluster", func(t *testing.T) {
 		n := node.NewNode("localhost:47000")
 		c := newClusterForTesting(n, "TestNodeCluster")
@@ -17,8 +17,8 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 		if !c.isNode() {
 			t.Fatalf("Expected isNode() to return true for node cluster")
 		}
-		if c.isGateway() {
-			t.Fatalf("Expected isGateway() to return false for node cluster")
+		if c.isGate() {
+			t.Fatalf("Expected isGate() to return false for node cluster")
 		}
 
 		// Test getAdvertiseAddr
@@ -32,9 +32,9 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 			t.Fatalf("Expected GetThisNode() to return the node instance")
 		}
 
-		// Test GetThisGateway
-		if c.GetThisGateway() != nil {
-			t.Fatalf("Expected GetThisGateway() to return nil for node cluster")
+		// Test GetThisGate
+		if c.GetThisGate() != nil {
+			t.Fatalf("Expected GetThisGate() to return nil for node cluster")
 		}
 
 		// Test String representation
@@ -46,29 +46,29 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 		t.Logf("Node cluster string: %s", str)
 	})
 
-	t.Run("gateway cluster", func(t *testing.T) {
-		gwConfig := &gate.GatewayConfig{
+	t.Run("gate cluster", func(t *testing.T) {
+		gwConfig := &gate.GateConfig{
 			AdvertiseAddress: "localhost:49000",
 			EtcdAddress:      "localhost:2379",
-			EtcdPrefix:       "/test-gateway",
+			EtcdPrefix:       "/test-gate",
 		}
-		gw, err := gate.NewGateway(gwConfig)
+		gw, err := gate.NewGate(gwConfig)
 		if err != nil {
-			t.Fatalf("Failed to create gateway: %v", err)
+			t.Fatalf("Failed to create gate: %v", err)
 		}
 		defer gw.Stop()
 
-		c, err := newClusterWithEtcdForTestingGate("GatewayCluster", gw, "localhost:2379", "/test-gateway-cluster")
+		c, err := newClusterWithEtcdForTestingGate("GateCluster", gw, "localhost:2379", "/test-gate-cluster")
 		if err != nil {
-			t.Fatalf("Failed to create cluster with gateway: %v", err)
+			t.Fatalf("Failed to create cluster with gate: %v", err)
 		}
 
-		// Test gateway cluster identification
+		// Test gate cluster identification
 		if c.isNode() {
-			t.Fatalf("Expected isNode() to return false for gateway cluster")
+			t.Fatalf("Expected isNode() to return false for gate cluster")
 		}
-		if !c.isGateway() {
-			t.Fatalf("Expected isGateway() to return true for gateway cluster")
+		if !c.isGate() {
+			t.Fatalf("Expected isGate() to return true for gate cluster")
 		}
 
 		// Test getAdvertiseAddr
@@ -79,12 +79,12 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 
 		// Test GetThisNode
 		if c.GetThisNode() != nil {
-			t.Fatalf("Expected GetThisNode() to return nil for gateway cluster")
+			t.Fatalf("Expected GetThisNode() to return nil for gate cluster")
 		}
 
-		// Test GetThisGateway
-		if c.GetThisGateway() != gw {
-			t.Fatalf("Expected GetThisGateway() to return the gateway instance")
+		// Test GetThisGate
+		if c.GetThisGate() != gw {
+			t.Fatalf("Expected GetThisGate() to return the gate instance")
 		}
 
 		// Test String representation
@@ -92,38 +92,38 @@ func TestClusterNodeAndGatewaySupport(t *testing.T) {
 		if str == "" {
 			t.Fatalf("Expected non-empty string representation")
 		}
-		// Check that string contains "gateway" type indicator
-		t.Logf("Gateway cluster string: %s", str)
+		// Check that string contains "gate" type indicator
+		t.Logf("Gate cluster string: %s", str)
 	})
 }
 
-// TestClusterOperationsWithGateway tests that node-only operations return appropriate results for gateway clusters
-func TestClusterOperationsWithGateway(t *testing.T) {
-	gwConfig := &gate.GatewayConfig{
+// TestClusterOperationsWithGate tests that node-only operations return appropriate results for gate clusters
+func TestClusterOperationsWithGate(t *testing.T) {
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49000",
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-ops",
+		EtcdPrefix:       "/test-gate-ops",
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 	defer gw.Stop()
 
-	c, err := newClusterWithEtcdForTestingGate("GatewayCluster", gw, "localhost:2379", "/test-gateway-cluster-ops")
+	c, err := newClusterWithEtcdForTestingGate("GateCluster", gw, "localhost:2379", "/test-gate-cluster-ops")
 	if err != nil {
-		t.Fatalf("Failed to create cluster with gateway: %v", err)
+		t.Fatalf("Failed to create cluster with gate: %v", err)
 	}
 
-	// Test that node-only operations handle gateway gracefully
+	// Test that node-only operations handle gate gracefully
 	t.Run("releaseShardOwnership", func(t *testing.T) {
-		// Should not panic for gateway clusters
+		// Should not panic for gate clusters
 		c.releaseShardOwnership(nil)
 		// Test passes if no panic occurs
 	})
 
 	t.Run("removeObjectsNotBelongingToThisNode", func(t *testing.T) {
-		// Should not panic for gateway clusters
+		// Should not panic for gate clusters
 		c.removeObjectsNotBelongingToThisNode(nil)
 		// Test passes if no panic occurs
 	})

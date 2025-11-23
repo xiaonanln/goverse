@@ -10,26 +10,26 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func TestNewGatewayServer(t *testing.T) {
+func TestNewGateServer(t *testing.T) {
 	tests := []struct {
 		name       string
-		config     *GatewayServerConfig
+		config     *GateServerConfig
 		wantErr    bool
 		errContain string
 	}{
 		{
 			name: "valid config",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49001",
 				AdvertiseAddress: "localhost:49001",
 				EtcdAddress:      "localhost:2379",
-				EtcdPrefix:       "/test-gateway",
+				EtcdPrefix:       "/test-gate",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid config with default prefix",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49002",
 				AdvertiseAddress: "localhost:49002",
 				EtcdAddress:      "localhost:2379",
@@ -44,7 +44,7 @@ func TestNewGatewayServer(t *testing.T) {
 		},
 		{
 			name: "empty listen address",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    "",
 				AdvertiseAddress: "localhost:49003",
 				EtcdAddress:      "localhost:2379",
@@ -54,7 +54,7 @@ func TestNewGatewayServer(t *testing.T) {
 		},
 		{
 			name: "empty advertise address",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49003",
 				AdvertiseAddress: "",
 				EtcdAddress:      "localhost:2379",
@@ -64,7 +64,7 @@ func TestNewGatewayServer(t *testing.T) {
 		},
 		{
 			name: "empty etcd address",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49003",
 				AdvertiseAddress: "localhost:49003",
 				EtcdAddress:      "",
@@ -76,13 +76,13 @@ func TestNewGatewayServer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, err := NewGatewayServer(tt.config)
+			server, err := NewGateServer(tt.config)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("NewGatewayServer() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("NewGateServer() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errContain != "" {
 				if !contains(err.Error(), tt.errContain) {
-					t.Fatalf("NewGatewayServer() error = %v, want error containing %q", err, tt.errContain)
+					t.Fatalf("NewGateServer() error = %v, want error containing %q", err, tt.errContain)
 				}
 			}
 			if server != nil {
@@ -100,17 +100,17 @@ func TestNewGatewayServer(t *testing.T) {
 	}
 }
 
-func TestGatewayServerStartStop(t *testing.T) {
-	config := &GatewayServerConfig{
+func TestGateServerStartStop(t *testing.T) {
+	config := &GateServerConfig{
 		ListenAddress:    ":49010",
 		AdvertiseAddress: "localhost:49010",
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-lifecycle",
+		EtcdPrefix:       "/test-gate-lifecycle",
 	}
 
-	server, err := NewGatewayServer(config)
+	server, err := NewGateServer(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
 	// Create context with timeout
@@ -129,14 +129,14 @@ func TestGatewayServerStartStop(t *testing.T) {
 	// Verify server is listening by attempting connection
 	conn, err := grpc.NewClient("localhost:49010", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to connect to gateway server: %v", err)
+		t.Fatalf("Failed to connect to gate server: %v", err)
 	}
 	defer conn.Close()
 
 	// Create client
 	client := gate_pb.NewGateServiceClient(conn)
 	if client == nil {
-		t.Fatalf("Failed to create gateway client")
+		t.Fatalf("Failed to create gate client")
 	}
 
 	// Cancel context to trigger shutdown
@@ -158,17 +158,17 @@ func TestGatewayServerStartStop(t *testing.T) {
 	}
 }
 
-func TestGatewayServerMultipleStops(t *testing.T) {
-	config := &GatewayServerConfig{
+func TestGateServerMultipleStops(t *testing.T) {
+	config := &GateServerConfig{
 		ListenAddress:    ":49011",
 		AdvertiseAddress: "localhost:49011",
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-multistop",
+		EtcdPrefix:       "/test-gate-multistop",
 	}
 
-	server, err := NewGatewayServer(config)
+	server, err := NewGateServer(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
 	// Create context with timeout
@@ -189,17 +189,17 @@ func TestGatewayServerMultipleStops(t *testing.T) {
 	}
 }
 
-func TestGatewayServerRPCMethods(t *testing.T) {
-	config := &GatewayServerConfig{
+func TestGateServerRPCMethods(t *testing.T) {
+	config := &GateServerConfig{
 		ListenAddress:    ":49012",
 		AdvertiseAddress: "localhost:49012",
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-rpc",
+		EtcdPrefix:       "/test-gate-rpc",
 	}
 
-	server, err := NewGatewayServer(config)
+	server, err := NewGateServer(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 	defer server.Stop()
 
@@ -214,7 +214,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 	// Connect to server
 	conn, err := grpc.NewClient("localhost:49012", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to connect to gateway server: %v", err)
+		t.Fatalf("Failed to connect to gate server: %v", err)
 	}
 	defer conn.Close()
 
@@ -226,9 +226,9 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 			Id:   "test-object-1",
 		}
 
-		// This will return "not implemented" error from the gateway
+		// This will return "not implemented" error from the gate
 		resp, err := client.CreateObject(context.Background(), req)
-		// We expect an error since gateway methods are not fully implemented yet
+		// We expect an error since gate methods are not fully implemented yet
 		if err == nil {
 			t.Logf("CreateObject succeeded (unexpected but ok for now): %v", resp)
 		} else {
@@ -244,7 +244,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 			Id:       "test-object-1",
 		}
 
-		// This will return "not implemented" error from the gateway
+		// This will return "not implemented" error from the gate
 		resp, err := client.CallObject(context.Background(), req)
 		if err == nil {
 			t.Logf("CallObject succeeded (unexpected but ok for now): %v", resp)
@@ -258,7 +258,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 			Id: "test-object-1",
 		}
 
-		// This will return "not implemented" error from the gateway
+		// This will return "not implemented" error from the gate
 		resp, err := client.DeleteObject(context.Background(), req)
 		if err == nil {
 			t.Logf("DeleteObject succeeded (unexpected but ok for now): %v", resp)
@@ -273,7 +273,7 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 			t.Fatalf("Register failed to create stream: %v", err)
 		}
 
-		// This will return "not implemented" error from the gateway
+		// This will return "not implemented" error from the gate
 		_, err = stream.Recv()
 		if err == nil {
 			t.Logf("Register succeeded (unexpected but ok for now)")
@@ -286,14 +286,14 @@ func TestGatewayServerRPCMethods(t *testing.T) {
 func TestValidateConfig(t *testing.T) {
 	tests := []struct {
 		name       string
-		config     *GatewayServerConfig
+		config     *GateServerConfig
 		wantErr    bool
 		errContain string
-		checkFunc  func(*testing.T, *GatewayServerConfig)
+		checkFunc  func(*testing.T, *GateServerConfig)
 	}{
 		{
 			name: "valid config",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49000",
 				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
@@ -303,13 +303,13 @@ func TestValidateConfig(t *testing.T) {
 		},
 		{
 			name: "sets default prefix",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49000",
 				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
-			checkFunc: func(t *testing.T, cfg *GatewayServerConfig) {
+			checkFunc: func(t *testing.T, cfg *GateServerConfig) {
 				if cfg.EtcdPrefix != "/goverse" {
 					t.Fatalf("Expected EtcdPrefix to be /goverse, got %s", cfg.EtcdPrefix)
 				}
@@ -323,7 +323,7 @@ func TestValidateConfig(t *testing.T) {
 		},
 		{
 			name: "empty listen address",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
 			},
@@ -332,7 +332,7 @@ func TestValidateConfig(t *testing.T) {
 		},
 		{
 			name: "empty advertise address",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress: ":49000",
 				EtcdAddress:   "localhost:2379",
 			},
@@ -341,7 +341,7 @@ func TestValidateConfig(t *testing.T) {
 		},
 		{
 			name: "empty etcd address",
-			config: &GatewayServerConfig{
+			config: &GateServerConfig{
 				ListenAddress:    ":49000",
 				AdvertiseAddress: "localhost:49000",
 			},
@@ -368,21 +368,21 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
-func TestGatewayServerGracefulShutdown(t *testing.T) {
+func TestGateServerGracefulShutdown(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running test in short mode")
 	}
 
-	config := &GatewayServerConfig{
+	config := &GateServerConfig{
 		ListenAddress:    ":49013",
 		AdvertiseAddress: "localhost:49013",
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-graceful",
+		EtcdPrefix:       "/test-gate-graceful",
 	}
 
-	server, err := NewGatewayServer(config)
+	server, err := NewGateServer(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -395,7 +395,7 @@ func TestGatewayServerGracefulShutdown(t *testing.T) {
 	// Create a client connection
 	conn, err := grpc.NewClient("localhost:49013", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to connect to gateway server: %v", err)
+		t.Fatalf("Failed to connect to gate server: %v", err)
 	}
 	defer conn.Close()
 

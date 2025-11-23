@@ -61,15 +61,15 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 		t.Fatalf("Node1 should see 3 nodes, got %d", len(node1.GetNodes()))
 	}
 
-	// Create a gateway
-	gwConfig := &gate.GatewayConfig{
+	// Create a gate
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49030",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
@@ -171,15 +171,15 @@ func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
 
-	// Create a gateway
-	gwConfig := &gate.GatewayConfig{
+	// Create a gate
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49040",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
 	if err != nil {
@@ -249,15 +249,15 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	// Wait for nodes to discover each other
 	time.Sleep(1 * time.Second)
 
-	// Create first gateway
-	gw1Config := &gate.GatewayConfig{
+	// Create first gate
+	gw1Config := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49050",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw1, err := gate.NewGateway(gw1Config)
+	gw1, err := gate.NewGate(gw1Config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway 1: %v", err)
+		t.Fatalf("Failed to create gate 1: %v", err)
 	}
 	gate1Cluster, err := newClusterWithEtcdForTestingGate("gate1Cluster", gw1, "localhost:2379", testPrefix)
 	if err != nil {
@@ -271,15 +271,15 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	}
 	defer gate1Cluster.Stop(ctx)
 
-	// Create second gateway
-	gw2Config := &gate.GatewayConfig{
+	// Create second gate
+	gw2Config := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49051",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw2, err := gate.NewGateway(gw2Config)
+	gw2, err := gate.NewGate(gw2Config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway 2: %v", err)
+		t.Fatalf("Failed to create gate 2: %v", err)
 	}
 	gate2Cluster, err := newClusterWithEtcdForTestingGate("gate2Cluster", gw2, "localhost:2379", testPrefix)
 	if err != nil {

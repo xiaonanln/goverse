@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	// Create gateway server configuration
-	config := &gateserver.GatewayServerConfig{
+	// Create gate server configuration
+	config := &gateserver.GateServerConfig{
 		ListenAddress:    ":49000",
 		AdvertiseAddress: "localhost:49000",
 		EtcdAddress:      "localhost:2379",
@@ -20,9 +20,9 @@ func main() {
 	}
 
 	// Create gateserver server
-	gateserver, err := gateserver.NewGatewayServer(config)
+	gateserver, err := gateserver.NewGateServer(config)
 	if err != nil {
-		log.Fatalf("Failed to create gateway server: %v", err)
+		log.Fatalf("Failed to create gate server: %v", err)
 	}
 
 	// Create context for server lifecycle
@@ -33,7 +33,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start gateway server in goroutine
+	// Start gate server in goroutine
 	serverDone := make(chan error, 1)
 	go func() {
 		serverDone <- gateserver.Start(ctx)
@@ -46,14 +46,14 @@ func main() {
 		cancel() // Cancel context to trigger server shutdown
 	case err := <-serverDone:
 		if err != nil {
-			log.Printf("Gateway server error: %v", err)
+			log.Printf("Gate server error: %v", err)
 		}
 	}
 
-	// Stop the gateway server
+	// Stop the gate server
 	if err := gateserver.Stop(); err != nil {
-		log.Printf("Error stopping gateway: %v", err)
+		log.Printf("Error stopping gate: %v", err)
 	}
 
-	log.Println("Gateway stopped")
+	log.Println("Gate stopped")
 }

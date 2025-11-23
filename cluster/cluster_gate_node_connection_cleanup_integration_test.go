@@ -48,16 +48,16 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 	// Wait for node to be ready
 	time.Sleep(500 * time.Millisecond)
 
-	// Step 3: Create a gateway that will connect to the node
+	// Step 3: Create a gate that will connect to the node
 	gateAddr := "localhost:49100"
-	gwConfig := &gate.GatewayConfig{
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
@@ -160,16 +160,16 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	// Create first gateway
+	// Create first gate
 	gate1Addr := "localhost:49101"
-	gw1Config := &gate.GatewayConfig{
+	gw1Config := &gate.GateConfig{
 		AdvertiseAddress: gate1Addr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw1, err := gate.NewGateway(gw1Config)
+	gw1, err := gate.NewGate(gw1Config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway 1: %v", err)
+		t.Fatalf("Failed to create gate 1: %v", err)
 	}
 
 	gate1Cluster, err := newClusterWithEtcdForTestingGate("gate1Cluster", gw1, "localhost:2379", testPrefix)
@@ -184,16 +184,16 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	}
 	t.Logf("Started gate 1 at %s", gate1Addr)
 
-	// Create second gateway
+	// Create second gate
 	gate2Addr := "localhost:49102"
-	gw2Config := &gate.GatewayConfig{
+	gw2Config := &gate.GateConfig{
 		AdvertiseAddress: gate2Addr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw2, err := gate.NewGateway(gw2Config)
+	gw2, err := gate.NewGate(gw2Config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway 2: %v", err)
+		t.Fatalf("Failed to create gate 2: %v", err)
 	}
 
 	gate2Cluster, err := newClusterWithEtcdForTestingGate("gate2Cluster", gw2, "localhost:2379", testPrefix)
@@ -286,14 +286,14 @@ func TestGateNodeReconnection(t *testing.T) {
 	gateAddr := "localhost:49103"
 
 	// First connection
-	gwConfig1 := &gate.GatewayConfig{
+	gwConfig1 := &gate.GateConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw1, err := gate.NewGateway(gwConfig1)
+	gw1, err := gate.NewGate(gwConfig1)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	gateCluster1, err := newClusterWithEtcdForTestingGate("gateCluster1", gw1, "localhost:2379", testPrefix)
@@ -332,14 +332,14 @@ func TestGateNodeReconnection(t *testing.T) {
 	t.Logf("✓ First connection cleaned up")
 
 	// Reconnect with same address
-	gwConfig2 := &gate.GatewayConfig{
+	gwConfig2 := &gate.GateConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw2, err := gate.NewGateway(gwConfig2)
+	gw2, err := gate.NewGate(gwConfig2)
 	if err != nil {
-		t.Fatalf("Failed to create gateway for reconnection: %v", err)
+		t.Fatalf("Failed to create gate for reconnection: %v", err)
 	}
 
 	gateCluster2, err := newClusterWithEtcdForTestingGate("gateCluster2", gw2, "localhost:2379", testPrefix)

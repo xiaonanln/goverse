@@ -75,14 +75,14 @@ The test infrastructure uses several helper classes:
 - **BinaryHelper.py**: Compiles Go binaries with optional coverage instrumentation
 - **Inspector.py**: Manages the inspector process for cluster visibility
 - **ChatServer.py**: Manages chat server (Goverse node) processes
-- **Gateway.py**: Manages the gateway process for client connections
+- **Gate.py**: Manages the gateway process for client connections
 - **ChatClient.py**: Python client that connects to the gateway and calls chat objects
 
 ### Component Roles
 
 1. **Inspector**: Provides HTTP/gRPC interface for cluster monitoring
 2. **Chat Server(s)**: Goverse nodes that host ChatRoom and ChatRoomMgr objects
-3. **Gateway**: Handles client connections and routes calls to appropriate nodes
+3. **Gate**: Handles client connections and routes calls to appropriate nodes
 4. **Chat Client**: Test client that connects to gateway and exercises chat functionality
 
 ## Known Issues
@@ -92,7 +92,7 @@ The test infrastructure uses several helper classes:
 The push messaging test is currently disabled due to a proto unmarshaling issue in the gateway:
 
 ```
-[ERROR] [Gateway] Failed to unmarshal message for client: proto: not found
+[ERROR] [Gate] Failed to unmarshal message for client: proto: not found
 ```
 
 **Issue**: The gateway cannot unmarshal `Client_NewMessageNotification` proto messages pushed from chat rooms to clients.

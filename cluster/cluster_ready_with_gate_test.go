@@ -13,18 +13,18 @@ import (
 func mustNewGateCluster(ctx context.Context, t *testing.T, gateAddr string, etcdPrefix string) *Cluster {
 	t.Helper()
 
-	// Create gateway config
-	gwConfig := &gate.GatewayConfig{
+	// Create gate config
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
-	// Create cluster with gateway
+	// Create cluster with gate
 	gateCluster, err := newClusterWithEtcdForTestingGate("GateCluster", gw, "localhost:2379", etcdPrefix)
 	if err != nil {
 		t.Fatalf("Failed to create gate cluster: %v", err)

@@ -35,7 +35,7 @@ const (
 
 type Cluster struct {
 	node                      *node.Node
-	gate                      *gate.Gateway
+	gate                      *gate.Gate
 	etcdManager               *etcdmanager.EtcdManager
 	consensusManager          *consensusmanager.ConsensusManager
 	nodeConnections           *nodeconnections.NodeConnections
@@ -106,7 +106,7 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 	return c, nil
 }
 
-func NewClusterWithGate(cfg Config, g *gate.Gateway) (*Cluster, error) {
+func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 	c := &Cluster{
 		gate:                      g,
 		logger:                    logger.NewLogger("Cluster"),
@@ -128,7 +128,7 @@ func NewClusterWithGate(cfg Config, g *gate.Gateway) (*Cluster, error) {
 func (c *Cluster) init(cfg Config) error {
 	// Initialization logic for the cluster
 	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
-	// Note: Gateways don't need ShardLock as they don't host objects
+	// Note: Gates don't need ShardLock as they don't host objects
 	if c.isNode() {
 		c.node.SetShardLock(c.shardLock)
 	}
@@ -197,7 +197,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 
 // newClusterWithEtcdForTestingGate creates a new cluster instance for testing with a gate and initializes it with etcd
 // Uses test-appropriate configuration values (shorter durations)
-func newClusterWithEtcdForTestingGate(name string, gate *gate.Gateway, etcdAddress string, etcdPrefix string) (*Cluster, error) {
+func newClusterWithEtcdForTestingGate(name string, gate *gate.Gate, etcdAddress string, etcdPrefix string) (*Cluster, error) {
 	// Create config with test values
 	cfg := Config{
 		EtcdAddress:                   etcdAddress,
@@ -228,12 +228,12 @@ func newClusterWithEtcdForTestingGate(name string, gate *gate.Gateway, etcdAddre
 // This function should be called once during cluster initialization.
 // Use Stop() to cleanly shutdown the cluster.
 func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
-	// Register this node or gateway with etcd
+	// Register this node or gate with etcd
 	if c.isNode() {
 		if err := c.registerNode(ctx); err != nil {
 			return fmt.Errorf("failed to register node: %w", err)
 		}
-	} else if c.isGateway() {
+	} else if c.isGate() {
 		if err := c.registerGate(ctx); err != nil {
 			return fmt.Errorf("failed to register gate: %w", err)
 		}
@@ -286,7 +286,7 @@ func (c *Cluster) Stop(ctx context.Context) error {
 			c.logger.Errorf("%s - Failed to unregister node: %v", c, err)
 			// Continue with cleanup even if unregister fails
 		}
-	} else if c.isGateway() {
+	} else if c.isGate() {
 		if err := c.unregisterGate(ctx); err != nil {
 			c.logger.Errorf("%s - Failed to unregister gate: %v", c, err)
 			// Continue with cleanup even if unregister fails
@@ -303,7 +303,7 @@ func (c *Cluster) Stop(ctx context.Context) error {
 	return nil
 }
 
-// getAdvertiseAddr returns the advertise address of this cluster (node or gateway)
+// getAdvertiseAddr returns the advertise address of this cluster (node or gate)
 func (c *Cluster) getAdvertiseAddr() string {
 	if c.node != nil {
 		return c.node.GetAdvertiseAddress()
@@ -319,8 +319,8 @@ func (c *Cluster) isNode() bool {
 	return c.node != nil
 }
 
-// isGateway returns true if this cluster is a gateway cluster
-func (c *Cluster) isGateway() bool {
+// isGate returns true if this cluster is a gate cluster
+func (c *Cluster) isGate() bool {
 	return c.gate != nil
 }
 
@@ -356,9 +356,9 @@ func (c *Cluster) GetThisNode() *node.Node {
 	return c.node
 }
 
-// GetThisGateway returns the gateway instance if this cluster is a gateway cluster
-// Returns nil if this is not a gateway cluster
-func (c *Cluster) GetThisGateway() *gate.Gateway {
+// GetThisGate returns the gate instance if this cluster is a gate cluster
+// Returns nil if this is not a gate cluster
+func (c *Cluster) GetThisGate() *gate.Gate {
 	return c.gate
 }
 
@@ -370,8 +370,8 @@ func (c *Cluster) String() string {
 	var clusterType string
 	if c.isNode() {
 		clusterType = "node"
-	} else if c.isGateway() {
-		clusterType = "gateway"
+	} else if c.isGate() {
+		clusterType = "gate"
 	} else {
 		clusterType = "unknown"
 	}
@@ -471,7 +471,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return c.node.CallObject(ctx, objType, id, method, request)
 	}
 
-	// Route to the appropriate node (both node and gateway clusters can route)
+	// Route to the appropriate node (both node and gate clusters can route)
 	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
@@ -516,10 +516,10 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 
 // CallObjectAnyRequest calls a method on a distributed object, accepting an *anypb.Any request.
 // This is an optimized version that avoids unnecessary marshal/unmarshal cycles when the request
-// is already in Any format (e.g., from a gateway that received it from a client).
+// is already in Any format (e.g., from a gate that received it from a client).
 func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (*anypb.Any, error) {
-	if !c.isGateway() {
-		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gateway clusters")
+	if !c.isGate() {
+		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gate clusters")
 	}
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
@@ -527,7 +527,7 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
 
-	// Route to the appropriate node (both node and gateway clusters can route)
+	// Route to the appropriate node (both node and gate clusters can route)
 	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
@@ -598,7 +598,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		Type: objType,
 		Id:   objID,
 	}
-	if c.isGateway() {
+	if c.isGate() {
 		// Synchronous execution for gateways
 		_, err = client.CreateObject(ctx, req)
 		if err != nil {
@@ -669,7 +669,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	req := &goverse_pb.DeleteObjectRequest{
 		Id: objID,
 	}
-	if c.isGateway() {
+	if c.isGate() {
 		// Synchronous execution for gateways
 		_, err = client.DeleteObject(ctx, req)
 		if err != nil {
@@ -778,7 +778,7 @@ func (c *Cluster) cleanupGateChannels() {
 // This method can only be called on a node cluster, not a gate cluster
 func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
 	// This method can only be called on node clusters
-	if c.isGateway() {
+	if c.isGate() {
 		return fmt.Errorf("PushMessageToClient can only be called on node clusters, not gate clusters")
 	}
 
@@ -862,7 +862,7 @@ func (c *Cluster) unregisterNode(ctx context.Context) error {
 	return c.etcdManager.UnregisterKeyLease(ctx, key)
 }
 
-// registerGate registers this gateway with etcd using the shared lease API
+// registerGate registers this gate with etcd using the shared lease API
 func (c *Cluster) registerGate(ctx context.Context) error {
 	gatesPrefix := c.etcdManager.GetPrefix() + "/gates/"
 	key := gatesPrefix + c.getAdvertiseAddr()
@@ -876,7 +876,7 @@ func (c *Cluster) registerGate(ctx context.Context) error {
 	return nil
 }
 
-// unregisterGate unregisters this gateway from etcd using the shared lease API
+// unregisterGate unregisters this gate from etcd using the shared lease API
 func (c *Cluster) unregisterGate(ctx context.Context) error {
 	gatesPrefix := c.etcdManager.GetPrefix() + "/gates/"
 	key := gatesPrefix + c.getAdvertiseAddr()
@@ -1041,8 +1041,8 @@ func (c *Cluster) updateMetrics() {
 
 // claimShardOwnership claims ownership of shards when cluster state is stable
 func (c *Cluster) claimShardOwnership(ctx context.Context) {
-	if c.isGateway() {
-		// Gateways don't host objects, so they don't need to claim shard ownership
+	if c.isGate() {
+		// Gates don't host objects, so they don't need to claim shard ownership
 		return
 	}
 	// Claim ownership of shards where this node is the target
@@ -1057,10 +1057,10 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 // - CurrentNode is this node
 // - TargetNode is another node (not empty and not this node)
 // - No objects exist on this node for that shard
-// Note: This is a node-only operation. Gateways don't host objects so they skip this.
+// Note: This is a node-only operation. Gates don't host objects so they skip this.
 func (c *Cluster) releaseShardOwnership(ctx context.Context) {
-	// Gateways don't host objects, so they don't need to release shard ownership
-	if c.isGateway() {
+	// Gates don't host objects, so they don't need to release shard ownership
+	if c.isGate() {
 		return
 	}
 
@@ -1084,10 +1084,10 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 }
 
 // removeObjectsNotBelongingToThisNode removes objects whose shards no longer belong to this node
-// Note: This is a node-only operation. Gateways don't host objects so they skip this.
+// Note: This is a node-only operation. Gates don't host objects so they skip this.
 func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
-	// Gateways don't host objects, so they don't need to remove objects
-	if c.isGateway() {
+	// Gates don't host objects, so they don't need to remove objects
+	if c.isGate() {
 		return
 	}
 
@@ -1208,9 +1208,9 @@ func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 }
 
 // registerGateWithNodes registers this gate with all nodes that haven't been registered yet
-// This is called periodically from the cluster management loop for gateway clusters
+// This is called periodically from the cluster management loop for gate clusters
 func (c *Cluster) registerGateWithNodes(ctx context.Context) {
-	if !c.isGateway() {
+	if !c.isGate() {
 		return
 	}
 

@@ -57,7 +57,7 @@ Comprehensive observability features enable production operations:
            │               │               │
            ▼               ▼               ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Server     │  │   Gateway    │  │   Cluster    │
+│   Server     │  │   Gate    │  │   Cluster    │
 │   Runtime    │  │   System     │  │  Management  │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                  │
@@ -107,13 +107,13 @@ Comprehensive observability features enable production operations:
 - Thread-safe ToData()/FromData() serialization hooks
 - Concurrency modes: Sequential, Concurrent, Read-only
 
-#### 4. Gateway System (`gate/`)
-- Gateway servers handle client connections separately from nodes
-- Gateway registration with nodes via bidirectional gRPC streams (`RegisterGate`)
-- Client registration with gateways for unique client ID assignment
+#### 4. Gate System (`gate/`)
+- Gate servers handle client connections separately from nodes
+- Gate registration with nodes via bidirectional gRPC streams (`RegisterGate`)
+- Client registration with gates for unique client ID assignment
 - Generic object call routing from clients to distributed objects
-- Push-based messaging from nodes through gateways to clients
-- Graceful cleanup on client disconnect and gateway shutdown
+- Push-based messaging from nodes through gates to clients
+- Graceful cleanup on client disconnect and gate shutdown
 - Legacy `client/` package retained for backwards compatibility (BaseClient)
 
 #### 5. Cluster Management (`cluster/`)
@@ -197,22 +197,22 @@ func (room *ChatRoom) Join(ctx context.Context, req *chat_pb.JoinRequest) (*chat
 }
 ```
 
-### Gateway Architecture
+### Gate Architecture
 
-The gateway system provides a clean separation between client connections and distributed objects:
+The gate system provides a clean separation between client connections and distributed objects:
 
-1. **Gateway Registration**: Gateways register with nodes via `RegisterGate` streaming RPC
-2. **Client Registration**: Clients connect to gateways and receive a unique ID in format `gateAddress/uniqueId`
+1. **Gate Registration**: Gates register with nodes via `RegisterGate` streaming RPC
+2. **Client Registration**: Clients connect to gates and receive a unique ID in format `gateAddress/uniqueId`
 3. **Generic Object Calls**: Clients call distributed objects directly via `CallObject()` RPC
-4. **Message Routing**: Gateways route calls to the appropriate nodes based on shard mapping
-5. **Push Messaging**: Nodes push messages to clients via gateway registration streams
+4. **Message Routing**: Gates route calls to the appropriate nodes based on shard mapping
+5. **Push Messaging**: Nodes push messages to clients via gate registration streams
 
 Benefits:
-- Clean separation between client-facing gateways and object-hosting nodes
+- Clean separation between client-facing gates and object-hosting nodes
 - Distributed objects are the primary abstraction (no client-specific objects)
 - Efficient resource management and connection pooling
 - Support for long-lived connections with push messaging
-- Scalable gateway layer independent of object hosts
+- Scalable gate layer independent of object hosts
 
 ### Sharding and Distribution
 
@@ -425,9 +425,9 @@ INFO: DeleteObject objType=GameSession id=game-456
 
 ### 1. Real-Time Chat Systems
 - Distributed chat rooms as objects
-- Push-based message delivery through gateways
+- Push-based message delivery through gates
 - Multi-room support with independent state
-- Direct object calls from clients via gateway
+- Direct object calls from clients via gate
 
 **Example**: `samples/chat/`
 
@@ -475,10 +475,10 @@ config := &goverseapi.ServerConfig{
 }
 ```
 
-### Gateway Configuration
+### Gate Configuration
 
 ```go
-config := &gateserver.GatewayServerConfig{
+config := &gateserver.GateServerConfig{
     ListenAddress:    ":49000",              // Client connection port
     AdvertiseAddress: "localhost:49000",     // Address clients use
     EtcdAddress:      "localhost:2379",      // etcd endpoint

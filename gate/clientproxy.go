@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// ClientProxy represents a client connection in the gateway
+// ClientProxy represents a client connection in the gate
 // It holds minimal connection-local state needed for transport
 type ClientProxy struct {
 	id          string

@@ -51,12 +51,12 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 **Solution**: 
 - Removed `-client-listen` flag from ChatServer.py
-- Created Gateway.py helper class to manage separate gateway process
+- Created Gate.py helper class to manage separate gateway process
 - Updated test_chat.py to start and connect to gateway
 
 **Files Modified**: 
 - `tests/integration/ChatServer.py` 
-- `tests/integration/Gateway.py` (new file)
+- `tests/integration/Gate.py` (new file)
 - `tests/integration/test_chat.py`
 
 ### 7. Missing etcd ✅ Fixed
@@ -91,7 +91,7 @@ The test infrastructure now correctly implements the new gateway architecture:
 
 ```
 ┌─────────┐          ┌─────────┐          ┌──────────────┐
-│  Client │  ───────>│ Gateway │  ───────>│ Chat Server  │
+│  Client │  ───────>│ Gate │  ───────>│ Chat Server  │
 │ (Python)│   gRPC   │ :49000  │   gRPC   │   (Node)     │
 └─────────┘          └─────────┘          │  :47000      │
                           │               └──────────────┘
@@ -108,9 +108,9 @@ The test infrastructure now correctly implements the new gateway architecture:
 ## Known Issues
 
 ### Push Messaging (Not Fixed)
-**Issue**: Gateway fails to unmarshal `Client_NewMessageNotification` proto messages
+**Issue**: Gate fails to unmarshal `Client_NewMessageNotification` proto messages
 
-**Error**: `[ERROR] [Gateway] Failed to unmarshal message for client: proto: not found`
+**Error**: `[ERROR] [Gate] Failed to unmarshal message for client: proto: not found`
 
 **Status**: This is a deeper architecture issue where the gateway (application-agnostic) needs to handle application-specific proto types for push notifications. The push messaging test is disabled pending a fix in the Go codebase.
 
@@ -119,7 +119,7 @@ The test infrastructure now correctly implements the new gateway architecture:
 ## Files Created/Modified
 
 ### New Files:
-- `tests/integration/Gateway.py` - Gateway process helper
+- `tests/integration/Gate.py` - Gate process helper
 - `tests/integration/SETUP.md` - Setup documentation
 - `tests/integration/FIXES_SUMMARY.md` - This file
 

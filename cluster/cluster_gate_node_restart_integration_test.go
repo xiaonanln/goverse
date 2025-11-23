@@ -41,15 +41,15 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	// Use unique ports to avoid conflicts with other tests
 	nodeAddr := "localhost:47999"
 
-	// Create a gateway cluster
-	gwConfig := &gate.GatewayConfig{
+	// Create a gate cluster
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49999",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	gateCluster, err := newClusterWithEtcdForTestingGate("gateCluster", gw, "localhost:2379", testPrefix)
