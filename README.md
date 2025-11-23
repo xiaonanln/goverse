@@ -110,10 +110,10 @@ High-level objectives for future development:
 - **Multi-region cluster support** - Enable geo-distributed deployments with locality-aware routing
 
 ### Gateway & Client Features
-- **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility
-- **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
-- **Gate object call filtering** - Whitelist/blacklist patterns for security and API governance
-- **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
+- **Gateway HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility
+- **Gateway authorization mechanism** - Fine-grained access control and authentication for client connections
+- **Gateway object call filtering** - Whitelist/blacklist patterns for security and API governance
+- **Gateway rate limiting** - Per-client and per-object throttling to prevent abuse
 - **Client reconnection & backoff** - Automatic retry logic with exponential backoff
 
 ### Developer Experience
