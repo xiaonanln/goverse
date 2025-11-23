@@ -96,21 +96,21 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 	t.Logf("Started node server at %s", nodeAddr)
 
-	// 2. Create and start the real GatewayServer
+	// 2. Create and start the real GateServer
 	gateAddr := testutil.GetFreeAddress()
-	gwServerConfig := &GatewayServerConfig{
+	gwServerConfig := &GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gwServer, err := NewGatewayServer(gwServerConfig)
+	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gateway server in a goroutine
+	// Start the gate server in a goroutine
 	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
 	t.Cleanup(gwStartCancel)
 
@@ -119,17 +119,17 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 		gwStarted <- gwServer.Start(gwStartCtx)
 	}()
 
-	// Wait for gateway to be ready
+	// Wait for gate to be ready
 	time.Sleep(500 * time.Millisecond)
 	select {
 	case err := <-gwStarted:
 		if err != nil {
-			t.Fatalf("Gateway server failed to start: %v", err)
+			t.Fatalf("Gate server failed to start: %v", err)
 		}
 	default:
-		// Gateway is running
+		// Gate is running
 	}
-	t.Logf("Started real gateway server at %s", gateAddr)
+	t.Logf("Started real gate server at %s", gateAddr)
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
 	testutil.WaitForClusterReady(t, nodeCluster)
@@ -230,21 +230,21 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 	t.Logf("Started node server at %s", nodeAddr)
 
-	// 2. Create and start the real GatewayServer
+	// 2. Create and start the real GateServer
 	gateAddr := testutil.GetFreeAddress()
-	gwServerConfig := &GatewayServerConfig{
+	gwServerConfig := &GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gwServer, err := NewGatewayServer(gwServerConfig)
+	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gateway server in a goroutine
+	// Start the gate server in a goroutine
 	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
 	t.Cleanup(gwStartCancel)
 
@@ -253,17 +253,17 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		gwStarted <- gwServer.Start(gwStartCtx)
 	}()
 
-	// Wait for gateway to be ready
+	// Wait for gate to be ready
 	time.Sleep(500 * time.Millisecond)
 	select {
 	case err := <-gwStarted:
 		if err != nil {
-			t.Fatalf("Gateway server failed to start: %v", err)
+			t.Fatalf("Gate server failed to start: %v", err)
 		}
 	default:
-		// Gateway is running
+		// Gate is running
 	}
-	t.Logf("Started real gateway server at %s", gateAddr)
+	t.Logf("Started real gate server at %s", gateAddr)
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
 	testutil.WaitForClusterReady(t, nodeCluster)

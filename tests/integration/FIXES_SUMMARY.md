@@ -47,16 +47,16 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ### 6. Invalid -client-listen Flag ✅ Fixed
 **Error**: `flag provided but not defined: -client-listen`
 
-**Root Cause**: The new gateway architecture separates client connections from chat servers. Chat servers are now pure Goverse nodes without client-facing ports.
+**Root Cause**: The new gate architecture separates client connections from chat servers. Chat servers are now pure Goverse nodes without client-facing ports.
 
 **Solution**: 
 - Removed `-client-listen` flag from ChatServer.py
-- Created Gateway.py helper class to manage separate gateway process
-- Updated test_chat.py to start and connect to gateway
+- Created Gate.py helper class to manage separate gate process
+- Updated test_chat.py to start and connect to gate
 
 **Files Modified**: 
 - `tests/integration/ChatServer.py` 
-- `tests/integration/Gateway.py` (new file)
+- `tests/integration/Gate.py` (new file)
 - `tests/integration/test_chat.py`
 
 ### 7. Missing etcd ✅ Fixed
@@ -77,7 +77,7 @@ docker run -d --name etcd-test \
 ### 8. Wrong Object Types Being Called ✅ Fixed
 **Error**: `failed to get connection to node localhost:49000: no connection to node localhost:49000`
 
-**Root Cause**: ChatClient was trying to call "Client" objects that don't exist in the new architecture. In the gateway architecture, clients directly call ChatRoom and ChatRoomMgr objects.
+**Root Cause**: ChatClient was trying to call "Client" objects that don't exist in the new architecture. In the gate architecture, clients directly call ChatRoom and ChatRoomMgr objects.
 
 **Solution**: Updated ChatClient.py methods to call correct object types:
 - `ListChatRooms` → calls `ChatRoomMgr` object with ID `ChatRoomMgr0`
@@ -87,11 +87,11 @@ docker run -d --name etcd-test \
 
 ## Architecture Changes
 
-The test infrastructure now correctly implements the new gateway architecture:
+The test infrastructure now correctly implements the new gate architecture:
 
 ```
 ┌─────────┐          ┌─────────┐          ┌──────────────┐
-│  Client │  ───────>│ Gateway │  ───────>│ Chat Server  │
+│  Client │  ───────>│ Gate │  ───────>│ Chat Server  │
 │ (Python)│   gRPC   │ :49000  │   gRPC   │   (Node)     │
 └─────────┘          └─────────┘          │  :47000      │
                           │               └──────────────┘
@@ -108,25 +108,25 @@ The test infrastructure now correctly implements the new gateway architecture:
 ## Known Issues
 
 ### Push Messaging (Not Fixed)
-**Issue**: Gateway fails to unmarshal `Client_NewMessageNotification` proto messages
+**Issue**: Gate fails to unmarshal `Client_NewMessageNotification` proto messages
 
-**Error**: `[ERROR] [Gateway] Failed to unmarshal message for client: proto: not found`
+**Error**: `[ERROR] [Gate] Failed to unmarshal message for client: proto: not found`
 
-**Status**: This is a deeper architecture issue where the gateway (application-agnostic) needs to handle application-specific proto types for push notifications. The push messaging test is disabled pending a fix in the Go codebase.
+**Status**: This is a deeper architecture issue where the gate (application-agnostic) needs to handle application-specific proto types for push notifications. The push messaging test is disabled pending a fix in the Go codebase.
 
 **Workaround**: Push messaging test is commented out in test_chat.py
 
 ## Files Created/Modified
 
 ### New Files:
-- `tests/integration/Gateway.py` - Gateway process helper
+- `tests/integration/Gate.py` - Gate process helper
 - `tests/integration/SETUP.md` - Setup documentation
 - `tests/integration/FIXES_SUMMARY.md` - This file
 
 ### Modified Files:
 - `tests/integration/ChatClient.py` - Fixed proto references and object types
 - `tests/integration/ChatServer.py` - Removed invalid -client-listen flag
-- `tests/integration/test_chat.py` - Added gateway support, disabled push test
+- `tests/integration/test_chat.py` - Added gate support, disabled push test
 
 ## Test Status
 
@@ -155,6 +155,6 @@ python3 tests/integration/test_chat.py
 # Cleanup
 pkill -f "/tmp/inspector" || true
 pkill -f "/tmp/chat_server" || true
-pkill -f "/tmp/gateway" || true
+pkill -f "/tmp/gate" || true
 docker stop etcd-test && docker rm etcd-test
 ```

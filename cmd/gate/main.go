@@ -14,16 +14,16 @@ import (
 func main() {
 	// Parse command line flags
 	var (
-		listenAddr        = flag.String("listen", ":49000", "Gateway listen address")
-		advertiseAddr     = flag.String("advertise", "localhost:49000", "Gateway advertise address")
+		listenAddr        = flag.String("listen", ":49000", "Gate listen address")
+		advertiseAddr     = flag.String("advertise", "localhost:49000", "Gate advertise address")
 		metricsListenAddr = flag.String("metrics-listen", "", "Metrics listen address (optional, e.g., ':9091')")
 		etcdAddr          = flag.String("etcd", "localhost:2379", "Etcd address")
 		etcdPrefix        = flag.String("etcd-prefix", "/goverse", "Etcd key prefix")
 	)
 	flag.Parse()
 
-	// Create gateway server configuration
-	config := &gateserver.GatewayServerConfig{
+	// Create gate server configuration
+	config := &gateserver.GateServerConfig{
 		ListenAddress:        *listenAddr,
 		AdvertiseAddress:     *advertiseAddr,
 		MetricsListenAddress: *metricsListenAddr,
@@ -32,9 +32,9 @@ func main() {
 	}
 
 	// Create gateserver server
-	gateserver, err := gateserver.NewGatewayServer(config)
+	gateserver, err := gateserver.NewGateServer(config)
 	if err != nil {
-		log.Fatalf("Failed to create gateway server: %v", err)
+		log.Fatalf("Failed to create gate server: %v", err)
 	}
 
 	// Create context for server lifecycle
@@ -45,7 +45,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start gateway server in goroutine
+	// Start gate server in goroutine
 	serverDone := make(chan error, 1)
 	go func() {
 		serverDone <- gateserver.Start(ctx)
@@ -58,14 +58,14 @@ func main() {
 		cancel() // Cancel context to trigger server shutdown
 	case err := <-serverDone:
 		if err != nil {
-			log.Printf("Gateway server error: %v", err)
+			log.Printf("Gate server error: %v", err)
 		}
 	}
 
-	// Stop the gateway server
+	// Stop the gate server
 	if err := gateserver.Stop(); err != nil {
-		log.Printf("Error stopping gateway: %v", err)
+		log.Printf("Error stopping gate: %v", err)
 	}
 
-	log.Println("Gateway stopped")
+	log.Println("Gate stopped")
 }

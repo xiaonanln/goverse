@@ -15,7 +15,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 - Virtual objects with automatic lifecycle & activation
 - Sharded placement using etcd
-- Gateway architecture with streaming gRPC
+- Gate architecture with streaming gRPC
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics
@@ -108,11 +108,11 @@ High-level objectives for future development:
 - **Shard rebalancing based on actual node load** - Dynamic rebalancing that considers CPU, memory, and object count
 - **Support different object call semantics** - Currently only best-effort; add at-least-once, exactly-once, and idempotent patterns
 
-### Gateway & Client Features
-- **Gateway HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility
-- **Gateway authorization mechanism** - Fine-grained access control and authentication for client connections
-- **Gateway object call filtering** - Whitelist/blacklist patterns for security and API governance
-- **Gateway rate limiting** - Per-client and per-object throttling to prevent abuse
+### Gate & Client Features
+- **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility
+- **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
+- **Gate object call filtering** - Whitelist/blacklist patterns for security and API governance
+- **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
 - **Client reconnection & backoff** - Automatic retry logic with exponential backoff
 
 ### Performance & Scalability

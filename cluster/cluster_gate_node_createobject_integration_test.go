@@ -118,14 +118,14 @@ func TestGateNodeIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create gate cluster
-	gwConfig := &gate.GatewayConfig{
+	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: "localhost:49001",
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gw, err := gate.NewGateway(gwConfig)
+	gw, err := gate.NewGate(gwConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	// Create gate cluster with test values

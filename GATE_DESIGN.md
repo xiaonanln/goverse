@@ -1,24 +1,24 @@
-# Gateway Refactor Design
+# Gate Refactor Design
 
 > **Status**: Draft / WIP  
-> This document describes the planned gateway refactor for GoVerse, focusing on how client traffic enters the system and how it interacts with GoVerse objects (grains). Implementation details may change as the `gateway` branch evolves.
+> This document describes the planned gate refactor for GoVerse, focusing on how client traffic enters the system and how it interacts with GoVerse objects (grains). Implementation details may change as the `gate` branch evolves.
 
 ---
 
 ## 1. Goals
 
-The gateway refactor aims to:
+The gate refactor aims to:
 
 - Introduce a **clear separation** between:
   - **Nodes (GoVerse servers)** that host objects and participate in the cluster.
-  - **Gateways** that handle client connections and protocols (gRPC, HTTP).
+  - **Gates** that handle client connections and protocols (gRPC, HTTP).
 - Make **GoVerse objects** (grains) the primary abstraction:
   - No special client-specific objects in the cluster.
   - Per-user or per-session state can be modeled as grains when needed.
-- Provide a **GoVerse service API** that both gateways and nodes use to:
+- Provide a **GoVerse service API** that both gates and nodes use to:
   - Call objects.
   - Create objects.
-- Keep the gateway as thin as possible:
+- Keep the gate as thin as possible:
   - Protocol handling, authentication, simple orchestration.
   - Core business logic lives in objects on nodes.
 
@@ -34,7 +34,7 @@ A GoVerse server (node) is a long-running process that:
 
 - Joins the cluster and registers itself in etcd.
 - Hosts GoVerse objects (e.g. `ChatRoom-{roomID}`, `Counter-{id}`, etc.).
-- Receives object calls from gateways or other nodes and executes them locally.
+- Receives object calls from gates or other nodes and executes them locally.
 - Uses node-to-node RPC for:
   - Object→object calls across nodes.
   - Activation / creation of remote objects.
@@ -53,29 +53,29 @@ type GoverseService interface {
 - Server-side implementation lives inside the node.
 - Used by:
   - Nodes themselves (for internal object→object calls).
-  - Gateways via a client implementation (for external calls into the cluster).
+  - Gates via a client implementation (for external calls into the cluster).
 
 All user-facing helpers like `goverseapi.CallObject` and `goverseapi.CreateObject` ultimately drive this service.
 
-#### Gateway
+#### Gate
 
-The **gateway** is a separate process (planned `goverse-gateway` binary) responsible for client-facing concerns:
+The **gate** is a separate process (planned `goverse-gate` binary) responsible for client-facing concerns:
 
 - gRPC `ClientService`.
 - HTTP/JSON endpoints (future REST-style API).
 - Optional long-lived streaming endpoints.
 - Authentication and basic authorization / routing rules.
 
-The gateway:
+The gate:
 
 - Connects to nodes using a **GoVerse service client**.
 - Uses etcd-backed cluster state (via `ConsensusManager` and sharding) to route `objectID` to the correct node.
 - Does **not** host GoVerse objects; it only forwards calls and maintains connection-local state if needed.
 - Does **not** implement domain logic (e.g. room membership, nicknames); that logic lives in grains.
 
-#### Client proxies (gateway-local, optional)
+#### Client proxies (gate-local, optional)
 
-Client proxies are gateway-local, per-connection controllers:
+Client proxies are gate-local, per-connection controllers:
 
 - Created per incoming client connection (e.g., per gRPC stream).
 - Hold only minimal connection-local state needed for transport:
@@ -92,12 +92,12 @@ For simple flows (including the chat sample), client proxies can be very thin or
 
 ## 3. Call Flows
 
-### 3.1 External client → gateway → node
+### 3.1 External client → gate → node
 
 #### gRPC example (generic CallObject)
 
-1. Client opens a gRPC stream to the **gateway**.
-2. Gateway creates a client proxy instance for that connection.
+1. Client opens a gRPC stream to the **gate**.
+2. Gate creates a client proxy instance for that connection.
 3. When the client wants to invoke an object method, it sends a generic call request, for example:
 
    ```protobuf
@@ -108,9 +108,9 @@ For simple flows (including the chat sample), client proxies can be very thin or
    }
    ```
 
-   The client chooses `object_id` and `method` and encodes the domain arguments into `payload`. The gateway does not interpret domain fields (such as “room id”); it treats them as opaque.
+   The client chooses `object_id` and `method` and encodes the domain arguments into `payload`. The gate does not interpret domain fields (such as “room id”); it treats them as opaque.
 
-4. Gateway receives `CallObjectRequest` and calls:
+4. Gate receives `CallObjectRequest` and calls:
 
    ```go
    svc.CallObject(ctx, req.ObjectId, req.Method, req.Payload)
@@ -126,7 +126,7 @@ For simple flows (including the chat sample), client proxies can be very thin or
    - Invokes the method named by `req.Method` (e.g. `Join`) with the decoded payload.
    - Returns success or error.
 
-7. Gateway sends the result back to the client over gRPC.
+7. Gate sends the result back to the client over gRPC.
 
 #### HTTP example (chat)
 
@@ -136,7 +136,7 @@ For HTTP, a similar pattern can be exposed (shape TBD), where the client or HTTP
 - `method`
 - JSON payload
 
-and the gateway simply forwards this as a `CallObject` to the GoVerse service client.
+and the gate simply forwards this as a `CallObject` to the GoVerse service client.
 
 ### 3.2 Object → object (inside the cluster)
 
@@ -156,18 +156,18 @@ Execution:
    - Use node→node RPC to forward the call to the owning node’s GoVerse service implementation.
 4. Remote node activates/invokes the object and returns the result.
 
-Gateways are not involved in internal object→object calls.
+Gates are not involved in internal object→object calls.
 
 ### 3.3 Gate → Node Registration Flow
 
-To enable objects on nodes to push messages to clients connected to gateways, gateways must register with nodes:
+To enable objects on nodes to push messages to clients connected to gates, gates must register with nodes:
 
-1. **Gateway startup**:
-   - Gateway starts and connects to etcd to discover nodes in the cluster.
-   - Gateway discovers all nodes via the consensus/shard mapping.
+1. **Gate startup**:
+   - Gate starts and connects to etcd to discover nodes in the cluster.
+   - Gate discovers all nodes via the consensus/shard mapping.
 
 2. **Gate registers with each node**:
-   - For each discovered node, the gateway calls the node's `RegisterGate` RPC with its advertise address:
+   - For each discovered node, the gate calls the node's `RegisterGate` RPC with its advertise address:
      ```protobuf
      message RegisterGateRequest {
        string gate_addr = 1;  // e.g., "localhost:49000"
@@ -207,17 +207,17 @@ To enable objects on nodes to push messages to clients connected to gateways, ga
    - Client receives the message via its `Register` stream.
 
 6. **Stream lifecycle**:
-   - The `RegisterGate` stream stays open as long as the gateway is connected.
-   - If the stream closes (due to network issues, gateway shutdown, etc.):
+   - The `RegisterGate` stream stays open as long as the gate is connected.
+   - If the stream closes (due to network issues, gate shutdown, etc.):
      - Node detects the closure and unregisters the gate connection.
      - Node cleans up the gate's message channel.
-   - Gateway can re-register with the node when the connection is re-established.
+   - Gate can re-register with the node when the connection is re-established.
 
 ---
 
 ## 4. Chat Sample Refactor
 
-The chat sample will be refactored to follow this gateway architecture with minimal complexity.
+The chat sample will be refactored to follow this gate architecture with minimal complexity.
 
 ### 4.1 Target shape for chat
 
@@ -225,7 +225,7 @@ For the chat sample:
 
 - **Objects on nodes**:
   - `ChatRoom-{roomID}`: primary entrypoint for chat actions.
-- **Gateway**:
+- **Gate**:
   - gRPC `ClientService` with a client proxy per connection (thin).
   - (Later) HTTP endpoints that map to generic `CallObject` requests.
 - **No `ChatUser`/session grains** for this sample; the client calls `ChatRoom` directly via `CallObject`.
@@ -271,9 +271,9 @@ func (r *ChatRoom) SendMessage(ctx context.Context, args *SendMessageArgs) error
 
 The client encodes `JoinArgs` / `SendMessageArgs` into the `payload` field of `CallObjectRequest` and uses `object_id = "ChatRoom-{roomID}"`, `method = "Join"` / `"SendMessage"`.
 
-### 4.3 Client proxy (gateway-local)
+### 4.3 Client proxy (gate-local)
 
-In the gateway process, a client proxy can be as thin as:
+In the gate process, a client proxy can be as thin as:
 
 ```go
 type ClientProxy struct {
@@ -294,14 +294,14 @@ func (p *ClientProxy) HandleCall(ctx context.Context, req *CallObjectRequest) (*
 
 Notes:
 
-- `ClientProxy` is gateway-local only.
+- `ClientProxy` is gate-local only.
 - It forwards `object_id`, `method`, and `payload` without interpreting them.
 
 ---
 
 ## 5. Push Messaging from Objects to Clients
 
-GoVerse supports push messaging, allowing objects on nodes to send messages directly to clients connected to gateways, even when the client is not actively making a request.
+GoVerse supports push messaging, allowing objects on nodes to send messages directly to clients connected to gates, even when the client is not actively making a request.
 
 ### 5.1 Use Cases
 
@@ -313,11 +313,11 @@ Push messaging is useful for:
 
 ### 5.2 Client Registration and Identification
 
-1. **Client connects to gateway**:
-   - Client calls the gateway's `Register` RPC.
-   - Gateway generates a unique `client_id` with format: `gateAddress/uniqueId` (e.g., `"localhost:49000/AAZEDvtPr4JHP6WtybiD"`).
-   - Gateway creates a `ClientProxy` to manage the client's connection.
-   - Gateway returns the `client_id` to the client in a `RegisterResponse`.
+1. **Client connects to gate**:
+   - Client calls the gate's `Register` RPC.
+   - Gate generates a unique `client_id` with format: `gateAddress/uniqueId` (e.g., `"localhost:49000/AAZEDvtPr4JHP6WtybiD"`).
+   - Gate creates a `ClientProxy` to manage the client's connection.
+   - Gate returns the `client_id` to the client in a `RegisterResponse`.
 
 2. **Client keeps the stream open**:
    - The `Register` RPC returns a stream (`stream google.protobuf.Any`).
@@ -398,8 +398,8 @@ Objects should handle these errors gracefully, as clients may disconnect at any 
 
 ### 5.6 Design Considerations
 
-- **Client ID format**: The `gateAddress/uniqueId` format allows the node to route messages to the correct gateway without a centralized client registry.
-- **Per-gate channels**: Each gateway has a dedicated message channel on each node, enabling concurrent message delivery to multiple gateways.
+- **Client ID format**: The `gateAddress/uniqueId` format allows the node to route messages to the correct gate without a centralized client registry.
+- **Per-gate channels**: Each gate has a dedicated message channel on each node, enabling concurrent message delivery to multiple gates.
 - **Buffered channels**: Channels are buffered (default 1024 messages) to prevent blocking object methods during transient network delays.
 - **No guaranteed delivery**: If a client disconnects or a gate fails, messages are dropped. Applications requiring guaranteed delivery should implement acknowledgment and retry logic at the application level.
 
@@ -409,29 +409,29 @@ Objects should handle these errors gracefully, as clients may disconnect at any 
 
 While the chat sample does not emphasize security, the architecture allows more control later:
 
-- Gateway can enforce which objects and methods are callable from external clients:
+- Gate can enforce which objects and methods are callable from external clients:
   - For example, only allow calls to certain prefixes (`ChatRoom-*`, `User-*`, etc.) and whitelisted methods.
 - For real applications:
-  - Gateway authenticates the caller and attaches identity (e.g. user ID, roles) to the `context.Context` or request arguments.
-  - Gateways do not trust identity fields provided directly by clients.
+  - Gate authenticates the caller and attaches identity (e.g. user ID, roles) to the `context.Context` or request arguments.
+  - Gates do not trust identity fields provided directly by clients.
 
 For now, the chat sample can remain simple:
 
 - Let clients provide `object_id`, `method`, and arguments.
-- Let the gateway forward directly to GoVerse objects via `CallObject`.
+- Let the gate forward directly to GoVerse objects via `CallObject`.
 
 ---
 
 ## 7. Summary
 
-This gateway refactor design:
+This gate refactor design:
 
-- Separates **nodes** (object hosts) from **gateways** (client-facing).
+- Separates **nodes** (object hosts) from **gates** (client-facing).
 - Introduces a shared **GoverseService** abstraction used by both.
 - Keeps **GoVerse objects** as the core programming model.
-- Uses a generic `CallObject` request from clients, so the gateway stays free of domain logic and simply routes calls to objects based on `object_id`.
+- Uses a generic `CallObject` request from clients, so the gate stays free of domain logic and simply routes calls to objects based on `object_id`.
 - Supports **push messaging** from objects to clients via `PushMessageToClient`, enabling real-time notifications and updates.
-- Implements **gate registration** via the `RegisterGate` streaming RPC, allowing nodes to push messages to clients through gateways.
+- Implements **gate registration** via the `RegisterGate` streaming RPC, allowing nodes to push messages to clients through gates.
 - Makes the chat sample simpler by letting clients call `ChatRoom` objects directly, without introducing extra user/session grains for now.
 
-As the `gateway` branch evolves, this document should be kept in sync with the actual behavior of `goverse-server` and the future `goverse-gateway` binary.
+As the `gate` branch evolves, this document should be kept in sync with the actual behavior of `goverse-server` and the future `goverse-gate` binary.

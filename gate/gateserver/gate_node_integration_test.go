@@ -83,7 +83,7 @@ func waitForObjectDeletedOnNode(t *testing.T, n *node.Node, objID string, timeou
 }
 
 // TestGateNodeIntegrationSimple tests basic gate-to-node integration:
-// - Creates a real GatewayServer that routes calls through cluster to a node
+// - Creates a real GateServer that routes calls through cluster to a node
 // - Creates objects via the gate client and verifies they're created on the node
 // - Calls object methods via the gate client and verifies responses
 // - Uses 1 gate and 1 node for simplicity
@@ -116,21 +116,21 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 	t.Logf("Started mock node server at %s", nodeAddr)
 
-	// Create and start the real GatewayServer
+	// Create and start the real GateServer
 	gateAddr := testutil.GetFreeAddress()
-	gwServerConfig := &GatewayServerConfig{
+	gwServerConfig := &GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
 	}
-	gwServer, err := NewGatewayServer(gwServerConfig)
+	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server: %v", err)
+		t.Fatalf("Failed to create gate server: %v", err)
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gateway server in a goroutine
+	// Start the gate server in a goroutine
 	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
 	t.Cleanup(gwStartCancel)
 
@@ -139,17 +139,17 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 		gwStarted <- gwServer.Start(gwStartCtx)
 	}()
 
-	// Wait for gateway to be ready
+	// Wait for gate to be ready
 	time.Sleep(500 * time.Millisecond)
 	select {
 	case err := <-gwStarted:
 		if err != nil {
-			t.Fatalf("Gateway server failed to start: %v", err)
+			t.Fatalf("Gate server failed to start: %v", err)
 		}
 	default:
-		// Gateway is running
+		// Gate is running
 	}
-	t.Logf("Started real gateway server at %s", gateAddr)
+	t.Logf("Started real gate server at %s", gateAddr)
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
 	testutil.WaitForClusterReady(t, nodeCluster)
@@ -306,7 +306,7 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 }
 
 // TestGateNodeIntegrationMulti tests gate-to-node integration with multiple gates and nodes:
-// - Creates 2 real GatewayServers that route calls through cluster to nodes
+// - Creates 2 real GateServers that route calls through cluster to nodes
 // - Creates 3 node servers in a cluster
 // - Creates multiple objects via different gate clients
 // - Calls multiple object methods via different gate clients
@@ -380,17 +380,17 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	testutil.WaitForClusterReady(t, nodeCluster2)
 	testutil.WaitForClusterReady(t, nodeCluster3)
 
-	// Create and start Gateway 1
+	// Create and start Gate 1
 	gateAddr1 := testutil.GetFreeAddress()
-	gwServerConfig1 := &GatewayServerConfig{
+	gwServerConfig1 := &GateServerConfig{
 		ListenAddress:    gateAddr1,
 		AdvertiseAddress: gateAddr1,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
 	}
-	gwServer1, err := NewGatewayServer(gwServerConfig1)
+	gwServer1, err := NewGateServer(gwServerConfig1)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server 1: %v", err)
+		t.Fatalf("Failed to create gate server 1: %v", err)
 	}
 	t.Cleanup(func() { gwServer1.Stop() })
 
@@ -406,24 +406,24 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	select {
 	case err := <-gwStarted1:
 		if err != nil {
-			t.Fatalf("Gateway server 1 failed to start: %v", err)
+			t.Fatalf("Gate server 1 failed to start: %v", err)
 		}
 	default:
-		// Gateway is running
+		// Gate is running
 	}
-	t.Logf("Started gateway server 1 at %s", gateAddr1)
+	t.Logf("Started gate server 1 at %s", gateAddr1)
 
-	// Create and start Gateway 2
+	// Create and start Gate 2
 	gateAddr2 := testutil.GetFreeAddress()
-	gwServerConfig2 := &GatewayServerConfig{
+	gwServerConfig2 := &GateServerConfig{
 		ListenAddress:    gateAddr2,
 		AdvertiseAddress: gateAddr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
 	}
-	gwServer2, err := NewGatewayServer(gwServerConfig2)
+	gwServer2, err := NewGateServer(gwServerConfig2)
 	if err != nil {
-		t.Fatalf("Failed to create gateway server 2: %v", err)
+		t.Fatalf("Failed to create gate server 2: %v", err)
 	}
 	t.Cleanup(func() { gwServer2.Stop() })
 
@@ -439,12 +439,12 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	select {
 	case err := <-gwStarted2:
 		if err != nil {
-			t.Fatalf("Gateway server 2 failed to start: %v", err)
+			t.Fatalf("Gate server 2 failed to start: %v", err)
 		}
 	default:
-		// Gateway is running
+		// Gate is running
 	}
-	t.Logf("Started gateway server 2 at %s", gateAddr2)
+	t.Logf("Started gate server 2 at %s", gateAddr2)
 
 	// Wait for gates to register with nodes
 	// (gates are already ready from node cluster ready above)

@@ -29,22 +29,22 @@ import (
 // This is an integration test that verifies the gate's registerWithNode goroutine
 // properly handles stream.Recv() errors and performs cleanup when the stream closes.
 func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
-	config := &GatewayConfig{
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-stream-disconnect",
+		EtcdPrefix:       "/test-gate-stream-disconnect",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Create mock node connection (this will fail to connect, but that's ok for this test)
@@ -67,7 +67,7 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 
 	regDone := make(chan struct{})
 	go func() {
-		gateway.RegisterWithNodes(regCtx, connections)
+		gate.RegisterWithNodes(regCtx, connections)
 		close(regDone)
 	}()
 
@@ -86,8 +86,8 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 	// Give time for cleanup
 	time.Sleep(500 * time.Millisecond)
 
-	// The gateway will be stopped by the defer, verifying clean shutdown
-	t.Logf("Successfully verified gateway handles stream disconnect/failure gracefully")
+	// The gate will be stopped by the defer, verifying clean shutdown
+	t.Logf("Successfully verified gate handles stream disconnect/failure gracefully")
 }
 
 // TestGateCleanupOnNodeRemoval tests that when a node is removed from the
@@ -97,22 +97,22 @@ func TestGateDetectsNodeStreamDisconnect(t *testing.T) {
 // This test specifically verifies the cleanup path in RegisterWithNodes
 // when nodes are no longer present in the provided connections map.
 func TestGateCleanupOnNodeRemoval(t *testing.T) {
-	config := &GatewayConfig{
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-node-removal",
+		EtcdPrefix:       "/test-gate-node-removal",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Manually add a mock registration to simulate an active connection
@@ -120,18 +120,18 @@ func TestGateCleanupOnNodeRemoval(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(ctx)
 	mockStream := &mockGateStream{ctx: ctx1}
 
-	gateway.nodeRegMu.Lock()
-	gateway.nodeRegs[mockNodeAddr] = &nodeReg{
+	gate.nodeRegMu.Lock()
+	gate.nodeRegs[mockNodeAddr] = &nodeReg{
 		stream: mockStream,
 		cancel: cancel1,
 		ctx:    ctx1,
 	}
-	gateway.nodeRegMu.Unlock()
+	gate.nodeRegMu.Unlock()
 
 	// Verify registration exists
-	gateway.nodeRegMu.RLock()
-	_, exists := gateway.nodeRegs[mockNodeAddr]
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	_, exists := gate.nodeRegs[mockNodeAddr]
+	gate.nodeRegMu.RUnlock()
 
 	if !exists {
 		t.Fatal("Registration should exist after manual addition")
@@ -148,15 +148,15 @@ func TestGateCleanupOnNodeRemoval(t *testing.T) {
 	// Call RegisterWithNodes with empty map - simulates all nodes being removed
 	// This should trigger cleanup of the existing registration
 	emptyConnections := map[string]goverse_pb.GoverseClient{}
-	gateway.RegisterWithNodes(ctx, emptyConnections)
+	gate.RegisterWithNodes(ctx, emptyConnections)
 
 	// Give time for cleanup
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the registration was removed
-	gateway.nodeRegMu.RLock()
-	_, exists = gateway.nodeRegs[mockNodeAddr]
-	gateway.nodeRegMu.RUnlock()
+	gate.nodeRegMu.RLock()
+	_, exists = gate.nodeRegs[mockNodeAddr]
+	gate.nodeRegMu.RUnlock()
 
 	if exists {
 		t.Error("Registration should have been removed after node removal")

@@ -59,11 +59,11 @@ go get github.com/xiaonanln/goverse
 ## Project Structure
 
 - `cmd/inspector/` – Inspector web server for cluster visualization
-- `cmd/gate/` – Gateway server binary for client connections
+- `cmd/gate/` – Gate server binary for client connections
 - `server/` – Node server implementation with context-based shutdown
 - `node/` – Core node logic and object management
 - `object/` – Object base types and helpers (BaseObject)
-- `gate/` – Gateway implementation for handling client connections
+- `gate/` – Gate implementation for handling client connections
 - `client/` – Client protocol definitions (deprecated BaseClient for backwards compatibility)
 - `cluster/` – Cluster singleton management, leadership election, and automatic shard mapping
 - `cluster/sharding/` – Shard-to-node mapping with 8192 fixed shards
@@ -77,25 +77,25 @@ go get github.com/xiaonanln/goverse
 
 ---
 
-## Gateway Architecture
+## Gate Architecture
 
-GoVerse features a **Gateway** system that enables seamless communication between clients and distributed objects.
+GoVerse features a **Gate** system that enables seamless communication between clients and distributed objects.
 
 ### Core Components
 
-**1. Gateway Server**
+**1. Gate Server**
 - Separate `cmd/gate/` binary that handles client connections
-- Gateways connect to GoVerse nodes to route calls to distributed objects
+- Gates connect to GoVerse nodes to route calls to distributed objects
 - Provides `GateService` for client-facing RPCs
 
 **2. Client Registration System**
-- Clients register with the gateway via `Register()` streaming RPC on the `GateService`
+- Clients register with the gate via `Register()` streaming RPC on the `GateService`
 - Each client receives a unique ID in format `gateAddress/uniqueId` (e.g., `localhost:49000/AAZEDvtPr4JHP6WtybiD`)
 - Persistent connections maintained for bidirectional communication
 
 **3. Connection Lifecycle Management**
 ```go
-// Client-side registration with gateway
+// Client-side registration with gate
 stream, err := client.Register(ctx, &gate_pb.Empty{})
 
 // Receive registration response with client ID
@@ -105,30 +105,30 @@ clientID := regResp.(*gate_pb.RegisterResponse).ClientId
 
 **4. Generic Object Call Interface**
 - Clients call distributed objects via the `CallObject()` RPC with object type, ID, method name, and request
-- Gateway routes calls to the appropriate node based on object ID shard mapping
+- Gate routes calls to the appropriate node based on object ID shard mapping
 - No client-specific objects on the server; all logic lives in distributed objects
 
 **5. Push Messaging**
-- Gateways register with each node via `RegisterGate()` streaming RPC
-- Nodes can push messages to clients via the gateway using `PushMessageToClient()`
+- Gates register with each node via `RegisterGate()` streaming RPC
+- Nodes can push messages to clients via the gate using `PushMessageToClient()`
 - Enables real-time notifications, chat messages, and event delivery
 
-### Gateway Connection Flow
+### Gate Connection Flow
 
-1. **Gateway Startup**: Gateway connects to etcd and discovers nodes in the cluster
-2. **Gate Registration**: Gateway registers with each node via `RegisterGate()` streaming RPC
-3. **Client Registration**: Client connects to gateway and calls `Register()` to get a unique client ID
+1. **Gate Startup**: Gate connects to etcd and discovers nodes in the cluster
+2. **Gate Registration**: Gate registers with each node via `RegisterGate()` streaming RPC
+3. **Client Registration**: Client connects to gate and calls `Register()` to get a unique client ID
 4. **Bidirectional Communication**: Client can call objects AND receive pushed messages
 5. **Object Invocation**: Client calls distributed objects through `CallObject()` RPC
-6. **Node Routing**: Gateway routes calls to the appropriate node based on object shard
-7. **Real-time Updates**: Nodes push messages to clients via the gateway's registration stream
-8. **Graceful Cleanup**: Client connections and gateway registrations cleaned up on disconnect
+6. **Node Routing**: Gate routes calls to the appropriate node based on object shard
+7. **Real-time Updates**: Nodes push messages to clients via the gate's registration stream
+8. **Graceful Cleanup**: Client connections and gate registrations cleaned up on disconnect
 
 ### Usage Example
 
 ```go
-// Connect to gateway
-conn, _ := grpc.Dial(gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// Connect to gate
+conn, _ := grpc.Dial(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 client := gate_pb.NewGateServiceClient(conn)
 
 // Register and get client ID
@@ -236,7 +236,7 @@ fmt.Printf("Counter value: %d\n", value)
 
 ## Chat Application Example
 
-The chat system demonstrates how distributed objects work together in a real application with the gateway architecture.
+The chat system demonstrates how distributed objects work together in a real application with the gate architecture.
 
 ### ChatRoom Object (Distributed Object)
 
@@ -323,7 +323,7 @@ func main() {
 ### Client Usage
 
 ```go
-// Connect to gateway
+// Connect to gate
 client := gate_pb.NewGateServiceClient(conn)
 stream, _ := client.Register(ctx, &gate_pb.Empty{})
 regResp, _ := stream.Recv()
@@ -360,8 +360,8 @@ client.CallObject(ctx, &gate_pb.CallObjectRequest{
 
 The chat system provides real-time message delivery through distributed ChatRoom objects:
 
-- **Push-based Delivery**: Messages are pushed to clients in real-time via gateway streams
-- **Gateway Routing**: Gateways register with nodes and route push messages to connected clients
+- **Push-based Delivery**: Messages are pushed to clients in real-time via gate streams
+- **Gate Routing**: Gates register with nodes and route push messages to connected clients
 - **Polling Support**: Clients can also poll for recent messages using `GetRecentMessages()`
 - **Timestamp Tracking**: Messages include microsecond timestamps for ordering and filtering
 - **Message Persistence**: Chat history stored in distributed ChatRoom objects
@@ -384,10 +384,10 @@ See [PUSH_MESSAGING.md](PUSH_MESSAGING.md) for implementation details.
    # Starts node server on port 47000 (node-to-node communication)
    ```
 
-3. **Start the gateway:**
+3. **Start the gate:**
    ```bash
    go run ./cmd/gate/
-   # Starts gateway on port 49000 (client connections)
+   # Starts gate on port 49000 (client connections)
    ```
 
 4. **Start multiple chat clients:**

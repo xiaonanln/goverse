@@ -11,29 +11,29 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func TestNewGateway(t *testing.T) {
+func TestNewGate(t *testing.T) {
 	// Get free addresses for tests that need them
 	addr1 := testutil.GetFreeAddress()
 	addr2 := testutil.GetFreeAddress()
 
 	tests := []struct {
 		name       string
-		config     *GatewayConfig
+		config     *GateConfig
 		wantErr    bool
 		errContain string
 	}{
 		{
 			name: "valid config",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: addr1,
 				EtcdAddress:      "localhost:2379",
-				EtcdPrefix:       "/test-gateway",
+				EtcdPrefix:       "/test-gate",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid config with default prefix",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: addr2,
 				EtcdAddress:      "localhost:2379",
 			},
@@ -47,7 +47,7 @@ func TestNewGateway(t *testing.T) {
 		},
 		{
 			name: "empty advertise address",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: "",
 				EtcdAddress:      "localhost:2379",
 			},
@@ -56,7 +56,7 @@ func TestNewGateway(t *testing.T) {
 		},
 		{
 			name: "empty etcd address",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: addr1, // Reuse addr1 since this test will fail validation
 				EtcdAddress:      "",
 			},
@@ -67,23 +67,23 @@ func TestNewGateway(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gateway, err := NewGateway(tt.config)
+			gate, err := NewGate(tt.config)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("NewGateway() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("NewGate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errContain != "" {
 				if !contains(err.Error(), tt.errContain) {
-					t.Fatalf("NewGateway() error = %v, want error containing %q", err, tt.errContain)
+					t.Fatalf("NewGate() error = %v, want error containing %q", err, tt.errContain)
 				}
 			}
-			if gateway != nil {
+			if gate != nil {
 				// Clean up
-				defer gateway.Stop()
+				defer gate.Stop()
 
 				// Verify defaults are set
 				if tt.config != nil && tt.config.EtcdPrefix == "" {
-					if gateway.config.EtcdPrefix != "/goverse" {
-						t.Fatalf("Expected default EtcdPrefix to be /goverse, got %s", gateway.config.EtcdPrefix)
+					if gate.config.EtcdPrefix != "/goverse" {
+						t.Fatalf("Expected default EtcdPrefix to be /goverse, got %s", gate.config.EtcdPrefix)
 					}
 				}
 			}
@@ -91,17 +91,17 @@ func TestNewGateway(t *testing.T) {
 	}
 }
 
-func TestValidateGatewayConfig(t *testing.T) {
+func TestValidateGateConfig(t *testing.T) {
 	tests := []struct {
 		name       string
-		config     *GatewayConfig
+		config     *GateConfig
 		wantErr    bool
 		errContain string
-		checkFunc  func(*testing.T, *GatewayConfig)
+		checkFunc  func(*testing.T, *GateConfig)
 	}{
 		{
 			name: "valid config",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
 				EtcdPrefix:       "/custom",
@@ -110,12 +110,12 @@ func TestValidateGatewayConfig(t *testing.T) {
 		},
 		{
 			name: "sets default prefix",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
-			checkFunc: func(t *testing.T, cfg *GatewayConfig) {
+			checkFunc: func(t *testing.T, cfg *GateConfig) {
 				if cfg.EtcdPrefix != "/goverse" {
 					t.Fatalf("Expected EtcdPrefix to be /goverse, got %s", cfg.EtcdPrefix)
 				}
@@ -129,7 +129,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		},
 		{
 			name: "empty advertise address",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: "",
 				EtcdAddress:      "localhost:2379",
 			},
@@ -138,7 +138,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		},
 		{
 			name: "empty etcd address",
-			config: &GatewayConfig{
+			config: &GateConfig{
 				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "",
 			},
@@ -149,13 +149,13 @@ func TestValidateGatewayConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateGatewayConfig(tt.config)
+			err := validateGateConfig(tt.config)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("validateGatewayConfig() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("validateGateConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errContain != "" {
 				if !contains(err.Error(), tt.errContain) {
-					t.Fatalf("validateGatewayConfig() error = %v, want error containing %q", err, tt.errContain)
+					t.Fatalf("validateGateConfig() error = %v, want error containing %q", err, tt.errContain)
 				}
 			}
 			if err == nil && tt.checkFunc != nil {
@@ -165,85 +165,85 @@ func TestValidateGatewayConfig(t *testing.T) {
 	}
 }
 
-func TestGatewayStartStop(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateStartStop(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-lifecycle",
+		EtcdPrefix:       "/test-gate-lifecycle",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	ctx := context.Background()
 
-	// Start gateway
-	err = gateway.Start(ctx)
+	// Start gate
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
-	// Stop gateway
-	err = gateway.Stop()
+	// Stop gate
+	err = gate.Stop()
 	if err != nil {
-		t.Fatalf("Gateway.Stop() returned error: %v", err)
+		t.Fatalf("Gate.Stop() returned error: %v", err)
 	}
 }
 
-func TestGatewayMultipleStops(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateMultipleStops(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-multistop",
+		EtcdPrefix:       "/test-gate-multistop",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	ctx := context.Background()
 
-	// Start gateway
-	err = gateway.Start(ctx)
+	// Start gate
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Stop multiple times should not panic or error
-	if err := gateway.Stop(); err != nil {
+	if err := gate.Stop(); err != nil {
 		t.Fatalf("First Stop() returned error: %v", err)
 	}
 
-	if err := gateway.Stop(); err != nil {
+	if err := gate.Stop(); err != nil {
 		t.Fatalf("Second Stop() returned error: %v", err)
 	}
 }
 
-func TestGatewayRegister(t *testing.T) {
+func TestGateRegister(t *testing.T) {
 	advertiseAddr := testutil.GetFreeAddress()
-	config := &GatewayConfig{
+	config := &GateConfig{
 		AdvertiseAddress: advertiseAddr,
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-register",
+		EtcdPrefix:       "/test-gate-register",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Register should return a valid client proxy
-	clientProxy := gateway.Register(ctx)
+	clientProxy := gate.Register(ctx)
 	if clientProxy == nil {
 		t.Fatalf("Register() returned nil clientProxy")
 	}
@@ -259,8 +259,8 @@ func TestGatewayRegister(t *testing.T) {
 		t.Fatalf("Register() clientID = %s, want to start with '%s'", clientID, expectedPrefix)
 	}
 
-	// Verify client proxy exists in gateway
-	clientProxy2, exists := gateway.GetClient(clientID)
+	// Verify client proxy exists in gate
+	clientProxy2, exists := gate.GetClient(clientID)
 	if !exists {
 		t.Fatalf("Client proxy not found after registration")
 	}
@@ -275,60 +275,60 @@ func TestGatewayRegister(t *testing.T) {
 	}
 
 	// Test Unregister
-	gateway.Unregister(clientID)
-	_, exists = gateway.GetClient(clientID)
+	gate.Unregister(clientID)
+	_, exists = gate.GetClient(clientID)
 	if exists {
 		t.Fatalf("Client proxy still exists after unregister")
 	}
 }
 
-func TestGatewayStartWithoutStop(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateStartWithoutStop(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-nostop",
+		EtcdPrefix:       "/test-gate-nostop",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	ctx := context.Background()
 
-	// Start gateway
-	err = gateway.Start(ctx)
+	// Start gate
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Can start multiple times without error (idempotent)
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() second call returned error: %v", err)
+		t.Fatalf("Gate.Start() second call returned error: %v", err)
 	}
 
 	// Clean up
-	gateway.Stop()
+	gate.Stop()
 }
 
-func TestGatewayRegisterMultipleClients(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateRegisterMultipleClients(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-multiple",
+		EtcdPrefix:       "/test-gate-multiple",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Register multiple clients
@@ -336,7 +336,7 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 	clientIDs := make([]string, numClients)
 
 	for i := 0; i < numClients; i++ {
-		clientProxy := gateway.Register(ctx)
+		clientProxy := gate.Register(ctx)
 		clientIDs[i] = clientProxy.GetID()
 	}
 
@@ -348,7 +348,7 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 		}
 		seenIDs[clientID] = true
 
-		clientProxy, exists := gateway.GetClient(clientID)
+		clientProxy, exists := gate.GetClient(clientID)
 		if !exists {
 			t.Fatalf("Client #%d not found after registration", i)
 		}
@@ -359,79 +359,79 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 
 	// Unregister all clients
 	for i, clientID := range clientIDs {
-		gateway.Unregister(clientID)
-		_, exists := gateway.GetClient(clientID)
+		gate.Unregister(clientID)
+		_, exists := gate.GetClient(clientID)
 		if exists {
 			t.Fatalf("Client #%d still exists after unregister", i)
 		}
 	}
 }
 
-func TestGatewayUnregisterNonExistentClient(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateUnregisterNonExistentClient(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-unregister",
+		EtcdPrefix:       "/test-gate-unregister",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Unregister a non-existent client should not panic or error
-	gateway.Unregister("non-existent-client")
+	gate.Unregister("non-existent-client")
 
 	// Should still be able to register new clients
-	clientProxy := gateway.Register(ctx)
+	clientProxy := gate.Register(ctx)
 	if clientProxy.GetID() == "" {
 		t.Fatalf("Register() returned empty client ID")
 	}
 }
 
-func TestGatewayGetClientNotFound(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateGetClientNotFound(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-getclient",
+		EtcdPrefix:       "/test-gate-getclient",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	// Get non-existent client
-	_, exists := gateway.GetClient("non-existent-client")
+	_, exists := gate.GetClient("non-existent-client")
 	if exists {
 		t.Fatalf("GetClient() returned true for non-existent client")
 	}
 }
 
-func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateStopCleansUpAllClientProxies(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-cleanup",
+		EtcdPrefix:       "/test-gate-cleanup",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Register multiple clients
@@ -440,13 +440,13 @@ func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
 	clientIDs := make([]string, numClients)
 
 	for i := 0; i < numClients; i++ {
-		clientProxies[i] = gateway.Register(ctx)
+		clientProxies[i] = gate.Register(ctx)
 		clientIDs[i] = clientProxies[i].GetID()
 	}
 
 	// Verify all clients are registered
 	for i, clientID := range clientIDs {
-		_, exists := gateway.GetClient(clientID)
+		_, exists := gate.GetClient(clientID)
 		if !exists {
 			t.Fatalf("Client #%d not found after registration", i)
 		}
@@ -458,15 +458,15 @@ func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
 		}
 	}
 
-	// Stop the gateway
-	err = gateway.Stop()
+	// Stop the gate
+	err = gate.Stop()
 	if err != nil {
-		t.Fatalf("Gateway.Stop() returned error: %v", err)
+		t.Fatalf("Gate.Stop() returned error: %v", err)
 	}
 
 	// Verify all clients are unregistered
 	for i, clientID := range clientIDs {
-		_, exists := gateway.GetClient(clientID)
+		_, exists := gate.GetClient(clientID)
 		if exists {
 			t.Fatalf("Client #%d still exists after Stop", i)
 		}
@@ -478,39 +478,39 @@ func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
 	}
 
 	// Verify internal clients map is empty
-	gateway.clientsMu.RLock()
-	clientCount := len(gateway.clients)
-	gateway.clientsMu.RUnlock()
+	gate.clientsMu.RLock()
+	clientCount := len(gate.clients)
+	gate.clientsMu.RUnlock()
 
 	if clientCount != 0 {
-		t.Fatalf("Gateway still has %d clients after Stop, expected 0", clientCount)
+		t.Fatalf("Gate still has %d clients after Stop, expected 0", clientCount)
 	}
 }
 
-func TestGatewayHandleGateMessage(t *testing.T) {
-	config := &GatewayConfig{
+func TestGateHandleGateMessage(t *testing.T) {
+	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
-		EtcdPrefix:       "/test-gateway-handlemsg",
+		EtcdPrefix:       "/test-gate-handlemsg",
 	}
 
-	gateway, err := NewGateway(config)
+	gate, err := NewGate(config)
 	if err != nil {
-		t.Fatalf("Failed to create gateway: %v", err)
+		t.Fatalf("Failed to create gate: %v", err)
 	}
-	defer gateway.Stop()
+	defer gate.Stop()
 
 	ctx := context.Background()
-	err = gateway.Start(ctx)
+	err = gate.Start(ctx)
 	if err != nil {
-		t.Fatalf("Gateway.Start() returned error: %v", err)
+		t.Fatalf("Gate.Start() returned error: %v", err)
 	}
 
 	// Register two clients to verify correct routing
-	clientProxy1 := gateway.Register(ctx)
+	clientProxy1 := gate.Register(ctx)
 	clientID1 := clientProxy1.GetID()
 
-	clientProxy2 := gateway.Register(ctx)
+	clientProxy2 := gate.Register(ctx)
 	clientID2 := clientProxy2.GetID()
 
 	t.Run("ClientMessage_RoutesToCorrectClient", func(t *testing.T) {
@@ -546,7 +546,7 @@ func TestGatewayHandleGateMessage(t *testing.T) {
 			},
 		}
 
-		gateway.handleGateMessage("test-node", gateMsg1)
+		gate.handleGateMessage("test-node", gateMsg1)
 
 		// Send message to client 2
 		anyMsg2, err := anypb.New(testMessage2)
@@ -565,7 +565,7 @@ func TestGatewayHandleGateMessage(t *testing.T) {
 			},
 		}
 
-		gateway.handleGateMessage("test-node", gateMsg2)
+		gate.handleGateMessage("test-node", gateMsg2)
 
 		// Verify client 1 receives only its message
 		select {
@@ -648,7 +648,7 @@ func TestGatewayHandleGateMessage(t *testing.T) {
 		}
 
 		// Handle the message - should log warning and drop message
-		gateway.handleGateMessage("test-node", gateMsg)
+		gate.handleGateMessage("test-node", gateMsg)
 
 		// Verify our registered clients did NOT receive the message
 		select {
@@ -680,7 +680,7 @@ func TestGatewayHandleGateMessage(t *testing.T) {
 		}
 
 		// Handle the message - should log warning and not crash
-		gateway.handleGateMessage("test-node", gateMsg)
+		gate.handleGateMessage("test-node", gateMsg)
 
 		// Verify client did NOT receive a message
 		select {
@@ -700,7 +700,7 @@ func TestGatewayHandleGateMessage(t *testing.T) {
 		}
 
 		// Handle the message - should just log
-		gateway.handleGateMessage("test-node", gateMsg)
+		gate.handleGateMessage("test-node", gateMsg)
 
 		// Verify clients did NOT receive anything
 		select {
@@ -725,7 +725,7 @@ func TestGatewayHandleGateMessage(t *testing.T) {
 		}
 
 		// Handle the message - should log warning and not crash
-		gateway.handleGateMessage("test-node", gateMsg)
+		gate.handleGateMessage("test-node", gateMsg)
 
 		// Verify clients did NOT receive a message
 		select {
