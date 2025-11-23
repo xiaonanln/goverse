@@ -139,6 +139,15 @@ testServer.Start(ctx)
 defer testServer.Stop()
 ```
 
+**Dynamic ports**: Always use `testutil.GetFreeAddress()` or `:0` for test parallelism:
+```go
+addr := testutil.GetFreeAddress()  // Returns "localhost:12345"
+// Or with TestServerHelper
+testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
+testServer.Start(ctx)
+actualAddr := testServer.GetAddress()  // Get bound address
+```
+
 ### Test Conventions
 
 - Use `t.Fatalf()` not `t.Errorf()` (fail fast)
