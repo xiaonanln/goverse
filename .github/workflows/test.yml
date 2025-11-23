@@ -78,7 +78,7 @@ jobs:
           done
 
       - name: Run tests with coverage
-        run: go test -v -p 1 -failfast -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -v -p 1 -parallel 1 -failfast -coverprofile=coverage.out -covermode=atomic ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
@@ -86,7 +86,7 @@ jobs:
           POSTGRES_DB: postgres
 
       - name: Run etcd restart tests
-        run: go test -tags=etcd_restart -v -p=1 -run=^.*Reconnection$ -coverprofile=coverage-etcd-restart.out -covermode=atomic ./...
+        run: go test -tags=etcd_restart -v -p 1 -parallel 1 -run=^.*Reconnection$ -coverprofile=coverage-etcd-restart.out -covermode=atomic ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
@@ -177,7 +177,7 @@ jobs:
           done
 
       - name: Run tests with race detector
-        run: go test -v -p 1 -failfast -race ./...
+        run: go test -v -p 1 -parallel 1 -failfast -race ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
@@ -258,7 +258,7 @@ jobs:
           done
 
       - name: Run tests in parallel
-        run: go test -v -failfast ./...
+        run: go test -v ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
