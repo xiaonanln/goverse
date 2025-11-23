@@ -166,9 +166,7 @@ func TestNodeConnections_RetryOnFailedConnection(t *testing.T) {
 	}
 
 	// No retry should be running since grpc.NewClient succeeded
-	nc.retryingNodesMu.Lock()
-	retryCount := len(nc.retryingNodes)
-	nc.retryingNodesMu.Unlock()
+	retryCount := nc.NumActiveRetries()
 
 	if retryCount != 0 {
 		t.Fatalf("Expected 0 retry goroutines when grpc.NewClient succeeds, got %d", retryCount)
@@ -214,9 +212,7 @@ func TestNodeConnections_RetryStopsOnDisconnect(t *testing.T) {
 	}
 
 	// No retry goroutines should be running
-	nc.retryingNodesMu.Lock()
-	retryCount := len(nc.retryingNodes)
-	nc.retryingNodesMu.Unlock()
+	retryCount := nc.NumActiveRetries()
 
 	if retryCount != 0 {
 		t.Fatalf("Expected 0 retry goroutines after node removal, got %d", retryCount)
@@ -244,9 +240,7 @@ func TestNodeConnections_RetryStopsOnStop(t *testing.T) {
 	nc.Stop()
 
 	// Verify all retry goroutines stopped and cleanup happened
-	nc.retryingNodesMu.Lock()
-	retryCountAfterStop := len(nc.retryingNodes)
-	nc.retryingNodesMu.Unlock()
+	retryCountAfterStop := nc.NumActiveRetries()
 
 	if retryCountAfterStop != 0 {
 		t.Fatalf("Expected 0 retry goroutines after Stop(), got %d", retryCountAfterStop)
@@ -278,9 +272,7 @@ func TestNodeConnections_NoRetryForAlreadyConnected(t *testing.T) {
 
 	// If connection was established, no retry should be running
 	// (Note: grpc.NewClient succeeds even if server isn't running)
-	nc.retryingNodesMu.Lock()
-	retryCount := len(nc.retryingNodes)
-	nc.retryingNodesMu.Unlock()
+	retryCount := nc.NumActiveRetries()
 
 	// Connection should exist (even if server isn't actually running)
 	connCount := nc.NumConnections()
@@ -339,9 +331,7 @@ func TestNodeConnections_SetNodesDoesNotStartRetryForExistingConnection(t *testi
 	}
 
 	// No retry goroutines should be running
-	nc.retryingNodesMu.Lock()
-	retryCount := len(nc.retryingNodes)
-	nc.retryingNodesMu.Unlock()
+	retryCount := nc.NumActiveRetries()
 
 	if retryCount != 0 {
 		t.Fatalf("Expected 0 retry goroutines for existing connection, got %d", retryCount)

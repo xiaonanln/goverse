@@ -290,7 +290,10 @@ func (nc *NodeConnections) SetNodes(nodes []string) {
 			nc.retryingNodesMu.Lock()
 			if cancel, exists := nc.retryingNodes[nodeAddr]; exists {
 				nc.logger.Debugf("Cancelling retry goroutine for removed node %s", nodeAddr)
-				cancel()
+				// Cancel function might be nil if retry goroutine hasn't fully started yet
+				if cancel != nil {
+					cancel()
+				}
 				delete(nc.retryingNodes, nodeAddr)
 			}
 			nc.retryingNodesMu.Unlock()
@@ -307,4 +310,11 @@ func (nc *NodeConnections) NumConnections() int {
 	nc.connectionsMu.RLock()
 	defer nc.connectionsMu.RUnlock()
 	return len(nc.connections)
+}
+
+// NumActiveRetries returns the number of active retry goroutines
+func (nc *NodeConnections) NumActiveRetries() int {
+	nc.retryingNodesMu.Lock()
+	defer nc.retryingNodesMu.Unlock()
+	return len(nc.retryingNodes)
 }
