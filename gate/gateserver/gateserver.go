@@ -24,6 +24,7 @@ type GateServerConfig struct {
 	MetricsListenAddress string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress          string // Address of etcd for cluster state
 	EtcdPrefix           string // Optional: etcd key prefix (default: "/goverse")
+	NumShards            int    // Optional: number of shards in the cluster (default: 8192)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
@@ -63,6 +64,7 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 	clusterCfg := cluster.Config{
 		EtcdAddress: config.EtcdAddress,
 		EtcdPrefix:  config.EtcdPrefix,
+		NumShards:   config.NumShards,
 	}
 	c, err := cluster.NewClusterWithGate(clusterCfg, gw)
 	if err != nil {

@@ -14,7 +14,7 @@ func TestNumShards(t *testing.T) {
 func TestGetShardID_BasicFunctionality(t *testing.T) {
 	// Test that GetShardID returns a valid shard ID
 	objectID := "exampleObjectID"
-	shardID := GetShardID(objectID)
+	shardID := GetShardID(objectID, NumShards)
 
 	if shardID < 0 || shardID >= NumShards {
 		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
@@ -24,8 +24,8 @@ func TestGetShardID_BasicFunctionality(t *testing.T) {
 func TestGetShardID_Consistency(t *testing.T) {
 	// Test that the same object ID always returns the same shard ID
 	objectID := "testObject123"
-	shardID1 := GetShardID(objectID)
-	shardID2 := GetShardID(objectID)
+	shardID1 := GetShardID(objectID, NumShards)
+	shardID2 := GetShardID(objectID, NumShards)
 
 	if shardID1 != shardID2 {
 		t.Fatalf("GetShardID(%s) should be consistent: got %d and %d", objectID, shardID1, shardID2)
@@ -37,8 +37,8 @@ func TestGetShardID_DifferentInputs(t *testing.T) {
 	id1 := "object1"
 	id2 := "object2"
 
-	shardID1 := GetShardID(id1)
-	shardID2 := GetShardID(id2)
+	shardID1 := GetShardID(id1, NumShards)
+	shardID2 := GetShardID(id2, NumShards)
 
 	// They should be different (though theoretically they could collide)
 	// We're just checking that they're both valid
@@ -52,7 +52,7 @@ func TestGetShardID_DifferentInputs(t *testing.T) {
 
 func TestGetShardID_EmptyString(t *testing.T) {
 	// Test with empty string
-	shardID := GetShardID("")
+	shardID := GetShardID("", NumShards)
 
 	if shardID < 0 || shardID >= NumShards {
 		t.Fatalf("GetShardID(\"\") = %d, want value in range [0, %d)", shardID, NumShards)
@@ -72,7 +72,7 @@ func TestGetShardID_SpecialCharacters(t *testing.T) {
 	}
 
 	for _, objectID := range testCases {
-		shardID := GetShardID(objectID)
+		shardID := GetShardID(objectID, NumShards)
 		if shardID < 0 || shardID >= NumShards {
 			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
 		}
@@ -87,7 +87,7 @@ func TestGetShardID_Distribution(t *testing.T) {
 
 	for i := 0; i < numTests; i++ {
 		objectID := fmt.Sprintf("object-%d", i)
-		shardID := GetShardID(objectID)
+		shardID := GetShardID(objectID, NumShards)
 
 		if shardID < 0 || shardID >= NumShards {
 			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
@@ -128,7 +128,7 @@ func TestGetShardID_KnownValues(t *testing.T) {
 		// Call multiple times to ensure consistency
 		results := make(map[int]bool)
 		for i := 0; i < 10; i++ {
-			shardID := GetShardID(tc.objectID)
+			shardID := GetShardID(tc.objectID, NumShards)
 			results[shardID] = true
 		}
 
@@ -144,7 +144,7 @@ func BenchmarkGetShardID(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		GetShardID(objectID)
+		GetShardID(objectID, NumShards)
 	}
 }
 
@@ -158,7 +158,7 @@ func BenchmarkGetShardID_VaryingLength(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				GetShardID(tc)
+				GetShardID(tc, NumShards)
 			}
 		})
 	}

@@ -31,6 +31,7 @@ type ServerConfig struct {
 	MinQuorum                 int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
 	NodeStabilityDuration     time.Duration // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
 	ShardMappingCheckInterval time.Duration // Optional: how often to check if shard mapping needs updating (default: 5s)
+	NumShards                 int           // Optional: number of shards in the cluster (default: 8192)
 }
 
 type Server struct {
@@ -65,6 +66,9 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	if config.ShardMappingCheckInterval > 0 {
 		clusterCfg.ShardMappingCheckInterval = config.ShardMappingCheckInterval
+	}
+	if config.NumShards > 0 {
+		clusterCfg.NumShards = config.NumShards
 	}
 
 	// Initialize cluster with etcd connection

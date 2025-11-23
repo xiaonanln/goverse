@@ -161,6 +161,10 @@ func (node *Node) GetAdvertiseAddress() string {
 // This must be called during initialization before the node is used concurrently
 func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
 	node.shardLock = sl
+	// Update inspector manager with numShards from shard lock
+	if sl != nil {
+		node.inspectorManager.SetNumShards(sl.GetNumShards())
+	}
 }
 
 // RegisterObjectType registers a new object type with the node
@@ -449,7 +453,11 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.inspectorManager.NotifyObjectAdded(id, typ)
 
 	// Record metrics with shard information
-	shard := sharding.GetShardID(id)
+	numShards := sharding.NumShards
+	if node.shardLock != nil {
+		numShards = node.shardLock.GetNumShards()
+	}
+	shard := sharding.GetShardID(id, numShards)
 	metrics.RecordObjectCreated(node.advertiseAddress, typ, shard)
 
 	return nil
@@ -472,7 +480,11 @@ func (node *Node) destroyObject(id string) {
 
 	// Record metrics if object existed
 	if exists {
-		shard := sharding.GetShardID(id)
+		numShards := sharding.NumShards
+		if node.shardLock != nil {
+			numShards = node.shardLock.GetNumShards()
+		}
+		shard := sharding.GetShardID(id, numShards)
 		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shard)
 	}
 }

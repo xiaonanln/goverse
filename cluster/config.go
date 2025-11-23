@@ -23,6 +23,10 @@ type Config struct {
 	// ShardMappingCheckInterval is how often to check if shard mapping needs updating
 	// Default: 5 seconds
 	ShardMappingCheckInterval time.Duration
+
+	// NumShards is the number of shards in the cluster
+	// Default: 8192
+	NumShards int
 }
 
 // DefaultConfig returns a Config with production default values
@@ -31,5 +35,6 @@ func DefaultConfig() Config {
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 10 * time.Second,
 		ShardMappingCheckInterval:     5 * time.Second,
+		NumShards:                     8192,
 	}
 }

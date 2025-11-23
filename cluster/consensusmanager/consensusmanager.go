@@ -49,8 +49,8 @@ type ShardMapping struct {
 	Shards map[int]ShardInfo `json:"shards"`
 }
 
-func (sm *ShardMapping) IsFullyAssignedAndClaimed() bool {
-	if len(sm.Shards) != sharding.NumShards {
+func (sm *ShardMapping) IsFullyAssignedAndClaimed(numShards int) bool {
+	if len(sm.Shards) != numShards {
 		return false
 	}
 	// Check that all shards have both TargetNode and CurrentNode set
@@ -157,6 +157,7 @@ type ConsensusManager struct {
 	minQuorum                     int           // minimal number of nodes required for cluster to be considered stable
 	clusterStateStabilityDuration time.Duration // duration to wait for cluster state to stabilize
 	localNodeAddress              string        // local node address for this consensus manager
+	numShards                     int           // number of shards in the cluster
 
 	// Watch management
 	watchCtx     context.Context
@@ -169,9 +170,12 @@ type ConsensusManager struct {
 }
 
 // NewConsensusManager creates a new consensus manager
-func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string) *ConsensusManager {
+func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string, numShards int) *ConsensusManager {
 	if clusterStateStabilityDuration <= 0 {
 		clusterStateStabilityDuration = defaultClusterStateStabilityDuration
+	}
+	if numShards <= 0 {
+		numShards = sharding.NumShards
 	}
 	return &ConsensusManager{
 		etcdManager:                   etcdMgr,
@@ -179,6 +183,7 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		shardLock:                     shardLock,
 		clusterStateStabilityDuration: clusterStateStabilityDuration,
 		localNodeAddress:              localNodeAddress,
+		numShards:                     numShards,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -237,7 +242,7 @@ func (cm *ConsensusManager) IsReady() bool {
 		return false
 	}
 
-	if cm.state.ShardMapping == nil || !cm.state.ShardMapping.IsFullyAssignedAndClaimed() {
+	if cm.state.ShardMapping == nil || !cm.state.ShardMapping.IsFullyAssignedAndClaimed(cm.numShards) {
 		cm.logger.Warnf("ConsensusManager not ready: Shard mapping not fully assigned and claimed")
 		return false
 	}
@@ -269,6 +274,13 @@ func (cm *ConsensusManager) getEffectiveMinQuorum() int {
 		return 1
 	}
 	return cm.minQuorum
+}
+
+// GetNumShards returns the number of shards in the cluster
+func (cm *ConsensusManager) GetNumShards() int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.numShards
 }
 
 // notifyStateChanged notifies all listeners about cluster state changes
@@ -506,7 +518,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		return
 	}
 
-	if shardID < 0 || shardID >= sharding.NumShards {
+	if shardID < 0 || shardID >= cm.numShards {
 		cm.logger.Errorf("Invalid shard ID %d from key %s", shardID, key)
 		return
 	}
@@ -620,7 +632,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 				continue
 			}
 
-			if shardID < 0 || shardID >= sharding.NumShards {
+			if shardID < 0 || shardID >= cm.numShards {
 				cm.logger.Warnf("Invalid shard ID %d from key %s", shardID, key)
 				continue
 			}
@@ -715,7 +727,7 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 	}
 
 	// Use the sharding logic to determine the node
-	shardID := sharding.GetShardID(objectID)
+	shardID := sharding.GetShardID(objectID, cm.numShards)
 
 	// Get shard mapping and check node existence under a single lock
 	cm.mu.RLock()
@@ -751,7 +763,7 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 
 // GetNodeForShard returns the node that owns the given shard
 func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
-	if shardID < 0 || shardID >= sharding.NumShards {
+	if shardID < 0 || shardID >= cm.numShards {
 		return "", fmt.Errorf("invalid shard ID: %d", shardID)
 	}
 
@@ -1083,7 +1095,7 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 		currentShards = make(map[int]ShardInfo)
 	}
 
-	for shardID := 0; shardID < sharding.NumShards; shardID++ {
+	for shardID := 0; shardID < cm.numShards; shardID++ {
 		currentInfo := currentShards[shardID]
 		if !nodeSet[currentInfo.TargetNode] {
 			// If TargetNode is empty but CurrentNode is already set to a valid node,
@@ -1162,7 +1174,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	}
 
 	allAssigned := true
-	for shardID := 0; shardID < sharding.NumShards; shardID++ {
+	for shardID := 0; shardID < cm.numShards; shardID++ {
 		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
 		// Require TargetNode to be assigned for all shards for rebalance to proceed
 		if !exists || shardInfo.TargetNode == "" {
@@ -1195,7 +1207,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		// Find max and min shard counts based on current state
 		var maxNode, minNode string
 		maxCount := -1
-		minCount := sharding.NumShards + 1
+		minCount := cm.numShards + 1
 
 		for _, node := range nodes {
 			count := shardCounts[node]
@@ -1381,7 +1393,7 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 		}
 
 		// Get the shard for this object
-		shardID := sharding.GetShardID(objectID)
+		shardID := sharding.GetShardID(objectID, cm.numShards)
 
 		// Check if this shard belongs to this node
 		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
