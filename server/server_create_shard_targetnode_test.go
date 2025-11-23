@@ -24,7 +24,7 @@ func TestServerCreateObject_ShardIDComputation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			shardID := sharding.GetShardID(tc.objectID)
+			shardID := sharding.GetShardID(tc.objectID, sharding.NumShards)
 			if shardID < 0 || shardID >= sharding.NumShards {
 				t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", tc.objectID, shardID, sharding.NumShards)
 			}

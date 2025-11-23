@@ -33,7 +33,7 @@ func TestStorageFormat(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
 
 	// Set up some nodes
 	cm.mu.Lock()
@@ -145,7 +145,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
 
 	// Set up nodes
 	cm.mu.Lock()
@@ -208,7 +208,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
 	ctx := context.Background()
 
 	// Test 1: Store new shards with ModRevision=0 (should succeed)

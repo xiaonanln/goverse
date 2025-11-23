@@ -113,7 +113,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	for i := 0; i < numObjects; i++ {
 		objID := fmt.Sprintf("test-remove-obj-%d", i)
 		objectIDs[i] = objID
-		shardIDs[i] = sharding.GetShardID(objID)
+		shardIDs[i] = sharding.GetShardID(objID, sharding.NumShards)
 
 		// Create the object
 		createdID, err := cluster1.CreateObject(ctx, "TestRemoveObject", objID)
