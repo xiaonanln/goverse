@@ -77,11 +77,11 @@ This ensures that context values set by this package don't conflict with other c
 
 Returns a new context with the client ID stored. This is called internally by the gateway server when processing client requests.
 
-### `GetClientID(ctx context.Context) string`
+### `ClientID(ctx context.Context) string`
 
 Retrieves the client ID from the context. Returns empty string if no client ID is present.
 
-### `HasClientID(ctx context.Context) bool`
+### `FromClient(ctx context.Context) bool`
 
 Checks if the context contains a client ID. Returns `true` if the call originated from a client via the gate.
 
