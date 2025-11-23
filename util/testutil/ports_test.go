@@ -60,9 +60,9 @@ func TestGetFreePort_MultipleCalls(t *testing.T) {
 }
 
 func TestGetFreeAddress_MultipleCalls(t *testing.T) {
-	// Get multiple addresses and verify they're all valid
+	// Get multiple addresses and verify they're all valid and distinct
 	addresses := make(map[string]bool)
-	numAddresses := 5
+	numAddresses := 10
 
 	for i := 0; i < numAddresses; i++ {
 		addr := GetFreeAddress()
@@ -71,11 +71,47 @@ func TestGetFreeAddress_MultipleCalls(t *testing.T) {
 			t.Fatalf("GetFreeAddress() call %d returned invalid address: %s", i+1, addr)
 		}
 
+		// Check for collisions
+		if addresses[addr] {
+			t.Fatalf("GetFreeAddress() returned duplicate address %s on call %d", addr, i+1)
+		}
+
 		addresses[addr] = true
 	}
 
-	// Verify all addresses were valid
-	if len(addresses) == 0 {
-		t.Fatal("No valid addresses were returned")
+	// Verify all addresses were distinct
+	if len(addresses) != numAddresses {
+		t.Fatalf("Expected %d distinct addresses but got %d", numAddresses, len(addresses))
 	}
+}
+
+// TestGetFreeAddress_NoCollisions verifies that multiple calls to GetFreeAddress
+// return distinct addresses with no collisions across many iterations.
+// This ensures the function is suitable for concurrent test setup scenarios.
+func TestGetFreeAddress_NoCollisions(t *testing.T) {
+	addresses := make(map[string]bool)
+	numAddresses := 100
+
+	for i := 0; i < numAddresses; i++ {
+		addr := GetFreeAddress()
+
+		// Verify address format
+		if !strings.HasPrefix(addr, "localhost:") {
+			t.Fatalf("GetFreeAddress() call %d returned invalid address format: %s", i+1, addr)
+		}
+
+		// Check for collisions - this is the critical requirement
+		if addresses[addr] {
+			t.Fatalf("GetFreeAddress() collision detected: address %s returned twice (first seen before call %d)", addr, i+1)
+		}
+
+		addresses[addr] = true
+	}
+
+	// Final verification: all addresses must be distinct
+	if len(addresses) != numAddresses {
+		t.Fatalf("Expected %d distinct addresses but got %d (collisions detected)", numAddresses, len(addresses))
+	}
+
+	t.Logf("Successfully verified %d distinct addresses with no collisions", numAddresses)
 }
