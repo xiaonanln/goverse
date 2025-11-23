@@ -10,14 +10,26 @@ import (
 
 // ShardLock provides per-cluster shard-level locking to prevent lock collisions between clusters
 type ShardLock struct {
-	keyLock *keylock.KeyLock
+	keyLock   *keylock.KeyLock
+	numShards int
 }
 
 // NewShardLock creates a new ShardLock instance for a cluster
 func NewShardLock() *ShardLock {
 	return &ShardLock{
-		keyLock: keylock.NewKeyLock(),
+		keyLock:   keylock.NewKeyLock(),
+		numShards: sharding.NumShards,
 	}
+}
+
+// SetNumShards sets the number of shards for this ShardLock
+func (sl *ShardLock) SetNumShards(numShards int) {
+	sl.numShards = numShards
+}
+
+// GetNumShards returns the number of shards for this ShardLock
+func (sl *ShardLock) GetNumShards() int {
+	return sl.numShards
 }
 
 // AcquireRead acquires a read lock on the shard for the given object ID.
@@ -30,7 +42,7 @@ func (sl *ShardLock) AcquireRead(objectID string) func() {
 		return func() {} // No-op unlock
 	}
 
-	shardID := sharding.GetShardID(objectID)
+	shardID := sharding.GetShardID(objectID, sl.numShards)
 	return sl.keyLock.RLock(shardLockKey(shardID))
 }
 

@@ -145,7 +145,13 @@ func (c *Cluster) init(cfg Config) error {
 	if stabilityDuration <= 0 {
 		stabilityDuration = DefaultNodeStabilityDuration
 	}
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr())
+	// Use the provided number of shards or default
+	numShards := cfg.NumShards
+	if numShards <= 0 {
+		numShards = sharding.NumShards
+	}
+	c.shardLock.SetNumShards(numShards)
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr(), numShards)
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
@@ -164,7 +170,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
-		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, ""),
+		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", sharding.NumShards),
 		minQuorum:                 1,
 		shardMappingCheckInterval: 1 * time.Second,
 		shardLock:                 shardLock,
@@ -1072,7 +1078,7 @@ func (c *Cluster) releaseShardOwnership(ctx context.Context) {
 		if strings.Contains(objectID, "/") {
 			continue
 		}
-		shardID := sharding.GetShardID(objectID)
+		shardID := sharding.GetShardID(objectID, c.consensusManager.GetNumShards())
 		localObjectsPerShard[shardID]++
 	}
 
@@ -1109,7 +1115,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 
 	// Remove each object that should be evicted
 	for _, objectID := range objectsToEvict {
-		shardID := sharding.GetShardID(objectID)
+		shardID := sharding.GetShardID(objectID, c.consensusManager.GetNumShards())
 		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 

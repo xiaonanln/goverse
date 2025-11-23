@@ -25,6 +25,7 @@ type InspectorManager struct {
 	inspectorAddress    string
 	healthCheckInterval time.Duration
 	logger              *logger.Logger
+	numShards           int
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -45,7 +46,15 @@ func NewInspectorManager(nodeAddress string) *InspectorManager {
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("InspectorManager"),
 		objects:             make(map[string]*inspector_pb.Object),
+		numShards:           sharding.NumShards,
 	}
+}
+
+// SetNumShards sets the number of shards for the inspector manager
+func (im *InspectorManager) SetNumShards(numShards int) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.numShards = numShards
 }
 
 // SetHealthCheckInterval sets the health check interval for the InspectorManager.
@@ -115,7 +124,7 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
 	defer im.mu.Unlock()
 
 	// Compute shard ID for the object
-	shardID := sharding.GetShardID(objectID)
+	shardID := sharding.GetShardID(objectID, im.numShards)
 
 	// Store object info for re-registration on reconnect
 	im.objects[objectID] = &inspector_pb.Object{
@@ -239,7 +248,7 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string)
 	}
 
 	// Compute shard ID for the object
-	shardID := sharding.GetShardID(objectID)
+	shardID := sharding.GetShardID(objectID, im.numShards)
 
 	req := &inspector_pb.AddOrUpdateObjectRequest{
 		Object: &inspector_pb.Object{

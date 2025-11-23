@@ -22,6 +22,10 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatalf("Expected default ShardMappingCheckInterval to be 5s, got %v", cfg.ShardMappingCheckInterval)
 	}
 
+	if cfg.NumShards != 8192 {
+		t.Fatalf("Expected default NumShards to be 8192, got %d", cfg.NumShards)
+	}
+
 	// EtcdAddress and EtcdPrefix should be empty by default
 	if cfg.EtcdAddress != "" {
 		t.Fatalf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
@@ -41,6 +45,7 @@ func TestConfigCustomization(t *testing.T) {
 	cfg.MinQuorum = 3
 	cfg.ClusterStateStabilityDuration = 5 * time.Second
 	cfg.ShardMappingCheckInterval = 2 * time.Second
+	cfg.NumShards = 4096
 
 	// Verify customizations
 	if cfg.EtcdAddress != "localhost:2379" {
@@ -61,6 +66,10 @@ func TestConfigCustomization(t *testing.T) {
 
 	if cfg.ShardMappingCheckInterval != 2*time.Second {
 		t.Fatalf("Expected ShardMappingCheckInterval to be 2s, got %v", cfg.ShardMappingCheckInterval)
+	}
+
+	if cfg.NumShards != 4096 {
+		t.Fatalf("Expected NumShards to be 4096, got %d", cfg.NumShards)
 	}
 }
 
