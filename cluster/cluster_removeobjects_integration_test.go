@@ -259,7 +259,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
-		
+
 		if !found {
 			if objExistsOnNode(objID, node1) {
 				t.Logf("Note: Object %s was created on node1, but will be removed again in next cycle", objID)
