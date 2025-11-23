@@ -102,7 +102,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: testutil.GetFreeAddress(),
 				EtcdAddress:      "localhost:2379",
 				EtcdPrefix:       "/custom",
 			},
@@ -111,7 +111,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "sets default prefix",
 			config: &GatewayConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: testutil.GetFreeAddress(),
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
@@ -139,7 +139,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "empty etcd address",
 			config: &GatewayConfig{
-				AdvertiseAddress: "localhost:49000",
+				AdvertiseAddress: testutil.GetFreeAddress(),
 				EtcdAddress:      "",
 			},
 			wantErr:    true,
@@ -167,7 +167,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 
 func TestGatewayStartStop(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-lifecycle",
 	}
@@ -194,7 +194,7 @@ func TestGatewayStartStop(t *testing.T) {
 
 func TestGatewayMultipleStops(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-multistop",
 	}
@@ -223,8 +223,9 @@ func TestGatewayMultipleStops(t *testing.T) {
 }
 
 func TestGatewayRegister(t *testing.T) {
+	advertiseAddr := testutil.GetFreeAddress()
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: advertiseAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-register",
 	}
@@ -253,8 +254,9 @@ func TestGatewayRegister(t *testing.T) {
 	}
 
 	// Verify client ID format (should start with advertise address)
-	if !contains(clientID, "localhost:49000/") {
-		t.Fatalf("Register() clientID = %s, want to start with 'localhost:49000/'", clientID)
+	expectedPrefix := advertiseAddr + "/"
+	if !contains(clientID, expectedPrefix) {
+		t.Fatalf("Register() clientID = %s, want to start with '%s'", clientID, expectedPrefix)
 	}
 
 	// Verify client proxy exists in gateway
@@ -282,7 +284,7 @@ func TestGatewayRegister(t *testing.T) {
 
 func TestGatewayStartWithoutStop(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-nostop",
 	}
@@ -312,7 +314,7 @@ func TestGatewayStartWithoutStop(t *testing.T) {
 
 func TestGatewayRegisterMultipleClients(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-multiple",
 	}
@@ -367,7 +369,7 @@ func TestGatewayRegisterMultipleClients(t *testing.T) {
 
 func TestGatewayUnregisterNonExistentClient(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-unregister",
 	}
@@ -396,7 +398,7 @@ func TestGatewayUnregisterNonExistentClient(t *testing.T) {
 
 func TestGatewayGetClientNotFound(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-getclient",
 	}
@@ -416,7 +418,7 @@ func TestGatewayGetClientNotFound(t *testing.T) {
 
 func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-cleanup",
 	}
@@ -487,7 +489,7 @@ func TestGatewayStopCleansUpAllClientProxies(t *testing.T) {
 
 func TestGatewayHandleGateMessage(t *testing.T) {
 	config := &GatewayConfig{
-		AdvertiseAddress: "localhost:49000",
+		AdvertiseAddress: testutil.GetFreeAddress(),
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       "/test-gateway-handlemsg",
 	}
