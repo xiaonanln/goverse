@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/inspector"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
@@ -144,7 +145,7 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Add an object
-	mgr.NotifyObjectAdded("test-obj-1", "TestObjectType")
+	mgr.NotifyObjectAdded("test-obj-1", "TestObjectType", sharding.GetShardID("test-obj-1", sharding.NumShards))
 
 	// Wait for notification to be processed
 	time.Sleep(100 * time.Millisecond)
@@ -159,8 +160,8 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	}
 
 	// Add more objects
-	mgr.NotifyObjectAdded("test-obj-2", "TestObjectType")
-	mgr.NotifyObjectAdded("test-obj-3", "AnotherType")
+	mgr.NotifyObjectAdded("test-obj-2", "TestObjectType", sharding.GetShardID("test-obj-2", sharding.NumShards))
+	mgr.NotifyObjectAdded("test-obj-3", "AnotherType", sharding.GetShardID("test-obj-3", sharding.NumShards))
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -292,7 +293,7 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	}
 
 	// Add an object before disconnection
-	mgr.NotifyObjectAdded("pre-disconnect-obj", "PreType")
+	mgr.NotifyObjectAdded("pre-disconnect-obj", "PreType", sharding.GetShardID("pre-disconnect-obj", sharding.NumShards))
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify object is registered
@@ -318,7 +319,7 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	}
 
 	// Add object while disconnected (should be queued)
-	mgr.NotifyObjectAdded("during-disconnect-obj", "DisconnectType")
+	mgr.NotifyObjectAdded("during-disconnect-obj", "DisconnectType", sharding.GetShardID("during-disconnect-obj", sharding.NumShards))
 
 	// Restart the inspector server on the same address
 	listener, err := net.Listen("tcp", inspectorAddr)
@@ -422,7 +423,7 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 	}
 
 	for _, obj := range testObjects {
-		mgr.NotifyObjectAdded(obj.id, obj.typ)
+		mgr.NotifyObjectAdded(obj.id, obj.typ, sharding.GetShardID(obj.id, sharding.NumShards))
 	}
 
 	// Wait for notifications to be processed
@@ -453,7 +454,7 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 	mgr.NotifyObjectRemoved(firstObjectID)
 	time.Sleep(100 * time.Millisecond)
 
-	mgr.NotifyObjectAdded(firstObjectID, "ReAddedType")
+	mgr.NotifyObjectAdded(firstObjectID, "ReAddedType", sharding.GetShardID(firstObjectID, sharding.NumShards))
 	time.Sleep(200 * time.Millisecond)
 
 	// Verify shard ID is consistent
@@ -540,10 +541,10 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	}
 
 	// Add objects from different managers
-	mgr1.NotifyObjectAdded("node1-obj1", "Type1")
-	mgr1.NotifyObjectAdded("node1-obj2", "Type1")
-	mgr2.NotifyObjectAdded("node2-obj1", "Type2")
-	mgr3.NotifyObjectAdded("node3-obj1", "Type3")
+	mgr1.NotifyObjectAdded("node1-obj1", "Type1", sharding.GetShardID("node1-obj1", sharding.NumShards))
+	mgr1.NotifyObjectAdded("node1-obj2", "Type1", sharding.GetShardID("node1-obj2", sharding.NumShards))
+	mgr2.NotifyObjectAdded("node2-obj1", "Type2", sharding.GetShardID("node2-obj1", sharding.NumShards))
+	mgr3.NotifyObjectAdded("node3-obj1", "Type3", sharding.GetShardID("node3-obj1", sharding.NumShards))
 
 	time.Sleep(100 * time.Millisecond)
 

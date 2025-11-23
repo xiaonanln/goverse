@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -110,12 +109,10 @@ func (im *InspectorManager) Stop() error {
 }
 
 // NotifyObjectAdded notifies the Inspector that a new object has been created.
-func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
+// The shardID should be computed by the caller using the cluster's configured numShards.
+func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shardID int) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-
-	// Compute shard ID for the object
-	shardID := sharding.GetShardID(objectID, sharding.NumShards)
 
 	// Store object info for re-registration on reconnect
 	im.objects[objectID] = &inspector_pb.Object{
@@ -126,7 +123,7 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
 
 	// If connected, send the notification immediately
 	if im.connected && im.client != nil {
-		im.addOrUpdateObjectLocked(objectID, objectType)
+		im.addOrUpdateObjectLocked(objectID, objectType, shardID)
 	}
 }
 
@@ -233,13 +230,10 @@ func (im *InspectorManager) unregisterNodeLocked() error {
 
 // addOrUpdateObjectLocked sends an AddOrUpdateObject RPC to the Inspector.
 // Must be called with im.mu held.
-func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string) {
+func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string, shardID int) {
 	if im.client == nil {
 		return
 	}
-
-	// Compute shard ID for the object
-	shardID := sharding.GetShardID(objectID, sharding.NumShards)
 
 	req := &inspector_pb.AddOrUpdateObjectRequest{
 		Object: &inspector_pb.Object{
