@@ -71,8 +71,9 @@ func (nc *NodeConnections) Stop() {
 	for addr, cancel := range nc.retryingNodes {
 		nc.logger.Debugf("Cancelling retry goroutine for node %s", addr)
 		cancel()
+		// Delete immediately to avoid goroutines trying to delete from map in defer
+		delete(nc.retryingNodes, addr)
 	}
-	nc.retryingNodes = make(map[string]context.CancelFunc)
 	nc.retryingNodesMu.Unlock()
 
 	// Close all connections
@@ -124,17 +125,26 @@ func (nc *NodeConnections) retryConnection(nodeAddr string) {
 	// Create a cancellable context for this retry goroutine
 	retryCtx, retryCancel := context.WithCancel(nc.ctx)
 
-	// Register the cancel function
-	nc.retryingNodesMu.Lock()
-	nc.retryingNodes[nodeAddr] = retryCancel
-	nc.retryingNodesMu.Unlock()
-
 	// Ensure cleanup on exit
 	defer func() {
+		retryCancel() // Ensure context is cancelled
 		nc.retryingNodesMu.Lock()
 		delete(nc.retryingNodes, nodeAddr)
 		nc.retryingNodesMu.Unlock()
 	}()
+
+	// Check if parent context is already cancelled before starting
+	select {
+	case <-retryCtx.Done():
+		nc.logger.Infof("Retry loop cancelled before start for node %s", nodeAddr)
+		return
+	default:
+	}
+
+	// Register the cancel function
+	nc.retryingNodesMu.Lock()
+	nc.retryingNodes[nodeAddr] = retryCancel
+	nc.retryingNodesMu.Unlock()
 
 	retryDelay := initialRetryDelay
 
