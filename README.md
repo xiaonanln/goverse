@@ -99,6 +99,43 @@ See [Getting Started](docs/GET_STARTED.md) for detailed roadmap and contribution
 
 ---
 
+## TODO
+
+High-level objectives for future development:
+
+### Core System Improvements
+- **Better leader election strategy** - Improve stability and reduce failover time during node transitions
+- **Shard rebalancing based on actual node load** - Dynamic rebalancing that considers CPU, memory, and object count
+- **Support different object call semantics** - Currently only best-effort; add at-least-once, exactly-once, and idempotent patterns
+- **Multi-region cluster support** - Enable geo-distributed deployments with locality-aware routing
+
+### Gateway & Client Features
+- **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility
+- **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
+- **Gate object call filtering** - Whitelist/blacklist patterns for security and API governance
+- **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
+- **Client reconnection & backoff** - Automatic retry logic with exponential backoff
+
+### Developer Experience
+- **Code generation for object types** - Generate boilerplate from protobuf definitions
+- **Hot reload for object code** - Update object implementations without cluster restart
+- **Enhanced debugging tools** - Distributed tracing, object lifecycle visualization
+- **Schema migration helpers** - Tools for evolving persisted object state
+
+### Performance & Scalability
+- **Streaming object-to-object calls** - Reduce latency for high-throughput inter-object communication
+- **Batched method calls** - Group multiple calls to same object for efficiency
+- **Read replicas for objects** - Optional read-only object instances for query optimization
+- **Configurable shard count** - Move beyond fixed 8192 shards for extreme scale
+
+### Observability & Operations
+- **Distributed transaction support** - Coordinated multi-object operations with rollback
+- **Enhanced metrics & alerting** - More granular Prometheus metrics, SLO tracking
+- **Automatic backup & restore** - Built-in persistence snapshots and recovery
+- **Chaos engineering tools** - Inject failures for resilience testing
+
+---
+
 ## License
 
 MIT License
