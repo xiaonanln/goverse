@@ -2,6 +2,7 @@ package gateserver
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -420,6 +421,74 @@ func TestGatewayServerGracefulShutdown(t *testing.T) {
 	}
 
 	t.Logf("Graceful shutdown completed in %v", duration)
+}
+
+func TestGatewayServerMetrics(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
+
+	config := &GatewayServerConfig{
+		ListenAddress:        ":49014",
+		AdvertiseAddress:     "localhost:49014",
+		MetricsListenAddress: ":19014",
+		EtcdAddress:          "localhost:2379",
+		EtcdPrefix:           "/test-gateway-metrics",
+	}
+
+	server, err := NewGatewayServer(config)
+	if err != nil {
+		t.Fatalf("Failed to create gateway server: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Start server
+	go server.Start(ctx)
+
+	// Wait for server to be ready - give more time for everything to start
+	time.Sleep(1 * time.Second)
+
+	// Try to fetch metrics with retries
+	var resp *http.Response
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		resp, err = http.Get("http://localhost:19014/metrics")
+		if err == nil {
+			break
+		}
+		t.Logf("Retry %d: waiting for metrics server to start...", i+1)
+		time.Sleep(200 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("Failed to fetch metrics after retries: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	// Read a bit of the response to verify it's prometheus metrics
+	buf := make([]byte, 100)
+	n, _ := resp.Body.Read(buf)
+	if n == 0 {
+		t.Fatal("Expected metrics response body, got empty")
+	}
+
+	// Check for typical prometheus metrics format
+	metricsContent := string(buf[:n])
+	if !contains(metricsContent, "go_") && !contains(metricsContent, "promhttp_") {
+		t.Fatalf("Expected prometheus metrics format, got: %s", metricsContent)
+	}
+
+	t.Log("Successfully fetched metrics from HTTP endpoint")
+
+	// Stop server
+	if err := server.Stop(); err != nil {
+		t.Fatalf("Server.Stop() returned error: %v", err)
+	}
 }
 
 // Helper function to check if a string contains a substring

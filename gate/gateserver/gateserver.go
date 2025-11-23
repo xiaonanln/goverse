@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/gate"
@@ -17,22 +19,24 @@ import (
 
 // GatewayServerConfig holds configuration for the gateway server
 type GatewayServerConfig struct {
-	ListenAddress    string // Address to listen on for client connections (e.g., ":49000")
-	AdvertiseAddress string // Address to advertise to the cluster (e.g., "localhost:49000")
-	EtcdAddress      string // Address of etcd for cluster state
-	EtcdPrefix       string // Optional: etcd key prefix (default: "/goverse")
+	ListenAddress        string // Address to listen on for client connections (e.g., ":49000")
+	AdvertiseAddress     string // Address to advertise to the cluster (e.g., "localhost:49000")
+	MetricsListenAddress string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
+	EtcdAddress          string // Address of etcd for cluster state
+	EtcdPrefix           string // Optional: etcd key prefix (default: "/goverse")
 }
 
 // GatewayServer handles gRPC requests and delegates to the gateway
 type GatewayServer struct {
 	gate_pb.UnimplementedGateServiceServer
-	config     *GatewayServerConfig
-	ctx        context.Context
-	cancel     context.CancelFunc
-	logger     *logger.Logger
-	grpcServer *grpc.Server
-	gate       *gate.Gateway
-	cluster    *cluster.Cluster
+	config        *GatewayServerConfig
+	ctx           context.Context
+	cancel        context.CancelFunc
+	logger        *logger.Logger
+	grpcServer    *grpc.Server
+	metricsServer *http.Server
+	gate          *gate.Gateway
+	cluster       *cluster.Cluster
 }
 
 // NewGatewayServer creates a new gateway server instance
@@ -105,7 +109,23 @@ func validateConfig(config *GatewayServerConfig) error {
 func (s *GatewayServer) Start(ctx context.Context) error {
 	s.logger.Infof("Starting gateway server on %s", s.config.ListenAddress)
 
-	// Start the cluster first
+	// Start metrics HTTP server early if configured (independent of cluster)
+	if s.config.MetricsListenAddress != "" {
+		s.metricsServer = &http.Server{
+			Addr:              s.config.MetricsListenAddress,
+			Handler:           promhttp.Handler(),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		go func() {
+			s.logger.Infof("Metrics HTTP server listening on %s", s.config.MetricsListenAddress)
+			if err := s.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				s.logger.Errorf("Metrics HTTP server error: %v", err)
+			}
+			s.logger.Infof("Metrics HTTP server stopped")
+		}()
+	}
+
+	// Start the cluster
 	if err := s.cluster.Start(ctx, nil); err != nil {
 		return fmt.Errorf("failed to start cluster: %w", err)
 	}
@@ -165,6 +185,15 @@ func (s *GatewayServer) Stop() error {
 		case <-shutdownCtx.Done():
 			s.logger.Warnf("gRPC server shutdown timed out, forcing stop")
 			s.grpcServer.Stop()
+		}
+	}
+
+	// Shutdown metrics server if running
+	if s.metricsServer != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.metricsServer.Shutdown(shutdownCtx); err != nil {
+			s.logger.Errorf("Metrics server shutdown error: %v", err)
 		}
 	}
 
