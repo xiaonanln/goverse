@@ -10,6 +10,7 @@ import (
 
 // TestLockClusterState_Empty tests LockClusterState with empty state
 func TestLockClusterState_Empty(t *testing.T) {
+	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -32,6 +33,7 @@ func TestLockClusterState_Empty(t *testing.T) {
 
 // TestLockClusterState_WithData tests LockClusterState with populated state
 func TestLockClusterState_WithData(t *testing.T) {
+	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -80,6 +82,7 @@ func TestLockClusterState_WithData(t *testing.T) {
 
 // TestLockClusterState_LockingBehavior tests that the lock is properly held
 func TestLockClusterState_LockingBehavior(t *testing.T) {
+	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -113,6 +116,7 @@ func TestLockClusterState_LockingBehavior(t *testing.T) {
 
 // TestLockClusterState_FullShardMapping tests LockClusterState with full 8192 shard mapping
 func TestLockClusterState_FullShardMapping(t *testing.T) {
+	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 
@@ -188,8 +192,9 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 	t.Logf("Successfully accessed state with %d nodes and %d shards", len(state.Nodes), len(state.ShardMapping.Shards))
 }
 
-// TestGetClusterStateForTesting_ReturnsClonedState tests that GetClusterStateForTesting returns a cloned copy
+// TestGetClusterStateForTesting_ReturnsClonedState tests that GetClusterStateForTesting returns a deep copy
 func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
+	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
 

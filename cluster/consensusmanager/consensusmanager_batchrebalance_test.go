@@ -11,6 +11,7 @@ import (
 
 // TestRebalanceShards_BatchMigration tests that RebalanceShards can migrate multiple shards in a single call
 func TestRebalanceShards_BatchMigration(t *testing.T) {
+	t.Parallel()
 	// Create a consensus manager without connecting to etcd (unit test)
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "")
@@ -106,6 +107,7 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 
 // TestRebalanceShards_BatchLogic tests the batch selection logic without etcd
 func TestRebalanceShards_BatchLogic(t *testing.T) {
+	t.Parallel()
 	// Test the logic that decides how many shards to migrate
 
 	// Create a test scenario with varying degrees of imbalance

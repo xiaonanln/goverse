@@ -18,6 +18,7 @@ func shardLockKey(shardID int) string {
 
 // TestShardLocking_ReadWriteExclusion tests that write locks block read locks
 func TestShardLocking_ReadWriteExclusion(t *testing.T) {
+	t.Parallel()
 	sl := shardlock.NewShardLock()
 
 	// Test object ID that maps to a specific shard
@@ -88,6 +89,7 @@ func TestShardLocking_ReadWriteExclusion(t *testing.T) {
 
 // TestShardLocking_MultipleReadLocks tests that multiple read locks can be held concurrently
 func TestShardLocking_MultipleReadLocks(t *testing.T) {
+	t.Parallel()
 	sl := shardlock.NewShardLock()
 	objectID := "test-object-456"
 
@@ -133,6 +135,7 @@ func TestShardLocking_MultipleReadLocks(t *testing.T) {
 
 // TestShardLocking_ReleaseBlocksCreate simulates the race condition scenario
 func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
+	t.Parallel()
 	sl := shardlock.NewShardLock()
 	objectID := "test-object-789"
 	shardID := sharding.GetShardID(objectID)
@@ -183,6 +186,7 @@ func TestShardLocking_ReleaseBlocksCreate(t *testing.T) {
 
 // TestShardLocking_DifferentShardsNoBlocking tests that operations on different shards don't block
 func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
+	t.Parallel()
 	sl := shardlock.NewShardLock()
 
 	// Use object IDs that map to different shards
@@ -256,6 +260,7 @@ func TestShardLocking_DifferentShardsNoBlocking(t *testing.T) {
 
 // TestAcquireShardReadLock_FixedNodeAddress tests that fixed node addresses don't acquire locks
 func TestAcquireShardReadLock_FixedNodeAddress(t *testing.T) {
+	t.Parallel()
 	sl := shardlock.NewShardLock()
 
 	// Object with fixed node address (contains "/")
@@ -271,6 +276,7 @@ func TestAcquireShardReadLock_FixedNodeAddress(t *testing.T) {
 
 // TestAcquireShardReadLock_NormalObject tests that normal objects do acquire locks
 func TestAcquireShardReadLock_NormalObject(t *testing.T) {
+	t.Parallel()
 	sl := shardlock.NewShardLock()
 	objectID := "test-object-normal"
 
