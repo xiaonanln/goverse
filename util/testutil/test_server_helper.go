@@ -62,10 +62,14 @@ func (tsh *TestServerHelper) Start(ctx context.Context) error {
 	// Update address with the actual bound address (important for :0 port allocation)
 	tsh.address = listener.Addr().String()
 
+	// Capture logger and server before starting goroutine to avoid race
+	logger := tsh.logger
+	server := tsh.server
+
 	// Start serving in background
 	go func() {
-		if err := tsh.server.Serve(listener); err != nil {
-			tsh.logger.Errorf("Server error: %v", err)
+		if err := server.Serve(listener); err != nil {
+			logger.Errorf("Server error: %v", err)
 		}
 	}()
 
