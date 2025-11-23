@@ -167,6 +167,15 @@ func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
 	}
 }
 
+// getNumShards returns the number of shards for this node
+// Returns the configured value from shardLock if set, otherwise the default
+func (node *Node) getNumShards() int {
+	if node.shardLock != nil {
+		return node.shardLock.GetNumShards()
+	}
+	return sharding.NumShards
+}
+
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)
@@ -453,11 +462,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.inspectorManager.NotifyObjectAdded(id, typ)
 
 	// Record metrics with shard information
-	numShards := sharding.NumShards
-	if node.shardLock != nil {
-		numShards = node.shardLock.GetNumShards()
-	}
-	shard := sharding.GetShardID(id, numShards)
+	shard := sharding.GetShardID(id, node.getNumShards())
 	metrics.RecordObjectCreated(node.advertiseAddress, typ, shard)
 
 	return nil
@@ -480,11 +485,7 @@ func (node *Node) destroyObject(id string) {
 
 	// Record metrics if object existed
 	if exists {
-		numShards := sharding.NumShards
-		if node.shardLock != nil {
-			numShards = node.shardLock.GetNumShards()
-		}
-		shard := sharding.GetShardID(id, numShards)
+		shard := sharding.GetShardID(id, node.getNumShards())
 		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shard)
 	}
 }
