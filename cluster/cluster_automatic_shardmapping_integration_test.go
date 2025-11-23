@@ -165,28 +165,18 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	// Wait for node list to stabilize and mapping to be updated
 	testutil.WaitForClusterReady(t, cluster2)
 
-	// Get updated mapping
-	updatedMapping := cluster1.GetShardMapping(ctx)
-
-	// Note: Version tracking is now in ClusterState
-	// With rebalancing enabled, shards should be distributed between both nodes
-	t.Logf("Shard mapping updated after node addition")
-
-	// Verify mapping now includes both nodes (shards are rebalanced)
-	nodeSet := make(map[string]bool)
-	for _, assignedNode := range updatedMapping.Shards {
-		nodeSet[assignedNode.TargetNode] = true
-	}
-
-	if len(nodeSet) != 2 {
-		t.Fatalf("Expected shard mapping to contain 2 nodes after rebalancing, got %d nodes: %v", len(nodeSet), nodeSet)
-	}
-
+	// Wait for rebalancing to complete - both nodes should appear in the shard mapping
 	expectedNode1 := "localhost:50021"
 	expectedNode2 := "localhost:50022"
-	if !nodeSet[expectedNode1] || !nodeSet[expectedNode2] {
-		t.Fatalf("Expected shard mapping to contain both %s and %s, got: %v", expectedNode1, expectedNode2, nodeSet)
-	}
+
+	testutil.WaitFor(t, 15*time.Second, "both nodes to appear in shard mapping after rebalancing", func() bool {
+		updatedMapping := cluster1.GetShardMapping(ctx)
+		nodeSet := make(map[string]bool)
+		for _, assignedNode := range updatedMapping.Shards {
+			nodeSet[assignedNode.TargetNode] = true
+		}
+		return len(nodeSet) == 2 && nodeSet[expectedNode1] && nodeSet[expectedNode2]
+	})
 
 	t.Logf("Test completed - shard mapping successfully updated when nodes changed")
 }
