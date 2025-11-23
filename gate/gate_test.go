@@ -102,7 +102,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GatewayConfig{
-				AdvertiseAddress: testutil.GetFreeAddress(),
+				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
 				EtcdPrefix:       "/custom",
 			},
@@ -111,7 +111,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "sets default prefix",
 			config: &GatewayConfig{
-				AdvertiseAddress: testutil.GetFreeAddress(),
+				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "localhost:2379",
 			},
 			wantErr: false,
@@ -139,7 +139,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 		{
 			name: "empty etcd address",
 			config: &GatewayConfig{
-				AdvertiseAddress: testutil.GetFreeAddress(),
+				AdvertiseAddress: "localhost:49000",
 				EtcdAddress:      "",
 			},
 			wantErr:    true,
