@@ -3,6 +3,7 @@ package gateserver
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,7 +84,7 @@ func TestNewGatewayServer(t *testing.T) {
 				t.Fatalf("NewGatewayServer() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errContain != "" {
-				if !contains(err.Error(), tt.errContain) {
+				if !strings.Contains(err.Error(), tt.errContain) {
 					t.Fatalf("NewGatewayServer() error = %v, want error containing %q", err, tt.errContain)
 				}
 			}
@@ -362,7 +363,7 @@ func TestValidateConfig(t *testing.T) {
 				t.Fatalf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errContain != "" {
-				if !contains(err.Error(), tt.errContain) {
+				if !strings.Contains(err.Error(), tt.errContain) {
 					t.Fatalf("validateConfig() error = %v, want error containing %q", err, tt.errContain)
 				}
 			}
@@ -479,7 +480,7 @@ func TestGatewayServerMetrics(t *testing.T) {
 
 	// Check for typical prometheus metrics format
 	metricsContent := string(buf[:n])
-	if !contains(metricsContent, "go_") && !contains(metricsContent, "promhttp_") {
+	if !strings.Contains(metricsContent, "go_") && !strings.Contains(metricsContent, "promhttp_") {
 		t.Fatalf("Expected prometheus metrics format, got: %s", metricsContent)
 	}
 
@@ -489,19 +490,4 @@ func TestGatewayServerMetrics(t *testing.T) {
 	if err := server.Stop(); err != nil {
 		t.Fatalf("Server.Stop() returned error: %v", err)
 	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && containsHelper(s, substr)))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
