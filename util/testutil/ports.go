@@ -8,9 +8,10 @@ import (
 
 var (
 	// recentPorts tracks recently allocated ports to prevent immediate reuse
-	// This is an append-only list where newer ports are added to the end
-	recentPorts   []int
-	recentPortsMu sync.Mutex
+	// Uses both a map (for O(1) lookup) and slice (for maintaining order)
+	recentPortsMap  = make(map[int]bool)
+	recentPortsList []int
+	recentPortsMu   sync.Mutex
 )
 
 // GetFreePort returns an available TCP port on localhost by binding to port 0
@@ -34,24 +35,19 @@ func GetFreePort() int {
 		port := addr.Port
 		listener.Close()
 
-		// Check if this port was recently allocated
-		isRecent := false
-		for _, recentPort := range recentPorts {
-			if recentPort == port {
-				isRecent = true
-				break
-			}
-		}
-
-		if !isRecent {
-			// Mark this port as recently used by adding to the list
-			recentPorts = append(recentPorts, port)
+		// Check if this port was recently allocated (O(1) map lookup)
+		if !recentPortsMap[port] {
+			// Mark this port as recently used
+			recentPortsMap[port] = true
+			recentPortsList = append(recentPortsList, port)
 
 			// Keep only the most recent ports (remove oldest if list is too long)
 			// This gradual cleanup maintains collision protection for recent ports
-			if len(recentPorts) > maxTrackedPorts {
-				// Remove the oldest entry (first element)
-				recentPorts = recentPorts[1:]
+			if len(recentPortsList) > maxTrackedPorts {
+				// Remove the oldest entry from both map and list
+				oldestPort := recentPortsList[0]
+				delete(recentPortsMap, oldestPort)
+				recentPortsList = recentPortsList[1:]
 			}
 
 			return port
