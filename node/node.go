@@ -97,7 +97,8 @@ func (node *Node) Start(ctx context.Context) error {
 	// Notify inspector manager about existing objects
 	node.objectsMu.RLock()
 	for _, obj := range node.objects {
-		node.inspectorManager.NotifyObjectAdded(obj.Id(), obj.Type())
+		shardID := sharding.GetShardID(obj.Id(), node.numShards)
+		node.inspectorManager.NotifyObjectAdded(obj.Id(), obj.Type(), shardID)
 	}
 	node.objectsMu.RUnlock()
 
@@ -453,11 +454,13 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
 
+	// Compute shard ID for the object
+	shard := sharding.GetShardID(id, node.numShards)
+
 	// Notify inspector manager about the new object
-	node.inspectorManager.NotifyObjectAdded(id, typ)
+	node.inspectorManager.NotifyObjectAdded(id, typ, shard)
 
 	// Record metrics with shard information
-	shard := sharding.GetShardID(id, node.numShards)
 	metrics.RecordObjectCreated(node.advertiseAddress, typ, shard)
 
 	return nil

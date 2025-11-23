@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/xiaonanln/goverse/cluster/sharding"
 )
 
 func TestInspectorManager_NewInspectorManager(t *testing.T) {
@@ -68,7 +70,7 @@ func TestInspectorManager_NotifyObjectAdded(t *testing.T) {
 	objectType := "TestObject"
 
 	// Add an object
-	mgr.NotifyObjectAdded(objectID, objectType)
+	mgr.NotifyObjectAdded(objectID, objectType, sharding.GetShardID(objectID, sharding.NumShards))
 
 	// Verify object was stored
 	mgr.mu.RLock()
@@ -97,7 +99,7 @@ func TestInspectorManager_NotifyObjectRemoved(t *testing.T) {
 	objectType := "TestObject"
 
 	// Add an object
-	mgr.NotifyObjectAdded(objectID, objectType)
+	mgr.NotifyObjectAdded(objectID, objectType, sharding.GetShardID(objectID, sharding.NumShards))
 
 	// Verify object was stored
 	mgr.mu.RLock()
@@ -137,7 +139,7 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 
 	// Add multiple objects
 	for _, obj := range objects {
-		mgr.NotifyObjectAdded(obj.id, obj.typ)
+		mgr.NotifyObjectAdded(obj.id, obj.typ, sharding.GetShardID(obj.id, sharding.NumShards))
 	}
 
 	// Verify all objects are tracked
@@ -228,9 +230,11 @@ func TestInspectorManager_ConcurrentNotifications(t *testing.T) {
 
 	for i := 0; i < numObjects; i++ {
 		go func(id int) {
+			objID := "concurrent-obj-" + string(rune(id))
 			mgr.NotifyObjectAdded(
-				"concurrent-obj-"+string(rune(id)),
+				objID,
 				"TestType",
+				sharding.GetShardID(objID, sharding.NumShards),
 			)
 			done <- true
 		}(i)
@@ -257,8 +261,8 @@ func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 	mgr := NewInspectorManager("localhost:47000")
 
 	// Add objects before starting the manager
-	mgr.NotifyObjectAdded("obj-1", "Type1")
-	mgr.NotifyObjectAdded("obj-2", "Type2")
+	mgr.NotifyObjectAdded("obj-1", "Type1", sharding.GetShardID("obj-1", sharding.NumShards))
+	mgr.NotifyObjectAdded("obj-2", "Type2", sharding.GetShardID("obj-2", sharding.NumShards))
 
 	// Verify objects are tracked
 	mgr.mu.RLock()
@@ -302,7 +306,7 @@ func TestInspectorManager_ShardIDComputation(t *testing.T) {
 	objectID := "test-object-with-shard"
 	objectType := "TestObject"
 
-	mgr.NotifyObjectAdded(objectID, objectType)
+	mgr.NotifyObjectAdded(objectID, objectType, sharding.GetShardID(objectID, sharding.NumShards))
 
 	// Verify object was stored with shard ID
 	mgr.mu.RLock()
