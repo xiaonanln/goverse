@@ -28,7 +28,7 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create and start a node cluster
-	nodeAddr := "localhost:47100"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -50,7 +50,7 @@ func TestGateNodeConnectionCleanupOnGateShutdown(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Step 3: Create a gate that will connect to the node
-	gateAddr := "localhost:49100"
+	gateAddr := testutil.GetFreeAddress()
 	gwConfig := &gate.GateConfig{
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
@@ -145,7 +145,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start a node cluster
-	nodeAddr := "localhost:47101"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -163,7 +163,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Create first gate
-	gate1Addr := "localhost:49101"
+	gate1Addr := testutil.GetFreeAddress()
 	gw1Config := &gate.GateConfig{
 		AdvertiseAddress: gate1Addr,
 		EtcdAddress:      "localhost:2379",
@@ -187,7 +187,7 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	t.Logf("Started gate 1 at %s", gate1Addr)
 
 	// Create second gate
-	gate2Addr := "localhost:49102"
+	gate2Addr := testutil.GetFreeAddress()
 	gw2Config := &gate.GateConfig{
 		AdvertiseAddress: gate2Addr,
 		EtcdAddress:      "localhost:2379",
@@ -269,7 +269,7 @@ func TestGateNodeReconnection(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and start a node cluster
-	nodeAddr := "localhost:47102"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -286,7 +286,7 @@ func TestGateNodeReconnection(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	gateAddr := "localhost:49103"
+	gateAddr := testutil.GetFreeAddress()
 
 	// First connection
 	gwConfig1 := &gate.GateConfig{

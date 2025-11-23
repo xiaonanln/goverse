@@ -27,8 +27,10 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create clusters using mustNewCluster
-	cluster1 := mustNewCluster(ctx, t, "localhost:47101", testPrefix)
-	cluster2 := mustNewCluster(ctx, t, "localhost:47102", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	node2Addr := testutil.GetFreeAddress()
+	cluster1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
+	cluster2 := mustNewCluster(ctx, t, node2Addr, testPrefix)
 
 	// Register object types on the nodes
 	node1 := cluster1.GetThisNode()
@@ -42,7 +44,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	// Start mock gRPC servers for both nodes
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47101", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
@@ -51,7 +53,7 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2)
-	testServer2 := testutil.NewTestServerHelper("localhost:47102", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(node2Addr, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
@@ -108,22 +110,22 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	// Verify all objects exist on their initial nodes
 	t.Logf("Verifying objects exist on their initial nodes...")
 	initialNodeCounts := map[string]int{
-		"localhost:47101": 0,
-		"localhost:47102": 0,
+		node1Addr: 0,
+		node2Addr: 0,
 	}
 	for i, objID := range objectIDs {
 		if objExistsOnNode(objID, node1) {
-			initialNodeCounts["localhost:47101"]++
+			initialNodeCounts[node1Addr]++
 			t.Logf("Object %s (shard %d) is on node1", objID, shardIDs[i])
 		} else if objExistsOnNode(objID, node2) {
-			initialNodeCounts["localhost:47102"]++
+			initialNodeCounts[node2Addr]++
 			t.Logf("Object %s (shard %d) is on node2", objID, shardIDs[i])
 		} else {
 			t.Fatalf("Object %s not found on any node", objID)
 		}
 	}
 	t.Logf("Initial distribution - node1: %d objects, node2: %d objects",
-		initialNodeCounts["localhost:47101"], initialNodeCounts["localhost:47102"])
+		initialNodeCounts[node1Addr], initialNodeCounts[node2Addr])
 
 	// Now manually update the shard mapping in etcd to reassign shards from node1 to node2
 	// We'll reassign the shards of all objects that are currently on node1
@@ -235,18 +237,18 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 
 	// Count final distribution
 	finalNodeCounts := map[string]int{
-		"localhost:47101": 0,
-		"localhost:47102": 0,
+		node1Addr: 0,
+		node2Addr: 0,
 	}
 	for _, objID := range objectIDs {
 		if objExistsOnNode(objID, node1) {
-			finalNodeCounts["localhost:47101"]++
+			finalNodeCounts[node1Addr]++
 		} else if objExistsOnNode(objID, node2) {
-			finalNodeCounts["localhost:47102"]++
+			finalNodeCounts[node2Addr]++
 		}
 	}
 	t.Logf("Final distribution after re-creation - node1: %d objects, node2: %d objects",
-		finalNodeCounts["localhost:47101"], finalNodeCounts["localhost:47102"])
+		finalNodeCounts[node1Addr], finalNodeCounts[node2Addr])
 
 	// The key test is that objects WERE removed from node1
 	// (Re-creation routing is a bonus but not the primary test objective)
