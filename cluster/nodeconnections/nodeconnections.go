@@ -122,6 +122,12 @@ func (nc *NodeConnections) connectToNode(nodeAddr string) error {
 
 // retryConnection retries connection to a node with exponential backoff
 func (nc *NodeConnections) retryConnection(nodeAddr string) {
+	// Check if NodeConnections has been started
+	if nc.ctx == nil {
+		nc.logger.Errorf("Cannot retry connection to %s: NodeConnections not started", nodeAddr)
+		return
+	}
+
 	// Create a cancellable context for this retry goroutine
 	retryCtx, retryCancel := context.WithCancel(nc.ctx)
 
