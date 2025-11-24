@@ -433,32 +433,26 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 
 	// Test Case 1: ObjectA and ObjectB on the same node
 	t.Run("SameNode", func(t *testing.T) {
-		// Find objects that will be on the same node
-		var objectAID, objectBID string
-		var foundSameNode bool
+		// Use GetObjectIDForShard to create objects on the same shard (same node)
+		// With 2 nodes and 64 shards, shard 5 will be on one of the nodes
+		targetShard := 5
+		objectAID := testutil.GetObjectIDForShard(targetShard, "TestObjectA")
+		objectBID := testutil.GetObjectIDForShard(targetShard, "TestObjectB")
 
-		for i := 0; i < 100 && !foundSameNode; i++ {
-			objectAID = fmt.Sprintf("TestObjectA-same-%d", i)
-			objectBID = fmt.Sprintf("TestObjectB-same-%d", i)
-
-			node1, err := node1Cluster.GetCurrentNodeForObject(ctx, objectAID)
-			if err != nil {
-				t.Fatalf("Failed to determine node for ObjectA: %v", err)
-			}
-			node2, err := node1Cluster.GetCurrentNodeForObject(ctx, objectBID)
-			if err != nil {
-				t.Fatalf("Failed to determine node for ObjectB: %v", err)
-			}
-
-			if node1 == node2 {
-				foundSameNode = true
-				t.Logf("Found objects on same node: A and B both on %s", node1)
-			}
+		// Verify they're on the same node
+		node1, err := node1Cluster.GetCurrentNodeForObject(ctx, objectAID)
+		if err != nil {
+			t.Fatalf("Failed to determine node for ObjectA: %v", err)
+		}
+		node2, err := node1Cluster.GetCurrentNodeForObject(ctx, objectBID)
+		if err != nil {
+			t.Fatalf("Failed to determine node for ObjectB: %v", err)
 		}
 
-		if !foundSameNode {
-			t.Skip("Could not find object IDs that hash to the same node")
+		if node1 != node2 {
+			t.Fatalf("Expected objects on same node, got A on %s and B on %s", node1, node2)
 		}
+		t.Logf("Objects on same shard %d, same node: %s", targetShard, node1)
 
 		// Create both objects
 		_, err = gateClient.CreateObject(ctx, &gate_pb.CreateObjectRequest{
