@@ -22,6 +22,7 @@ import (
 type GateServerConfig struct {
 	ListenAddress        string        // Address to listen on for client connections (e.g., ":49000")
 	AdvertiseAddress     string        // Address to advertise to the cluster (e.g., "localhost:49000")
+	HTTPListenAddress    string        // Optional: HTTP address for REST API (e.g., ":8080")
 	MetricsListenAddress string        // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress          string        // Address of etcd for cluster state
 	EtcdPrefix           string        // Optional: etcd key prefix (default: "/goverse")
@@ -37,6 +38,7 @@ type GateServer struct {
 	cancel        context.CancelFunc
 	logger        *logger.Logger
 	grpcServer    *grpc.Server
+	httpServer    *http.Server
 	metricsServer *http.Server
 	gate          *gate.Gate
 	cluster       *cluster.Cluster
@@ -162,6 +164,11 @@ func (s *GateServer) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start HTTP server if configured
+	if err := s.startHTTPServer(ctx); err != nil {
+		return fmt.Errorf("failed to start HTTP server: %w", err)
+	}
+
 	// Wait for context cancellation
 	<-ctx.Done()
 	s.logger.Infof("Gate server context cancelled, initiating shutdown")
@@ -193,6 +200,11 @@ func (s *GateServer) Stop() error {
 			s.logger.Warnf("gRPC server shutdown timed out, forcing stop")
 			s.grpcServer.Stop()
 		}
+	}
+
+	// Shutdown HTTP server if running
+	if err := s.stopHTTPServer(); err != nil {
+		s.logger.Errorf("HTTP server shutdown error: %v", err)
 	}
 
 	// Shutdown metrics server if running
