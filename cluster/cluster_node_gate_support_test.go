@@ -3,6 +3,8 @@ package cluster
 import (
 	"testing"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 )
@@ -11,7 +13,7 @@ import (
 func TestClusterNodeAndGateSupport(t *testing.T) {
 	t.Parallel()
 	t.Run("node cluster", func(t *testing.T) {
-		n := node.NewNode("localhost:47000")
+		n := node.NewNode("localhost:47000", sharding.NumShards)
 		c := newClusterForTesting(n, "TestNodeCluster")
 
 		// Test node cluster identification

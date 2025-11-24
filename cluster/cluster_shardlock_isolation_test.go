@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node"
 )
@@ -14,8 +16,8 @@ import (
 func TestCluster_ShardLockIsolation(t *testing.T) {
 	t.Parallel()
 	// Create two separate cluster instances
-	node1 := node.NewNode("localhost:50001")
-	node2 := node.NewNode("localhost:50002")
+	node1 := node.NewNode("localhost:50001", sharding.NumShards)
+	node2 := node.NewNode("localhost:50002", sharding.NumShards)
 
 	cluster1 := newClusterForTesting(node1, "Cluster1")
 	cluster2 := newClusterForTesting(node2, "Cluster2")
@@ -72,7 +74,7 @@ func TestCluster_ShardLockIsolation(t *testing.T) {
 // TestCluster_NodeShardLockSet verifies that the cluster sets its ShardLock on the node
 func TestCluster_NodeShardLockSet(t *testing.T) {
 	t.Parallel()
-	n := node.NewNode("localhost:50003")
+	n := node.NewNode("localhost:50003", sharding.NumShards)
 	cluster := newClusterForTesting(n, "TestCluster")
 
 	// Verify the cluster's ShardLock was set on the node
@@ -99,7 +101,7 @@ func TestShardLock_MultipleClustersConcurrent(t *testing.T) {
 	for i := 0; i < numClusters; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			n := node.NewNode("localhost:5000" + string(rune('0'+idx)))
+			n := node.NewNode("localhost:5000"+string(rune('0'+idx)), sharding.NumShards)
 			clusters[idx] = newClusterForTesting(n, "Cluster"+string(rune('0'+idx)))
 		}(i)
 	}
