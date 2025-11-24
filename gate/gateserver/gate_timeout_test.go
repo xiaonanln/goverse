@@ -38,9 +38,9 @@ func (o *SlowObject) SlowMethod(ctx context.Context, req *structpb.Struct) (*str
 	// Use a ticker to check context periodically
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	
+
 	deadline := time.Now().Add(time.Duration(delayMs) * time.Millisecond)
-	
+
 	for {
 		select {
 		case <-ctx.Done():
