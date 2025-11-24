@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
@@ -12,7 +11,7 @@ import (
 func TestLockClusterState_Empty(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Call LockClusterState - should return state and unlock function
 	state, unlock := cm.LockClusterState()
@@ -35,7 +34,7 @@ func TestLockClusterState_Empty(t *testing.T) {
 func TestLockClusterState_WithData(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -84,7 +83,7 @@ func TestLockClusterState_WithData(t *testing.T) {
 func TestLockClusterState_LockingBehavior(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -114,11 +113,11 @@ func TestLockClusterState_LockingBehavior(t *testing.T) {
 	}
 }
 
-// TestLockClusterState_FullShardMapping tests LockClusterState with full 8192 shard mapping
+// TestLockClusterState_FullShardMapping tests LockClusterState with full shard mapping
 func TestLockClusterState_FullShardMapping(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Add nodes to internal state
 	cm.mu.Lock()
@@ -133,13 +132,13 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 		cm.state.Nodes[addr] = true
 	}
 
-	// Initialize full shard mapping with all 8192 shards
+	// Initialize full shard mapping with all shards
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
 
 	// Populate all shards with round-robin assignment to nodes
-	for i := 0; i < sharding.NumShards; i++ {
+	for i := 0; i < testNumShards; i++ {
 		nodeIdx := i % len(nodeAddrs)
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  nodeAddrs[nodeIdx],
@@ -165,8 +164,8 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 		t.Fatal("State should have shard mapping")
 	}
 
-	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Fatalf("Expected %d shards in state, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+	if len(state.ShardMapping.Shards) != testNumShards {
+		t.Fatalf("Expected %d shards in state, got %d", testNumShards, len(state.ShardMapping.Shards))
 	}
 
 	if state.Revision != 456 {
@@ -196,7 +195,7 @@ func TestLockClusterState_FullShardMapping(t *testing.T) {
 func TestGetClusterStateForTesting_ReturnsClonedState(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Add some nodes to internal state
 	cm.mu.Lock()

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 )
 
@@ -14,7 +13,7 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 	t.Parallel()
 	// Create a consensus manager without connecting to etcd (unit test)
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	ctx := context.Background()
 
@@ -29,15 +28,16 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 	}
 
 	// Create highly imbalanced shard mapping:
-	// node1: 6000 shards
-	// node2: 1096 shards  (8192 / 3 = 2730, so 1096 is significantly less)
-	// node3: 1096 shards
+	// node1: most shards (75%)
+	// node2: remaining shards split with node3
+	// node3: remaining shards split with node2
 	cm.state.ShardMapping = &ShardMapping{
 		Shards: make(map[int]ShardInfo),
 	}
 
-	// Assign first 6000 shards to node1
-	for i := 0; i < 6000; i++ {
+	// Assign most shards (75%) to node1
+	imbalancedCount := (testNumShards * 3) / 4
+	for i := 0; i < imbalancedCount; i++ {
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  "node1",
 			CurrentNode: "node1",
@@ -45,8 +45,8 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 		}
 	}
 
-	// Assign next shards to node2 and node3
-	for i := 6000; i < sharding.NumShards; i++ {
+	// Assign remaining shards to node2 and node3
+	for i := imbalancedCount; i < testNumShards; i++ {
 		if i%2 == 0 {
 			cm.state.ShardMapping.Shards[i] = ShardInfo{
 				TargetNode:  "node2",
@@ -157,7 +157,7 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a consensus manager without connecting to etcd
 			mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-			cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+			cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 			ctx := context.Background()
 

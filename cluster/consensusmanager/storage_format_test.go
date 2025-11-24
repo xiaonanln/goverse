@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -33,7 +32,7 @@ func TestStorageFormat(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up some nodes
 	cm.mu.Lock()
@@ -145,7 +144,7 @@ func TestStorageFormatFullMapping(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up nodes
 	cm.mu.Lock()
@@ -163,15 +162,15 @@ func TestStorageFormatFullMapping(t *testing.T) {
 		t.Fatal("Expected shards to be reassigned")
 	}
 
-	// Verify that 8192 shard keys exist
+	// Verify that testNumShards shard keys exist
 	client := mgr.GetClient()
 	resp, err := client.Get(ctx, prefix+"/shard/", clientv3.WithPrefix())
 	if err != nil {
 		t.Fatalf("Failed to read from etcd: %v", err)
 	}
 
-	if len(resp.Kvs) != sharding.NumShards {
-		t.Fatalf("Expected %d shard keys, got %d", sharding.NumShards, len(resp.Kvs))
+	if len(resp.Kvs) != testNumShards {
+		t.Fatalf("Expected %d shard keys, got %d", testNumShards, len(resp.Kvs))
 	}
 
 	// Load back and verify count
@@ -180,11 +179,11 @@ func TestStorageFormatFullMapping(t *testing.T) {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
-	if len(state.ShardMapping.Shards) != sharding.NumShards {
-		t.Fatalf("Expected %d shards in loaded mapping, got %d", sharding.NumShards, len(state.ShardMapping.Shards))
+	if len(state.ShardMapping.Shards) != testNumShards {
+		t.Fatalf("Expected %d shards in loaded mapping, got %d", testNumShards, len(state.ShardMapping.Shards))
 	}
 
-	t.Logf("Successfully stored and loaded all %d shards as individual keys", sharding.NumShards)
+	t.Logf("Successfully stored and loaded all %d shards as individual keys", testNumShards)
 }
 
 // TestConditionalPutWithModRevision verifies that shards are stored conditionally based on ModRevision
@@ -208,7 +207,7 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 	defer mgr.Close()
 
 	// Create consensus manager
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 	ctx := context.Background()
 
 	// Test 1: Store new shards with ModRevision=0 (should succeed)

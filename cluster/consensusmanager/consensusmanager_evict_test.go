@@ -11,7 +11,7 @@ import (
 func TestGetObjectsToEvict(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up a test cluster state with nodes
 	cm.mu.Lock()
@@ -51,7 +51,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 
 	for i := 0; i < 100000 && len(objectIDs) < 4; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
-		shardID := sharding.GetShardID(testID, sharding.NumShards)
+		shardID := sharding.GetShardID(testID, testNumShards)
 		if shardID == 0 || shardID == 1 || shardID == 2 {
 			if _, exists := objToShard[testID]; !exists {
 				objectIDs = append(objectIDs, testID)
@@ -82,7 +82,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 
 	// Verify that evicted objects are from shards 0 and 2, not shard 1
 	for _, objID := range toEvict {
-		shardID := sharding.GetShardID(objID, sharding.NumShards)
+		shardID := sharding.GetShardID(objID, testNumShards)
 		if shardID != 0 && shardID != 2 {
 			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
@@ -93,7 +93,7 @@ func TestGetObjectsToEvict(t *testing.T) {
 func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	objectIDs := []string{"TestObject-123"}
 	toEvict := cm.GetObjectsToEvict("localhost:50001", objectIDs)
@@ -107,7 +107,7 @@ func TestGetObjectsToEvict_EmptyMapping(t *testing.T) {
 func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up cluster state with nodes
 	cm.mu.Lock()
@@ -122,7 +122,7 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 	}
 
 	// Set up all shards to need eviction
-	for i := 0; i < sharding.NumShards; i++ {
+	for i := 0; i < testNumShards; i++ {
 		cm.state.ShardMapping.Shards[i] = ShardInfo{
 			TargetNode:  "localhost:50002",
 			CurrentNode: "localhost:50001",
@@ -147,7 +147,7 @@ func TestGetObjectsToEvict_ClientObjectsSkipped(t *testing.T) {
 func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up cluster state with nodes but incomplete shard mapping
 	cm.mu.Lock()
@@ -174,7 +174,7 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 
 	for i := 0; i < 100000 && len(objToShard) < 3; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
-		shardID := sharding.GetShardID(testID, sharding.NumShards)
+		shardID := sharding.GetShardID(testID, testNumShards)
 		if shardID == 0 || shardID == 1 || shardID == 2 {
 			if _, exists := objToShard[testID]; !exists {
 				objectIDs = append(objectIDs, testID)
@@ -203,7 +203,7 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 
 	// Verify that evicted objects are from shards 1 and 2, not shard 0
 	for _, objID := range toEvict {
-		shardID := sharding.GetShardID(objID, sharding.NumShards)
+		shardID := sharding.GetShardID(objID, testNumShards)
 		if shardID != 1 && shardID != 2 {
 			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
@@ -214,7 +214,7 @@ func TestGetObjectsToEvict_ShardNotExist(t *testing.T) {
 func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up cluster state with nodes
 	cm.mu.Lock()
@@ -254,7 +254,7 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 
 	for i := 0; i < 100000 && len(objToShard) < 3; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
-		shardID := sharding.GetShardID(testID, sharding.NumShards)
+		shardID := sharding.GetShardID(testID, testNumShards)
 		if shardID == 0 || shardID == 1 || shardID == 2 {
 			if _, exists := objToShard[testID]; !exists {
 				objectIDs = append(objectIDs, testID)
@@ -283,7 +283,7 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 
 	// Verify that evicted objects are from shards 0 and 2, not shard 1
 	for _, objID := range toEvict {
-		shardID := sharding.GetShardID(objID, sharding.NumShards)
+		shardID := sharding.GetShardID(objID, testNumShards)
 		if shardID != 0 && shardID != 2 {
 			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
@@ -294,7 +294,7 @@ func TestGetObjectsToEvict_CurrentNodeMismatch(t *testing.T) {
 func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 	t.Parallel()
 
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Set up cluster state with nodes
 	cm.mu.Lock()
@@ -333,7 +333,7 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 
 	for i := 0; i < 100000 && len(objToShard) < 3; i++ {
 		testID := "TestObject-" + string(rune('a'+i%26)) + string(rune('a'+(i/26)%26)) + string(rune('a'+(i/676)%26))
-		shardID := sharding.GetShardID(testID, sharding.NumShards)
+		shardID := sharding.GetShardID(testID, testNumShards)
 		if shardID == 0 || shardID == 1 || shardID == 2 {
 			if _, exists := objToShard[testID]; !exists {
 				objectIDs = append(objectIDs, testID)
@@ -362,7 +362,7 @@ func TestGetObjectsToEvict_TargetNodeMismatch(t *testing.T) {
 
 	// Verify that evicted objects are from shards 0 and 2, not shard 1
 	for _, objID := range toEvict {
-		shardID := sharding.GetShardID(objID, sharding.NumShards)
+		shardID := sharding.GetShardID(objID, testNumShards)
 		if shardID != 0 && shardID != 2 {
 			t.Fatalf("Object %s with shard %d should not be evicted", objID, shardID)
 		}
