@@ -124,6 +124,7 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
@@ -389,6 +390,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		AdvertiseAddress: gateAddr1,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer1, err := NewGateServer(gwServerConfig1)
 	if err != nil {
@@ -422,6 +424,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		AdvertiseAddress: gateAddr2,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer2, err := NewGateServer(gwServerConfig2)
 	if err != nil {
