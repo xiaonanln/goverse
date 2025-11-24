@@ -141,9 +141,13 @@ func TestGateCallObjectTimeout(t *testing.T) {
 	gateClient := gate_pb.NewGateServiceClient(conn)
 
 	t.Run("DefaultTimeoutApplied", func(t *testing.T) {
-		// Create object directly on the node (bypassing async creation for testing)
+		// Create object via the gate (same as other integration tests)
 		objID := testutil.GetObjectIDForShard(0, "SlowObject")
-		_, err := testNode.CreateObject(ctx, "SlowObject", objID)
+		createReq := &gate_pb.CreateObjectRequest{
+			Type: "SlowObject",
+			Id:   objID,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq)
 		if err != nil {
 			t.Fatalf("Failed to create SlowObject: %v", err)
 		}
@@ -191,7 +195,11 @@ func TestGateCallObjectTimeout(t *testing.T) {
 	t.Run("ExistingDeadlinePreserved", func(t *testing.T) {
 		// Create object
 		objID := testutil.GetObjectIDForShard(1, "SlowObject")
-		_, err := testNode.CreateObject(ctx, "SlowObject", objID)
+		createReq := &gate_pb.CreateObjectRequest{
+			Type: "SlowObject",
+			Id:   objID,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq)
 		if err != nil {
 			t.Fatalf("Failed to create SlowObject: %v", err)
 		}
@@ -233,7 +241,11 @@ func TestGateCallObjectTimeout(t *testing.T) {
 	t.Run("ExistingDeadlineTimesOut", func(t *testing.T) {
 		// Create object
 		objID := testutil.GetObjectIDForShard(2, "SlowObject")
-		_, err := testNode.CreateObject(ctx, "SlowObject", objID)
+		createReq := &gate_pb.CreateObjectRequest{
+			Type: "SlowObject",
+			Id:   objID,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq)
 		if err != nil {
 			t.Fatalf("Failed to create SlowObject: %v", err)
 		}
