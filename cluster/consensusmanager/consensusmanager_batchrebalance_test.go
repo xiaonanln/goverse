@@ -109,19 +109,22 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 func TestRebalanceShards_BatchLogic(t *testing.T) {
 	t.Parallel()
 	// Test the logic that decides how many shards to migrate
-	// With testNumShards = 64, we need to adjust the counts
+	// Tests with both testNumShards = 64 and production shards = 8192
 
 	// Create a test scenario with varying degrees of imbalance
 	testCases := []struct {
 		name            string
+		numShards       int // Total number of shards to use
 		node1Count      int
 		node2Count      int
 		node3Count      int
 		expectedBatch   int // Minimum expected batch size
 		shouldRebalance bool
 	}{
+		// Tests with 64 shards (test default)
 		{
-			name:            "Severe imbalance - should migrate many shards",
+			name:            "64 shards - Severe imbalance - should migrate many shards",
+			numShards:       64,
 			node1Count:      48, // 75% of 64
 			node2Count:      8,
 			node3Count:      8,
@@ -129,7 +132,8 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 			shouldRebalance: true,
 		},
 		{
-			name:            "Moderate imbalance - should migrate some shards",
+			name:            "64 shards - Moderate imbalance - should migrate some shards",
+			numShards:       64,
 			node1Count:      34, // Imbalanced: a=34, b=15, 34 >= 17 and 34 > 30
 			node2Count:      15,
 			node3Count:      15,
@@ -137,7 +141,8 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 			shouldRebalance: true,
 		},
 		{
-			name:            "Balanced - should not rebalance",
+			name:            "64 shards - Balanced - should not rebalance",
+			numShards:       64,
 			node1Count:      21, // 64/3 = 21.33, so 21, 21, 22
 			node2Count:      21,
 			node3Count:      22,
@@ -145,11 +150,49 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 			shouldRebalance: false,
 		},
 		{
-			name:            "Small imbalance - should not rebalance",
+			name:            "64 shards - Small imbalance - should not rebalance",
+			numShards:       64,
 			node1Count:      23, // a=23, b=20, a < b+2 is false, but a <= 2*b is true (23 <= 40)
 			node2Count:      21,
 			node3Count:      20,
 			expectedBatch:   0, // a >= b+2 (23 >= 22) but a <= 2*b (23 <= 40), so no rebalance
+			shouldRebalance: false,
+		},
+		// Tests with 8192 shards (production default)
+		{
+			name:            "8192 shards - Severe imbalance - should migrate many shards",
+			numShards:       8192,
+			node1Count:      6144, // 75% of 8192
+			node2Count:      1024,
+			node3Count:      1024,
+			expectedBatch:   1, // Should migrate shards
+			shouldRebalance: true,
+		},
+		{
+			name:            "8192 shards - Moderate imbalance - should migrate some shards",
+			numShards:       8192,
+			node1Count:      4352, // Imbalanced: a=4352, b=1920, 4352 >= 1922 and 4352 > 3840
+			node2Count:      1920,
+			node3Count:      1920,
+			expectedBatch:   1, // Should migrate at least some shards
+			shouldRebalance: true,
+		},
+		{
+			name:            "8192 shards - Balanced - should not rebalance",
+			numShards:       8192,
+			node1Count:      2730, // 8192/3 = 2730.67, so 2730, 2731, 2731
+			node2Count:      2731,
+			node3Count:      2731,
+			expectedBatch:   0, // Should not rebalance (diff is only 1)
+			shouldRebalance: false,
+		},
+		{
+			name:            "8192 shards - Small imbalance - should not rebalance",
+			numShards:       8192,
+			node1Count:      2950, // a=2950, b=2621, a >= b+2 (2950 >= 2623) but a <= 2*b (2950 <= 5242), so no rebalance
+			node2Count:      2621,
+			node3Count:      2621,
+			expectedBatch:   0,
 			shouldRebalance: false,
 		},
 	}
@@ -158,7 +201,7 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a consensus manager without connecting to etcd
 			mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-			cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
+			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards)
 
 			ctx := context.Background()
 
