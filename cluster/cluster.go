@@ -200,6 +200,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 3 * time.Second,
 		ShardMappingCheckInterval:     1 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 
 	c, err := NewClusterWithNode(cfg, node)
