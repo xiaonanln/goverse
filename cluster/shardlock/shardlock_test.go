@@ -7,7 +7,7 @@ import (
 )
 
 func TestAcquireRead_NormalObject(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	// Acquire read lock for a normal object
 	unlock := sl.AcquireRead("test-object-123")
 	if unlock == nil {
@@ -19,7 +19,7 @@ func TestAcquireRead_NormalObject(t *testing.T) {
 }
 
 func TestAcquireRead_FixedNodeAddress(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	// Acquire read lock for a fixed node address (contains "/")
 	unlock := sl.AcquireRead("localhost:7001/client-123")
 	if unlock == nil {
@@ -31,7 +31,7 @@ func TestAcquireRead_FixedNodeAddress(t *testing.T) {
 }
 
 func TestAcquireWrite(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	// Acquire write lock for shard 0
 	unlock := sl.AcquireWrite(0)
 	if unlock == nil {
@@ -43,7 +43,7 @@ func TestAcquireWrite(t *testing.T) {
 }
 
 func TestShardLock_ReadWriteExclusion(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	writeLockReleased := false
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -76,7 +76,7 @@ func TestShardLock_ReadWriteExclusion(t *testing.T) {
 }
 
 func TestShardLock_ConcurrentReads(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	// Multiple read locks should be able to coexist
 	// Use a simple object ID - doesn't matter which shard it maps to
 	objectID := "concurrent-test-object"
@@ -106,7 +106,7 @@ func TestShardLock_ConcurrentReads(t *testing.T) {
 }
 
 func TestShardLock_WriteExclusivity(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	// Multiple write locks should be serialized
 	var wg sync.WaitGroup
 	writers := 5
@@ -143,7 +143,7 @@ func TestShardLock_WriteExclusivity(t *testing.T) {
 }
 
 func TestShardLock_DifferentShards(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 	// Locks on different shards should not interfere
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -227,8 +227,8 @@ func TestShardLockKey(t *testing.T) {
 func TestShardLock_MultipleInstances(t *testing.T) {
 	// Test that different ShardLock instances don't interfere with each other
 	// This is the key test for the per-cluster isolation fix
-	sl1 := NewShardLock()
-	sl2 := NewShardLock()
+	sl1 := NewShardLock(8192)
+	sl2 := NewShardLock(8192)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -260,7 +260,7 @@ func TestShardLock_MultipleInstances(t *testing.T) {
 }
 
 func TestShardLock_AcquireWriteMultiple(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 
 	// Test empty slice
 	unlock := sl.AcquireWriteMultiple([]int{})
@@ -283,7 +283,7 @@ func TestShardLock_AcquireWriteMultiple(t *testing.T) {
 }
 
 func TestShardLock_AcquireWriteMultiple_PreventDeadlock(t *testing.T) {
-	sl := NewShardLock()
+	sl := NewShardLock(8192)
 
 	// Test that two goroutines acquiring the same shards in different order
 	// don't deadlock when using AcquireWriteMultiple

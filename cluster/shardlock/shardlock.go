@@ -14,13 +14,8 @@ type ShardLock struct {
 	numShards int
 }
 
-// NewShardLock creates a new ShardLock instance for a cluster with default number of shards
-func NewShardLock() *ShardLock {
-	return NewShardLockWithShards(sharding.NumShards)
-}
-
-// NewShardLockWithShards creates a new ShardLock instance with specified number of shards
-func NewShardLockWithShards(numShards int) *ShardLock {
+// NewShardLock creates a new ShardLock instance with specified number of shards
+func NewShardLock(numShards int) *ShardLock {
 	return &ShardLock{
 		keyLock:   keylock.NewKeyLock(),
 		numShards: numShards,
