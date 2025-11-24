@@ -88,6 +88,7 @@ func TestClientIDInContext(t *testing.T) {
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
