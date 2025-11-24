@@ -17,6 +17,7 @@ import (
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -221,6 +222,7 @@ func newClusterWithEtcdForTestingGate(name string, gate *gate.Gate, etcdAddress 
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 3 * time.Second,
 		ShardMappingCheckInterval:     1 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 
 	c, err := NewClusterWithGate(cfg, gate)
