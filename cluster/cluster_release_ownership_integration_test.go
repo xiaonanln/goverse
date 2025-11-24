@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -74,7 +73,7 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 
 	// Pick a shard that belongs to node1
 	// We'll use a shard ID directly without creating objects
-	targetShardID := 100 // Arbitrary shard ID for testing
+	targetShardID := 10 // Arbitrary shard ID for testing (must be < 64 since we use TestNumShards)
 
 	t.Logf("Using shard ID: %d", targetShardID)
 
