@@ -52,7 +52,13 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	node := node.NewNode(config.AdvertiseAddress)
+	// Determine number of shards (default to 8192 if not specified)
+	numShards := config.NumShards
+	if numShards <= 0 {
+		numShards = 8192
+	}
+
+	node := node.NewNode(config.AdvertiseAddress, numShards)
 
 	// Create cluster configuration from server config
 	clusterCfg := cluster.DefaultConfig()

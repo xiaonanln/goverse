@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -16,7 +18,7 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
@@ -73,7 +75,7 @@ func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
@@ -141,7 +143,7 @@ func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -199,7 +201,7 @@ func TestKeyLockIntegration_ConcurrentCallsSameObject(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
 	ctx := context.Background()
@@ -248,7 +250,7 @@ func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
@@ -308,7 +310,7 @@ func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()

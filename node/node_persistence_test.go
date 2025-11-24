@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -145,7 +147,7 @@ type TestNonPersistentObject struct {
 func (t *TestNonPersistentObject) OnCreated() {}
 
 func TestNode_SetPersistenceProvider(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 
 	node.SetPersistenceProvider(provider)
@@ -156,7 +158,7 @@ func TestNode_SetPersistenceProvider(t *testing.T) {
 }
 
 func TestNode_SetPersistenceInterval(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	interval := 10 * time.Second
 
 	node.SetPersistenceInterval(interval)
@@ -167,7 +169,7 @@ func TestNode_SetPersistenceInterval(t *testing.T) {
 }
 
 func TestNode_SaveAllObjects_NoPersistentObjects(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 
@@ -195,7 +197,7 @@ func TestNode_SaveAllObjects_NoPersistentObjects(t *testing.T) {
 }
 
 func TestNode_SaveAllObjects_WithPersistentObjects(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 
@@ -233,7 +235,7 @@ func TestNode_SaveAllObjects_WithPersistentObjects(t *testing.T) {
 }
 
 func TestNode_SaveAllObjects_MixedObjects(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 
@@ -267,7 +269,7 @@ func TestNode_SaveAllObjects_MixedObjects(t *testing.T) {
 }
 
 func TestNode_PeriodicPersistence_Integration(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.SetPersistenceInterval(100 * time.Millisecond) // Short interval for testing
@@ -299,7 +301,7 @@ func TestNode_PeriodicPersistence_Integration(t *testing.T) {
 }
 
 func TestNode_StartStop_WithPersistence(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.SetPersistenceInterval(1 * time.Second) // Longer interval to avoid multiple saves
@@ -347,7 +349,7 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 }
 
 func TestNode_SaveAllObjects_NoProvider(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	// No provider set
 
 	ctx := context.Background()
@@ -358,7 +360,7 @@ func TestNode_SaveAllObjects_NoProvider(t *testing.T) {
 }
 
 func TestNode_StartPeriodicPersistence_NoProvider(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	// No provider set
 
 	ctx := context.Background()
@@ -372,7 +374,7 @@ func TestNode_StartPeriodicPersistence_NoProvider(t *testing.T) {
 
 func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 	// This test verifies that the node actually saves objects at the configured interval
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 
@@ -481,7 +483,7 @@ func TestNode_PeriodicPersistence_ActuallyStoresPeriodically(t *testing.T) {
 
 func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 	// This test verifies that periodic persistence updates objects even when they change
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 
@@ -551,7 +553,7 @@ func TestNode_PeriodicPersistence_UpdatesExistingObjects(t *testing.T) {
 
 func TestNode_PeriodicPersistence_StopsCleanly(t *testing.T) {
 	// This test verifies that stopping periodic persistence actually stops the saves
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 
@@ -626,7 +628,7 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 	}
 
 	// Step 2: Create a fresh node and create the object again
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
@@ -669,7 +671,7 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	}
 
 	// Create a fresh node with the same persistence provider
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
@@ -694,7 +696,7 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
 	// This test verifies that when an object is not in persistence,
 	// it uses initData for initialization
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -732,7 +734,7 @@ func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
 
 func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
 	// This test verifies that non-persistent objects work normally
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestNonPersistentObject)(nil))
@@ -764,7 +766,7 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 	// This test verifies that when persistence loading fails with a real error,
 	// the object creation fails (does not fall back to initData)
 	// This prevents data loss or inconsistency when there are database errors
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	provider.LoadErr = fmt.Errorf("simulated load error")
 	node.SetPersistenceProvider(provider)
@@ -794,7 +796,7 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 }
 
 func TestNode_Stop_ClearsObjects(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -845,7 +847,7 @@ func TestNode_Stop_ClearsObjects(t *testing.T) {
 }
 
 func TestNode_Stop_ClearsObjects_NoPersistence(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	// No persistence provider set
 	node.RegisterObjectType((*TestNonPersistentObject)(nil))
 

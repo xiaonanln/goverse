@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/xiaonanln/goverse/cluster/sharding"
 )
 
 // TestInspectorManager_Integration tests the full integration of InspectorManager with Node
@@ -13,7 +15,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 	t.Parallel()
 
-	node := NewNode("localhost:47100")
+	node := NewNode("localhost:47100", sharding.NumShards)
 
 	// Register a test object type
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -92,7 +94,7 @@ func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
 	}
 	t.Parallel()
 
-	node := NewNode("localhost:47101")
+	node := NewNode("localhost:47101", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
@@ -125,7 +127,7 @@ func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
 	}
 
 	// Create new node for second cycle
-	node = NewNode("localhost:47101")
+	node = NewNode("localhost:47101", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	// Second cycle
@@ -154,7 +156,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	}
 	t.Parallel()
 
-	node := NewNode("localhost:47102")
+	node := NewNode("localhost:47102", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()

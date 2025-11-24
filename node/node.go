@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
@@ -48,6 +49,7 @@ type Object = object.Object
 // - Creates prevent any calls/saves/deletes until object is fully initialized
 type Node struct {
 	advertiseAddress      string
+	numShards             int // Number of shards in the cluster for shard ID calculation
 	objectTypes           map[string]reflect.Type
 	objectTypesMu         sync.RWMutex
 	objects               map[string]Object
@@ -68,9 +70,10 @@ type Node struct {
 }
 
 // NewNode creates a new Node instance
-func NewNode(advertiseAddress string) *Node {
+func NewNode(advertiseAddress string, numShards int) *Node {
 	node := &Node{
 		advertiseAddress:    advertiseAddress,
+		numShards:           numShards,
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
@@ -147,6 +150,11 @@ func (node *Node) String() string {
 // GetAdvertiseAddress returns the advertise address of the node
 func (node *Node) GetAdvertiseAddress() string {
 	return node.advertiseAddress
+}
+
+// GetShardID calculates the shard ID for a given object ID using the configured number of shards
+func (node *Node) GetShardID(objectID string) int {
+	return sharding.GetShardID(objectID, node.numShards)
 }
 
 // SetShardLock sets the cluster's ShardLock instance for this node
@@ -438,8 +446,9 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
 
-	// Notify inspector manager
-	node.inspectorManager.NotifyObjectAdded(id, typ)
+	// Notify inspector manager with shard ID
+	shardID := node.GetShardID(id)
+	node.inspectorManager.NotifyObjectAdded(id, typ, shardID)
 
 	return nil
 }
@@ -733,7 +742,7 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 	node.logger.Infof("Persistence summary: saved=%d, non-persistent=%d, errors=%d", savedCount, nonPersistentCount, errorCount)
 
 	if errorCount > 0 {
-		return fmt.Errorf("Failed to save %d objects", errorCount)
+		return fmt.Errorf("failed to save %d objects", errorCount)
 	}
 
 	return nil
