@@ -315,7 +315,7 @@ func TestNode_StartStop_WithPersistence(t *testing.T) {
 
 	// Start node
 	ctx := context.Background()
-	err := node.Start(ctx, -1)
+	err := node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	// Create the object - it should load from persistence
-	err = node.createObject(ctx, "TestPersistentObject", "load-test-obj", -1)
+	err = node.createObject(ctx, "TestPersistentObject", "load-test-obj", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -674,7 +674,7 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	// Create the object - it should load from persistence
-	err = node.createObject(ctx, "TestPersistentObject", "persistent-obj-123", -1)
+	err = node.createObject(ctx, "TestPersistentObject", "persistent-obj-123", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -702,7 +702,7 @@ func TestNode_CreateObject_UsesInitData_WhenNotInPersistence(t *testing.T) {
 	ctx := context.Background()
 
 	// Create object (object not in persistence, so FromData(nil) will be called)
-	err := node.createObject(ctx, "TestPersistentObject", "new-obj-456", -1)
+	err := node.createObject(ctx, "TestPersistentObject", "new-obj-456", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -740,7 +740,7 @@ func TestNode_CreateObject_NonPersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create non-persistent object
-	err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj", -1)
+	err := node.createObject(ctx, "TestNonPersistentObject", "non-persistent-obj", 0)
 	if err != nil {
 		t.Fatalf("Failed to create non-persistent object: %v", err)
 	}
@@ -773,7 +773,7 @@ func TestNode_CreateObject_PersistenceLoadError(t *testing.T) {
 	ctx := context.Background()
 
 	// Create object - load will fail, should return error
-	err := node.createObject(ctx, "TestPersistentObject", "error-obj", -1)
+	err := node.createObject(ctx, "TestPersistentObject", "error-obj", 0)
 	if err == nil {
 		t.Fatal("Expected error when persistence loading fails, but got nil")
 	}
@@ -809,7 +809,7 @@ func TestNode_Stop_ClearsObjects(t *testing.T) {
 	}
 
 	// Start node
-	err := node.Start(ctx, -1)
+	err := node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -859,7 +859,7 @@ func TestNode_Stop_ClearsObjects_NoPersistence(t *testing.T) {
 	}
 
 	// Start node
-	err := node.Start(ctx, -1)
+	err := node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}

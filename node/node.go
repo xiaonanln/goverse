@@ -201,7 +201,7 @@ func isConcreteProtoMessage(t reflect.Type) bool {
 }
 
 // CallObject implements the Goverse gRPC service CallObject method
-func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error) {
+func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message, shardID int) (proto.Message, error) {
 	// Start timing for metrics
 	startTime := time.Now()
 	var callErr error
@@ -230,8 +230,8 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 
-	// Auto-create object without shard ID (not available in this context)
-	err := node.createObject(ctx, typ, id, -1)
+	// Auto-create object with provided shard ID
+	err := node.createObject(ctx, typ, id, shardID)
 	if err != nil {
 		callErr = fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		return nil, callErr
@@ -452,11 +452,9 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, shard
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
 
-	// Notify inspector manager and record metrics if shard ID was provided
-	if shardID >= 0 {
-		node.inspectorManager.NotifyObjectAdded(id, typ, shardID)
-		metrics.RecordObjectCreated(node.advertiseAddress, typ, shardID)
-	}
+	// Notify inspector manager and record metrics
+	node.inspectorManager.NotifyObjectAdded(id, typ, shardID)
+	metrics.RecordObjectCreated(node.advertiseAddress, typ, shardID)
 
 	return nil
 }
@@ -476,8 +474,8 @@ func (node *Node) destroyObject(id string, shardID int) {
 	// Notify inspector manager about object removal
 	node.inspectorManager.NotifyObjectRemoved(id)
 
-	// Record metrics if object existed and shard ID was provided
-	if exists && shardID >= 0 {
+	// Record metrics if object existed
+	if exists {
 		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shardID)
 	}
 }

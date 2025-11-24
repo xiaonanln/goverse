@@ -480,11 +480,14 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
 
+	// Compute shard ID
+	shardID := sharding.GetShardID(id, c.numShards)
+
 	// Check if the object is on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		// Call locally on node
 		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
-		return c.node.CallObject(ctx, objType, id, method, request)
+		return c.node.CallObject(ctx, objType, id, method, request, shardID)
 	}
 
 	// Route to the appropriate node (both node and gate clusters can route)

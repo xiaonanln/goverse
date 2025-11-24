@@ -20,7 +20,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 
 	// Create objects before starting the node
 	ctx := context.Background()
-	err := node.createObject(ctx, "TestPersistentObject", "pre-start-obj-1", -1)
+	err := node.createObject(ctx, "TestPersistentObject", "pre-start-obj-1", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object before start: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 
 	// Start the node - this should register existing objects with inspector manager
-	err = node.Start(ctx, -1)
+	err = node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 
 	// Create a new object after start
-	err = node.createObject(ctx, "TestPersistentObject", "post-start-obj-1", -1)
+	err = node.createObject(ctx, "TestPersistentObject", "post-start-obj-1", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object after start: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestInspectorManager_Integration(t *testing.T) {
 	}
 
 	// Delete an object
-	node.destroyObject("pre-start-obj-1", -1)
+	node.destroyObject("pre-start-obj-1", 0)
 
 	// Verify object is no longer tracked
 	if node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
@@ -98,12 +98,12 @@ func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
 	ctx := context.Background()
 
 	// First cycle
-	err := node.Start(ctx, -1)
+	err := node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("First start failed: %v", err)
 	}
 
-	err = node.createObject(ctx, "TestPersistentObject", "cycle1-obj", -1)
+	err = node.createObject(ctx, "TestPersistentObject", "cycle1-obj", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object in cycle 1: %v", err)
 	}
@@ -129,12 +129,12 @@ func TestInspectorManager_Integration_MultipleStartStop(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	// Second cycle
-	err = node.Start(ctx, -1)
+	err = node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Second start failed: %v", err)
 	}
 
-	err = node.createObject(ctx, "TestPersistentObject", "cycle2-obj", -1)
+	err = node.createObject(ctx, "TestPersistentObject", "cycle2-obj", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object in cycle 2: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
-	err := node.Start(ctx, -1)
+	err := node.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	for i := 0; i < numObjects; i++ {
 		go func(id int) {
 			objID := "concurrent-integration-obj-" + string(rune(id))
-			err := node.createObject(ctx, "TestPersistentObject", objID, -1)
+			err := node.createObject(ctx, "TestPersistentObject", objID, 0)
 			if err != nil {
 				t.Errorf("Failed to create object %s: %v", objID, err)
 			}
@@ -196,7 +196,7 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 	for i := 0; i < numObjects/2; i++ {
 		go func(id int) {
 			objID := "concurrent-integration-obj-" + string(rune(id))
-			node.destroyObject(objID, -1)
+			node.destroyObject(objID, 0)
 			done <- true
 		}(i)
 	}
