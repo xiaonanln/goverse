@@ -139,14 +139,28 @@ testServer.Start(ctx)
 defer testServer.Stop()
 ```
 
-**Dynamic ports**: Always use `testutil.GetFreeAddress()` or `:0` for test parallelism:
+**Dynamic ports (CRITICAL)**: **Never use hardcoded ports when starting actual servers in tests** - always use `testutil.GetFreeAddress()`:
 ```go
-addr := testutil.GetFreeAddress()  // Returns "localhost:12345"
-// Or with TestServerHelper
-testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
-testServer.Start(ctx)
-actualAddr := testServer.GetAddress()  // Get bound address
+// CORRECT: Dynamic port allocation for actual servers
+nodeAddr := testutil.GetFreeAddress()  // Returns "localhost:12345"
+gateAddr := testutil.GetFreeAddress()  // Different free port
+testServer := testutil.NewTestServerHelper(nodeAddr, mockServer)
+testServer.Start(ctx)  // Actually binds to port
+
+// WRONG: Hardcoded ports with actual servers
+nodeAddr := "localhost:48020"  // ❌ Port conflict when server starts
+gateAddr := "localhost:48021"  // ❌ Fails in parallel or if port busy
+
+// OK: Hardcoded ports without actual servers (routing tests, etc.)
+nodeAddr := "localhost:48020"  // ✅ Fine if no server binds to this port
+cluster.GetCurrentNodeForObject(ctx, objID)  // Just routing logic
 ```
+
+**Why dynamic ports are critical:**
+- Prevents port conflicts when running tests in parallel
+- Avoids failures from leftover processes using ports
+- Enables multiple test instances to run simultaneously
+- Required for reliable CI/CD execution
 
 ### Shard Configuration in Tests
 
