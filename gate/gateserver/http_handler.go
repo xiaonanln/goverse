@@ -187,8 +187,8 @@ func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) 
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/objects/delete/")
 	objID := strings.TrimSpace(path)
 
-	if objID == "" {
-		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Object ID must not be empty")
+	if objID == "" || strings.Contains(objID, "/") {
+		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Object ID must not be empty and must not contain slashes")
 		return
 	}
 
