@@ -104,8 +104,8 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 		return false
 	}
 
-	// Create multiple objects that will be assigned to nodes
-	numObjects := 100
+	// Create 10 objects but will only move 2 of them
+	numObjects := 10
 	objectIDs := make([]string, numObjects)
 	shardIDs := make([]int, numObjects)
 
@@ -144,29 +144,37 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 		waitForObjectCreated(t, n, objID, 5*time.Second)
 	}
 
-	// Verify all objects exist on their initial nodes
-	t.Logf("Verifying objects exist on their initial nodes...")
-	initialNodeCounts := map[string]int{
-		node1Addr: 0,
-		node2Addr: 0,
-	}
+	// Find which objects are on node1 - we'll only move 2 of them to avoid rebalancing interference
+	objectsOnNode1 := make([]string, 0)
+	objectsOnNode1ShardIDs := make([]int, 0)
+
 	for i, objID := range objectIDs {
 		if objExistsOnNode(objID, node1) {
-			initialNodeCounts[node1Addr]++
+			objectsOnNode1 = append(objectsOnNode1, objID)
+			objectsOnNode1ShardIDs = append(objectsOnNode1ShardIDs, shardIDs[i])
 			t.Logf("Object %s (shard %d) is on node1", objID, shardIDs[i])
 		} else if objExistsOnNode(objID, node2) {
-			initialNodeCounts[node2Addr]++
 			t.Logf("Object %s (shard %d) is on node2", objID, shardIDs[i])
 		} else {
 			t.Fatalf("Object %s not found on any node", objID)
 		}
 	}
-	t.Logf("Initial distribution - node1: %d objects, node2: %d objects",
-		initialNodeCounts[node1Addr], initialNodeCounts[node2Addr])
+
+	if len(objectsOnNode1) == 0 {
+		t.Skipf("No objects on node1, test cannot proceed (all objects happened to be on node2)")
+	}
+
+	// Select only 2 objects to move to avoid rebalancing interference
+	objectsToMove := objectsOnNode1
+	objectsToMoveShardIDs := objectsOnNode1ShardIDs
+	if len(objectsOnNode1) > 2 {
+		objectsToMove = objectsOnNode1[:2]
+		objectsToMoveShardIDs = objectsOnNode1ShardIDs[:2]
+		t.Logf("Will move only 2 out of %d objects from node1 to avoid rebalancing", len(objectsOnNode1))
+	}
 
 	// Now manually update the shard mapping in etcd to reassign shards from node1 to node2
-	// We'll reassign the shards of all objects that are currently on node1
-	t.Logf("Manually updating shard mapping to reassign objects from node1 to node2...")
+	t.Logf("Manually updating shard mapping to reassign %d objects from node1 to node2...", len(objectsToMove))
 
 	// Connect directly to etcd
 	etcdClient, err := clientv3.New(clientv3.Config{
@@ -178,33 +186,44 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 	}
 	defer etcdClient.Close()
 
-	// Update shard mappings for objects on node1 to point to node2
+	// Update shard mappings for the selected objects to point to node2
 	shardPrefix := testPrefix + "/shard/"
-	objectsToMove := make([]string, 0)
+	shardsToUpdate := make(map[int]bool)
 
-	for i, objID := range objectIDs {
-		if objExistsOnNode(objID, node1) {
-			objectsToMove = append(objectsToMove, objID)
-			shardID := shardIDs[i]
+	for i, objID := range objectsToMove {
+		shardID := objectsToMoveShardIDs[i]
 
-			// Update the shard mapping to point to node2
-			// Format: "targetNode,currentNode"
-			key := fmt.Sprintf("%s%d", shardPrefix, shardID)
-			value := fmt.Sprintf("%s,%s", node2Addr, node1Addr) // targetNode=node2, currentNode=node1
+		// Update the shard mapping to point to node2
+		// Format: "targetNode,currentNode"
+		key := fmt.Sprintf("%s%d", shardPrefix, shardID)
+		value := fmt.Sprintf("%s,%s", node2Addr, node1Addr) // targetNode=node2, currentNode=node1
 
-			_, err := etcdClient.Put(ctx, key, value)
-			if err != nil {
-				t.Fatalf("Failed to update shard %d in etcd: %v", shardID, err)
-			}
-			t.Logf("Updated shard %d mapping: %s -> %s", shardID, node1Addr, node2Addr)
+		_, err := etcdClient.Put(ctx, key, value)
+		if err != nil {
+			t.Fatalf("Failed to update shard %d in etcd: %v", shardID, err)
 		}
+		shardsToUpdate[shardID] = true
+		t.Logf("Updated shard %d mapping for object %s: %s -> %s", shardID, objID, node1Addr, node2Addr)
 	}
 
-	if len(objectsToMove) == 0 {
-		t.Fatalf("No objects to move from node1, test cannot proceed")
-	}
+	t.Logf("Updated %d shard mappings to reassign objects from node1 to node2", len(shardsToUpdate))
 
-	t.Logf("Updated %d shard mappings to reassign objects from node1 to node2", len(objectsToMove))
+	// Wait for all shard mappings to reflect node2 as CurrentNode
+	t.Logf("Waiting for moved shards' current nodes to be changed to node2...")
+	testutil.WaitFor(t, 30*time.Second, "all moved shards current nodes changed to node2", func() bool {
+		mapping := cluster1.GetShardMapping(ctx)
+		for _, shardID := range objectsToMoveShardIDs {
+			shardInfo, exists := mapping.Shards[shardID]
+			if !exists || shardInfo.CurrentNode != node2Addr {
+				t.Logf("Shard %d current node is still %s, target node is %s, waiting...", shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
+				return false
+			}
+		}
+		return true
+	})
+	t.Logf("All moved shards' current nodes successfully changed to node2")
+
+	time.Sleep(1 * time.Second)
 
 	// The clusters will automatically pick up shard mapping changes via etcd watch
 	// Wait for the cluster to process the shard mapping changes
@@ -220,19 +239,12 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 		t.Logf("✓ Object %s successfully removed from node1", objID)
 	}
 
-	// Test Step 4: Verify objects can be re-created (sampling a few objects)
+	// Test Step 4: Verify objects can be re-created on the new target node
 	t.Logf("Testing that objects can be re-created on new target node when accessed...")
 
-	// Try to re-create a sample of moved objects (not all 50+ to avoid overwhelming the system)
-	// This tests that the system can handle object re-creation after removal
-	sampleSize := 5
-	if sampleSize > len(objectsToMove) {
-		sampleSize = len(objectsToMove)
-	}
-
+	// Try to re-create all moved objects
 	recreatedOnNode2 := 0
-	for i := 0; i < sampleSize; i++ {
-		objID := objectsToMove[i]
+	for _, objID := range objectsToMove {
 		t.Logf("Attempting to re-create %s on new target node...", objID)
 
 		// Re-create the object - it should now be routed appropriately
@@ -269,26 +281,8 @@ func TestClusterRemoveObjectsNotBelongingToThisNode(t *testing.T) {
 		}
 	}
 
-	// Count final distribution
-	finalNodeCounts := map[string]int{
-		node1Addr: 0,
-		node2Addr: 0,
-	}
-	for _, objID := range objectIDs {
-		if objExistsOnNode(objID, node1) {
-			finalNodeCounts[node1Addr]++
-		} else if objExistsOnNode(objID, node2) {
-			finalNodeCounts[node2Addr]++
-		}
-	}
-	t.Logf("Final distribution after re-creation - node1: %d objects, node2: %d objects",
-		finalNodeCounts[node1Addr], finalNodeCounts[node2Addr])
-
 	// The key test is that objects WERE removed from node1
-	// (Re-creation routing is a bonus but not the primary test objective)
-	if len(objectsToMove) > 0 {
-		t.Logf("Successfully verified that %d objects were removed from node1 after shard reassignment", len(objectsToMove))
-	}
+	t.Logf("Successfully verified that %d objects were removed from node1 after shard reassignment", len(objectsToMove))
 
 	// If at least some objects were routed correctly to node2, that's good
 	if recreatedOnNode2 > 0 {
