@@ -83,13 +83,13 @@ func TestClientIDInContext(t *testing.T) {
 
 	// 2. Create and start the real GatewayServer
 	gateAddr := "localhost:48021"
-	gwServerConfig := &GatewayServerConfig{
+	gwServerConfig := &GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
-	gwServer, err := NewGatewayServer(gwServerConfig)
+	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create gateway server: %v", err)
 	}
