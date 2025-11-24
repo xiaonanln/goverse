@@ -37,7 +37,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create an object first - directly using the node to avoid cluster checks
-	_, err := n.CreateObject(ctx, "TestObject", "test-delete-obj")
+	_, err := n.CreateObject(ctx, "TestObject", "test-delete-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}

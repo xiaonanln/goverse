@@ -146,7 +146,6 @@ func (c *Cluster) init(cfg Config) error {
 	// Note: Gates don't need ShardLock as they don't host objects
 	if c.isNode() {
 		c.node.SetShardLock(c.shardLock)
-		c.node.SetNumShards(c.numShards)
 	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
@@ -584,11 +583,14 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
+	// Compute shard ID for metrics and inspector
+	shardID := sharding.GetShardID(objID, c.numShards)
+
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
-			_, err := c.node.CreateObject(ctx, objType, objID)
+			_, err := c.node.CreateObject(ctx, objType, objID, shardID)
 			if err != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed: %v", c, objID, err)
 			} else {
@@ -655,12 +657,15 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if err != nil {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
+	// Compute shard ID for metrics
+	shardID := sharding.GetShardID(objID, c.numShards)
+
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
-			err := c.node.DeleteObject(ctx, objID)
+			err := c.node.DeleteObject(ctx, objID, shardID)
 			if err != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
 			} else {
@@ -1130,7 +1135,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 
-		err := c.node.DeleteObject(ctx, objectID)
+		err := c.node.DeleteObject(ctx, objectID, shardID)
 		if err != nil {
 			c.logger.Errorf("%s - Failed to delete object %s: %v", c, objectID, err)
 		} else {

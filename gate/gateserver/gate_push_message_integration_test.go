@@ -23,7 +23,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 	n := node.NewNode(nodeAddr)
 
 	// Start the node
-	err := n.Start(ctx)
+	err := n.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}

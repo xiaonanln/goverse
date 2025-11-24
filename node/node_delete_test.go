@@ -16,7 +16,7 @@ func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a persistent object
-	err := node.createObject(ctx, "TestPersistentObject", "delete-obj-1")
+	err := node.createObject(ctx, "TestPersistentObject", "delete-obj-1", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 	}
 
 	// Delete the object
-	err = node.DeleteObject(ctx, "delete-obj-1")
+	err = node.DeleteObject(ctx, "delete-obj-1", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a non-persistent object
-	err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-obj")
+	err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
 	}
 
 	// Delete the object
-	err = node.DeleteObject(ctx, "non-persist-obj")
+	err = node.DeleteObject(ctx, "non-persist-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete non-persistent object: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a persistent object
-	err := node.createObject(ctx, "TestPersistentObject", "no-provider-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "no-provider-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 	}
 
 	// Delete the object (should work even without persistence provider)
-	err = node.DeleteObject(ctx, "no-provider-obj")
+	err = node.DeleteObject(ctx, "no-provider-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete object without provider: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestNode_DeleteObject_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	// Try to delete non-existent object - should succeed (idempotent)
-	err := node.DeleteObject(ctx, "non-existent-obj")
+	err := node.DeleteObject(ctx, "non-existent-obj", -1)
 	if err != nil {
 		t.Fatalf("Expected no error for idempotent delete of non-existent object, got: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestNode_DeleteObject_PersistenceError(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and save a persistent object
-	err := node.createObject(ctx, "TestPersistentObject", "error-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "error-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 	// Create multiple persistent objects
 	for i := 1; i <= 5; i++ {
 		objID := fmt.Sprintf("multi-obj-%d", i)
-		err := node.createObject(ctx, "TestPersistentObject", objID)
+		err := node.createObject(ctx, "TestPersistentObject", objID, -1)
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
@@ -246,7 +246,7 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 	}
 
 	// Delete one object
-	err = node.DeleteObject(ctx, "multi-obj-3")
+	err = node.DeleteObject(ctx, "multi-obj-3", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 	}
 
 	// Delete another object
-	err = node.DeleteObject(ctx, "multi-obj-1")
+	err = node.DeleteObject(ctx, "multi-obj-1", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete second object: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestNode_DeleteObject_ThreadSafety(t *testing.T) {
 	objectCount := 10
 	for i := 0; i < objectCount; i++ {
 		objID := fmt.Sprintf("thread-obj-%d", i)
-		err := node.createObject(ctx, "TestPersistentObject", objID)
+		err := node.createObject(ctx, "TestPersistentObject", objID, -1)
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
@@ -326,7 +326,7 @@ func TestNode_DeleteObject_ThreadSafety(t *testing.T) {
 	for i := 0; i < objectCount; i++ {
 		go func(idx int) {
 			objID := fmt.Sprintf("thread-obj-%d", idx)
-			_ = node.DeleteObject(ctx, objID)
+			_ = node.DeleteObject(ctx, objID, -1)
 			done <- true
 		}(i)
 	}

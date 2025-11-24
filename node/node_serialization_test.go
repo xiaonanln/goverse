@@ -21,7 +21,7 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx)
+	err := node.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 			objID := "serial-test-obj"
-			_, err := node.CreateObject(ctx, "TestPersistentObject", objID)
+			_, err := node.CreateObject(ctx, "TestPersistentObject", objID, -1)
 			if err == nil {
 				countMu.Lock()
 				createCount++
@@ -75,8 +75,8 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 			time.Sleep(20 * time.Millisecond) // Let creates finish first
 			objID := "serial-delete-obj"
 			// Create the object first
-			node.createObject(ctx, "TestPersistentObject", objID)
-			err := node.DeleteObject(ctx, objID)
+			node.createObject(ctx, "TestPersistentObject", objID, -1)
+			err := node.DeleteObject(ctx, objID, -1)
 			if err == nil {
 				countMu.Lock()
 				deleteCount++
@@ -128,7 +128,7 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
-	err := node.Start(ctx)
+	err := node.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			_, err := node.CreateObject(ctx, "TestPersistentObject", objID)
+			_, err := node.CreateObject(ctx, "TestPersistentObject", objID, -1)
 			results <- err
 		}()
 	}
@@ -187,7 +187,7 @@ func TestSaveAllObjectsWhileCreating(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
-	err := node.Start(ctx)
+	err := node.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestSaveAllObjectsWhileCreating(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 			objID := "save-create-test"
-			node.createObject(ctx, "TestPersistentObject", objID)
+			node.createObject(ctx, "TestPersistentObject", objID, -1)
 			time.Sleep(5 * time.Millisecond) // Small delay
 		}(i)
 	}
@@ -237,7 +237,7 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
 	ctx := context.Background()
-	err := node.Start(ctx)
+	err := node.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 
 	// Create an object
 	objID := "delete-call-test"
-	err = node.createObject(ctx, "TestPersistentObjectWithMethod", objID)
+	err = node.createObject(ctx, "TestPersistentObjectWithMethod", objID, -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(5 * time.Millisecond)
-			err := node.DeleteObject(ctx, objID)
+			err := node.DeleteObject(ctx, objID, -1)
 			if err == nil {
 				countMu.Lock()
 				deleteSuccessCount++

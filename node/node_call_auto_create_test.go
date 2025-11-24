@@ -301,7 +301,7 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
 	// Create object with one type
-	_, err := node.CreateObject(ctx, "TestObjectWithMethod", "type-test-1")
+	_, err := node.CreateObject(ctx, "TestObjectWithMethod", "type-test-1", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
