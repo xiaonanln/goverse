@@ -148,6 +148,44 @@ testServer.Start(ctx)
 actualAddr := testServer.GetAddress()  // Get bound address
 ```
 
+### Shard Configuration in Tests
+
+**Production**: 8192 shards (default)  
+**Tests**: 64 shards (via `testutil.TestNumShards`)
+
+**Always use `testutil.TestNumShards` for test shard counts:**
+
+```go
+// Node configuration
+nodeConfig := &node.Config{
+    NumShards: testutil.TestNumShards,  // Required
+    // ... other config
+}
+
+// Gate configuration
+gateConfig := &gateserver.GateServerConfig{
+    NumShards: testutil.TestNumShards,  // Required
+    // ... other config
+}
+
+// Cluster configuration
+clusterConfig := &cluster.Config{
+    NumShards: testutil.TestNumShards,  // Required
+    // ... other config
+}
+```
+
+**Why 64 shards in tests:**
+- Faster shard operations and leadership elections
+- Reduced resource usage in test environments
+- Still validates distributed behavior
+- Valid shard IDs: 0-63 (not 0-8191)
+
+**Common mistakes:**
+- Omitting NumShards (defaults to 8192, causes slow tests)
+- Using hardcoded shard IDs >= 64 (use 0-63 range)
+- Inconsistent shard counts across test components
+
 ### Test Conventions
 
 - Use `t.Fatalf()` not `t.Errorf()` (fail fast)
