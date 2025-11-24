@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
