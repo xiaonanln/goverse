@@ -20,7 +20,7 @@ func TestStop_RaceWithCreateObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestStop_RaceWithCreateObject(t *testing.T) {
 			if index > 5 {
 				time.Sleep(10 * time.Millisecond)
 			}
-			id, err := node.CreateObject(ctx, "TestPersistentObject", objID, 0)
+			id, err := node.CreateObject(ctx, "TestPersistentObject", objID)
 			results <- struct {
 				id  string
 				err error
@@ -104,13 +104,13 @@ func TestStop_RaceWithCallObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 
 	// Pre-create an object
-	err = node.createObject(ctx, "TestPersistentObjectWithMethod", "call-obj-1", 0)
+	err = node.createObject(ctx, "TestPersistentObjectWithMethod", "call-obj-1")
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestStop_RaceWithCallObject(t *testing.T) {
 			if index > 5 {
 				time.Sleep(10 * time.Millisecond)
 			}
-			_, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", "call-obj-1", "GetValue", &emptypb.Empty{}, 0)
+			_, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", "call-obj-1", "GetValue", &emptypb.Empty{})
 			results <- err
 		}(i)
 	}
@@ -184,14 +184,14 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 
 	// Pre-create multiple objects
 	for i := 0; i < 10; i++ {
-		err = node.createObject(ctx, "TestPersistentObject", "delete-race-obj", 0)
+		err = node.createObject(ctx, "TestPersistentObject", "delete-race-obj")
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
@@ -217,7 +217,7 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 			if index > 5 {
 				time.Sleep(10 * time.Millisecond)
 			}
-			err := node.DeleteObject(ctx, "delete-race-obj", 0)
+			err := node.DeleteObject(ctx, "delete-race-obj")
 			results <- err
 		}(i)
 	}
@@ -273,14 +273,14 @@ func TestStop_RaceWithSaveAllObjects(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 
 	// Pre-create multiple objects
 	for i := 0; i < 5; i++ {
-		err := node.createObject(ctx, "TestPersistentObject", "save-race-obj", 0)
+		err := node.createObject(ctx, "TestPersistentObject", "save-race-obj")
 		if err != nil {
 			t.Fatalf("Failed to create object %d: %v", i, err)
 		}
@@ -366,7 +366,7 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	}
 
 	// Try CreateObject - should fail
-	_, err = node.CreateObject(ctx, "TestPersistentObject", "after-stop-obj", 0)
+	_, err = node.CreateObject(ctx, "TestPersistentObject", "after-stop-obj")
 	if err == nil {
 		t.Fatal("Expected CreateObject to fail after stop")
 	} else if err.Error() != "node is stopped" {
@@ -386,7 +386,7 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	}
 
 	// Try CallObject - should fail
-	_, err = node.CallObject(ctx, "TestPersistentObjectWithMethod", "after-stop-obj", "GetValue", &emptypb.Empty{}, 0)
+	_, err = node.CallObject(ctx, "TestPersistentObjectWithMethod", "after-stop-obj", "GetValue", &emptypb.Empty{})
 	if err == nil {
 		t.Fatal("Expected CallObject to fail after stop")
 	} else if err.Error() != "node is stopped" {
@@ -396,7 +396,7 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	// Try DeleteObject - should succeed (idempotent: node stopped = objects cleared)
 	// Unlike other operations, DeleteObject succeeds when node is stopped because
 	// the desired state (object not existing) is already achieved
-	err = node.DeleteObject(ctx, "after-stop-obj", 0)
+	err = node.DeleteObject(ctx, "after-stop-obj")
 	if err != nil {
 		t.Fatalf("Expected DeleteObject to succeed after stop (idempotent), got error: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
 	// Create multiple objects
 	objectIDs := []string{"persist-obj-1", "persist-obj-2", "persist-obj-3"}
 	for _, id := range objectIDs {
-		err := node.createObject(ctx, "TestPersistentObject", id, 0)
+		err := node.createObject(ctx, "TestPersistentObject", id)
 		if err != nil {
 			t.Fatalf("Failed to create object %s: %v", id, err)
 		}
@@ -469,7 +469,7 @@ func TestStop_MultipleStopCalls(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the node
-	err := node.Start(ctx, 8192)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}

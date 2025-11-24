@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
@@ -84,23 +83,12 @@ func NewNode(advertiseAddress string) *Node {
 }
 
 // Start starts the node and connects it to the inspector
-// numShards is optional - if -1, existing objects will not be registered with inspector
-func (node *Node) Start(ctx context.Context, numShards int) error {
+func (node *Node) Start(ctx context.Context) error {
 	node.startupTime = time.Now()
 
 	// Start periodic persistence if provider is configured
 	if node.persistenceProvider != nil {
 		node.StartPeriodicPersistence(ctx)
-	}
-
-	// Notify inspector manager about existing objects if numShards is provided
-	if numShards >= 0 {
-		node.objectsMu.RLock()
-		for _, obj := range node.objects {
-			shardID := sharding.GetShardID(obj.Id(), numShards)
-			node.inspectorManager.NotifyObjectAdded(obj.Id(), obj.Type(), shardID)
-		}
-		node.objectsMu.RUnlock()
 	}
 
 	// Start the inspector manager
@@ -201,7 +189,7 @@ func isConcreteProtoMessage(t reflect.Type) bool {
 }
 
 // CallObject implements the Goverse gRPC service CallObject method
-func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message, shardID int) (proto.Message, error) {
+func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error) {
 	// Start timing for metrics
 	startTime := time.Now()
 	var callErr error
@@ -230,8 +218,8 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 
-	// Auto-create object with provided shard ID
-	err := node.createObject(ctx, typ, id, shardID)
+	// Auto-create object
+	err := node.createObject(ctx, typ, id)
 	if err != nil {
 		callErr = fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		return nil, callErr
@@ -313,8 +301,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
-// shardID is optional - if -1, metrics and inspector notifications will not include shard info
-func (node *Node) CreateObject(ctx context.Context, typ string, id string, shardID int) (string, error) {
+func (node *Node) CreateObject(ctx context.Context, typ string, id string) (string, error) {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -327,7 +314,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, shard
 
 	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
 
-	err := node.createObject(ctx, typ, id, shardID)
+	err := node.createObject(ctx, typ, id)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
 		return "", err
@@ -337,8 +324,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string, shard
 
 // createObject creates a new object of the specified type and ID
 // createObject MUST not return the object because the keylock is not held after return
-// shardID is optional - if -1, metrics and inspector notifications will not include shard info
-func (node *Node) createObject(ctx context.Context, typ string, id string, shardID int) error {
+func (node *Node) createObject(ctx context.Context, typ string, id string) error {
 	// ID must be specified to ensure proper shard mapping
 	if id == "" {
 		return fmt.Errorf("object ID must be specified")
@@ -452,20 +438,17 @@ func (node *Node) createObject(ctx context.Context, typ string, id string, shard
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
 
-	// Notify inspector manager and record metrics
-	node.inspectorManager.NotifyObjectAdded(id, typ, shardID)
-	metrics.RecordObjectCreated(node.advertiseAddress, typ, shardID)
+	// Notify inspector manager
+	node.inspectorManager.NotifyObjectAdded(id, typ)
 
 	return nil
 }
 
-func (node *Node) destroyObject(id string, shardID int) {
-	// Get object type before deletion for metrics
+func (node *Node) destroyObject(id string) {
+	// Delete object from map
 	node.objectsMu.Lock()
-	obj, exists := node.objects[id]
-	var objectType string
+	_, exists := node.objects[id]
 	if exists {
-		objectType = obj.Type()
 		delete(node.objects, id)
 	}
 	node.objectsMu.Unlock()
@@ -473,11 +456,6 @@ func (node *Node) destroyObject(id string, shardID int) {
 
 	// Notify inspector manager about object removal
 	node.inspectorManager.NotifyObjectRemoved(id)
-
-	// Record metrics if object existed
-	if exists {
-		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shardID)
-	}
 }
 
 // DeleteObject removes an object from the node and deletes it from persistence if configured.
@@ -485,8 +463,7 @@ func (node *Node) destroyObject(id string, shardID int) {
 // This operation is idempotent - if the object doesn't exist, no error is returned.
 // If the node is stopped, this operation succeeds since all objects are already cleared.
 // Returns error only if persistence deletion fails.
-// shardID is optional - if -1, metrics will not include shard info
-func (node *Node) DeleteObject(ctx context.Context, id string, shardID int) error {
+func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -540,7 +517,7 @@ func (node *Node) DeleteObject(ctx context.Context, id string, shardID int) erro
 		}
 	}
 
-	node.destroyObject(id, shardID)
+	node.destroyObject(id)
 	node.logger.Infof("Deleted object %s from node", id)
 	return nil
 }

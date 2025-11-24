@@ -9,7 +9,7 @@ import (
 
 func MustNewNode(ctx context.Context, t *testing.T, advertiseAddr string) *node.Node {
 	n := node.NewNode(advertiseAddr)
-	err := n.Start(ctx, 8192)
+	err := n.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
