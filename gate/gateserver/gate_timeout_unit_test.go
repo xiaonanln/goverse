@@ -20,7 +20,7 @@ func TestGateServerConfig_DefaultCallTimeout(t *testing.T) {
 			t.Fatalf("validateConfig failed: %v", err)
 		}
 
-		expectedTimeout := 300 * time.Second
+		expectedTimeout := 30 * time.Second
 		if config.DefaultCallTimeout != expectedTimeout {
 			t.Errorf("Expected DefaultCallTimeout to be %v, got %v", expectedTimeout, config.DefaultCallTimeout)
 		}

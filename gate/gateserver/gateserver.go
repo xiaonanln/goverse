@@ -106,7 +106,7 @@ func validateConfig(config *GateServerConfig) error {
 		config.EtcdPrefix = "/goverse"
 	}
 	if config.DefaultCallTimeout <= 0 {
-		config.DefaultCallTimeout = 300 * time.Second // Default 300 seconds as per requirement
+		config.DefaultCallTimeout = 30 * time.Second // Default 30 seconds
 	}
 
 	return nil
