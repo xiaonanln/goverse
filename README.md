@@ -107,6 +107,7 @@ High-level objectives for future development:
 - **Better leader election strategy** - Improve stability and reduce failover time during node transitions
 - **Shard rebalancing based on actual node load** - Dynamic rebalancing that considers CPU, memory, and object count
 - **Support different object call semantics** - Currently only best-effort; add at-least-once, exactly-once, and idempotent patterns
+- **RPC timeout configuration** - Configurable timeouts for CallObject/CreateObject with proper propagation across node boundaries (see [TIMEOUT_DESIGN.md](docs/TIMEOUT_DESIGN.md))
 
 ### Gate & Client Features
 - **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility
