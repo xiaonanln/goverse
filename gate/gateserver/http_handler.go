@@ -78,12 +78,12 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
+	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_BODY", fmt.Sprintf("Failed to read request body: %v", err))
 		return
 	}
-	defer r.Body.Close()
 
 	var httpReq HTTPRequest
 	if err := json.Unmarshal(body, &httpReq); err != nil {
