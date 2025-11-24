@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -118,7 +119,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	defer cancel()
 
 	// Create first cluster and node
-	node1 := node.NewNode("localhost:50021")
+	node1 := node.NewNode("localhost:50021", sharding.NumShards)
 	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
@@ -144,7 +145,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 	t.Logf("Initial shard mapping created")
 
 	// Now add a second node
-	node2 := node.NewNode("localhost:50022")
+	node2 := node.NewNode("localhost:50022", sharding.NumShards)
 	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)

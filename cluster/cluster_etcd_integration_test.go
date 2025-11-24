@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -129,7 +130,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 
 	// Create cluster2 (we'll stop it manually later to test leave detection)
 	// For this test, we need manual control over cluster2's lifecycle
-	node2 := node.NewNode("localhost:47006")
+	node2 := node.NewNode("localhost:47006", sharding.NumShards)
 	err := node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
@@ -202,7 +203,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	addresses := []string{"localhost:47100", "localhost:47050", "localhost:47200"}
 
 	for i := 0; i < 3; i++ {
-		nodes[i] = node.NewNode(addresses[i])
+		nodes[i] = node.NewNode(addresses[i], sharding.NumShards)
 		err := nodes[i].Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
@@ -256,8 +257,8 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two nodes - node2 has smaller address (will be initial leader)
-	node1 := node.NewNode("localhost:47300")
-	node2 := node.NewNode("localhost:47200") // Smaller address - will be leader
+	node1 := node.NewNode("localhost:47300", sharding.NumShards)
+	node2 := node.NewNode("localhost:47200", sharding.NumShards) // Smaller address - will be leader
 
 	// Start both nodes
 	err := node1.Start(ctx)

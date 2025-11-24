@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -34,8 +36,8 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two nodes
-	node1 := node.NewNode("localhost:52001")
-	node2 := node.NewNode("localhost:52002")
+	node1 := node.NewNode("localhost:52001", sharding.NumShards)
+	node2 := node.NewNode("localhost:52002", sharding.NumShards)
 
 	// Register test object type
 	node1.RegisterObjectType((*TestReleaseObject)(nil))
