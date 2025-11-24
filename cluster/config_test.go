@@ -3,6 +3,8 @@ package cluster
 import (
 	"testing"
 	"time"
+
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -85,6 +87,7 @@ func TestNewClusterAppliesConfig(t *testing.T) {
 		MinQuorum:                     3,
 		ClusterStateStabilityDuration: 7 * time.Second,
 		ShardMappingCheckInterval:     3 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 
 	// Note: We can't actually call NewCluster here without a running etcd instance

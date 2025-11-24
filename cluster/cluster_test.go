@@ -31,6 +31,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 3 * time.Second,
 		ShardMappingCheckInterval:     1 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 
 	// Create cluster with etcd

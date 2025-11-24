@@ -25,6 +25,7 @@ func makeTestClusterConfig(etcdPrefix string) Config {
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 3 * time.Second,
 		ShardMappingCheckInterval:     1 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 }
 

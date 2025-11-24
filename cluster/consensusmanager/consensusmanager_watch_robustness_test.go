@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -44,7 +43,7 @@ func TestWatchReconnection(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Initialize and start watch
 	err = cm.Initialize(ctx)

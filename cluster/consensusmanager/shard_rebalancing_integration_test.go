@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -34,7 +33,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", sharding.NumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(), 0, "", testNumShards)
 
 	// Initialize and start watching
 	err = cm.Initialize(ctx)
@@ -72,7 +71,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 		// Create fully assigned shard mapping with balanced distribution
 		shards := make(map[int]ShardInfo)
-		for i := 0; i < sharding.NumShards; i++ {
+		for i := 0; i < testNumShards; i++ {
 			nodeIdx := i % len(nodes)
 			assignedNode := nodes[nodeIdx]
 			shards[i] = ShardInfo{
@@ -106,7 +105,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		targetMove := 2000
 
 		// Build the full shard map with imbalance
-		for i := 0; i < sharding.NumShards; i++ {
+		for i := 0; i < testNumShards; i++ {
 			shardInfo := mapping.Shards[i]
 			if movedCount < targetMove && shardInfo.CurrentNode != "node1" {
 				// Move this shard to node1
@@ -136,7 +135,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		for _, node := range nodes {
 			shardCounts[node] = 0
 		}
-		for i := 0; i < sharding.NumShards; i++ {
+		for i := 0; i < testNumShards; i++ {
 			// Count shards by TargetNode to match RebalanceShards logic (which uses TargetNode)
 			shardCounts[mapping.Shards[i].TargetNode]++
 		}
@@ -146,7 +145,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 
 		// Find max and min
 		maxCount := 0
-		minCount := sharding.NumShards
+		minCount := testNumShards
 		for _, count := range shardCounts {
 			if count > maxCount {
 				maxCount = count
@@ -178,7 +177,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		// (CurrentNode stays the same until migration completes)
 		mapping = cm.GetShardMapping()
 		migrationCount := 0
-		for i := 0; i < sharding.NumShards; i++ {
+		for i := 0; i < testNumShards; i++ {
 			shardInfo := mapping.Shards[i]
 			if shardInfo.TargetNode != shardInfo.CurrentNode {
 				migrationCount++
@@ -209,7 +208,7 @@ func TestShardAssignmentAndRebalancing_Integration(t *testing.T) {
 		}
 
 		shards := make(map[int]ShardInfo)
-		for i := 0; i < sharding.NumShards; i++ {
+		for i := 0; i < testNumShards; i++ {
 			nodeIdx := i % len(nodes)
 			node := nodes[nodeIdx]
 			shards[i] = ShardInfo{
