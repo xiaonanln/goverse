@@ -21,10 +21,6 @@ import (
 )
 
 const (
-	// shardStorageWorkers defines the number of concurrent workers for storing shards in etcd.
-	// This value balances parallelism with avoiding overwhelming etcd.
-	// With 8192 shards and 20 workers, each worker handles ~410 shards sequentially.
-	shardStorageWorkers = 20
 	// defaultClusterStateStabilityDuration is the default duration to consider the cluster state stable
 	defaultClusterStateStabilityDuration = 10 * time.Second
 )
@@ -817,8 +813,14 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	shardIDs := slices.Collect(maps.Keys(updateShards))
 	startTime := time.Now()
 
+	// Calculate worker pool size based on numShards (numShards/512, minimum 1)
+	poolSize := cm.numShards / 512
+	if poolSize < 1 {
+		poolSize = 1
+	}
+
 	// Create and start a fixed worker pool
-	pool := workerpool.New(ctx, shardStorageWorkers)
+	pool := workerpool.New(ctx, poolSize)
 	pool.Start()
 	defer pool.Stop()
 

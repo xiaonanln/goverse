@@ -1130,6 +1130,7 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	// This is more efficient than cloning the entire cluster state
 	// ConsensusManager will also check if this node is in the cluster
 	objectsToEvict := c.consensusManager.GetObjectsToEvict(localAddr, objectIDs)
+	c.logger.Infof("%s - Found %d objects out of %d to evict from this node", c, len(objectsToEvict), len(objectIDs))
 
 	// Remove each object that should be evicted
 	for _, objectID := range objectsToEvict {
