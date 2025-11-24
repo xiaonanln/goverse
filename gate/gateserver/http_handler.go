@@ -78,7 +78,6 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
-	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_BODY", fmt.Sprintf("Failed to read request body: %v", err))
@@ -233,13 +232,6 @@ func (s *GateServer) startHTTPServer(ctx context.Context) error {
 	}
 
 	mux := s.setupHTTPRoutes()
-
-	// Combine metrics handler if metrics are enabled
-	if s.config.MetricsListenAddress == "" {
-		// No separate metrics server, combine with HTTP server
-		// Note: This merges prometheus metrics into the same HTTP server
-		// For now, we keep them separate as per existing design
-	}
 
 	s.httpServer = &http.Server{
 		Addr:    s.config.HTTPListenAddress,
