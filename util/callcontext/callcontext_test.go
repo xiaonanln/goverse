@@ -3,6 +3,7 @@ package callcontext
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestWithClientID(t *testing.T) {
@@ -87,4 +88,62 @@ func TestContextChaining(t *testing.T) {
 	if clientID != "gate1/client1" {
 		t.Errorf("Expected client ID %q, got %q", "gate1/client1", clientID)
 	}
+}
+
+func TestWithDefaultTimeout_NoExistingDeadline(t *testing.T) {
+	ctx := context.Background()
+	defaultTimeout := 5 * time.Second
+
+	// Context without deadline should have default timeout applied
+	newCtx, cancel := WithDefaultTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	deadline, hasDeadline := newCtx.Deadline()
+	if !hasDeadline {
+		t.Fatal("Expected context to have a deadline after WithDefaultTimeout")
+	}
+
+	// Deadline should be approximately defaultTimeout from now
+	expectedDeadline := time.Now().Add(defaultTimeout)
+	diff := deadline.Sub(expectedDeadline)
+	if diff < -100*time.Millisecond || diff > 100*time.Millisecond {
+		t.Errorf("Deadline diff from expected: %v (should be within ±100ms)", diff)
+	}
+}
+
+func TestWithDefaultTimeout_ExistingDeadline(t *testing.T) {
+	// Create context with existing deadline
+	existingTimeout := 2 * time.Second
+	ctx, existingCancel := context.WithTimeout(context.Background(), existingTimeout)
+	defer existingCancel()
+
+	existingDeadline, _ := ctx.Deadline()
+
+	// Apply default timeout (longer than existing)
+	defaultTimeout := 10 * time.Second
+	newCtx, cancel := WithDefaultTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	// Deadline should be preserved (not replaced)
+	newDeadline, hasDeadline := newCtx.Deadline()
+	if !hasDeadline {
+		t.Fatal("Expected context to still have deadline")
+	}
+
+	if !newDeadline.Equal(existingDeadline) {
+		t.Errorf("Expected deadline to be preserved at %v, got %v", existingDeadline, newDeadline)
+	}
+}
+
+func TestWithDefaultTimeout_CancelNoopWhenDeadlineExists(t *testing.T) {
+	// Create context with existing deadline
+	ctx, existingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer existingCancel()
+
+	// Apply default timeout
+	_, cancel := WithDefaultTimeout(ctx, 10*time.Second)
+
+	// Cancel should be a no-op and not panic
+	cancel()
+	cancel() // Call multiple times to ensure it's safe
 }

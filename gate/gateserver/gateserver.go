@@ -226,7 +226,7 @@ func (s *GateServer) Stop() error {
 }
 
 // Register implements the Register RPC
-func (s *GateServer) Register(req *gate_pb.Empty, stream gate_pb.GateService_RegisterServer) error {
+func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
 	ctx := stream.Context()
 	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
@@ -271,11 +271,8 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream gate_pb.GateService_Reg
 // CallObject implements the CallObject RPC
 func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
 	// Apply default timeout if context has no deadline
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, s.config.DefaultCallTimeout)
-		defer cancel()
-	}
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCallTimeout)
+	defer cancel()
 
 	// Inject client_id into the context so it can be passed to the node
 	if req.ClientId != "" {
