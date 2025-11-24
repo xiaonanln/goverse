@@ -20,12 +20,13 @@ import (
 
 // GateServerConfig holds configuration for the gate server
 type GateServerConfig struct {
-	ListenAddress        string // Address to listen on for client connections (e.g., ":49000")
-	AdvertiseAddress     string // Address to advertise to the cluster (e.g., "localhost:49000")
-	MetricsListenAddress string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
-	EtcdAddress          string // Address of etcd for cluster state
-	EtcdPrefix           string // Optional: etcd key prefix (default: "/goverse")
-	NumShards            int    // Optional: number of shards in the cluster (default: 8192)
+	ListenAddress        string        // Address to listen on for client connections (e.g., ":49000")
+	AdvertiseAddress     string        // Address to advertise to the cluster (e.g., "localhost:49000")
+	MetricsListenAddress string        // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
+	EtcdAddress          string        // Address of etcd for cluster state
+	EtcdPrefix           string        // Optional: etcd key prefix (default: "/goverse")
+	NumShards            int           // Optional: number of shards in the cluster (default: 8192)
+	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 300s)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
@@ -103,6 +104,9 @@ func validateConfig(config *GateServerConfig) error {
 	// Set defaults
 	if config.EtcdPrefix == "" {
 		config.EtcdPrefix = "/goverse"
+	}
+	if config.DefaultCallTimeout <= 0 {
+		config.DefaultCallTimeout = 300 * time.Second // Default 300 seconds as per requirement
 	}
 
 	return nil
@@ -266,6 +270,13 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream gate_pb.GateService_Reg
 
 // CallObject implements the CallObject RPC
 func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+	// Apply default timeout if context has no deadline
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.config.DefaultCallTimeout)
+		defer cancel()
+	}
+
 	// Inject client_id into the context so it can be passed to the node
 	if req.ClientId != "" {
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
