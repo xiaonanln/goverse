@@ -433,9 +433,32 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 
 	// Test Case 1: ObjectA and ObjectB on the same node
 	t.Run("SameNode", func(t *testing.T) {
-		// Create ObjectA and ObjectB with IDs that hash to the same shard (and thus same node)
-		objectAID := "TestObjectA-same-node"
-		objectBID := "TestObjectB-same-node"
+		// Find objects that will be on the same node
+		var objectAID, objectBID string
+		var foundSameNode bool
+
+		for i := 0; i < 100 && !foundSameNode; i++ {
+			objectAID = fmt.Sprintf("TestObjectA-same-%d", i)
+			objectBID = fmt.Sprintf("TestObjectB-same-%d", i)
+
+			node1, err := node1Cluster.GetCurrentNodeForObject(ctx, objectAID)
+			if err != nil {
+				t.Fatalf("Failed to determine node for ObjectA: %v", err)
+			}
+			node2, err := node1Cluster.GetCurrentNodeForObject(ctx, objectBID)
+			if err != nil {
+				t.Fatalf("Failed to determine node for ObjectB: %v", err)
+			}
+
+			if node1 == node2 {
+				foundSameNode = true
+				t.Logf("Found objects on same node: A and B both on %s", node1)
+			}
+		}
+
+		if !foundSameNode {
+			t.Skip("Could not find object IDs that hash to the same node")
+		}
 
 		// Create both objects
 		_, err = gateClient.CreateObject(ctx, &gate_pb.CreateObjectRequest{
