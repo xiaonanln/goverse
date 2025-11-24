@@ -622,11 +622,9 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// For gates, execute synchronously since they don't risk deadlocks
 	// (gates don't host objects so they don't hold object locks)
 	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
-	// Extract client_id from context if present and pass it in the request
 	req := &goverse_pb.CreateObjectRequest{
-		Type:     objType,
-		Id:       objID,
-		ClientId: callcontext.ClientID(ctx),
+		Type: objType,
+		Id:   objID,
 	}
 	if c.isGate() {
 		// Synchronous execution for gates
