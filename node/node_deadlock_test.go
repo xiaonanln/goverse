@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -41,7 +43,7 @@ func (obj *TestObjectMethodCallingCreateReentrant) MethodThatCreatesObject(ctx c
 // TestCallObject_MethodCallingCreateObject_NoDeadlock verifies that a method
 // can call CreateObject without causing a deadlock
 func TestCallObject_MethodCallingCreateObject_NoDeadlock(t *testing.T) {
-	n := NewNode("localhost:47000")
+	n := NewNode("localhost:47000", sharding.NumShards)
 	n.RegisterObjectType((*TestObjectMethodCallingCreateReentrant)(nil))
 	n.RegisterObjectType((*TestPersistentObject)(nil))
 
@@ -114,7 +116,7 @@ func (obj *TestObjectMethodCallingCallReentrant) MethodThatCallsObject(ctx conte
 // TestCallObject_MethodCallingCallObject_NoDeadlock verifies that a method
 // can call CallObject without causing a deadlock
 func TestCallObject_MethodCallingCallObject_NoDeadlock(t *testing.T) {
-	n := NewNode("localhost:47000")
+	n := NewNode("localhost:47000", sharding.NumShards)
 	n.RegisterObjectType((*TestObjectMethodCallingCallReentrant)(nil))
 	n.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
@@ -182,7 +184,7 @@ func (obj *TestObjectOnCreatedCallingCreate) OnCreated() {
 // TestOnCreated_CallingCreateObject_NoDeadlock verifies that OnCreated
 // can call CreateObject without causing a deadlock
 func TestOnCreated_CallingCreateObject_NoDeadlock(t *testing.T) {
-	n := NewNode("localhost:47000")
+	n := NewNode("localhost:47000", sharding.NumShards)
 	n.RegisterObjectType((*TestObjectOnCreatedCallingCreate)(nil))
 	n.RegisterObjectType((*TestPersistentObject)(nil))
 
@@ -252,7 +254,7 @@ func (obj *TestObjectWithOnCreatedFlag) CheckOnCreated(ctx context.Context, req 
 // TestOnCreated_CalledBeforeObjectVisible verifies that OnCreated completes
 // before other threads can call methods on the object
 func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
-	n := NewNode("localhost:47000")
+	n := NewNode("localhost:47000", sharding.NumShards)
 	n.RegisterObjectType((*TestObjectWithOnCreatedFlag)(nil))
 
 	ctx := context.Background()

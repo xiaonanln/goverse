@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -32,7 +33,7 @@ func (t *TestObjectWithMethod) TestMethod(ctx context.Context, req *emptypb.Empt
 
 // TestCallObject_AutoCreateNonPersistent tests that CallObject automatically creates non-persistent objects
 func TestCallObject_AutoCreateNonPersistent(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Register object type
@@ -140,7 +141,7 @@ func (t *TestPersistentObjectWithMethod) FromData(data proto.Message) error {
 
 // TestCallObject_AutoCreatePersistent_NotInStorage tests auto-creation of persistent objects not in storage
 func TestCallObject_AutoCreatePersistent_NotInStorage(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Set up persistence provider
@@ -187,7 +188,7 @@ func TestCallObject_AutoCreatePersistent_NotInStorage(t *testing.T) {
 
 // TestCallObject_AutoCreatePersistent_LoadFromStorage tests auto-creation with data from storage
 func TestCallObject_AutoCreatePersistent_LoadFromStorage(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Set up persistence provider with existing data
@@ -248,7 +249,7 @@ func TestCallObject_AutoCreatePersistent_LoadFromStorage(t *testing.T) {
 
 // TestCallObject_AutoCreate_MultipleCallsIdempotent tests that multiple calls are idempotent
 func TestCallObject_AutoCreate_MultipleCallsIdempotent(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Register object type
@@ -293,7 +294,7 @@ func TestCallObject_AutoCreate_MultipleCallsIdempotent(t *testing.T) {
 
 // TestCallObject_AutoCreate_TypeMismatch tests that type validation still works
 func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Register object types
@@ -322,7 +323,7 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 
 // TestCallObject_AutoCreate_UnknownType tests that unknown types still fail
 func TestCallObject_AutoCreate_UnknownType(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Don't register any types
@@ -341,7 +342,7 @@ func TestCallObject_AutoCreate_UnknownType(t *testing.T) {
 
 // TestCallObject_AutoCreate_MethodNotFound tests that method validation still works
 func TestCallObject_AutoCreate_MethodNotFound(t *testing.T) {
-	node := NewNode("test-node:1234")
+	node := NewNode("test-node:1234", sharding.NumShards)
 	ctx := context.Background()
 
 	// Register object type

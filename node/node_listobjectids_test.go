@@ -4,13 +4,15 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/xiaonanln/goverse/cluster/sharding"
 )
 
 // TestListObjectIDs tests the ListObjectIDs method
 func TestListObjectIDs(t *testing.T) {
 	t.Parallel()
 
-	n := NewNode("localhost:50000")
+	n := NewNode("localhost:50000", sharding.NumShards)
 
 	// Initially should have no objects
 	ids := n.ListObjectIDs()
@@ -28,7 +30,7 @@ func TestListObjectIDs(t *testing.T) {
 func TestListObjectIDs_EmptySlice(t *testing.T) {
 	t.Parallel()
 
-	n := NewNode("localhost:50001")
+	n := NewNode("localhost:50001", sharding.NumShards)
 
 	ids := n.ListObjectIDs()
 
@@ -46,7 +48,7 @@ func TestListObjectIDs_EmptySlice(t *testing.T) {
 func TestListObjectIDs_WithObjects(t *testing.T) {
 	t.Parallel()
 
-	n := NewNode("localhost:50002")
+	n := NewNode("localhost:50002", sharding.NumShards)
 	n.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()

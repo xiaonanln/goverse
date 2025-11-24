@@ -3,6 +3,8 @@ package node
 import (
 	"context"
 	"testing"
+
+	"github.com/xiaonanln/goverse/cluster/sharding"
 )
 
 // TestDeleteObject_Integration is an end-to-end integration test showing the complete flow
@@ -12,7 +14,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -79,7 +81,7 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestNonPersistentObject)(nil))
@@ -130,7 +132,7 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))

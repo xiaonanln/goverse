@@ -6,13 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // TestObjectLifecycleSerialization verifies that objectsMu properly serializes
 // all object lifecycle operations (create, call, delete, save)
 func TestObjectLifecycleSerialization(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -124,7 +126,7 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 // TestConcurrentCreateObjectSerialization verifies that concurrent CreateObject
 // calls for the same object ID are properly serialized and only one succeeds
 func TestConcurrentCreateObjectSerialization(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
 	ctx := context.Background()
@@ -181,7 +183,7 @@ func TestConcurrentCreateObjectSerialization(t *testing.T) {
 // TestSaveAllObjectsWhileCreating verifies that SaveAllObjects properly
 // serializes with concurrent CreateObject operations
 func TestSaveAllObjectsWhileCreating(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -231,7 +233,7 @@ func TestSaveAllObjectsWhileCreating(t *testing.T) {
 // TestDeleteObjectSerializesWithCallObject verifies that DeleteObject
 // properly serializes with CallObject operations
 func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
-	node := NewNode("localhost:47000")
+	node := NewNode("localhost:47000", sharding.NumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
