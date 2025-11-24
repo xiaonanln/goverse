@@ -68,7 +68,7 @@ func TestInspectorManager_NotifyObjectAdded(t *testing.T) {
 	objectType := "TestObject"
 
 	// Add an object
-	mgr.NotifyObjectAdded(objectID, objectType)
+	mgr.NotifyObjectAdded(objectID, objectType, 0)
 
 	// Verify object was stored
 	mgr.mu.RLock()
@@ -97,7 +97,7 @@ func TestInspectorManager_NotifyObjectRemoved(t *testing.T) {
 	objectType := "TestObject"
 
 	// Add an object
-	mgr.NotifyObjectAdded(objectID, objectType)
+	mgr.NotifyObjectAdded(objectID, objectType, 0)
 
 	// Verify object was stored
 	mgr.mu.RLock()
@@ -137,7 +137,7 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 
 	// Add multiple objects
 	for _, obj := range objects {
-		mgr.NotifyObjectAdded(obj.id, obj.typ)
+		mgr.NotifyObjectAdded(obj.id, obj.typ, 0)
 	}
 
 	// Verify all objects are tracked
@@ -229,7 +229,7 @@ func TestInspectorManager_ConcurrentNotifications(t *testing.T) {
 	for i := 0; i < numObjects; i++ {
 		go func(id int) {
 			objID := "concurrent-obj-" + string(rune(id))
-			mgr.NotifyObjectAdded(objID, "TestType")
+			mgr.NotifyObjectAdded(objID, "TestType", 0)
 			done <- true
 		}(i)
 	}
@@ -255,8 +255,8 @@ func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 	mgr := NewInspectorManager("localhost:47000")
 
 	// Add objects before starting the manager
-	mgr.NotifyObjectAdded("obj-1", "Type1")
-	mgr.NotifyObjectAdded("obj-2", "Type2")
+	mgr.NotifyObjectAdded("obj-1", "Type1", 0)
+	mgr.NotifyObjectAdded("obj-2", "Type2", 0)
 
 	// Verify objects are tracked
 	mgr.mu.RLock()
@@ -300,7 +300,7 @@ func TestInspectorManager_ShardIDComputation(t *testing.T) {
 	objectID := "test-object-with-shard"
 	objectType := "TestObject"
 
-	mgr.NotifyObjectAdded(objectID, objectType)
+	mgr.NotifyObjectAdded(objectID, objectType, 0)
 
 	// Verify object was stored with shard ID
 	mgr.mu.RLock()
