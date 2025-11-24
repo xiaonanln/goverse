@@ -186,6 +186,14 @@ clusterConfig := &cluster.Config{
 - Using hardcoded shard IDs >= 64 (use 0-63 range)
 - Inconsistent shard counts across test components
 
+**Shard-specific objects**: Use `testutil.GetObjectIDForShard()` to generate IDs for specific shards:
+```go
+// Get object IDs that hash to specific shards
+objA := testutil.GetObjectIDForShard(5, "TestObjectA")   // Shard 5
+objB := testutil.GetObjectIDForShard(5, "TestObjectB")   // Same shard
+objC := testutil.GetObjectIDForShard(10, "TestObjectC")  // Different shard
+```
+
 ### Test Conventions
 
 - Use `t.Fatalf()` not `t.Errorf()` (fail fast)
