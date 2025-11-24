@@ -109,6 +109,7 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 func TestRebalanceShards_BatchLogic(t *testing.T) {
 	t.Parallel()
 	// Test the logic that decides how many shards to migrate
+	// With testNumShards = 64, we need to adjust the counts
 
 	// Create a test scenario with varying degrees of imbalance
 	testCases := []struct {
@@ -121,34 +122,34 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 	}{
 		{
 			name:            "Severe imbalance - should migrate many shards",
-			node1Count:      6000,
-			node2Count:      1096,
-			node3Count:      1096,
-			expectedBatch:   50, // Should migrate many shards
+			node1Count:      48, // 75% of 64
+			node2Count:      8,
+			node3Count:      8,
+			expectedBatch:   1, // Should migrate shards
 			shouldRebalance: true,
 		},
 		{
 			name:            "Moderate imbalance - should migrate some shards",
-			node1Count:      4000,
-			node2Count:      1996,
-			node3Count:      2196,
-			expectedBatch:   1, // Should migrate at least a few shards
+			node1Count:      34, // Imbalanced: a=34, b=15, 34 >= 17 and 34 > 30
+			node2Count:      15,
+			node3Count:      15,
+			expectedBatch:   1, // Should migrate at least some shards
 			shouldRebalance: true,
 		},
 		{
 			name:            "Balanced - should not rebalance",
-			node1Count:      2731,
-			node2Count:      2731,
-			node3Count:      2730,
-			expectedBatch:   0, // Should not rebalance
+			node1Count:      21, // 64/3 = 21.33, so 21, 21, 22
+			node2Count:      21,
+			node3Count:      22,
+			expectedBatch:   0, // Should not rebalance (diff is only 1)
 			shouldRebalance: false,
 		},
 		{
 			name:            "Small imbalance - should not rebalance",
-			node1Count:      2733,
-			node2Count:      2730,
-			node3Count:      2729,
-			expectedBatch:   0, // a=2733, b=2729, a < b+2, so no rebalance
+			node1Count:      23, // a=23, b=20, a < b+2 is false, but a <= 2*b is true (23 <= 40)
+			node2Count:      21,
+			node3Count:      20,
+			expectedBatch:   0, // a >= b+2 (23 >= 22) but a <= 2*b (23 <= 40), so no rebalance
 			shouldRebalance: false,
 		},
 	}
