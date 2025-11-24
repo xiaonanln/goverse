@@ -64,7 +64,7 @@ func TestClientIDInContext(t *testing.T) {
 	defer cancel()
 
 	// 1. Create and start a node with cluster
-	nodeAddr := "localhost:48020"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -84,7 +84,7 @@ func TestClientIDInContext(t *testing.T) {
 	t.Cleanup(func() { nodeServer.Stop() })
 
 	// 2. Create and start the real GatewayServer
-	gateAddr := "localhost:48021"
+	gateAddr := testutil.GetFreeAddress()
 	gwServerConfig := &GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
@@ -211,7 +211,7 @@ func TestCallFromCluster(t *testing.T) {
 	defer cancel()
 
 	// Create and start a node with cluster
-	nodeAddr := "localhost:48022"
+	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	defer nodeCluster.Stop(ctx)
 
@@ -318,11 +318,11 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 	defer cancel()
 
 	// Create and start two nodes with cluster
-	node1Addr := "localhost:48030"
+	node1Addr := testutil.GetFreeAddress()
 	node1Cluster := mustNewCluster(ctx, t, node1Addr, testPrefix)
 	defer node1Cluster.Stop(ctx)
 
-	node2Addr := "localhost:48031"
+	node2Addr := testutil.GetFreeAddress()
 	node2Cluster := mustNewCluster(ctx, t, node2Addr, testPrefix)
 	defer node2Cluster.Stop(ctx)
 
@@ -360,7 +360,7 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 	t.Cleanup(func() { node2Server.Stop() })
 
 	// Create and start the real GatewayServer
-	gateAddr := "localhost:48032"
+	gateAddr := testutil.GetFreeAddress()
 	gwServerConfig := &GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
