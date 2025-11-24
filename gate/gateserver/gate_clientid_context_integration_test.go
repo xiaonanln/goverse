@@ -2,6 +2,7 @@ package gateserver
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -251,8 +252,6 @@ func TestCallFromCluster(t *testing.T) {
 // TestObjectA is a test object that calls another object (ObjectB)
 type TestObjectA struct {
 	goverseapi.BaseObject
-	mu               sync.Mutex
-	lastReceivedFrom string // Stores the client ID from the last call
 }
 
 func (o *TestObjectA) OnCreated() {
@@ -261,12 +260,8 @@ func (o *TestObjectA) OnCreated() {
 
 // CallObjectB calls TestObjectB and returns the client ID it received
 func (o *TestObjectA) CallObjectB(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-	o.mu.Lock()
-	// Extract and store client ID from context
+	// Extract client ID from context for logging
 	clientID := goverseapi.GetClientID(ctx)
-	o.lastReceivedFrom = clientID
-	o.mu.Unlock()
-
 	o.Logger.Infof("TestObjectA.CallObjectB called with message: %s, clientID: %s", req.GetValue(), clientID)
 
 	// Call TestObjectB and pass along the context (which should contain client_id)
@@ -289,8 +284,6 @@ func (o *TestObjectA) CallObjectB(ctx context.Context, req *wrapperspb.StringVal
 // TestObjectB is a test object that receives calls and returns the client ID from context
 type TestObjectB struct {
 	goverseapi.BaseObject
-	mu               sync.Mutex
-	lastReceivedFrom string // Stores the client ID from the last call
 }
 
 func (o *TestObjectB) OnCreated() {
@@ -299,13 +292,8 @@ func (o *TestObjectB) OnCreated() {
 
 // ReceiveCall is called by ObjectA and should receive the client ID from context
 func (o *TestObjectB) ReceiveCall(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
 	// Extract client ID from context
 	clientID := goverseapi.GetClientID(ctx)
-	o.lastReceivedFrom = clientID
-
 	o.Logger.Infof("TestObjectB.ReceiveCall called with message: %s, clientID: %s", req.GetValue(), clientID)
 
 	// Return the client ID
@@ -510,11 +498,17 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 		var foundDifferentNodes bool
 
 		for i := 0; i < 100 && !foundDifferentNodes; i++ {
-			objectAID = "TestObjectA-diff-" + string(rune('a'+i))
-			objectBID = "TestObjectB-diff-" + string(rune('a'+i))
+			objectAID = fmt.Sprintf("TestObjectA-diff-%d", i)
+			objectBID = fmt.Sprintf("TestObjectB-diff-%d", i)
 
-			node1, _ := node1Cluster.GetCurrentNodeForObject(ctx, objectAID)
-			node2, _ := node1Cluster.GetCurrentNodeForObject(ctx, objectBID)
+			node1, err := node1Cluster.GetCurrentNodeForObject(ctx, objectAID)
+			if err != nil {
+				t.Fatalf("Failed to determine node for ObjectA: %v", err)
+			}
+			node2, err := node1Cluster.GetCurrentNodeForObject(ctx, objectBID)
+			if err != nil {
+				t.Fatalf("Failed to determine node for ObjectB: %v", err)
+			}
 
 			if node1 != node2 {
 				foundDifferentNodes = true
