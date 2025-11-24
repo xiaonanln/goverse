@@ -29,17 +29,19 @@ func AcquireWrite(shardID int) func() {
 **After:**
 ```go
 type ShardLock struct {
-    keyLock *keylock.KeyLock
+    keyLock   *keylock.KeyLock
+    numShards int
 }
 
-func NewShardLock() *ShardLock {
+func NewShardLock(numShards int) *ShardLock {
     return &ShardLock{
-        keyLock: keylock.NewKeyLock(),
+        keyLock:   keylock.NewKeyLock(),
+        numShards: numShards,
     }
 }
 
 func (sl *ShardLock) AcquireRead(objectID string) func() {
-    shardID := sharding.GetShardID(objectID)
+    shardID := sharding.GetShardID(objectID, sl.numShards)
     return sl.keyLock.RLock(shardLockKey(shardID))
 }
 
@@ -62,7 +64,7 @@ type Cluster struct {
 func NewCluster(cfg Config, thisNode *node.Node) (*Cluster, error) {
     c := &Cluster{
         // ... other fields ...
-        shardLock: shardlock.NewShardLock(),
+        shardLock: shardlock.NewShardLock(sharding.NumShards),
         // ... other fields ...
     }
     

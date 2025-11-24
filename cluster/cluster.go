@@ -105,7 +105,7 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 		numShards:                 numShards,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
-		shardLock:                 shardlock.NewShardLockWithShards(numShards),
+		shardLock:                 shardlock.NewShardLock(numShards),
 		gateChannels:              make(map[string]chan proto.Message),
 	}
 	if err := c.init(cfg); err != nil {
@@ -131,7 +131,7 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 		numShards:                 numShards,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
 		nodeConnections:           nodeconnections.New(),
-		shardLock:                 shardlock.NewShardLockWithShards(numShards),
+		shardLock:                 shardlock.NewShardLock(numShards),
 		gateChannels:              make(map[string]chan proto.Message),
 	}
 	if err := c.init(cfg); err != nil {
@@ -174,7 +174,7 @@ func (c *Cluster) init(cfg Config) error {
 // Uses test-appropriate configuration values
 func newClusterForTesting(node *node.Node, name string) *Cluster {
 	// Use test-appropriate durations (faster than production defaults)
-	shardLock := shardlock.NewShardLock()
+	shardLock := shardlock.NewShardLock(sharding.NumShards)
 	return &Cluster{
 		node:                      node,
 		logger:                    logger.NewLogger(name),
