@@ -47,7 +47,7 @@ func TestCallObject_AutoCreateNonPersistent(t *testing.T) {
 	}
 
 	// Call method on non-existent object - should auto-create and call
-	resp, err := node.CallObject(ctx, "TestObjectWithMethod", "auto-create-1", "TestMethod", &emptypb.Empty{})
+	resp, err := node.CallObject(ctx, "TestObjectWithMethod", "auto-create-1", "TestMethod", &emptypb.Empty{}, 0)
 	if err != nil {
 		t.Fatalf("CallObject should succeed and auto-create object, got error: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestCallObject_AutoCreatePersistent_NotInStorage(t *testing.T) {
 
 	// Call method on non-existent object (not in storage)
 	// Should auto-create with FromData(nil)
-	resp, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", "persistent-1", "GetValue", &emptypb.Empty{})
+	resp, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", "persistent-1", "GetValue", &emptypb.Empty{}, 0)
 	if err != nil {
 		t.Fatalf("CallObject should succeed and auto-create object, got error: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestCallObject_AutoCreatePersistent_LoadFromStorage(t *testing.T) {
 
 	// Call method on non-existent object (exists in storage)
 	// Should auto-create and load from storage
-	resp, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", "persistent-2", "GetValue", &emptypb.Empty{})
+	resp, err := node.CallObject(ctx, "TestPersistentObjectWithMethod", "persistent-2", "GetValue", &emptypb.Empty{}, 0)
 	if err != nil {
 		t.Fatalf("CallObject should succeed and auto-create object from storage, got error: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestCallObject_AutoCreate_MultipleCallsIdempotent(t *testing.T) {
 	node.RegisterObjectType((*TestObjectWithMethod)(nil))
 
 	// First call - should auto-create
-	_, err := node.CallObject(ctx, "TestObjectWithMethod", "idempotent-1", "TestMethod", &emptypb.Empty{})
+	_, err := node.CallObject(ctx, "TestObjectWithMethod", "idempotent-1", "TestMethod", &emptypb.Empty{}, 0)
 	if err != nil {
 		t.Fatalf("First CallObject failed: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestCallObject_AutoCreate_MultipleCallsIdempotent(t *testing.T) {
 	node.objectsMu.RUnlock()
 
 	// Second call - should use existing object
-	_, err = node.CallObject(ctx, "TestObjectWithMethod", "idempotent-1", "TestMethod", &emptypb.Empty{})
+	_, err = node.CallObject(ctx, "TestObjectWithMethod", "idempotent-1", "TestMethod", &emptypb.Empty{}, 0)
 	if err != nil {
 		t.Fatalf("Second CallObject failed: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
 
 	// Create object with one type
-	_, err := node.CreateObject(ctx, "TestObjectWithMethod", "type-test-1", -1)
+	_, err := node.CreateObject(ctx, "TestObjectWithMethod", "type-test-1", 0)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestCallObject_AutoCreate_TypeMismatch(t *testing.T) {
 	waitForObjectCreated(t, node, "type-test-1", 5*time.Second)
 
 	// Try to call with different type - should fail with type mismatch
-	_, err = node.CallObject(ctx, "TestPersistentObjectWithMethod", "type-test-1", "GetValue", &emptypb.Empty{})
+	_, err = node.CallObject(ctx, "TestPersistentObjectWithMethod", "type-test-1", "GetValue", &emptypb.Empty{}, 0)
 	if err == nil {
 		t.Fatal("CallObject should fail with type mismatch")
 	}
@@ -328,7 +328,7 @@ func TestCallObject_AutoCreate_UnknownType(t *testing.T) {
 	// Don't register any types
 
 	// Try to call with unknown type - should fail
-	_, err := node.CallObject(ctx, "UnknownType", "unknown-1", "SomeMethod", &emptypb.Empty{})
+	_, err := node.CallObject(ctx, "UnknownType", "unknown-1", "SomeMethod", &emptypb.Empty{}, 0)
 	if err == nil {
 		t.Fatal("CallObject should fail with unknown type")
 	}
@@ -348,7 +348,7 @@ func TestCallObject_AutoCreate_MethodNotFound(t *testing.T) {
 	node.RegisterObjectType((*TestObjectWithMethod)(nil))
 
 	// Call non-existent method - object should be created but method call should fail
-	_, err := node.CallObject(ctx, "TestObjectWithMethod", "method-test-1", "NonExistentMethod", &emptypb.Empty{})
+	_, err := node.CallObject(ctx, "TestObjectWithMethod", "method-test-1", "NonExistentMethod", &emptypb.Empty{}, 0)
 	if err == nil {
 		t.Fatal("CallObject should fail with method not found")
 	}

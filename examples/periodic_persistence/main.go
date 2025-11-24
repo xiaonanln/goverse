@@ -109,7 +109,7 @@ func main() {
 
 	// Start the node (this will start periodic persistence)
 	ctx := context.Background()
-	err := n.Start(ctx, -1)
+	err := n.Start(ctx, 8192)
 	if err != nil {
 		log.Fatalf("Failed to start node: %v", err)
 	}
@@ -121,7 +121,7 @@ func main() {
 	fmt.Println("Creating 3 counter objects...")
 	for i := 1; i <= 3; i++ {
 		id := fmt.Sprintf("counter-%d", i)
-		_, err = n.CreateObject(ctx, "Counter", id, -1)
+		_, err = n.CreateObject(ctx, "Counter", id, 0)
 		if err != nil {
 			log.Fatalf("Failed to create %s: %v", id, err)
 		}

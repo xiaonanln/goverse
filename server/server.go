@@ -240,6 +240,13 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		return nil, err
 	}
 
+	// Compute shard ID
+	numShards := server.config.NumShards
+	if numShards <= 0 {
+		numShards = 8192
+	}
+	shardID := sharding.GetShardID(req.GetId(), numShards)
+
 	// Unmarshal the Any request to concrete proto.Message
 	var requestMsg proto.Message
 	var err error
@@ -250,7 +257,7 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		}
 	}
 
-	resp, err := server.Node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg)
+	resp, err := server.Node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg, shardID)
 	if err != nil {
 		return nil, err
 	}

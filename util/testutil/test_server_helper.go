@@ -117,7 +117,7 @@ func (tsh *TestServerHelper) GetAddress() string {
 
 type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string, shardID int) (string, error)
-	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
+	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message, shardID int) (proto.Message, error)
 	DeleteObject(ctx context.Context, id string, shardID int) error
 }
 
@@ -189,6 +189,9 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
+	// Compute shard ID for testing - use default shard count
+	shardID := sharding.GetShardID(req.GetId(), sharding.NumShards)
+
 	// Unmarshal request
 	var requestMsg proto.Message
 	var err error
@@ -200,7 +203,7 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 	}
 
 	// Call the object on the node
-	resp, err := node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg)
+	resp, err := node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg, shardID)
 	if err != nil {
 		return nil, err
 	}
