@@ -12,6 +12,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
@@ -133,7 +134,13 @@ func (server *Server) Run() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	if err := node.Start(server.ctx); err != nil {
+	// Determine numShards for the node
+	numShards := server.config.NumShards
+	if numShards <= 0 {
+		numShards = 8192 // Default value
+	}
+
+	if err := node.Start(server.ctx, numShards); err != nil {
 		server.logger.Errorf("Failed to start node: %v", err)
 		return err
 	}
@@ -272,7 +279,14 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		return nil, err
 	}
 
-	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId())
+	// Compute shard ID for metrics and inspector
+	numShards := server.config.NumShards
+	if numShards <= 0 {
+		numShards = 8192
+	}
+	shardID := sharding.GetShardID(req.GetId(), numShards)
+
+	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId(), shardID)
 	if err != nil {
 		server.logger.Errorf("CreateObject failed: %v", err)
 		return nil, err
@@ -305,7 +319,14 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 		}
 	}
 
-	err := server.Node.DeleteObject(ctx, req.GetId())
+	// Compute shard ID for metrics
+	numShards := server.config.NumShards
+	if numShards <= 0 {
+		numShards = 8192
+	}
+	shardID := sharding.GetShardID(req.GetId(), numShards)
+
+	err := server.Node.DeleteObject(ctx, req.GetId(), shardID)
 	if err != nil {
 		server.logger.Errorf("DeleteObject failed: %v", err)
 		return nil, err

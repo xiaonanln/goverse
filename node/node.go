@@ -55,7 +55,6 @@ type Node struct {
 	objectsMu             sync.RWMutex
 	keyLock               *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
 	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
-	numShards             int                  // Number of shards in the cluster (set by cluster during initialization)
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
@@ -76,7 +75,6 @@ func NewNode(advertiseAddress string) *Node {
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
-		numShards:           sharding.NumShards, // Default to standard shard count
 		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
@@ -86,7 +84,8 @@ func NewNode(advertiseAddress string) *Node {
 }
 
 // Start starts the node and connects it to the inspector
-func (node *Node) Start(ctx context.Context) error {
+// numShards is optional - if -1, existing objects will not be registered with inspector
+func (node *Node) Start(ctx context.Context, numShards int) error {
 	node.startupTime = time.Now()
 
 	// Start periodic persistence if provider is configured
@@ -94,13 +93,15 @@ func (node *Node) Start(ctx context.Context) error {
 		node.StartPeriodicPersistence(ctx)
 	}
 
-	// Notify inspector manager about existing objects
-	node.objectsMu.RLock()
-	for _, obj := range node.objects {
-		shardID := sharding.GetShardID(obj.Id(), node.numShards)
-		node.inspectorManager.NotifyObjectAdded(obj.Id(), obj.Type(), shardID)
+	// Notify inspector manager about existing objects if numShards is provided
+	if numShards >= 0 {
+		node.objectsMu.RLock()
+		for _, obj := range node.objects {
+			shardID := sharding.GetShardID(obj.Id(), numShards)
+			node.inspectorManager.NotifyObjectAdded(obj.Id(), obj.Type(), shardID)
+		}
+		node.objectsMu.RUnlock()
 	}
-	node.objectsMu.RUnlock()
 
 	// Start the inspector manager
 	return node.inspectorManager.Start(ctx)
@@ -166,12 +167,6 @@ func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
 	node.shardLock = sl
 }
 
-// SetNumShards sets the number of shards for this node
-// This must be called during initialization before the node is used concurrently
-func (node *Node) SetNumShards(numShards int) {
-	node.numShards = numShards
-}
-
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)
@@ -235,7 +230,8 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 
-	err := node.createObject(ctx, typ, id)
+	// Auto-create object without shard ID (not available in this context)
+	err := node.createObject(ctx, typ, id, -1)
 	if err != nil {
 		callErr = fmt.Errorf("failed to auto-create object %s: %w", id, err)
 		return nil, callErr
@@ -317,7 +313,8 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
-func (node *Node) CreateObject(ctx context.Context, typ string, id string) (string, error) {
+// shardID is optional - if -1, metrics and inspector notifications will not include shard info
+func (node *Node) CreateObject(ctx context.Context, typ string, id string, shardID int) (string, error) {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -330,7 +327,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string) (stri
 
 	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
 
-	err := node.createObject(ctx, typ, id)
+	err := node.createObject(ctx, typ, id, shardID)
 	if err != nil {
 		node.logger.Errorf("Failed to create object: %v", err)
 		return "", err
@@ -340,7 +337,8 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string) (stri
 
 // createObject creates a new object of the specified type and ID
 // createObject MUST not return the object because the keylock is not held after return
-func (node *Node) createObject(ctx context.Context, typ string, id string) error {
+// shardID is optional - if -1, metrics and inspector notifications will not include shard info
+func (node *Node) createObject(ctx context.Context, typ string, id string, shardID int) error {
 	// ID must be specified to ensure proper shard mapping
 	if id == "" {
 		return fmt.Errorf("object ID must be specified")
@@ -454,19 +452,16 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
 
-	// Compute shard ID for the object
-	shard := sharding.GetShardID(id, node.numShards)
-
-	// Notify inspector manager about the new object
-	node.inspectorManager.NotifyObjectAdded(id, typ, shard)
-
-	// Record metrics with shard information
-	metrics.RecordObjectCreated(node.advertiseAddress, typ, shard)
+	// Notify inspector manager and record metrics if shard ID was provided
+	if shardID >= 0 {
+		node.inspectorManager.NotifyObjectAdded(id, typ, shardID)
+		metrics.RecordObjectCreated(node.advertiseAddress, typ, shardID)
+	}
 
 	return nil
 }
 
-func (node *Node) destroyObject(id string) {
+func (node *Node) destroyObject(id string, shardID int) {
 	// Get object type before deletion for metrics
 	node.objectsMu.Lock()
 	obj, exists := node.objects[id]
@@ -481,10 +476,9 @@ func (node *Node) destroyObject(id string) {
 	// Notify inspector manager about object removal
 	node.inspectorManager.NotifyObjectRemoved(id)
 
-	// Record metrics if object existed
-	if exists {
-		shard := sharding.GetShardID(id, node.numShards)
-		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shard)
+	// Record metrics if object existed and shard ID was provided
+	if exists && shardID >= 0 {
+		metrics.RecordObjectDeleted(node.advertiseAddress, objectType, shardID)
 	}
 }
 
@@ -493,7 +487,8 @@ func (node *Node) destroyObject(id string) {
 // This operation is idempotent - if the object doesn't exist, no error is returned.
 // If the node is stopped, this operation succeeds since all objects are already cleared.
 // Returns error only if persistence deletion fails.
-func (node *Node) DeleteObject(ctx context.Context, id string) error {
+// shardID is optional - if -1, metrics will not include shard info
+func (node *Node) DeleteObject(ctx context.Context, id string, shardID int) error {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -547,7 +542,7 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		}
 	}
 
-	node.destroyObject(id)
+	node.destroyObject(id, shardID)
 	node.logger.Infof("Deleted object %s from node", id)
 	return nil
 }

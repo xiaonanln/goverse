@@ -20,7 +20,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create a persistent object
-	err := node.createObject(ctx, "TestPersistentObject", "integration-test-obj")
+	err := node.createObject(ctx, "TestPersistentObject", "integration-test-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 	}
 
 	// Step 3: Delete the object using DeleteObject
-	err = node.DeleteObject(ctx, "integration-test-obj")
+	err = node.DeleteObject(ctx, "integration-test-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 	}
 
 	// Step 6: Verify deletion is idempotent - can delete non-existent object without error
-	err = node.DeleteObject(ctx, "integration-test-obj")
+	err = node.DeleteObject(ctx, "integration-test-obj", -1)
 	if err != nil {
 		t.Fatalf("Expected no error when deleting already-deleted object (idempotent), got: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create a non-persistent object
-	err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-integration-obj")
+	err := node.createObject(ctx, "TestNonPersistentObject", "non-persist-integration-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to create object: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 	}
 
 	// Step 2: Delete the object
-	err = node.DeleteObject(ctx, "non-persist-integration-obj")
+	err = node.DeleteObject(ctx, "non-persist-integration-obj", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete non-persistent object: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 	// Create 3 persistent objects
 	for i := 1; i <= 3; i++ {
 		id := objID("persist", i)
-		err := node.createObject(ctx, "TestPersistentObject", id)
+		err := node.createObject(ctx, "TestPersistentObject", id, -1)
 		if err != nil {
 			t.Fatalf("Failed to create persistent object %d: %v", i, err)
 		}
@@ -156,7 +156,7 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 	// Create 2 non-persistent objects
 	for i := 1; i <= 2; i++ {
 		id := objID("non-persist", i)
-		err := node.createObject(ctx, "TestNonPersistentObject", id)
+		err := node.createObject(ctx, "TestNonPersistentObject", id, -1)
 		if err != nil {
 			t.Fatalf("Failed to create non-persistent object %d: %v", i, err)
 		}
@@ -183,13 +183,13 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 	}
 
 	// Delete one persistent object
-	err = node.DeleteObject(ctx, "persist-2")
+	err = node.DeleteObject(ctx, "persist-2", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete persistent object: %v", err)
 	}
 
 	// Delete one non-persistent object
-	err = node.DeleteObject(ctx, "non-persist-1")
+	err = node.DeleteObject(ctx, "non-persist-1", -1)
 	if err != nil {
 		t.Fatalf("Failed to delete non-persistent object: %v", err)
 	}

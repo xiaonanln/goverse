@@ -119,7 +119,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 
 	// Create first cluster and node
 	node1 := node.NewNode("localhost:50021")
-	err := node1.Start(ctx)
+	err := node1.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestClusterShardMappingAutoUpdate(t *testing.T) {
 
 	// Now add a second node
 	node2 := node.NewNode("localhost:50022")
-	err = node2.Start(ctx)
+	err = node2.Start(ctx, 8192)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}

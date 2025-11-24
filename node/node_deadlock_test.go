@@ -26,7 +26,7 @@ func (obj *TestObjectMethodCallingCreateReentrant) MethodThatCreatesObject(ctx c
 	n := testNodeRef
 	testNodeMu.Unlock()
 
-	_, err := n.CreateObject(ctx, "TestPersistentObject", "child-object-123")
+	_, err := n.CreateObject(ctx, "TestPersistentObject", "child-object-123", -1)
 	if err != nil {
 		return nil, err
 	}
@@ -51,14 +51,14 @@ func TestCallObject_MethodCallingCreateObject_NoDeadlock(t *testing.T) {
 	testNodeMu.Unlock()
 
 	ctx := context.Background()
-	err := n.Start(ctx)
+	err := n.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 	defer n.Stop(ctx)
 
 	// Create the parent object
-	err = n.createObject(ctx, "TestObjectMethodCallingCreateReentrant", "parent-object")
+	err = n.createObject(ctx, "TestObjectMethodCallingCreateReentrant", "parent-object", -1)
 	if err != nil {
 		t.Fatalf("Failed to create parent object: %v", err)
 	}
@@ -124,14 +124,14 @@ func TestCallObject_MethodCallingCallObject_NoDeadlock(t *testing.T) {
 	testNodeMu.Unlock()
 
 	ctx := context.Background()
-	err := n.Start(ctx)
+	err := n.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
 	defer n.Stop(ctx)
 
 	// Create the source object
-	err = n.createObject(ctx, "TestObjectMethodCallingCallReentrant", "source-object")
+	err = n.createObject(ctx, "TestObjectMethodCallingCallReentrant", "source-object", -1)
 	if err != nil {
 		t.Fatalf("Failed to create source object: %v", err)
 	}
@@ -172,7 +172,7 @@ func (obj *TestObjectOnCreatedCallingCreate) OnCreated() {
 	n := testNodeRef
 	testNodeMu.Unlock()
 
-	_, err := n.CreateObject(context.Background(), "TestPersistentObject", "oncreated-child-123")
+	_, err := n.CreateObject(context.Background(), "TestPersistentObject", "oncreated-child-123", -1)
 	if err != nil {
 		// Log error but don't fail - we're just checking for deadlock
 		println("OnCreated CreateObject error:", err.Error())
@@ -192,7 +192,7 @@ func TestOnCreated_CallingCreateObject_NoDeadlock(t *testing.T) {
 	testNodeMu.Unlock()
 
 	ctx := context.Background()
-	err := n.Start(ctx)
+	err := n.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestOnCreated_CallingCreateObject_NoDeadlock(t *testing.T) {
 
 	go func() {
 		// Create an object whose OnCreated calls CreateObject
-		_, createErr = n.CreateObject(ctx, "TestObjectOnCreatedCallingCreate", "parent-oncreated")
+		_, createErr = n.CreateObject(ctx, "TestObjectOnCreatedCallingCreate", "parent-oncreated", -1)
 		done <- true
 	}()
 
@@ -256,7 +256,7 @@ func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
 	n.RegisterObjectType((*TestObjectWithOnCreatedFlag)(nil))
 
 	ctx := context.Background()
-	err := n.Start(ctx)
+	err := n.Start(ctx, -1)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestOnCreated_CalledBeforeObjectVisible(t *testing.T) {
 	// Start creating the object in one goroutine
 	createDone := make(chan bool, 1)
 	go func() {
-		_, err := n.CreateObject(ctx, "TestObjectWithOnCreatedFlag", "test-visibility")
+		_, err := n.CreateObject(ctx, "TestObjectWithOnCreatedFlag", "test-visibility", -1)
 		if err != nil {
 			t.Errorf("CreateObject failed: %v", err)
 		}

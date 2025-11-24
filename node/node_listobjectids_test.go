@@ -56,17 +56,17 @@ func TestListObjectIDs_WithObjects(t *testing.T) {
 	objID2 := "list-obj-2"
 	objID3 := "list-obj-3"
 
-	_, err := n.CreateObject(ctx, "TestPersistentObject", objID1)
+	_, err := n.CreateObject(ctx, "TestPersistentObject", objID1, -1)
 	if err != nil {
 		t.Fatalf("Failed to create object 1: %v", err)
 	}
 
-	_, err = n.CreateObject(ctx, "TestPersistentObject", objID2)
+	_, err = n.CreateObject(ctx, "TestPersistentObject", objID2, -1)
 	if err != nil {
 		t.Fatalf("Failed to create object 2: %v", err)
 	}
 
-	_, err = n.CreateObject(ctx, "TestPersistentObject", objID3)
+	_, err = n.CreateObject(ctx, "TestPersistentObject", objID3, -1)
 	if err != nil {
 		t.Fatalf("Failed to create object 3: %v", err)
 	}

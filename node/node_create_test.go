@@ -45,7 +45,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 	ctx := context.Background()
 
 	// Test 1: Empty ID should fail
-	_, err := node.CreateObject(ctx, "TestObject", "")
+	_, err := node.CreateObject(ctx, "TestObject", "", -1)
 	if err == nil {
 		t.Fatal("Expected error when creating object with empty ID, got nil")
 	}
@@ -55,7 +55,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 	}
 
 	// Test 2: Non-empty ID should succeed
-	id, err := node.CreateObject(ctx, "TestObject", "test-obj-123")
+	id, err := node.CreateObject(ctx, "TestObject", "test-obj-123", -1)
 	if err != nil {
 		t.Fatalf("Expected success when creating object with valid ID, got error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 	ctx := context.Background()
 
 	// Create first object
-	id1, err := node.CreateObject(ctx, "TestObject", "duplicate-id")
+	id1, err := node.CreateObject(ctx, "TestObject", "duplicate-id", -1)
 	if err != nil {
 		t.Fatalf("Failed to create first object: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestCreateObject_DuplicateID(t *testing.T) {
 	}
 
 	// Try to create second object with same ID and type - should succeed and return existing object
-	id2, err := node.CreateObject(ctx, "TestObject", "duplicate-id")
+	id2, err := node.CreateObject(ctx, "TestObject", "duplicate-id", -1)
 	if err != nil {
 		t.Fatalf("Expected success when creating object with duplicate ID and same type, got error: %v", err)
 	}
@@ -138,13 +138,13 @@ func TestCreateObject_DuplicateID_DifferentType(t *testing.T) {
 	ctx := context.Background()
 
 	// Create object with first type
-	_, err := node.CreateObject(ctx, "TestObject", "same-id")
+	_, err := node.CreateObject(ctx, "TestObject", "same-id", -1)
 	if err != nil {
 		t.Fatalf("Failed to create first object: %v", err)
 	}
 
 	// Try to create object with same ID but different type - should fail
-	_, err = node.CreateObject(ctx, "TestObject2", "same-id")
+	_, err = node.CreateObject(ctx, "TestObject2", "same-id", -1)
 	if err == nil {
 		t.Fatal("Expected error when creating object with same ID but different type, got nil")
 	}
@@ -162,7 +162,7 @@ func TestCreateObject_UnknownType(t *testing.T) {
 	ctx := context.Background()
 
 	// Try to create object with unregistered type
-	_, err := node.CreateObject(ctx, "UnknownType", "test-obj-456")
+	_, err := node.CreateObject(ctx, "UnknownType", "test-obj-456", -1)
 	if err == nil {
 		t.Fatal("Expected error when creating object with unknown type, got nil")
 	}
@@ -195,7 +195,7 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 	// Launch concurrent CreateObject calls
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			id, err := node.CreateObject(ctx, "TestConcurrencyObject", objectID)
+			id, err := node.CreateObject(ctx, "TestConcurrencyObject", objectID, -1)
 			results <- struct {
 				id  string
 				err error
@@ -290,7 +290,7 @@ func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
 		objectID := strings.Repeat("a", i+1) // Different length IDs: "a", "aa", "aaa", etc.
 		createdIDs = append(createdIDs, objectID)
 		go func(id string) {
-			returnedID, err := node.CreateObject(ctx, "TestConcurrencyObject", id)
+			returnedID, err := node.CreateObject(ctx, "TestConcurrencyObject", id, -1)
 			results <- struct {
 				id  string
 				err error
