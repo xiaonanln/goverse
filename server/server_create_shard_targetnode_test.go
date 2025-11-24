@@ -1,6 +1,7 @@
 package server
 
 import (
+"github.com/xiaonanln/goverse/util/testutil"
 	"strings"
 	"testing"
 
@@ -24,9 +25,9 @@ func TestServerCreateObject_ShardIDComputation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			shardID := sharding.GetShardID(tc.objectID, sharding.NumShards)
-			if shardID < 0 || shardID >= sharding.NumShards {
-				t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", tc.objectID, shardID, sharding.NumShards)
+			shardID := sharding.GetShardID(tc.objectID, testutil.TestNumShards)
+			if shardID < 0 || shardID >= testutil.TestNumShards {
+				t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", tc.objectID, shardID, testutil.TestNumShards)
 			}
 			t.Logf("Object ID %s maps to shard %d", tc.objectID, shardID)
 		})

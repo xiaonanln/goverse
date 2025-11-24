@@ -5,7 +5,10 @@ import (
 	"testing"
 )
 
+const testNumShards = 64 // Use smaller shard count for tests
+
 func TestNumShards(t *testing.T) {
+	// NumShards constant is still 8192 for production use
 	if NumShards != 8192 {
 		t.Fatalf("NumShards should be 8192, got %d", NumShards)
 	}
@@ -14,18 +17,18 @@ func TestNumShards(t *testing.T) {
 func TestGetShardID_BasicFunctionality(t *testing.T) {
 	// Test that GetShardID returns a valid shard ID
 	objectID := "exampleObjectID"
-	shardID := GetShardID(objectID, NumShards)
+	shardID := GetShardID(objectID, testNumShards)
 
-	if shardID < 0 || shardID >= NumShards {
-		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
+	if shardID < 0 || shardID >= testNumShards {
+		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, testNumShards)
 	}
 }
 
 func TestGetShardID_Consistency(t *testing.T) {
 	// Test that the same object ID always returns the same shard ID
 	objectID := "testObject123"
-	shardID1 := GetShardID(objectID, NumShards)
-	shardID2 := GetShardID(objectID, NumShards)
+	shardID1 := GetShardID(objectID, testNumShards)
+	shardID2 := GetShardID(objectID, testNumShards)
 
 	if shardID1 != shardID2 {
 		t.Fatalf("GetShardID(%s) should be consistent: got %d and %d", objectID, shardID1, shardID2)
@@ -37,25 +40,25 @@ func TestGetShardID_DifferentInputs(t *testing.T) {
 	id1 := "object1"
 	id2 := "object2"
 
-	shardID1 := GetShardID(id1, NumShards)
-	shardID2 := GetShardID(id2, NumShards)
+	shardID1 := GetShardID(id1, testNumShards)
+	shardID2 := GetShardID(id2, testNumShards)
 
 	// They should be different (though theoretically they could collide)
 	// We're just checking that they're both valid
-	if shardID1 < 0 || shardID1 >= NumShards {
-		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", id1, shardID1, NumShards)
+	if shardID1 < 0 || shardID1 >= testNumShards {
+		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", id1, shardID1, testNumShards)
 	}
-	if shardID2 < 0 || shardID2 >= NumShards {
-		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", id2, shardID2, NumShards)
+	if shardID2 < 0 || shardID2 >= testNumShards {
+		t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", id2, shardID2, testNumShards)
 	}
 }
 
 func TestGetShardID_EmptyString(t *testing.T) {
 	// Test with empty string
-	shardID := GetShardID("", NumShards)
+	shardID := GetShardID("", testNumShards)
 
-	if shardID < 0 || shardID >= NumShards {
-		t.Fatalf("GetShardID(\"\") = %d, want value in range [0, %d)", shardID, NumShards)
+	if shardID < 0 || shardID >= testNumShards {
+		t.Fatalf("GetShardID(\"\") = %d, want value in range [0, %d)", shardID, testNumShards)
 	}
 }
 
@@ -72,9 +75,9 @@ func TestGetShardID_SpecialCharacters(t *testing.T) {
 	}
 
 	for _, objectID := range testCases {
-		shardID := GetShardID(objectID, NumShards)
-		if shardID < 0 || shardID >= NumShards {
-			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
+		shardID := GetShardID(objectID, testNumShards)
+		if shardID < 0 || shardID >= testNumShards {
+			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, testNumShards)
 		}
 	}
 }
@@ -87,10 +90,10 @@ func TestGetShardID_Distribution(t *testing.T) {
 
 	for i := 0; i < numTests; i++ {
 		objectID := fmt.Sprintf("object-%d", i)
-		shardID := GetShardID(objectID, NumShards)
+		shardID := GetShardID(objectID, testNumShards)
 
-		if shardID < 0 || shardID >= NumShards {
-			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, NumShards)
+		if shardID < 0 || shardID >= testNumShards {
+			t.Fatalf("GetShardID(%s) = %d, want value in range [0, %d)", objectID, shardID, testNumShards)
 		}
 
 		shardCounts[shardID]++
@@ -101,7 +104,7 @@ func TestGetShardID_Distribution(t *testing.T) {
 		t.Fatalf("Expected distribution across multiple shards, got only %d shard(s)", len(shardCounts))
 	}
 
-	// With 10000 objects and 8192 shards, we expect most shards to have 0-2 objects
+	// With 10000 objects and 64 shards, we expect most shards to have multiple objects
 	// Just verify that no single shard has all objects
 	for shardID, count := range shardCounts {
 		if count == numTests {
@@ -128,7 +131,7 @@ func TestGetShardID_KnownValues(t *testing.T) {
 		// Call multiple times to ensure consistency
 		results := make(map[int]bool)
 		for i := 0; i < 10; i++ {
-			shardID := GetShardID(tc.objectID, NumShards)
+			shardID := GetShardID(tc.objectID, testNumShards)
 			results[shardID] = true
 		}
 
@@ -144,7 +147,7 @@ func BenchmarkGetShardID(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		GetShardID(objectID, NumShards)
+		GetShardID(objectID, testNumShards)
 	}
 }
 
@@ -158,7 +161,7 @@ func BenchmarkGetShardID_VaryingLength(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				GetShardID(tc, NumShards)
+				GetShardID(tc, testNumShards)
 			}
 		})
 	}

@@ -1,20 +1,21 @@
 package node
 
+
 import (
 	"context"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+
 // TestStop_RaceWithCreateObject tests that CreateObject operations in flight when Stop is called
 // complete safely and that new CreateObject calls after Stop fail gracefully
 func TestStop_RaceWithCreateObject(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -98,7 +99,7 @@ func TestStop_RaceWithCreateObject(t *testing.T) {
 // TestStop_RaceWithCallObject tests that CallObject operations in flight when Stop is called
 // complete safely and that new CallObject calls after Stop fail gracefully
 func TestStop_RaceWithCallObject(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObjectWithMethod)(nil))
@@ -178,7 +179,7 @@ func TestStop_RaceWithCallObject(t *testing.T) {
 // TestStop_RaceWithDeleteObject tests that DeleteObject operations in flight when Stop is called
 // complete safely and that new DeleteObject calls after Stop fail gracefully
 func TestStop_RaceWithDeleteObject(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -267,7 +268,7 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 // TestStop_RaceWithSaveAllObjects tests that SaveAllObjects operations in flight when Stop is called
 // complete safely and that new SaveAllObjects calls after Stop fail gracefully
 func TestStop_RaceWithSaveAllObjects(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -359,7 +360,7 @@ func TestStop_RaceWithSaveAllObjects(t *testing.T) {
 
 // TestStop_NoNewOperationsAfterStop tests that no operations can start after Stop completes
 func TestStop_NoNewOperationsAfterStop(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -414,7 +415,7 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 
 // TestStop_ObjectsPersistedBeforeClearing tests that objects are saved before being cleared
 func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -463,7 +464,7 @@ func TestStop_ObjectsPersistedBeforeClearing(t *testing.T) {
 
 // TestStop_MultipleStopCalls tests that calling Stop multiple times is safe
 func TestStop_MultipleStopCalls(t *testing.T) {
-	node := NewNode("localhost:47000", sharding.NumShards)
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))

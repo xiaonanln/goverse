@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -17,7 +16,7 @@ func TestServerDeleteObject_Success(t *testing.T) {
 	nodeAddr := testutil.GetFreeAddress()
 
 	// Create a node directly without using cluster
-	n := node.NewNode(nodeAddr, sharding.NumShards)
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
 	n.RegisterObjectType((*TestObject)(nil))
 
 	// Create a server without cluster (standalone mode for testing)
@@ -68,7 +67,7 @@ func TestServerDeleteObject_RequiresID(t *testing.T) {
 	nodeAddr := testutil.GetFreeAddress()
 
 	// Create a node
-	n := node.NewNode(nodeAddr, sharding.NumShards)
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
 
 	// Create a server
 	config := &ServerConfig{
@@ -107,7 +106,7 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 	nodeAddr := testutil.GetFreeAddress()
 
 	// Create a node
-	n := node.NewNode(nodeAddr, sharding.NumShards)
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
 	n.RegisterObjectType((*TestObject)(nil))
 
 	// Create a server
