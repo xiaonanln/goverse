@@ -105,6 +105,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
@@ -240,6 +241,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
