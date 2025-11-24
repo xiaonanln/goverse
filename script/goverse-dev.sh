@@ -12,6 +12,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Docker image name
 IMAGE_NAME="xiaonanln/goverse:dev"
 
+# Log file
+LOG_FILE="goverse-dev.log"
+
 # Check if Docker is available
 if ! command -v docker >/dev/null 2>&1; then
     echo "Error: docker is not installed or not in PATH" >&2
@@ -51,16 +54,18 @@ fi
 # Use --rm to automatically remove the container when it exits
 if [ -t 0 ]; then
     # Interactive mode (stdin is a terminal)
-    exec docker run -it --rm \
+    docker run -it --rm \
         -v "$PROJECT_ROOT:/app" \
         -w /app \
         "$IMAGE_NAME" \
-        "$@"
+        "$@" 2>&1 | tee -a "$LOG_FILE"
+    exit ${PIPESTATUS[0]}
 else
     # Non-interactive mode (stdin is not a terminal, e.g., piped input)
-    exec docker run --rm \
+    docker run --rm \
         -v "$PROJECT_ROOT:/app" \
         -w /app \
         "$IMAGE_NAME" \
-        "$@"
+        "$@" 2>&1 | tee -a "$LOG_FILE"
+    exit ${PIPESTATUS[0]}
 fi
