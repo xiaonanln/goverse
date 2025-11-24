@@ -480,14 +480,11 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
 	}
 
-	// Compute shard ID
-	shardID := sharding.GetShardID(id, c.numShards)
-
 	// Check if the object is on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		// Call locally on node
 		c.logger.Infof("%s - Calling object %s.%s locally (type: %s)", c, id, method, objType)
-		return c.node.CallObject(ctx, objType, id, method, request, shardID)
+		return c.node.CallObject(ctx, objType, id, method, request)
 	}
 
 	// Route to the appropriate node (both node and gate clusters can route)
@@ -586,18 +583,20 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 		return "", fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
 
-	// Compute shard ID for metrics and inspector
-	shardID := sharding.GetShardID(objID, c.numShards)
-
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
-			_, err := c.node.CreateObject(ctx, objType, objID, shardID)
+			_, err := c.node.CreateObject(ctx, objType, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed: %v", c, objID, err)
 			} else {
 				c.logger.Infof("%s - Async CreateObject %s completed successfully", c, objID)
+				// Record metrics on success if numShards is configured
+				if c.numShards > 0 {
+					shardID := sharding.GetShardID(objID, c.numShards)
+					metrics.RecordObjectCreated(c.getAdvertiseAddr(), objType, shardID)
+				}
 			}
 		}()
 		return objID, nil
@@ -660,19 +659,17 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	if err != nil {
 		return fmt.Errorf("cannot determine node for object %s: %w", objID, err)
 	}
-	// Compute shard ID for metrics
-	shardID := sharding.GetShardID(objID, c.numShards)
-
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
-			err := c.node.DeleteObject(ctx, objID, shardID)
+			err := c.node.DeleteObject(ctx, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
 			} else {
 				c.logger.Infof("%s - Async DeleteObject %s completed successfully", c, objID)
+				// Metrics are not recorded here since we don't track object types
 			}
 		}()
 		return nil
@@ -1138,11 +1135,12 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 
-		err := c.node.DeleteObject(ctx, objectID, shardID)
+		err := c.node.DeleteObject(ctx, objectID)
 		if err != nil {
 			c.logger.Errorf("%s - Failed to delete object %s: %v", c, objectID, err)
 		} else {
 			c.logger.Infof("%s - Successfully removed object %s", c, objectID)
+			// Metrics are not recorded for evicted objects since we don't track object types here
 		}
 	}
 }

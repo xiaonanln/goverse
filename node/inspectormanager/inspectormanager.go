@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -109,10 +110,12 @@ func (im *InspectorManager) Stop() error {
 }
 
 // NotifyObjectAdded notifies the Inspector that a new object has been created.
-// The shardID should be computed by the caller using the cluster's configured numShards.
-func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shardID int) {
+func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
+
+	// Compute shard ID for inspector display using default shard count
+	shardID := sharding.GetShardID(objectID, sharding.NumShards)
 
 	// Store object info for re-registration on reconnect
 	im.objects[objectID] = &inspector_pb.Object{

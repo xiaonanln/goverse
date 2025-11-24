@@ -71,7 +71,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 
 	// Create an object with a fixed node address
 	objID := "localhost:7000/echo-obj"
-	_, err := testNode.CreateObject(ctx, "echoObject", objID, 0)
+	_, err := testNode.CreateObject(ctx, "echoObject", objID)
 	if err != nil {
 		t.Fatalf("Failed to create test object: %v", err)
 	}

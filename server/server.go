@@ -15,6 +15,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/proto"
@@ -134,13 +135,7 @@ func (server *Server) Run() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Determine numShards for the node
-	numShards := server.config.NumShards
-	if numShards <= 0 {
-		numShards = 8192 // Default value
-	}
-
-	if err := node.Start(server.ctx, numShards); err != nil {
+	if err := node.Start(server.ctx); err != nil {
 		server.logger.Errorf("Failed to start node: %v", err)
 		return err
 	}
@@ -240,13 +235,6 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		return nil, err
 	}
 
-	// Compute shard ID
-	numShards := server.config.NumShards
-	if numShards <= 0 {
-		numShards = 8192
-	}
-	shardID := sharding.GetShardID(req.GetId(), numShards)
-
 	// Unmarshal the Any request to concrete proto.Message
 	var requestMsg proto.Message
 	var err error
@@ -257,7 +245,7 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		}
 	}
 
-	resp, err := server.Node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg, shardID)
+	resp, err := server.Node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -286,18 +274,20 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		return nil, err
 	}
 
-	// Compute shard ID for metrics and inspector
+	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId())
+	if err != nil {
+		server.logger.Errorf("CreateObject failed: %v", err)
+		return nil, err
+	}
+
+	// Record metrics on success
 	numShards := server.config.NumShards
 	if numShards <= 0 {
 		numShards = 8192
 	}
 	shardID := sharding.GetShardID(req.GetId(), numShards)
+	metrics.RecordObjectCreated(server.Node.GetAdvertiseAddress(), req.GetType(), shardID)
 
-	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId(), shardID)
-	if err != nil {
-		server.logger.Errorf("CreateObject failed: %v", err)
-		return nil, err
-	}
 	response := &goverse_pb.CreateObjectResponse{
 		Id: id,
 	}
@@ -326,18 +316,14 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 		}
 	}
 
-	// Compute shard ID for metrics
-	numShards := server.config.NumShards
-	if numShards <= 0 {
-		numShards = 8192
-	}
-	shardID := sharding.GetShardID(req.GetId(), numShards)
-
-	err := server.Node.DeleteObject(ctx, req.GetId(), shardID)
+	err := server.Node.DeleteObject(ctx, req.GetId())
 	if err != nil {
 		server.logger.Errorf("DeleteObject failed: %v", err)
 		return nil, err
 	}
+
+	// Record metrics on success (we don't have object type here, so skip metrics)
+
 	response := &goverse_pb.DeleteObjectResponse{}
 	return response, nil
 }

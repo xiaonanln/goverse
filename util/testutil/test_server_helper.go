@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 )
@@ -116,9 +115,9 @@ func (tsh *TestServerHelper) GetAddress() string {
 }
 
 type nodeInterface interface {
-	CreateObject(ctx context.Context, typ string, id string, shardID int) (string, error)
-	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message, shardID int) (proto.Message, error)
-	DeleteObject(ctx context.Context, id string, shardID int) error
+	CreateObject(ctx context.Context, typ string, id string) (string, error)
+	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
+	DeleteObject(ctx context.Context, id string) error
 }
 
 type clusterInterface interface {
@@ -189,9 +188,6 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
-	// Compute shard ID for testing - use default shard count
-	shardID := sharding.GetShardID(req.GetId(), sharding.NumShards)
-
 	// Unmarshal request
 	var requestMsg proto.Message
 	var err error
@@ -203,7 +199,7 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 	}
 
 	// Call the object on the node
-	resp, err := node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg, shardID)
+	resp, err := node.CallObject(ctx, req.GetType(), req.GetId(), req.GetMethod(), requestMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -231,11 +227,8 @@ func (m *MockGoverseServer) CreateObject(ctx context.Context, req *goverse_pb.Cr
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
-	// Compute shard ID for testing - use default shard count
-	shardID := sharding.GetShardID(req.Id, sharding.NumShards)
-
 	// Call CreateObject on the actual node
-	createdID, err := node.CreateObject(ctx, req.Type, req.Id, shardID)
+	createdID, err := node.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create object: %v", err)
 	}
@@ -255,11 +248,8 @@ func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.De
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
-	// Compute shard ID for testing - use default shard count
-	shardID := sharding.GetShardID(req.Id, sharding.NumShards)
-
 	// Call DeleteObject on the actual node
-	err := node.DeleteObject(ctx, req.Id, shardID)
+	err := node.DeleteObject(ctx, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete object: %v", err)
 	}

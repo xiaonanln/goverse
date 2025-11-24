@@ -130,7 +130,7 @@ func TestClusterEtcdLeaveDetection(t *testing.T) {
 	// Create cluster2 (we'll stop it manually later to test leave detection)
 	// For this test, we need manual control over cluster2's lifecycle
 	node2 := node.NewNode("localhost:47006")
-	err := node2.Start(ctx, 8192)
+	err := node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		nodes[i] = node.NewNode(addresses[i])
-		err := nodes[i].Start(ctx, 8192)
+		err := nodes[i].Start(ctx)
 		if err != nil {
 			t.Fatalf("Failed to start node%d: %v", i+1, err)
 		}
@@ -260,13 +260,13 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	node2 := node.NewNode("localhost:47200") // Smaller address - will be leader
 
 	// Start both nodes
-	err := node1.Start(ctx, 8192)
+	err := node1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node1: %v", err)
 	}
 	defer node1.Stop(ctx)
 
-	err = node2.Start(ctx, 8192)
+	err = node2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node2: %v", err)
 	}
