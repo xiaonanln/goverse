@@ -14,6 +14,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"google.golang.org/grpc"
@@ -239,6 +240,11 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 	// Validate that this object should be on this node
 	if err := server.validateObjectShardOwnership(ctx, req.GetId()); err != nil {
 		return nil, err
+	}
+
+	// Inject client_id into context if present in the request
+	if req.ClientId != "" {
+		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
 	// Unmarshal the Any request to concrete proto.Message

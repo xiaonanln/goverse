@@ -515,7 +515,7 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	}
 
 	if shardID < 0 || shardID >= cm.numShards {
-		cm.logger.Errorf("Invalid shard ID %d from key %s", shardID, key)
+		cm.logger.Debugf("Invalid shard ID %d from key %s", shardID, key)
 		return
 	}
 
@@ -629,7 +629,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 			}
 
 			if shardID < 0 || shardID >= cm.numShards {
-				cm.logger.Warnf("Invalid shard ID %d from key %s", shardID, key)
+				cm.logger.Debugf("Invalid shard ID %d from key %s", shardID, key)
 				continue
 			}
 

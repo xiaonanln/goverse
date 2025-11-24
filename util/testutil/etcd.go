@@ -70,6 +70,8 @@ func PrepareEtcdPrefix(t *testing.T, etcdAddress string) string {
 		t.Fatalf("Warning: failed to clean etcd prefix before test: %v", err)
 	}
 
+	t.Logf("Etcd prefix %s cleaned for test isolation", prefix)
+
 	// Register cleanup to remove everything under the prefix after the test
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), cleanupTime)

@@ -35,6 +35,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 3 * time.Second,
 		ShardMappingCheckInterval:     1 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 
 	// Create cluster with etcd
@@ -104,6 +105,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {
@@ -239,6 +241,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
+		NumShards:        testutil.TestNumShards,
 	}
 	gwServer, err := NewGateServer(gwServerConfig)
 	if err != nil {

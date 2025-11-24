@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 )
 
@@ -186,6 +187,11 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 
 	if node == nil {
 		return nil, fmt.Errorf("no node assigned to mock server")
+	}
+
+	// Inject client_id into context if present in the request
+	if req.ClientId != "" {
+		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
 	// Unmarshal request

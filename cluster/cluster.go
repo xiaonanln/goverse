@@ -15,6 +15,7 @@ import (
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -199,6 +200,7 @@ func newClusterWithEtcdForTesting(name string, node *node.Node, etcdAddress stri
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 3 * time.Second,
 		ShardMappingCheckInterval:     1 * time.Second,
+		NumShards:                     testutil.TestNumShards,
 	}
 
 	c, err := NewClusterWithNode(cfg, node)
@@ -507,11 +509,13 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Call CallObject on the remote node
+	// Extract client_id from context if present and pass it in the request
 	req := &goverse_pb.CallObjectRequest{
-		Id:      id,
-		Method:  method,
-		Type:    objType,
-		Request: requestAny,
+		Id:       id,
+		Method:   method,
+		Type:     objType,
+		Request:  requestAny,
+		ClientId: callcontext.ClientID(ctx),
 	}
 
 	resp, err := client.CallObject(ctx, req)
@@ -554,11 +558,13 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	}
 
 	// Call CallObject on the remote node - pass Any directly (optimization: no marshal needed)
+	// Extract client_id from context if present and pass it in the request
 	req := &goverse_pb.CallObjectRequest{
-		Id:      id,
-		Method:  method,
-		Type:    objType,
-		Request: request,
+		Id:       id,
+		Method:   method,
+		Type:     objType,
+		Request:  request,
+		ClientId: callcontext.ClientID(ctx),
 	}
 
 	resp, err := client.CallObject(ctx, req)
