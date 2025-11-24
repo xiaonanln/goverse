@@ -222,7 +222,7 @@ func (s *GateServer) Stop() error {
 }
 
 // Register implements the Register RPC
-func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
+func (s *GateServer) Register(req *gate_pb.Empty, stream gate_pb.GateService_RegisterServer) error {
 	ctx := stream.Context()
 	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
