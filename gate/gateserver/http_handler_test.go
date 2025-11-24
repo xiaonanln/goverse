@@ -113,18 +113,18 @@ func TestHandleCallObject_PathParsing(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 
-		// Read body once
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
+			// Read body once
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("Failed to read response body: %v", err)
+			}
 
-		if resp.StatusCode != tt.expectedStatus {
-			t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
-		}
+			if resp.StatusCode != tt.expectedStatus {
+				t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
+			}
 
-		var errResp HTTPErrorResponse
-		if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
+			var errResp HTTPErrorResponse
+			if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
 				t.Fatalf("Failed to decode error response: %v", err)
 			}
 
@@ -179,18 +179,18 @@ func TestHandleCreateObject_PathParsing(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 
-		// Read body once
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
+			// Read body once
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("Failed to read response body: %v", err)
+			}
 
-		if resp.StatusCode != tt.expectedStatus {
-			t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
-		}
+			if resp.StatusCode != tt.expectedStatus {
+				t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
+			}
 
-		var errResp HTTPErrorResponse
-		if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
+			var errResp HTTPErrorResponse
+			if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
 				t.Fatalf("Failed to decode error response: %v", err)
 			}
 
@@ -238,18 +238,18 @@ func TestHandleDeleteObject_PathParsing(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 
-		// Read body once
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
+			// Read body once
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("Failed to read response body: %v", err)
+			}
 
-		if resp.StatusCode != tt.expectedStatus {
-			t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
-		}
+			if resp.StatusCode != tt.expectedStatus {
+				t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
+			}
 
-		var errResp HTTPErrorResponse
-		if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
+			var errResp HTTPErrorResponse
+			if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
 				t.Fatalf("Failed to decode error response: %v", err)
 			}
 
