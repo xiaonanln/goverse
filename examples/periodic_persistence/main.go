@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/proto"
@@ -95,7 +96,7 @@ func main() {
 	fmt.Println("=== Goverse Periodic Persistence Example ===")
 
 	// Create a node
-	n := node.NewNode("localhost:47000")
+	n := node.NewNode("localhost:47000", sharding.NumShards)
 
 	// Create persistence provider
 	provider := NewMockPersistenceProvider()
