@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -69,8 +68,8 @@ func TestShardMetricsIntegration(t *testing.T) {
 
 	// Verify total shards across all nodes
 	totalShards := int(metric1) + int(metric2)
-	if totalShards != sharding.NumShards {
-		t.Fatalf("Total shards should be %d, got %d", sharding.NumShards, totalShards)
+	if totalShards != testutil.TestNumShards {
+		t.Fatalf("Total shards should be %d, got %d", testutil.TestNumShards, totalShards)
 	}
 
 	t.Logf("Shard metrics verified: node1=%f, node2=%f, total=%d", metric1, metric2, totalShards)

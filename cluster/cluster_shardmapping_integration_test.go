@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
@@ -88,7 +87,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 
 	// Test GetNodeForShard
 	t.Run("GetNodeForShard", func(t *testing.T) {
-		testCases := []int{0, 1, 100, 1000, sharding.NumShards - 1}
+		testCases := []int{0, 1, testutil.TestNumShards / 2, testutil.TestNumShards - 1}
 
 		for _, shardID := range testCases {
 			// Both clusters should agree on which node owns the shard
@@ -110,7 +109,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 		}
 
 		// Test invalid shard IDs
-		invalidCases := []int{-1, sharding.NumShards, sharding.NumShards + 1}
+		invalidCases := []int{-1, testutil.TestNumShards, testutil.TestNumShards + 1}
 		for _, shardID := range invalidCases {
 			_, err := cluster1.GetNodeForShard(ctx, shardID)
 			if err == nil {

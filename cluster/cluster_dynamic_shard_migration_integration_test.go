@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/consensusmanager"
-	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
@@ -368,7 +367,7 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	updateShards := make(map[int]consensusmanager.ShardInfo)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for shardID := 0; shardID < sharding.NumShards; shardID++ {
+	for shardID := 0; shardID < testutil.TestNumShards; shardID++ {
 		// Pick a random node
 		randomNode := nodeAddresses[rng.Intn(len(nodeAddresses))]
 
@@ -401,11 +400,12 @@ func updateShardMappingsRandomly(ctx context.Context, t *testing.T, leaderCluste
 	prefix := etcdMgr.GetPrefix()
 	shardPrefix := prefix + "/shard/"
 
-	// Update a subset of shards (not all 8192 at once to be more realistic)
-	// Pick random 100 shards to update
-	shardsToUpdate := make([]int, 100)
-	for i := 0; i < 100; i++ {
-		shardsToUpdate[i] = rng.Intn(sharding.NumShards)
+	// Update a subset of shards to be more realistic
+	// Pick random shards to update (half of total)
+	updateCount := testutil.TestNumShards / 2
+	shardsToUpdate := make([]int, updateCount)
+	for i := 0; i < updateCount; i++ {
+		shardsToUpdate[i] = rng.Intn(testutil.TestNumShards)
 	}
 
 	successCount := 0
