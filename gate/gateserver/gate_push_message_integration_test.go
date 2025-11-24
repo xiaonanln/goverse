@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/sharding"
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
@@ -22,7 +21,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 	t.Helper()
 
 	// Create a node
-	n := node.NewNode(nodeAddr, sharding.NumShards)
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
 
 	// Start the node
 	err := n.Start(ctx)

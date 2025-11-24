@@ -318,6 +318,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		EtcdPrefix:                etcdPrefix,
 		NodeStabilityDuration:     3 * time.Second,
 		ShardMappingCheckInterval: 1 * time.Second,
+		NumShards:                 testutil.TestNumShards,
 	}
 
 	// Create server
@@ -433,8 +434,8 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		t.Fatal("Shard mapping should not be nil after initialization")
 	}
 
-	if len(shardMapping.Shards) != 8192 {
-		t.Fatal("Shard mapping should contain 8192 shards, got ", len(shardMapping.Shards))
+	if len(shardMapping.Shards) != testutil.TestNumShards {
+		t.Fatalf("Shard mapping should contain %d shards, got %d", testutil.TestNumShards, len(shardMapping.Shards))
 	}
 
 	// Verify the leader node is in the shard mapping
