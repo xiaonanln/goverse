@@ -84,7 +84,7 @@ func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
 		return
 	}
 
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 	prefix := fmt.Sprintf("[%s] [%s] [%s] ", timestamp, level.String(), currentPrefix)
 
 	message := fmt.Sprintf(format, args...)
