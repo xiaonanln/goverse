@@ -79,10 +79,9 @@ func TestRegisterGateTimeoutBehavior(t *testing.T) {
 			t.Fatalf("Gate.Start() returned error: %v", err)
 		}
 
-		// Create connection to an unavailable address
-		// This will fail to connect, which should happen quickly due to connection refusal
-		// or timeout if the address is routable but nothing is listening
-		unavailableAddr := "localhost:59999" // Unlikely to be in use
+		// Use a dynamically allocated address that is not in use
+		// This ensures we get a unique port that nothing is listening on
+		unavailableAddr := testutil.GetFreeAddress()
 		conn, err := grpc.NewClient(unavailableAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
@@ -102,18 +101,28 @@ func TestRegisterGateTimeoutBehavior(t *testing.T) {
 		// Call RegisterWithNodes - this will start a goroutine that tries to connect
 		gate.RegisterWithNodes(ctx, connections)
 
-		// Wait for the registration attempt to timeout
-		// The goroutine should complete within the timeout duration plus some margin
-		time.Sleep(shortTimeout + 500*time.Millisecond)
+		// Poll for the registration to be cleaned up (goroutine completed)
+		// Use a polling approach with a maximum wait time to be more deterministic
+		maxWaitTime := shortTimeout + 1*time.Second
+		pollInterval := 50 * time.Millisecond
+		registrationCleanedUp := false
+
+		for time.Since(startTime) < maxWaitTime {
+			gate.nodeRegMu.RLock()
+			_, exists := gate.nodeRegs[unavailableAddr]
+			gate.nodeRegMu.RUnlock()
+
+			if !exists {
+				registrationCleanedUp = true
+				break
+			}
+			time.Sleep(pollInterval)
+		}
+
 		elapsed := time.Since(startTime)
 
-		// Verify the registration was cleaned up (goroutine completed)
-		gate.nodeRegMu.RLock()
-		_, exists := gate.nodeRegs[unavailableAddr]
-		gate.nodeRegMu.RUnlock()
-
-		if exists {
-			t.Errorf("Expected registration to be cleaned up after timeout, but it still exists")
+		if !registrationCleanedUp {
+			t.Errorf("Expected registration to be cleaned up after timeout, but it still exists after %v", elapsed)
 		}
 
 		// Verify the elapsed time is reasonable (around the timeout value)
