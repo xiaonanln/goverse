@@ -27,16 +27,7 @@ type Config struct {
 	// NumShards is the number of shards in the cluster
 	// Default: 8192
 	NumShards int
-
-	// DefaultPushMessageTimeout is the default timeout for PushMessageToClient operations.
-	// Push delivery should be immediate or fail fast.
-	// Default: 5 seconds
-	DefaultPushMessageTimeout time.Duration
 }
-
-// DefaultPushMessageTimeout is the default timeout for PushMessageToClient operations.
-// Push delivery should be immediate or fail fast (5 seconds per TIMEOUT_DESIGN.md).
-const DefaultPushMessageTimeout = 5 * time.Second
 
 // DefaultConfig returns a Config with production default values
 func DefaultConfig() Config {
@@ -45,6 +36,5 @@ func DefaultConfig() Config {
 		ClusterStateStabilityDuration: 10 * time.Second,
 		ShardMappingCheckInterval:     5 * time.Second,
 		NumShards:                     8192,
-		DefaultPushMessageTimeout:     DefaultPushMessageTimeout,
 	}
 }

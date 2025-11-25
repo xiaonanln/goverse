@@ -28,11 +28,6 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatalf("Expected default NumShards to be 8192, got %d", cfg.NumShards)
 	}
 
-	// Verify DefaultPushMessageTimeout
-	if cfg.DefaultPushMessageTimeout != 5*time.Second {
-		t.Fatalf("Expected default DefaultPushMessageTimeout to be 5s, got %v", cfg.DefaultPushMessageTimeout)
-	}
-
 	// EtcdAddress and EtcdPrefix should be empty by default
 	if cfg.EtcdAddress != "" {
 		t.Fatalf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
