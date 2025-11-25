@@ -438,11 +438,11 @@ func TestGateServerMetrics(t *testing.T) {
 	t.Parallel()
 
 	config := &GateServerConfig{
-		ListenAddress:        ":49014",
-		AdvertiseAddress:     "localhost:49014",
-		MetricsListenAddress: ":19014",
-		EtcdAddress:          "localhost:2379",
-		EtcdPrefix:           "/test-gate-metrics",
+		ListenAddress:     ":49014",
+		AdvertiseAddress:  "localhost:49014",
+		HTTPListenAddress: ":19014",
+		EtcdAddress:       "localhost:2379",
+		EtcdPrefix:        "/test-gate-metrics",
 	}
 
 	server, err := NewGateServer(config)
@@ -456,7 +456,7 @@ func TestGateServerMetrics(t *testing.T) {
 	// Start server
 	go server.Start(ctx)
 
-	// Try to fetch metrics with retries - the metrics server starts quickly
+	// Try to fetch metrics with retries - the HTTP server starts quickly
 	var resp *http.Response
 	maxRetries := 20
 	for i := 0; i < maxRetries; i++ {

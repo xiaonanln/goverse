@@ -14,21 +14,21 @@ import (
 func main() {
 	// Parse command line flags
 	var (
-		listenAddr        = flag.String("listen", ":49000", "Gate listen address")
-		advertiseAddr     = flag.String("advertise", "localhost:49000", "Gate advertise address")
-		metricsListenAddr = flag.String("metrics-listen", "", "Metrics listen address (optional, e.g., ':9091')")
-		etcdAddr          = flag.String("etcd", "localhost:2379", "Etcd address")
-		etcdPrefix        = flag.String("etcd-prefix", "/goverse", "Etcd key prefix")
+		listenAddr     = flag.String("listen", ":49000", "Gate listen address")
+		advertiseAddr  = flag.String("advertise", "localhost:49000", "Gate advertise address")
+		httpListenAddr = flag.String("http-listen", "", "HTTP listen address for REST API and metrics (optional, e.g., ':8080')")
+		etcdAddr       = flag.String("etcd", "localhost:2379", "Etcd address")
+		etcdPrefix     = flag.String("etcd-prefix", "/goverse", "Etcd key prefix")
 	)
 	flag.Parse()
 
 	// Create gate server configuration
 	config := &gateserver.GateServerConfig{
-		ListenAddress:        *listenAddr,
-		AdvertiseAddress:     *advertiseAddr,
-		MetricsListenAddress: *metricsListenAddr,
-		EtcdAddress:          *etcdAddr,
-		EtcdPrefix:           *etcdPrefix,
+		ListenAddress:     *listenAddr,
+		AdvertiseAddress:  *advertiseAddr,
+		HTTPListenAddress: *httpListenAddr,
+		EtcdAddress:       *etcdAddr,
+		EtcdPrefix:        *etcdPrefix,
 	}
 
 	// Create gateserver server

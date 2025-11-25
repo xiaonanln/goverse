@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -49,6 +50,9 @@ func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/v1/objects/call/", s.handleCallObject)
 	mux.HandleFunc("/api/v1/objects/create/", s.handleCreateObject)
 	mux.HandleFunc("/api/v1/objects/delete/", s.handleDeleteObject)
+
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux
 }
