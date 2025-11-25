@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,8 +48,9 @@ func (o *TestHTTPObject) Echo(ctx context.Context, req *structpb.Struct) (*struc
 	}, nil
 }
 
-// httpCallObjectHelper makes an HTTP call to the CallObject endpoint and returns the response
-func httpCallObjectHelper(t *testing.T, client *http.Client, httpBaseURL, objType, objID, method string, message string) (statusCode int, echoResp *structpb.Struct, rawBody []byte) {
+// prepareCallObjectRequestBody creates the JSON request body for CallObject API.
+// It creates a structpb.Struct with the message, wraps it in an Any, and encodes to base64.
+func prepareCallObjectRequestBody(t *testing.T, message string) []byte {
 	t.Helper()
 
 	echoReq := &structpb.Struct{
@@ -74,6 +76,42 @@ func httpCallObjectHelper(t *testing.T, client *http.Client, httpBaseURL, objTyp
 		t.Fatalf("Failed to marshal HTTP request: %v", err)
 	}
 
+	return reqBody
+}
+
+// parseCallObjectResponseBody parses the CallObject response body into a structpb.Struct.
+func parseCallObjectResponseBody(t *testing.T, bodyBytes []byte) *structpb.Struct {
+	t.Helper()
+
+	var httpResp HTTPResponse
+	if err := json.Unmarshal(bodyBytes, &httpResp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
+	if err != nil {
+		t.Fatalf("Failed to decode base64 response: %v", err)
+	}
+
+	anyResp := &anypb.Any{}
+	if err := proto.Unmarshal(respBytes, anyResp); err != nil {
+		t.Fatalf("Failed to unmarshal Any response: %v", err)
+	}
+
+	var respStruct structpb.Struct
+	if err := anyResp.UnmarshalTo(&respStruct); err != nil {
+		t.Fatalf("Failed to unmarshal response struct: %v", err)
+	}
+
+	return &respStruct
+}
+
+// httpCallObjectHelper makes an HTTP call to the CallObject endpoint and returns the response
+func httpCallObjectHelper(t *testing.T, client *http.Client, httpBaseURL, objType, objID, method string, message string) (statusCode int, echoResp *structpb.Struct, rawBody []byte) {
+	t.Helper()
+
+	reqBody := prepareCallObjectRequestBody(t, message)
+
 	url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/%s", httpBaseURL, objType, objID, method)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
@@ -96,27 +134,7 @@ func httpCallObjectHelper(t *testing.T, client *http.Client, httpBaseURL, objTyp
 		return resp.StatusCode, nil, body
 	}
 
-	var httpResp HTTPResponse
-	if err := json.Unmarshal(body, &httpResp); err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
-	if err != nil {
-		t.Fatalf("Failed to decode base64 response: %v", err)
-	}
-
-	anyResp := &anypb.Any{}
-	if err := proto.Unmarshal(respBytes, anyResp); err != nil {
-		t.Fatalf("Failed to unmarshal Any response: %v", err)
-	}
-
-	var respStruct structpb.Struct
-	if err := anyResp.UnmarshalTo(&respStruct); err != nil {
-		t.Fatalf("Failed to unmarshal response struct: %v", err)
-	}
-
-	return resp.StatusCode, &respStruct, body
+	return resp.StatusCode, parseCallObjectResponseBody(t, body), body
 }
 
 // TestGateHTTPIntegration tests the HTTP API for create, call, and delete operations
@@ -361,14 +379,19 @@ func curlPostHelper(t *testing.T, url string, requestBody []byte) (statusCode in
 		t.Fatalf("curl command failed: %v", err)
 	}
 
-	// Parse output - last line is the status code
+	// Parse output - last line is the status code (we add a newline before status code in -w option)
 	lines := bytes.Split(output, []byte("\n"))
-	if len(lines) < 2 {
+	if len(lines) < 1 {
 		t.Fatalf("Unexpected curl output format: %s", string(output))
 	}
 
-	statusCodeLine := string(lines[len(lines)-1])
-	bodyBytes = bytes.Join(lines[:len(lines)-1], []byte("\n"))
+	// Handle case where response body might be empty (status code only)
+	statusCodeLine := strings.TrimSpace(string(lines[len(lines)-1]))
+	if len(lines) > 1 {
+		bodyBytes = bytes.Join(lines[:len(lines)-1], []byte("\n"))
+	} else {
+		bodyBytes = nil
+	}
 
 	parsedCode, err := strconv.Atoi(statusCodeLine)
 	if err != nil {
@@ -382,29 +405,7 @@ func curlPostHelper(t *testing.T, url string, requestBody []byte) (statusCode in
 func curlCallObjectHelper(t *testing.T, httpBaseURL, objType, objID, method, message string) (statusCode int, echoResp *structpb.Struct, rawOutput string) {
 	t.Helper()
 
-	echoReq := &structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			"message": structpb.NewStringValue(message),
-		},
-	}
-
-	anyReq, err := anypb.New(echoReq)
-	if err != nil {
-		t.Fatalf("Failed to create Any: %v", err)
-	}
-
-	reqBytes, err := proto.Marshal(anyReq)
-	if err != nil {
-		t.Fatalf("Failed to marshal request: %v", err)
-	}
-
-	encodedReq := base64.StdEncoding.EncodeToString(reqBytes)
-	httpReq := HTTPRequest{Request: encodedReq}
-	reqBody, err := json.Marshal(httpReq)
-	if err != nil {
-		t.Fatalf("Failed to marshal HTTP request: %v", err)
-	}
-
+	reqBody := prepareCallObjectRequestBody(t, message)
 	url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/%s", httpBaseURL, objType, objID, method)
 
 	statusCode, bodyBytes := curlPostHelper(t, url, reqBody)
@@ -413,27 +414,7 @@ func curlCallObjectHelper(t *testing.T, httpBaseURL, objType, objID, method, mes
 		return statusCode, nil, string(bodyBytes)
 	}
 
-	var httpResp HTTPResponse
-	if err := json.Unmarshal(bodyBytes, &httpResp); err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
-	if err != nil {
-		t.Fatalf("Failed to decode base64 response: %v", err)
-	}
-
-	anyResp := &anypb.Any{}
-	if err := proto.Unmarshal(respBytes, anyResp); err != nil {
-		t.Fatalf("Failed to unmarshal Any response: %v", err)
-	}
-
-	var respStruct structpb.Struct
-	if err := anyResp.UnmarshalTo(&respStruct); err != nil {
-		t.Fatalf("Failed to unmarshal response struct: %v", err)
-	}
-
-	return statusCode, &respStruct, string(bodyBytes)
+	return statusCode, parseCallObjectResponseBody(t, bodyBytes), string(bodyBytes)
 }
 
 // TestGateHTTPIntegrationWithCurl tests the HTTP API using curl as client.
