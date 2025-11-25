@@ -28,6 +28,7 @@ type GateServerConfig struct {
 
 	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
 	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
+	DefaultCreateTimeout time.Duration // Optional: default timeout for CreateObject operations (default: 30s)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
@@ -111,6 +112,9 @@ func validateConfig(config *GateServerConfig) error {
 	}
 	if config.DefaultDeleteTimeout <= 0 {
 		config.DefaultDeleteTimeout = 30 * time.Second // Default 30 seconds
+	}
+	if config.DefaultCreateTimeout <= 0 {
+		config.DefaultCreateTimeout = 30 * time.Second // Default 30 seconds
 	}
 
 	return nil
@@ -280,6 +284,10 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 
 // CreateObject implements the CreateObject RPC
 func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
+	// Apply default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCreateTimeout)
+	defer cancel()
+
 	// Call the cluster to create the object
 	objID, err := s.cluster.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {
