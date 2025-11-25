@@ -22,15 +22,19 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 	ctx := context.Background()
 
 	// Create three node clusters first
-	node1 := mustNewCluster(ctx, t, "localhost:47070", testPrefix)
-	node2 := mustNewCluster(ctx, t, "localhost:47071", testPrefix)
-	node3 := mustNewCluster(ctx, t, "localhost:47072", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	node2Addr := testutil.GetFreeAddress()
+	node3Addr := testutil.GetFreeAddress()
+
+	node1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
+	node2 := mustNewCluster(ctx, t, node2Addr, testPrefix)
+	node3 := mustNewCluster(ctx, t, node3Addr, testPrefix)
 
 	// Start gRPC servers for each node so gates can register with them
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1.GetThisNode())
 	mockServer1.SetCluster(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47070", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
@@ -39,7 +43,7 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2.GetThisNode())
 	mockServer2.SetCluster(node2)
-	testServer2 := testutil.NewTestServerHelper("localhost:47071", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(node2Addr, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
@@ -48,7 +52,7 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 	mockServer3 := testutil.NewMockGoverseServer()
 	mockServer3.SetNode(node3.GetThisNode())
 	mockServer3.SetCluster(node3)
-	testServer3 := testutil.NewTestServerHelper("localhost:47072", mockServer3)
+	testServer3 := testutil.NewTestServerHelper(node3Addr, mockServer3)
 	err = testServer3.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 3: %v", err)
@@ -63,8 +67,9 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 	}
 
 	// Create a gate
+	gateAddr := testutil.GetFreeAddress()
 	gwConfig := &gate.GateConfig{
-		AdvertiseAddress: "localhost:49030",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -89,7 +94,6 @@ func TestGateRegistersToAllNodesAutomatically(t *testing.T) {
 
 	// Verify that the gate has registered with all three nodes
 	// We can verify this by checking if each node's cluster has the gate connection registered
-	gateAddr := "localhost:49030"
 
 	// Check node1
 	if !hasGateConnection(node1, gateAddr) {
@@ -143,17 +147,20 @@ func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two node clusters
-	node1 := mustNewCluster(ctx, t, "localhost:47080", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	node2Addr := testutil.GetFreeAddress()
+
+	node1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
 	defer node1.Stop(ctx)
 
-	node2 := mustNewCluster(ctx, t, "localhost:47081", testPrefix)
+	node2 := mustNewCluster(ctx, t, node2Addr, testPrefix)
 	defer node2.Stop(ctx)
 
 	// Start gRPC servers for the nodes
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1.GetThisNode())
 	mockServer1.SetCluster(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47080", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
@@ -163,7 +170,7 @@ func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2.GetThisNode())
 	mockServer2.SetCluster(node2)
-	testServer2 := testutil.NewTestServerHelper("localhost:47081", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(node2Addr, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
@@ -174,8 +181,9 @@ func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Create a gate
+	gateAddr := testutil.GetFreeAddress()
 	gwConfig := &gate.GateConfig{
-		AdvertiseAddress: "localhost:49040",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -199,7 +207,6 @@ func TestGateRegistersToMultipleNodesSimultaneously(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Verify gate registered with both nodes
-	gateAddr := "localhost:49040"
 	if !hasGateConnection(node1, gateAddr) {
 		t.Errorf("Node1 should have gate %s registered", gateAddr)
 	}
@@ -222,17 +229,20 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two node clusters
-	node1 := mustNewCluster(ctx, t, "localhost:47090", testPrefix)
+	node1Addr := testutil.GetFreeAddress()
+	node2Addr := testutil.GetFreeAddress()
+
+	node1 := mustNewCluster(ctx, t, node1Addr, testPrefix)
 	defer node1.Stop(ctx)
 
-	node2 := mustNewCluster(ctx, t, "localhost:47091", testPrefix)
+	node2 := mustNewCluster(ctx, t, node2Addr, testPrefix)
 	defer node2.Stop(ctx)
 
 	// Start gRPC servers for the nodes
 	mockServer1 := testutil.NewMockGoverseServer()
 	mockServer1.SetNode(node1.GetThisNode())
 	mockServer1.SetCluster(node1)
-	testServer1 := testutil.NewTestServerHelper("localhost:47090", mockServer1)
+	testServer1 := testutil.NewTestServerHelper(node1Addr, mockServer1)
 	err := testServer1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 1: %v", err)
@@ -242,7 +252,7 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	mockServer2 := testutil.NewMockGoverseServer()
 	mockServer2.SetNode(node2.GetThisNode())
 	mockServer2.SetCluster(node2)
-	testServer2 := testutil.NewTestServerHelper("localhost:47091", mockServer2)
+	testServer2 := testutil.NewTestServerHelper(node2Addr, mockServer2)
 	err = testServer2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server 2: %v", err)
@@ -253,8 +263,9 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Create first gate
+	gate1Addr := testutil.GetFreeAddress()
 	gw1Config := &gate.GateConfig{
-		AdvertiseAddress: "localhost:49050",
+		AdvertiseAddress: gate1Addr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -275,8 +286,9 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	defer gate1Cluster.Stop(ctx)
 
 	// Create second gate
+	gate2Addr := testutil.GetFreeAddress()
 	gw2Config := &gate.GateConfig{
-		AdvertiseAddress: "localhost:49051",
+		AdvertiseAddress: gate2Addr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -300,9 +312,6 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// Verify both gates registered with both nodes
-	gate1Addr := "localhost:49050"
-	gate2Addr := "localhost:49051"
-
 	if !hasGateConnection(node1, gate1Addr) {
 		t.Errorf("Node1 should have gate1 %s registered", gate1Addr)
 	}
