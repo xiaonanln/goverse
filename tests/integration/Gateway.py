@@ -17,17 +17,19 @@ class Gateway:
     
     process: subprocess.Popen | None
     
-    def __init__(self, listen_port: int = 49000, binary_path: str | None = None, 
-                 build_if_needed: bool = True) -> None:
+    def __init__(self, listen_port: int = 49000, http_listen_port: int | None = None,
+                 binary_path: str | None = None, build_if_needed: bool = True) -> None:
         """Initialize and optionally build the gateway.
         
         Args:
-            listen_port: Gateway listen port (default: 49000)
+            listen_port: Gateway gRPC listen port (default: 49000)
+            http_listen_port: Optional HTTP listen port for REST API (e.g., 49080)
             binary_path: Path to gateway binary (defaults to /tmp/gateway)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/gateway'
         self.listen_port = listen_port
+        self.http_listen_port = http_listen_port
         self.process = None
         self.name = "Gateway"
         
@@ -44,9 +46,14 @@ class Gateway:
 
         print(f"Starting {self.name} on port {self.listen_port}...")
         
+        # Build command with optional HTTP listen address
+        cmd = [self.binary_path]
+        if self.http_listen_port is not None:
+            cmd.extend(['-http-listen', f':{self.http_listen_port}'])
+        
         # Start the process (inherits GOCOVERDIR from environment if set)
         self.process = subprocess.Popen(
-            [self.binary_path], 
+            cmd, 
             stdout=None, 
             stderr=None
         )
@@ -85,6 +92,12 @@ class Gateway:
         if not check_port(self.listen_port, timeout=timeout):
             print(f"❌ {self.name} failed to start")
             return False
+        
+        # Also check HTTP port if configured
+        if self.http_listen_port is not None:
+            if not check_port(self.http_listen_port, timeout=timeout):
+                print(f"❌ {self.name} HTTP port failed to start")
+                return False
         
         print(f"✅ {self.name} is running and ready")
         return True
