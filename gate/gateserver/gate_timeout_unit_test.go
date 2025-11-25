@@ -46,6 +46,46 @@ func TestGateServerConfig_DefaultCallTimeout(t *testing.T) {
 	})
 }
 
+// TestGateServerConfig_DefaultCreateTimeout tests that the default create timeout is set correctly
+func TestGateServerConfig_DefaultCreateTimeout(t *testing.T) {
+	t.Run("DefaultTimeoutSet", func(t *testing.T) {
+		config := &GateServerConfig{
+			ListenAddress:    "localhost:50000",
+			AdvertiseAddress: "localhost:50000",
+			EtcdAddress:      "localhost:2379",
+		}
+
+		err := validateConfig(config)
+		if err != nil {
+			t.Fatalf("validateConfig failed: %v", err)
+		}
+
+		expectedTimeout := 10 * time.Second
+		if config.DefaultCreateTimeout != expectedTimeout {
+			t.Errorf("Expected DefaultCreateTimeout to be %v, got %v", expectedTimeout, config.DefaultCreateTimeout)
+		}
+	})
+
+	t.Run("CustomTimeoutPreserved", func(t *testing.T) {
+		customTimeout := 30 * time.Second
+		config := &GateServerConfig{
+			ListenAddress:        "localhost:50000",
+			AdvertiseAddress:     "localhost:50000",
+			EtcdAddress:          "localhost:2379",
+			DefaultCreateTimeout: customTimeout,
+		}
+
+		err := validateConfig(config)
+		if err != nil {
+			t.Fatalf("validateConfig failed: %v", err)
+		}
+
+		if config.DefaultCreateTimeout != customTimeout {
+			t.Errorf("Expected DefaultCreateTimeout to be preserved at %v, got %v", customTimeout, config.DefaultCreateTimeout)
+		}
+	})
+}
+
 // TestGateServerConfig_DefaultDeleteTimeout tests that the default delete timeout is set correctly
 func TestGateServerConfig_DefaultDeleteTimeout(t *testing.T) {
 	t.Run("DefaultTimeoutSet", func(t *testing.T) {
