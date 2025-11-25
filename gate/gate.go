@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -13,9 +14,10 @@ import (
 
 // GateConfig holds configuration for the gate
 type GateConfig struct {
-	AdvertiseAddress string // Address to advertise to the cluster (e.g., "localhost:49000")
-	EtcdAddress      string // Address of etcd for cluster state
-	EtcdPrefix       string // etcd key prefix (default: "/goverse")
+	AdvertiseAddress           string        // Address to advertise to the cluster (e.g., "localhost:49000")
+	EtcdAddress                string        // Address of etcd for cluster state
+	EtcdPrefix                 string        // etcd key prefix (default: "/goverse")
+	DefaultRegisterGateTimeout time.Duration // Optional: timeout for RegisterGate RPC (default: 30s)
 }
 
 // nodeReg holds registration information for a single node
@@ -68,6 +70,9 @@ func validateGateConfig(config *GateConfig) error {
 	// Set defaults
 	if config.EtcdPrefix == "" {
 		config.EtcdPrefix = "/goverse"
+	}
+	if config.DefaultRegisterGateTimeout <= 0 {
+		config.DefaultRegisterGateTimeout = 30 * time.Second
 	}
 
 	return nil
@@ -233,9 +238,13 @@ func (g *Gate) registerWithNode(ctx context.Context, nodeAddr string, client gov
 		g.nodeRegMu.Unlock()
 	}()
 
-	stream, err := client.RegisterGate(ctx, &goverse_pb.RegisterGateRequest{
+	// Apply timeout for establishing the RegisterGate stream connection
+	// This timeout only applies to the initial connection establishment, not the stream lifetime
+	registerCtx, registerCancel := context.WithTimeout(ctx, g.config.DefaultRegisterGateTimeout)
+	stream, err := client.RegisterGate(registerCtx, &goverse_pb.RegisterGateRequest{
 		GateAddr: g.advertiseAddress,
 	})
+	registerCancel() // Cancel the timeout context immediately after stream is established
 	if err != nil {
 		g.logger.Errorf("Failed to call RegisterGate on node %s: %v", nodeAddr, err)
 		return

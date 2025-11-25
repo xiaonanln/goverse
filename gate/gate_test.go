@@ -122,6 +122,35 @@ func TestValidateGateConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "sets default RegisterGate timeout",
+			config: &GateConfig{
+				AdvertiseAddress: "localhost:49000",
+				EtcdAddress:      "localhost:2379",
+			},
+			wantErr: false,
+			checkFunc: func(t *testing.T, cfg *GateConfig) {
+				expectedTimeout := 30 * time.Second
+				if cfg.DefaultRegisterGateTimeout != expectedTimeout {
+					t.Fatalf("Expected DefaultRegisterGateTimeout to be %v, got %v", expectedTimeout, cfg.DefaultRegisterGateTimeout)
+				}
+			},
+		},
+		{
+			name: "preserves custom RegisterGate timeout",
+			config: &GateConfig{
+				AdvertiseAddress:           "localhost:49000",
+				EtcdAddress:                "localhost:2379",
+				DefaultRegisterGateTimeout: 60 * time.Second,
+			},
+			wantErr: false,
+			checkFunc: func(t *testing.T, cfg *GateConfig) {
+				expectedTimeout := 60 * time.Second
+				if cfg.DefaultRegisterGateTimeout != expectedTimeout {
+					t.Fatalf("Expected DefaultRegisterGateTimeout to be preserved at %v, got %v", expectedTimeout, cfg.DefaultRegisterGateTimeout)
+				}
+			},
+		},
+		{
 			name:       "nil config",
 			config:     nil,
 			wantErr:    true,
