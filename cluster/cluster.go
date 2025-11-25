@@ -48,6 +48,7 @@ type Cluster struct {
 	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
 	numShards                 int           // number of shards in this cluster
 	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
+	defaultPushMessageTimeout time.Duration // default timeout for PushMessageToClient
 	clusterManagementCtx      context.Context
 	clusterManagementCancel   context.CancelFunc
 	clusterManagementRunning  bool
@@ -96,6 +97,12 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 		numShards = sharding.NumShards
 	}
 
+	// Determine push message timeout
+	pushTimeout := cfg.DefaultPushMessageTimeout
+	if pushTimeout <= 0 {
+		pushTimeout = DefaultPushMessageTimeout
+	}
+
 	// Create a new cluster instance with its own ShardLock to ensure per-cluster isolation
 	c := &Cluster{
 		node:                      node,
@@ -106,6 +113,7 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 		minQuorum:                 cfg.MinQuorum,
 		numShards:                 numShards,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
+		defaultPushMessageTimeout: pushTimeout,
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(numShards),
 		gateChannels:              make(map[string]chan proto.Message),
@@ -123,6 +131,12 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 		numShards = sharding.NumShards
 	}
 
+	// Determine push message timeout
+	pushTimeout := cfg.DefaultPushMessageTimeout
+	if pushTimeout <= 0 {
+		pushTimeout = DefaultPushMessageTimeout
+	}
+
 	c := &Cluster{
 		gate:                      g,
 		logger:                    logger.NewLogger("Cluster"),
@@ -132,6 +146,7 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 		minQuorum:                 cfg.MinQuorum,
 		numShards:                 numShards,
 		shardMappingCheckInterval: cfg.ShardMappingCheckInterval,
+		defaultPushMessageTimeout: pushTimeout,
 		nodeConnections:           nodeconnections.New(),
 		shardLock:                 shardlock.NewShardLock(numShards),
 		gateChannels:              make(map[string]chan proto.Message),
@@ -185,6 +200,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", sharding.NumShards),
 		minQuorum:                 1,
 		shardMappingCheckInterval: 1 * time.Second,
+		defaultPushMessageTimeout: DefaultPushMessageTimeout,
 		shardLock:                 shardLock,
 		gateChannels:              make(map[string]chan proto.Message),
 	}
@@ -806,7 +822,16 @@ func (c *Cluster) cleanupGateChannels() {
 // Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target gate and routes the message accordingly
 // This method can only be called on a node cluster, not a gate cluster
+//
+// Timeout handling:
+// - If the context has a deadline, it will be respected
+// - If no deadline is set, a default timeout of 5 seconds is applied
+// - Push delivery should be immediate or fail fast per TIMEOUT_DESIGN.md
 func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
+	// Apply default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, c.defaultPushMessageTimeout)
+	defer cancel()
+
 	// This method can only be called on node clusters
 	if c.isGate() {
 		return fmt.Errorf("PushMessageToClient can only be called on node clusters, not gate clusters")
@@ -846,6 +871,10 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 			metrics.RecordNodePushedMessage(c.node.GetAdvertiseAddress(), gateAddr)
 			c.gateChannelsMu.RUnlock()
 			return nil
+		case <-ctx.Done():
+			// Context timeout or cancellation
+			c.gateChannelsMu.RUnlock()
+			return fmt.Errorf("push message to client %s timed out: %w", clientID, ctx.Err())
 		default:
 			// Record dropped message metric when channel is full
 			metrics.RecordNodeDroppedMessage(c.node.GetAdvertiseAddress(), gateAddr)

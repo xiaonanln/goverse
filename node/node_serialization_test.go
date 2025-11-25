@@ -1,16 +1,13 @@
 package node
 
-
 import (
 	"context"
 	"sync"
 	"testing"
 	"time"
 
-
 	"google.golang.org/protobuf/types/known/emptypb"
 )
-
 
 // TestObjectLifecycleSerialization verifies that objectsMu properly serializes
 // all object lifecycle operations (create, call, delete, save)

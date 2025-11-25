@@ -1,16 +1,13 @@
 package node
 
-
 import (
 	"context"
 	"strings"
 	"testing"
 	"time"
 
-
 	"github.com/xiaonanln/goverse/object"
 )
-
 
 // waitForObjectCreated waits for an object to be created on the specified node
 func waitForObjectCreated(t *testing.T, n *Node, objID string, timeout time.Duration) {

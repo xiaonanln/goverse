@@ -1,7 +1,7 @@
 package server
 
 import (
-"github.com/xiaonanln/goverse/util/testutil"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"strings"
 	"testing"
 

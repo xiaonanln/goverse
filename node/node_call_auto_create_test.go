@@ -1,6 +1,5 @@
 package node
 
-
 import (
 	"context"
 	"sync"
@@ -12,7 +11,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
 
 // TestObjectWithMethod is a test object with a callable method
 type TestObjectWithMethod struct {
