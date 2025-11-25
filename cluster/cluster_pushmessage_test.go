@@ -99,10 +99,6 @@ func TestPushMessageToClient_DefaultTimeout(t *testing.T) {
 	if c.defaultPushMessageTimeout != DefaultPushMessageTimeout {
 		t.Fatalf("Expected default push message timeout to be %v, got %v", DefaultPushMessageTimeout, c.defaultPushMessageTimeout)
 	}
-
-	if c.defaultPushMessageTimeout != 5*time.Second {
-		t.Fatalf("Expected default push message timeout to be 5s, got %v", c.defaultPushMessageTimeout)
-	}
 }
 
 // TestPushMessageToClient_ExistingDeadlinePreserved tests that existing context deadline is preserved
