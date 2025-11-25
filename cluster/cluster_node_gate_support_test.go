@@ -1,9 +1,8 @@
 package cluster
 
 import (
-"github.com/xiaonanln/goverse/util/testutil"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"testing"
-
 
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"

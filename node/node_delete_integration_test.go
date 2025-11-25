@@ -1,12 +1,9 @@
 package node
 
-
 import (
 	"context"
 	"testing"
-
 )
-
 
 // TestDeleteObject_Integration is an end-to-end integration test showing the complete flow
 // of creating an object, saving it to persistence, deleting it, and verifying removal

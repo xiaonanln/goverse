@@ -1,13 +1,10 @@
 package node
 
-
 import (
 	"context"
 	"fmt"
 	"testing"
-
 )
-
 
 func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 	// Test deleting a persistent object with persistence provider

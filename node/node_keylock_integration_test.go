@@ -1,6 +1,5 @@
 package node
 
-
 import (
 	"context"
 	"sync"
@@ -8,10 +7,8 @@ import (
 	"testing"
 	"time"
 
-
 	"google.golang.org/protobuf/types/known/emptypb"
 )
-
 
 // TestKeyLockIntegration_CreateDeleteRace tests that create and delete operations
 // on the same object are properly serialized

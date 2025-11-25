@@ -1,6 +1,5 @@
 package node
 
-
 import (
 	"context"
 	"fmt"
@@ -8,12 +7,10 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/xiaonanln/goverse/object"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
 
 // MockPersistenceProvider for testing
 type MockPersistenceProvider struct {

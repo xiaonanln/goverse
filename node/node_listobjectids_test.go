@@ -1,13 +1,10 @@
 package node
 
-
 import (
 	"context"
 	"testing"
 	"time"
-
 )
-
 
 // TestListObjectIDs tests the ListObjectIDs method
 func TestListObjectIDs(t *testing.T) {

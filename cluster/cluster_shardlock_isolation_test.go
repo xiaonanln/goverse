@@ -1,11 +1,10 @@
 package cluster
 
 import (
-"github.com/xiaonanln/goverse/util/testutil"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"sync"
 	"testing"
 	"time"
-
 
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/node"

@@ -1,16 +1,13 @@
 package node
 
-
 import (
 	"context"
 	"sync"
 	"testing"
 	"time"
 
-
 	"google.golang.org/protobuf/types/known/emptypb"
 )
-
 
 // TestStop_RaceWithCreateObject tests that CreateObject operations in flight when Stop is called
 // complete safely and that new CreateObject calls after Stop fail gracefully

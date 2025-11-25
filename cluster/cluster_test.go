@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )

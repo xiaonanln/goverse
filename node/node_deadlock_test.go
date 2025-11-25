@@ -1,17 +1,14 @@
 package node
 
-
 import (
 	"context"
 	"sync"
 	"testing"
 	"time"
 
-
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
 
 // Global reference to node for method callbacks (to avoid import cycle)
 var testNodeRef *Node

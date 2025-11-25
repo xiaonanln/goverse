@@ -1,13 +1,10 @@
 package node
 
-
 import (
 	"context"
 	"testing"
 	"time"
-
 )
-
 
 // TestInspectorManager_Integration tests the full integration of InspectorManager with Node
 func TestInspectorManager_Integration(t *testing.T) {
