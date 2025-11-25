@@ -26,7 +26,7 @@ type GateServerConfig struct {
 	EtcdPrefix           string        // Optional: etcd key prefix (default: "/goverse")
 	NumShards            int           // Optional: number of shards in the cluster (default: 8192)
 	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
-	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 10s)
+	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
@@ -109,7 +109,7 @@ func validateConfig(config *GateServerConfig) error {
 		config.DefaultCallTimeout = 30 * time.Second // Default 30 seconds
 	}
 	if config.DefaultDeleteTimeout <= 0 {
-		config.DefaultDeleteTimeout = 10 * time.Second // Default 10 seconds
+		config.DefaultDeleteTimeout = 30 * time.Second // Default 30 seconds
 	}
 
 	return nil
