@@ -19,12 +19,13 @@ import (
 
 // GateServerConfig holds configuration for the gate server
 type GateServerConfig struct {
-	ListenAddress        string        // Address to listen on for client connections (e.g., ":49000")
-	AdvertiseAddress     string        // Address to advertise to the cluster (e.g., "localhost:49000")
-	HTTPListenAddress    string        // Optional: HTTP address for REST API and metrics (e.g., ":8080")
-	EtcdAddress          string        // Address of etcd for cluster state
-	EtcdPrefix           string        // Optional: etcd key prefix (default: "/goverse")
-	NumShards            int           // Optional: number of shards in the cluster (default: 8192)
+	ListenAddress     string // Address to listen on for client connections (e.g., ":49000")
+	AdvertiseAddress  string // Address to advertise to the cluster (e.g., "localhost:49000")
+	HTTPListenAddress string // Optional: HTTP address for REST API and metrics (e.g., ":8080")
+	EtcdAddress       string // Address of etcd for cluster state
+	EtcdPrefix        string // Optional: etcd key prefix (default: "/goverse")
+	NumShards         int    // Optional: number of shards in the cluster (default: 8192)
+
 	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
 	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
 }
