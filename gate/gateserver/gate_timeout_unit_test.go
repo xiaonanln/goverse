@@ -60,14 +60,14 @@ func TestGateServerConfig_DefaultCreateTimeout(t *testing.T) {
 			t.Fatalf("validateConfig failed: %v", err)
 		}
 
-		expectedTimeout := 10 * time.Second
+		expectedTimeout := 30 * time.Second
 		if config.DefaultCreateTimeout != expectedTimeout {
 			t.Errorf("Expected DefaultCreateTimeout to be %v, got %v", expectedTimeout, config.DefaultCreateTimeout)
 		}
 	})
 
 	t.Run("CustomTimeoutPreserved", func(t *testing.T) {
-		customTimeout := 30 * time.Second
+		customTimeout := 60 * time.Second
 		config := &GateServerConfig{
 			ListenAddress:        "localhost:50000",
 			AdvertiseAddress:     "localhost:50000",
