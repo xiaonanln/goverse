@@ -802,6 +802,20 @@ func (c *Cluster) cleanupGateChannels() {
 	metrics.SetNodeConnectedGates(c.node.GetAdvertiseAddress(), len(c.gateChannels))
 }
 
+// IsGateConnected returns true if the specified gate is connected to this node
+// This is useful for tests to verify gate registration has completed
+func (c *Cluster) IsGateConnected(gateAddr string) bool {
+	if !c.isNode() {
+		return false
+	}
+
+	c.gateChannelsMu.RLock()
+	defer c.gateChannelsMu.RUnlock()
+
+	_, exists := c.gateChannels[gateAddr]
+	return exists
+}
+
 // PushMessageToClient sends a message to a client by its ID
 // Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target gate and routes the message accordingly
