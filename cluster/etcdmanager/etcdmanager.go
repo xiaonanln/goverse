@@ -96,7 +96,7 @@ func (mgr *EtcdManager) Connect() error {
 	mgr.logger.Infof("Successfully created etcd client to %v", mgr.endpoints)
 
 	// Test the connection
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultEtcdTimeout)
 	defer cancel()
 
 	_, err = cli.Get(ctx, "test-connection")
