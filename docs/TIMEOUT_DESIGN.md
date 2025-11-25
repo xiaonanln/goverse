@@ -9,9 +9,11 @@ This document describes the timeout handling design for operations in Goverse, e
 - `CreateObject` - Object creation and activation
 - `DeleteObject` - Object deletion and cleanup
 - `RegisterGate` - Gate registration streaming RPC
-- `PushMessageToClient` - Push message delivery
 - Etcd operations (reads, writes, watches)
 - gRPC connection establishment
+
+**Operations NOT requiring timeouts:**
+- `PushMessageToClient` - Non-blocking operation using buffered channels with `select { case ... default: }` pattern; returns immediately if channel is full
 
 ## Goals
 
@@ -46,7 +48,7 @@ Currently, operations rely on context deadlines:
 
 Add timeout configuration fields to `ServerConfig`, `GateServerConfig`, and `ClusterConfig`:
 - `DefaultCallTimeout`, `DefaultCreateTimeout`, `DefaultDeleteTimeout` for main operations
-- `PushMessageTimeout`, `EtcdTimeout`, `ConnectionTimeout` for infrastructure
+- `EtcdTimeout`, `ConnectionTimeout` for infrastructure
 - Hardcoded fallback defaults if not configured (CallObject: 30s, CreateObject: 10s, etc.)
 
 ### 2. Automatic Deadline Enforcement
@@ -87,19 +89,22 @@ Add `BaseObject.CheckTimeout(ctx)` helper for object methods to periodically che
 - **CallObject**: 30 seconds (most object methods should complete quickly)
 - **CreateObject**: 10 seconds (object creation should be fast)
 - **DeleteObject**: 10 seconds (deletion should be fast)
-- **PushMessageToClient**: 5 seconds (push delivery should be immediate or fail fast)
 - **Node-to-node calls**: 25 seconds (slightly less than CallObject to allow propagation)
 - **Etcd operations**: 60 seconds (allows for transient network issues and cluster recovery)
 - **gRPC connection**: 30 seconds (connection establishment)
 - **Maximum timeout**: 5 minutes (safety limit)
+
+**No timeout needed:**
+- **PushMessageToClient**: Non-blocking - uses buffered channel with immediate return on full buffer
 
 **Guidelines for users:**
 - Simple queries: 5-10 seconds
 - Standard operations: 30 seconds (default)
 - Complex operations: 1-2 minutes
 - Long-running operations: Use async pattern instead of long timeout
-- Push messages: 5 seconds (fail fast if client unreachable)
 - Infrastructure operations (etcd, connections): 30-60 seconds
+
+**Note:** `PushMessageToClient` is non-blocking and does not require timeout configuration.
 
 ### 7. Monitoring and Metrics
 
@@ -132,9 +137,11 @@ Add Prometheus metrics:
 **Then move to these:**
 
 4. **DeleteObject** - Less frequent but important for cleanup
-5. **PushMessageToClient** - Real-time feature, should fail fast anyway
-6. **gRPC connection establishment** - Affects startup and node discovery
-7. **RegisterGate** - Only affects gate startup/reconnection
+5. **gRPC connection establishment** - Affects startup and node discovery
+6. **RegisterGate** - Only affects gate startup/reconnection
+
+**No timeout needed:**
+- **PushMessageToClient** - Already non-blocking (uses buffered channel with immediate error on full buffer)
 
 ### Detailed Implementation Phases
 
@@ -154,9 +161,10 @@ Add Prometheus metrics:
 - [ ] **Priority 3:** Add timeout to etcd operations
 - [ ] Add deadline enforcement to Cluster.DeleteObject
 - [ ] Add deadline enforcement to Gate operations
-- [ ] Add deadline enforcement to PushMessageToClient
 - [ ] Update node-to-node call timeout handling
 - [ ] Add timeout to gRPC connection establishment
+
+Note: `PushMessageToClient` does not need deadline enforcement as it is already non-blocking.
 
 ### Phase 4: Object Support (Week 2)
 - [ ] Add CheckTimeout helper to BaseObject
@@ -172,11 +180,12 @@ Add Prometheus metrics:
 - [ ] Add timeout tests for CallObject
 - [ ] Add timeout tests for CreateObject
 - [ ] Add timeout tests for DeleteObject
-- [ ] Add timeout tests for PushMessageToClient
 - [ ] Add timeout propagation tests (node-to-node)
 - [ ] Add gate timeout tests
 - [ ] Add etcd timeout tests
 - [ ] Add connection timeout tests
+
+Note: No timeout tests needed for `PushMessageToClient` as it is non-blocking.
 
 ## Testing Strategy
 
