@@ -137,6 +137,12 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	// Wait for shard mapping to be initialized and nodes to discover each other
 	testutil.WaitForClusterReady(t, nodeCluster)
 
+	// Wait for gate to register with the node (this is async and must complete before pushing messages)
+	testutil.WaitFor(t, 10*time.Second, "gate to register with node", func() bool {
+		return nodeCluster.IsGateConnected(gateAddr)
+	})
+	t.Logf("Gate %s registered with node %s", gateAddr, nodeAddr)
+
 	// 3. Client connects to gate and registers
 	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -272,6 +278,12 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 
 	// Wait for shard mapping to be initialized and nodes to discover each other
 	testutil.WaitForClusterReady(t, nodeCluster)
+
+	// Wait for gate to register with the node (this is async and must complete before pushing messages)
+	testutil.WaitFor(t, 10*time.Second, "gate to register with node", func() bool {
+		return nodeCluster.IsGateConnected(gateAddr)
+	})
+	t.Logf("Gate %s registered with node %s", gateAddr, nodeAddr)
 
 	// 3. Register multiple clients
 	numClients := 3
