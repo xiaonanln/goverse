@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -18,6 +19,12 @@ import (
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+)
+
+const (
+	// DefaultConnectionTimeout is the default timeout for gRPC connection establishment.
+	// Per TIMEOUT_DESIGN.md, gRPC connection operations should have a 30 second timeout.
+	DefaultConnectionTimeout = 30 * time.Second
 )
 
 type ChatClient struct {
@@ -31,7 +38,16 @@ type ChatClient struct {
 }
 
 func NewChatClient(serverAddr, userID string) (*ChatClient, error) {
-	conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Configure connection parameters with timeout per TIMEOUT_DESIGN.md
+	connectParams := grpc.ConnectParams{
+		Backoff:           backoff.DefaultConfig,
+		MinConnectTimeout: DefaultConnectionTimeout,
+	}
+
+	conn, err := grpc.NewClient(serverAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(connectParams),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
