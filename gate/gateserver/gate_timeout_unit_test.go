@@ -60,7 +60,7 @@ func TestGateServerConfig_DefaultDeleteTimeout(t *testing.T) {
 			t.Fatalf("validateConfig failed: %v", err)
 		}
 
-		expectedTimeout := 10 * time.Second
+		expectedTimeout := 30 * time.Second
 		if config.DefaultDeleteTimeout != expectedTimeout {
 			t.Errorf("Expected DefaultDeleteTimeout to be %v, got %v", expectedTimeout, config.DefaultDeleteTimeout)
 		}
