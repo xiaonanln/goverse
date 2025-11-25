@@ -20,10 +20,10 @@ const (
 	DefaultEtcdTimeout = 5 * time.Second
 )
 
-// withEtcdDeadline ensures the context has a deadline for etcd operations.
+// WithEtcdDeadline ensures the context has a deadline for etcd operations.
 // If the context already has a deadline, it returns the original context.
 // Otherwise, it returns a new context with DefaultEtcdTimeout.
-func withEtcdDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+func WithEtcdDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
 		return ctx, func() {}
 	}
@@ -153,7 +153,7 @@ func (mgr *EtcdManager) Put(ctx context.Context, key, value string) error {
 		return fmt.Errorf("etcd client not connected")
 	}
 
-	ctx, cancel := withEtcdDeadline(ctx)
+	ctx, cancel := WithEtcdDeadline(ctx)
 	defer cancel()
 
 	_, err := mgr.client.Put(ctx, key, value)
@@ -193,7 +193,7 @@ func (mgr *EtcdManager) RegisterKeyLease(ctx context.Context, key string, value 
 	// Put the key immediately with the current lease (if exists)
 	// The sharedLeaseLoop will re-put all keys when creating a new lease
 	if mgr.sharedLeaseID != 0 {
-		putCtx, cancel := withEtcdDeadline(ctx)
+		putCtx, cancel := WithEtcdDeadline(ctx)
 		_, err := mgr.client.Put(putCtx, key, value, clientv3.WithLease(mgr.sharedLeaseID))
 		cancel()
 		if err != nil {
@@ -217,7 +217,7 @@ func (mgr *EtcdManager) UnregisterKeyLease(ctx context.Context, key string) erro
 
 	// Delete the key from etcd
 	if mgr.client != nil {
-		deleteCtx, cancel := withEtcdDeadline(ctx)
+		deleteCtx, cancel := WithEtcdDeadline(ctx)
 		_, err := mgr.client.Delete(deleteCtx, key)
 		cancel()
 		if err != nil {
@@ -418,7 +418,7 @@ func (mgr *EtcdManager) getAllNodesForTesting(ctx context.Context) ([]string, in
 		return nil, 0, fmt.Errorf("etcd client not connected")
 	}
 
-	ctx, cancel := withEtcdDeadline(ctx)
+	ctx, cancel := WithEtcdDeadline(ctx)
 	defer cancel()
 
 	nodesPrefix := mgr.prefix + "/nodes/"

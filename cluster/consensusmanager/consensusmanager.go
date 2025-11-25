@@ -594,11 +594,8 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	prefix := cm.etcdManager.GetPrefix()
 
 	// Ensure context has a deadline for etcd operation
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, etcdmanager.DefaultEtcdTimeout)
-		defer cancel()
-	}
+	ctx, cancel := etcdmanager.WithEtcdDeadline(ctx)
+	defer cancel()
 
 	// Load ALL cluster data in one transaction
 	resp, err := client.Get(ctx, prefix, clientv3.WithPrefix())
@@ -847,12 +844,8 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 			value := formatShardInfo(shardInfo)
 
 			// Ensure context has a deadline for etcd operation
-			txnCtx := ctx
-			if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-				var cancel context.CancelFunc
-				txnCtx, cancel = context.WithTimeout(ctx, etcdmanager.DefaultEtcdTimeout)
-				defer cancel()
-			}
+			txnCtx, cancel := etcdmanager.WithEtcdDeadline(ctx)
+			defer cancel()
 
 			// Build conditional transaction based on ModRevision
 			// Always check that ModRevision matches expected value (0 for new shards)
@@ -872,7 +865,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
 				// Retrieve current ModRevision for diagnostics with deadline
-				getCtx, getCancel := context.WithTimeout(context.Background(), etcdmanager.DefaultEtcdTimeout)
+				getCtx, getCancel := etcdmanager.WithEtcdDeadline(ctx)
 				defer getCancel()
 				var currentModRev int64
 				getResp, getErr := client.Get(getCtx, key)
