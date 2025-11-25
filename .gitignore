@@ -51,4 +51,4 @@ custom_stability_duration
 minquorum
 .venv/
 *.log
-httpgate
+*.zip

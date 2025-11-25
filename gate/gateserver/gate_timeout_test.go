@@ -295,3 +295,178 @@ func TestGateCallObjectTimeout(t *testing.T) {
 		t.Logf("Call timed out after %v (expected ~500ms)", elapsed)
 	})
 }
+
+// TestGateDeleteObjectTimeout tests that DeleteObject applies default timeout when context has no deadline
+func TestGateDeleteObjectTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	t.Parallel()
+
+	ctx := context.Background()
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	if etcdPrefix == "" {
+		t.Skip("Skipping test: etcd not available")
+	}
+
+	// Create and start a node with cluster (so it registers with etcd)
+	nodeAddr := testutil.GetFreeAddress()
+	nodeCluster := mustNewCluster(ctx, t, nodeAddr, etcdPrefix)
+	testNode := nodeCluster.GetThisNode()
+	t.Logf("Created node cluster at %s", nodeAddr)
+
+	// Register SlowObject type
+	testNode.RegisterObjectType((*SlowObject)(nil))
+
+	// Start mock gRPC server for the node to handle inter-node communication
+	mockNodeServer := testutil.NewMockGoverseServer()
+	mockNodeServer.SetNode(testNode)
+	mockNodeServer.SetCluster(nodeCluster)
+	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
+	err := nodeServer.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer.Stop() })
+	t.Logf("Started mock node server at %s", nodeAddr)
+
+	// Create and start gate server with a short delete timeout for testing
+	gateAddr := testutil.GetFreeAddress()
+	gateConfig := &GateServerConfig{
+		ListenAddress:        gateAddr,
+		AdvertiseAddress:     gateAddr,
+		EtcdAddress:          "localhost:2379",
+		EtcdPrefix:           etcdPrefix,
+		NumShards:            testutil.TestNumShards,
+		DefaultDeleteTimeout: 2 * time.Second, // Short timeout for testing
+	}
+
+	gateServer, err := NewGateServer(gateConfig)
+	if err != nil {
+		t.Fatalf("Failed to create gate server: %v", err)
+	}
+
+	gateCtx, gateCancel := context.WithCancel(ctx)
+	t.Cleanup(gateCancel)
+	t.Cleanup(func() { gateServer.Stop() })
+
+	// Start the gate server in a goroutine
+	gwStarted := make(chan error, 1)
+	go func() {
+		gwStarted <- gateServer.Start(gateCtx)
+	}()
+
+	// Wait for gate to be ready
+	time.Sleep(1 * time.Second)
+	select {
+	case err := <-gwStarted:
+		if err != nil {
+			t.Fatalf("Gate server failed to start: %v", err)
+		}
+		t.Fatalf("Gate server exited prematurely")
+	default:
+		// Gate server is running
+	}
+
+	// Create gRPC client to gate
+	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to connect to gate: %v", err)
+	}
+	defer conn.Close()
+
+	gateClient := gate_pb.NewGateServiceClient(conn)
+
+	testutil.WaitForClusterReady(t, nodeCluster)
+	testutil.WaitForClusterReady(t, gateServer.cluster)
+
+	t.Run("DeleteObject_DefaultTimeoutApplied", func(t *testing.T) {
+		// Create object via the gate
+		objID := testutil.GetObjectIDForShard(0, "SlowObject-delete-test")
+		createReq := &gate_pb.CreateObjectRequest{
+			Type: "SlowObject",
+			Id:   objID,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq)
+		if err != nil {
+			t.Fatalf("Failed to create SlowObject: %v", err)
+		}
+
+		// Wait for object to be created
+		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
+
+		// Delete the object with context that has NO deadline
+		// Gate should apply default timeout (2s) - this should succeed quickly
+		// since deletion is normally fast
+		deleteReq := &gate_pb.DeleteObjectRequest{
+			Id: objID,
+		}
+
+		start := time.Now()
+		_, err = gateClient.DeleteObject(context.Background(), deleteReq)
+		elapsed := time.Since(start)
+
+		// Deletion should succeed quickly (well under the timeout)
+		if err != nil {
+			t.Fatalf("Expected delete to succeed, got error: %v", err)
+		}
+
+		// Verify deletion completed quickly (under 1 second)
+		if elapsed > 1*time.Second {
+			t.Errorf("Deletion took too long: %v, expected quick completion", elapsed)
+		}
+
+		t.Logf("Delete completed in %v (expected quick)", elapsed)
+	})
+
+	t.Run("DeleteObject_ExistingDeadlinePreserved", func(t *testing.T) {
+		// Create object via the gate
+		objID := testutil.GetObjectIDForShard(1, "SlowObject-delete-test-2")
+		createReq := &gate_pb.CreateObjectRequest{
+			Type: "SlowObject",
+			Id:   objID,
+		}
+		_, err := gateClient.CreateObject(ctx, createReq)
+		if err != nil {
+			t.Fatalf("Failed to create SlowObject: %v", err)
+		}
+
+		// Wait for object to be created
+		waitForObjectCreatedOnNode(t, testNode, objID, 5*time.Second)
+
+		// Delete with context that HAS a deadline (5 seconds) - should use this
+		// instead of default 2s and succeed
+		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		deleteReq := &gate_pb.DeleteObjectRequest{
+			Id: objID,
+		}
+
+		_, err = gateClient.DeleteObject(deleteCtx, deleteReq)
+
+		// This should succeed because deletion is fast
+		if err != nil {
+			t.Fatalf("Expected delete to succeed with custom timeout, got error: %v", err)
+		}
+
+		t.Logf("Delete succeeded with custom deadline")
+	})
+
+	t.Run("DeleteObject_IdempotentDelete", func(t *testing.T) {
+		// Try to delete a non-existent object - should succeed (idempotent)
+		objID := "non-existent-object-for-delete-timeout-test"
+		deleteReq := &gate_pb.DeleteObjectRequest{
+			Id: objID,
+		}
+
+		_, err := gateClient.DeleteObject(context.Background(), deleteReq)
+
+		// Idempotent deletion should succeed
+		if err != nil {
+			t.Fatalf("Expected idempotent delete to succeed, got error: %v", err)
+		}
+
+		t.Logf("Idempotent delete succeeded")
+	})
+}
