@@ -25,42 +25,15 @@ Use the dynamic port allocation utilities in `util/testutil`:
 ### 1. Get a Free Port Number
 
 ```go
-port, err := testutil.GetFreePort()
-if err != nil {
-    t.Fatalf("Failed to get free port: %v", err)
-}
+port := testutil.GetFreePort()
 // Use: localhost:12345 (actual port will vary)
 ```
 
 ### 2. Get a Free Address (Recommended)
 
 ```go
-addr, err := testutil.GetFreeAddress()
-if err != nil {
-    t.Fatalf("Failed to get free address: %v", err)
-}
+addr := testutil.GetFreeAddress()
 // Returns: "localhost:12345" (port will vary)
-```
-
-### 3. Use TestServerHelper with Dynamic Ports
-
-`TestServerHelper` automatically captures the actual bound address when using `:0`:
-
-```go
-// Create server with dynamic port allocation
-mockServer := testutil.NewMockGoverseServer()
-mockServer.SetNode(node)
-testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
-
-err := testServer.Start(ctx)
-if err != nil {
-    t.Fatalf("Failed to start server: %v", err)
-}
-defer testServer.Stop()
-
-// Get the actual bound address
-actualAddr := testServer.GetAddress()
-// actualAddr will be something like "127.0.0.1:45678"
 ```
 
 ## Examples
@@ -70,10 +43,7 @@ actualAddr := testServer.GetAddress()
 ```go
 func TestMyNodeFeature(t *testing.T) {
     // Get a free address for the node
-    nodeAddr, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get free address: %v", err)
-    }
+    nodeAddr := testutil.GetFreeAddress()
 
     // Create node with dynamic address
     n := node.NewNode(nodeAddr)
@@ -90,31 +60,21 @@ func TestDistributedFeature(t *testing.T) {
     ctx := context.Background()
 
     // Get free addresses for multiple nodes
-    addr1, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get address for node1: %v", err)
-    }
-    addr2, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get address for node2: %v", err)
-    }
+    addr1 := testutil.GetFreeAddress()
+    addr2 := testutil.GetFreeAddress()
 
     // Create nodes
     node1 := node.NewNode(addr1)
     node2 := node.NewNode(addr2)
 
     // Start mock servers
-    server1 := testutil.NewTestServerHelper("localhost:0", mockServer1)
+    server1 := testutil.NewTestServerHelper(addr1, mockServer1)
     server1.Start(ctx)
     defer server1.Stop()
 
-    server2 := testutil.NewTestServerHelper("localhost:0", mockServer2)
+    server2 := testutil.NewTestServerHelper(addr2, mockServer2)
     server2.Start(ctx)
     defer server2.Stop()
-
-    // Get actual addresses
-    actualAddr1 := server1.GetAddress()
-    actualAddr2 := server2.GetAddress()
 
     // ... rest of test
 }
@@ -132,15 +92,8 @@ func TestGateNodeIntegration(t *testing.T) {
     etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
     // Get free addresses
-    nodeAddr, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get node address: %v", err)
-    }
-
-    gateAddr, err := testutil.GetFreeAddress()
-    if err != nil {
-        t.Fatalf("Failed to get gate address: %v", err)
-    }
+    nodeAddr := testutil.GetFreeAddress()
+    gateAddr := testutil.GetFreeAddress()
 
     // Create node cluster
     nodeCluster := mustNewCluster(ctx, t, nodeAddr, etcdPrefix)
@@ -150,11 +103,9 @@ func TestGateNodeIntegration(t *testing.T) {
     mockNodeServer := testutil.NewMockGoverseServer()
     mockNodeServer.SetNode(testNode)
     mockNodeServer.SetCluster(nodeCluster)
-    nodeServer := testutil.NewTestServerHelper("localhost:0", mockNodeServer)
+    nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
     nodeServer.Start(ctx)
     defer nodeServer.Stop()
-
-    actualNodeAddr := nodeServer.GetAddress()
 
     // Create gate server
     gwConfig := &GateServerConfig{
@@ -170,11 +121,10 @@ func TestGateNodeIntegration(t *testing.T) {
 
 ## Best Practices
 
-1. **Always use dynamic ports in tests**: Use `testutil.GetFreeAddress()` or `localhost:0` with TestServerHelper
+1. **Always use dynamic ports in tests**: Use `testutil.GetFreeAddress()` for all server addresses
 2. **Get addresses early**: Allocate all needed addresses at the start of your test
-3. **Use TestServerHelper's GetAddress()**: After starting a server with `:0`, get the actual address
-4. **Clean up resources**: Always use `defer` to stop servers and clean up
-5. **Enable parallel tests**: Tests with dynamic ports can run in parallel:
+3. **Clean up resources**: Always use `defer` to stop servers and clean up
+4. **Enable parallel tests**: Tests with dynamic ports can run in parallel:
    ```bash
    go test -v -parallel 4 ./...
    ```
@@ -197,10 +147,7 @@ import (
 nodeAddr := "localhost:47000"
 
 // After
-nodeAddr, err := testutil.GetFreeAddress()
-if err != nil {
-    t.Fatalf("Failed to get free address: %v", err)
-}
+nodeAddr := testutil.GetFreeAddress()
 ```
 
 ### Step 3: Update TestServerHelper usage
@@ -210,10 +157,9 @@ testServer := testutil.NewTestServerHelper("localhost:47001", mockServer)
 testServer.Start(ctx)
 
 // After
-testServer := testutil.NewTestServerHelper("localhost:0", mockServer)
+nodeAddr := testutil.GetFreeAddress()
+testServer := testutil.NewTestServerHelper(nodeAddr, mockServer)
 testServer.Start(ctx)
-actualAddr := testServer.GetAddress()
-// Use actualAddr where needed
 ```
 
 ## Running Tests
@@ -240,9 +186,9 @@ If you still see "address already in use" errors:
 - Verify tests don't share global state that uses specific ports
 
 ### Tests fail with "connection refused"
-- Make sure to use `testServer.GetAddress()` after starting the server
-- Don't use the original address if you specified `:0`
-- Allow time for servers to start before making connections
+- Ensure servers have started before making connections
+- Allow time for servers to initialize (add small delays if needed)
+- Verify the correct address is being used for connections
 
 ### Tests are slow
 - Dynamic port allocation is very fast (microseconds)
