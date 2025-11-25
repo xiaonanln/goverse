@@ -45,6 +45,78 @@ func (o *TestHTTPObject) Echo(ctx context.Context, req *structpb.Struct) (*struc
 	}, nil
 }
 
+// httpCallObjectHelper makes an HTTP call to the CallObject endpoint and returns the response
+func httpCallObjectHelper(t *testing.T, client *http.Client, httpBaseURL, objType, objID, method string, message string) (statusCode int, echoResp *structpb.Struct, rawBody []byte) {
+	t.Helper()
+
+	echoReq := &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"message": structpb.NewStringValue(message),
+		},
+	}
+
+	anyReq, err := anypb.New(echoReq)
+	if err != nil {
+		t.Fatalf("Failed to create Any: %v", err)
+	}
+
+	reqBytes, err := proto.Marshal(anyReq)
+	if err != nil {
+		t.Fatalf("Failed to marshal request: %v", err)
+	}
+
+	encodedReq := base64.StdEncoding.EncodeToString(reqBytes)
+	httpReq := HTTPRequest{Request: encodedReq}
+	reqBody, err := json.Marshal(httpReq)
+	if err != nil {
+		t.Fatalf("Failed to marshal HTTP request: %v", err)
+	}
+
+	url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/%s", httpBaseURL, objType, objID, method)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("HTTP request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, nil, body
+	}
+
+	var httpResp HTTPResponse
+	if err := json.Unmarshal(body, &httpResp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
+	if err != nil {
+		t.Fatalf("Failed to decode base64 response: %v", err)
+	}
+
+	anyResp := &anypb.Any{}
+	if err := proto.Unmarshal(respBytes, anyResp); err != nil {
+		t.Fatalf("Failed to unmarshal Any response: %v", err)
+	}
+
+	var respStruct structpb.Struct
+	if err := anyResp.UnmarshalTo(&respStruct); err != nil {
+		t.Fatalf("Failed to unmarshal response struct: %v", err)
+	}
+
+	return resp.StatusCode, &respStruct, body
+}
+
 // TestGateHTTPIntegration tests the HTTP API for create, call, and delete operations
 // This test verifies that HTTP requests work correctly to:
 // 1. Create an object via HTTP POST
@@ -168,75 +240,10 @@ func TestGateHTTPIntegration(t *testing.T) {
 	})
 
 	t.Run("CallObjectViaHTTP", func(t *testing.T) {
-		// Create the request message
-		echoReq := &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"message": structpb.NewStringValue("Hello from HTTP"),
-			},
-		}
+		statusCode, echoResp, body := httpCallObjectHelper(t, client, httpBaseURL, objType, objID, "Echo", "Hello from HTTP")
 
-		// Marshal to Any, then to bytes, then to base64
-		anyReq, err := anypb.New(echoReq)
-		if err != nil {
-			t.Fatalf("Failed to create Any: %v", err)
-		}
-
-		reqBytes, err := proto.Marshal(anyReq)
-		if err != nil {
-			t.Fatalf("Failed to marshal request: %v", err)
-		}
-
-		encodedReq := base64.StdEncoding.EncodeToString(reqBytes)
-
-		// Build HTTP request body
-		httpReq := HTTPRequest{Request: encodedReq}
-		reqBody, err := json.Marshal(httpReq)
-		if err != nil {
-			t.Fatalf("Failed to marshal HTTP request: %v", err)
-		}
-
-		// POST /api/v1/objects/call/{type}/{id}/{method}
-		url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/Echo", httpBaseURL, objType, objID)
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
-		if err != nil {
-			t.Fatalf("Failed to create HTTP request: %v", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("HTTP request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("Expected status 200, got %d. Body: %s", resp.StatusCode, string(body))
-		}
-
-		var httpResp HTTPResponse
-		if err := json.Unmarshal(body, &httpResp); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		// Decode base64, then unmarshal protobuf Any
-		respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
-		if err != nil {
-			t.Fatalf("Failed to decode base64 response: %v", err)
-		}
-
-		anyResp := &anypb.Any{}
-		if err := proto.Unmarshal(respBytes, anyResp); err != nil {
-			t.Fatalf("Failed to unmarshal Any response: %v", err)
-		}
-
-		var echoResp structpb.Struct
-		if err := anyResp.UnmarshalTo(&echoResp); err != nil {
-			t.Fatalf("Failed to unmarshal response struct: %v", err)
+		if statusCode != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d. Body: %s", statusCode, string(body))
 		}
 
 		// Verify response
@@ -257,69 +264,10 @@ func TestGateHTTPIntegration(t *testing.T) {
 	t.Run("CallObjectViaHTTPMultipleTimes", func(t *testing.T) {
 		// Call the object multiple times to verify call count increments
 		for i := 2; i <= 3; i++ {
-			echoReq := &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"message": structpb.NewStringValue(fmt.Sprintf("Call %d", i)),
-				},
-			}
+			statusCode, echoResp, body := httpCallObjectHelper(t, client, httpBaseURL, objType, objID, "Echo", fmt.Sprintf("Call %d", i))
 
-			anyReq, err := anypb.New(echoReq)
-			if err != nil {
-				t.Fatalf("Failed to create Any: %v", err)
-			}
-
-			reqBytes, err := proto.Marshal(anyReq)
-			if err != nil {
-				t.Fatalf("Failed to marshal request: %v", err)
-			}
-
-			encodedReq := base64.StdEncoding.EncodeToString(reqBytes)
-			httpReq := HTTPRequest{Request: encodedReq}
-			reqBody, err := json.Marshal(httpReq)
-			if err != nil {
-				t.Fatalf("Failed to marshal HTTP request: %v", err)
-			}
-
-			url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/Echo", httpBaseURL, objType, objID)
-			req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
-			if err != nil {
-				t.Fatalf("Failed to create HTTP request: %v", err)
-			}
-			req.Header.Set("Content-Type", "application/json")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				t.Fatalf("HTTP request failed: %v", err)
-			}
-
-			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				t.Fatalf("Failed to read response body: %v", err)
-			}
-
-			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("Expected status 200, got %d. Body: %s", resp.StatusCode, string(body))
-			}
-
-			var httpResp HTTPResponse
-			if err := json.Unmarshal(body, &httpResp); err != nil {
-				t.Fatalf("Failed to unmarshal response: %v", err)
-			}
-
-			respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
-			if err != nil {
-				t.Fatalf("Failed to decode base64 response: %v", err)
-			}
-
-			anyResp := &anypb.Any{}
-			if err := proto.Unmarshal(respBytes, anyResp); err != nil {
-				t.Fatalf("Failed to unmarshal Any response: %v", err)
-			}
-
-			var echoResp structpb.Struct
-			if err := anyResp.UnmarshalTo(&echoResp); err != nil {
-				t.Fatalf("Failed to unmarshal response struct: %v", err)
+			if statusCode != http.StatusOK {
+				t.Fatalf("Expected status 200, got %d. Body: %s", statusCode, string(body))
 			}
 
 			callCount := int(echoResp.Fields["callCount"].GetNumberValue())
@@ -372,70 +320,11 @@ func TestGateHTTPIntegration(t *testing.T) {
 	t.Run("VerifyObjectRecreatedOnCall", func(t *testing.T) {
 		// In the virtual actor model, calling a deleted object recreates it automatically
 		// This test verifies that the object is recreated with a fresh state (callCount = 1)
-		echoReq := &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"message": structpb.NewStringValue("After recreation"),
-			},
-		}
-
-		anyReq, err := anypb.New(echoReq)
-		if err != nil {
-			t.Fatalf("Failed to create Any: %v", err)
-		}
-
-		reqBytes, err := proto.Marshal(anyReq)
-		if err != nil {
-			t.Fatalf("Failed to marshal request: %v", err)
-		}
-
-		encodedReq := base64.StdEncoding.EncodeToString(reqBytes)
-		httpReq := HTTPRequest{Request: encodedReq}
-		reqBody, err := json.Marshal(httpReq)
-		if err != nil {
-			t.Fatalf("Failed to marshal HTTP request: %v", err)
-		}
-
-		url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/Echo", httpBaseURL, objType, objID)
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
-		if err != nil {
-			t.Fatalf("Failed to create HTTP request: %v", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("HTTP request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
+		statusCode, echoResp, body := httpCallObjectHelper(t, client, httpBaseURL, objType, objID, "Echo", "After recreation")
 
 		// Object is automatically recreated on call (virtual actor model)
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("Expected status 200 (object recreated), got %d. Body: %s", resp.StatusCode, string(body))
-		}
-
-		var httpResp HTTPResponse
-		if err := json.Unmarshal(body, &httpResp); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		respBytes, err := base64.StdEncoding.DecodeString(httpResp.Response)
-		if err != nil {
-			t.Fatalf("Failed to decode base64 response: %v", err)
-		}
-
-		anyResp := &anypb.Any{}
-		if err := proto.Unmarshal(respBytes, anyResp); err != nil {
-			t.Fatalf("Failed to unmarshal Any response: %v", err)
-		}
-
-		var echoResp structpb.Struct
-		if err := anyResp.UnmarshalTo(&echoResp); err != nil {
-			t.Fatalf("Failed to unmarshal response struct: %v", err)
+		if statusCode != http.StatusOK {
+			t.Fatalf("Expected status 200 (object recreated), got %d. Body: %s", statusCode, string(body))
 		}
 
 		// Verify the object was recreated with fresh state (callCount should be 1)
