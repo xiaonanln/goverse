@@ -16,17 +16,22 @@ const (
 	NodeKeepAliveTTL = 5  // seconds
 
 	// DefaultEtcdTimeout is the default timeout for etcd operations.
-	// Per TIMEOUT_DESIGN.md, etcd operations should have a 5 second timeout.
-	DefaultEtcdTimeout = 5 * time.Second
+	// Per TIMEOUT_DESIGN.md, etcd operations should have a 60 second timeout.
+	DefaultEtcdTimeout = 60 * time.Second
 )
 
 // WithEtcdDeadline ensures the context has a deadline for etcd operations.
-// If the context already has a deadline, it returns the original context.
-// Otherwise, it returns a new context with DefaultEtcdTimeout.
+// If the context has no deadline, or if the existing deadline is longer than
+// DefaultEtcdTimeout, it returns a new context with DefaultEtcdTimeout.
+// This ensures etcd operations don't hang even if the parent context has a very long deadline.
 func WithEtcdDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
-	if _, hasDeadline := ctx.Deadline(); hasDeadline {
-		return ctx, func() {}
+	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
+		// If existing deadline is shorter than etcd timeout, use it
+		if time.Until(deadline) <= DefaultEtcdTimeout {
+			return ctx, func() {}
+		}
 	}
+	// Apply etcd timeout if no deadline or deadline is too long
 	return context.WithTimeout(ctx, DefaultEtcdTimeout)
 }
 
