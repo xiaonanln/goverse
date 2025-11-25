@@ -11,6 +11,7 @@ Uses the ChatRoom object from the chat sample for simplicity.
 """
 
 import os
+import subprocess
 import sys
 import base64
 import json
@@ -99,10 +100,8 @@ def test_call_object(http_base_url: str) -> bool:
         print(f"   Created test object: {created_id}")
         
         # Now call a method on it (Join)
-        join_request = chat_pb2.ChatRoom_JoinRequest(
-            user_name="test_user",
-            client_id=""
-        )
+        # Note: client_id is left empty as this is an HTTP test (no streaming client registration)
+        join_request = chat_pb2.ChatRoom_JoinRequest(user_name="test_user")
         encoded_request = encode_protobuf_any(join_request)
         
         call_url = f"{http_base_url}/api/v1/objects/call/ChatRoom/{test_obj_id}/Join"
@@ -347,8 +346,9 @@ def main():
     grpc_port = 49000
     
     try:
-        # Add go bin to PATH
-        go_bin_path = os.popen('go env GOPATH').read().strip()
+        # Add go bin to PATH using subprocess for safer execution
+        result = subprocess.run(['go', 'env', 'GOPATH'], capture_output=True, text=True, check=True)
+        go_bin_path = result.stdout.strip()
         os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
         
         # Start inspector
@@ -362,10 +362,7 @@ def main():
         chat_server = ChatServer(server_index=0)
         chat_server.start()
         
-        print("\nWaiting for chat server to start...")
-        time.sleep(5)
-        
-        if not chat_server.wait_for_ready(timeout=20):
+        if not chat_server.wait_for_ready(timeout=30):
             print("❌ Chat server failed to start")
             return 1
         
