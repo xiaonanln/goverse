@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/gate"
@@ -20,28 +19,26 @@ import (
 
 // GateServerConfig holds configuration for the gate server
 type GateServerConfig struct {
-	ListenAddress        string        // Address to listen on for client connections (e.g., ":49000")
-	AdvertiseAddress     string        // Address to advertise to the cluster (e.g., "localhost:49000")
-	HTTPListenAddress    string        // Optional: HTTP address for REST API (e.g., ":8080")
-	MetricsListenAddress string        // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
-	EtcdAddress          string        // Address of etcd for cluster state
-	EtcdPrefix           string        // Optional: etcd key prefix (default: "/goverse")
-	NumShards            int           // Optional: number of shards in the cluster (default: 8192)
-	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 300s)
+	ListenAddress      string        // Address to listen on for client connections (e.g., ":49000")
+	AdvertiseAddress   string        // Address to advertise to the cluster (e.g., "localhost:49000")
+	HTTPListenAddress  string        // Optional: HTTP address for REST API and metrics (e.g., ":8080")
+	EtcdAddress        string        // Address of etcd for cluster state
+	EtcdPrefix         string        // Optional: etcd key prefix (default: "/goverse")
+	NumShards          int           // Optional: number of shards in the cluster (default: 8192)
+	DefaultCallTimeout time.Duration // Optional: default timeout for CallObject operations (default: 300s)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
 type GateServer struct {
 	gate_pb.UnimplementedGateServiceServer
-	config        *GateServerConfig
-	ctx           context.Context
-	cancel        context.CancelFunc
-	logger        *logger.Logger
-	grpcServer    *grpc.Server
-	httpServer    *http.Server
-	metricsServer *http.Server
-	gate          *gate.Gate
-	cluster       *cluster.Cluster
+	config     *GateServerConfig
+	ctx        context.Context
+	cancel     context.CancelFunc
+	logger     *logger.Logger
+	grpcServer *grpc.Server
+	httpServer *http.Server
+	gate       *gate.Gate
+	cluster    *cluster.Cluster
 }
 
 // NewGateServer creates a new gate server instance
@@ -118,22 +115,6 @@ func validateConfig(config *GateServerConfig) error {
 func (s *GateServer) Start(ctx context.Context) error {
 	s.logger.Infof("Starting gate server on %s", s.config.ListenAddress)
 
-	// Start metrics HTTP server early if configured (independent of cluster)
-	if s.config.MetricsListenAddress != "" {
-		s.metricsServer = &http.Server{
-			Addr:              s.config.MetricsListenAddress,
-			Handler:           promhttp.Handler(),
-			ReadHeaderTimeout: 5 * time.Second,
-		}
-		go func() {
-			s.logger.Infof("Metrics HTTP server listening on %s", s.config.MetricsListenAddress)
-			if err := s.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				s.logger.Errorf("Metrics HTTP server error: %v", err)
-			}
-			s.logger.Infof("Metrics HTTP server stopped")
-		}()
-	}
-
 	// Start the cluster
 	if err := s.cluster.Start(ctx, nil); err != nil {
 		return fmt.Errorf("failed to start cluster: %w", err)
@@ -164,7 +145,7 @@ func (s *GateServer) Start(ctx context.Context) error {
 		}
 	}()
 
-	// Start HTTP server if configured
+	// Start HTTP server if configured (includes REST API and metrics)
 	if err := s.startHTTPServer(ctx); err != nil {
 		return fmt.Errorf("failed to start HTTP server: %w", err)
 	}
@@ -205,15 +186,6 @@ func (s *GateServer) Stop() error {
 	// Shutdown HTTP server if running
 	if err := s.stopHTTPServer(); err != nil {
 		s.logger.Errorf("HTTP server shutdown error: %v", err)
-	}
-
-	// Shutdown metrics server if running
-	if s.metricsServer != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := s.metricsServer.Shutdown(shutdownCtx); err != nil {
-			s.logger.Errorf("Metrics server shutdown error: %v", err)
-		}
 	}
 
 	// Stop the gate
