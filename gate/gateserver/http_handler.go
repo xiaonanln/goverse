@@ -238,8 +238,12 @@ func (s *GateServer) startHTTPServer(ctx context.Context) error {
 	mux := s.setupHTTPRoutes()
 
 	s.httpServer = &http.Server{
-		Addr:    s.config.HTTPListenAddress,
-		Handler: mux,
+		Addr:              s.config.HTTPListenAddress,
+		Handler:           mux,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {
