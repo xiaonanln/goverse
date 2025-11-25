@@ -593,6 +593,13 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 
 	prefix := cm.etcdManager.GetPrefix()
 
+	// Ensure context has a deadline for etcd operation
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, etcdmanager.DefaultEtcdTimeout)
+		defer cancel()
+	}
+
 	// Load ALL cluster data in one transaction
 	resp, err := client.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
@@ -839,9 +846,17 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 			key := fmt.Sprintf("%s%d", shardPrefix, id)
 			value := formatShardInfo(shardInfo)
 
+			// Ensure context has a deadline for etcd operation
+			txnCtx := ctx
+			if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+				var cancel context.CancelFunc
+				txnCtx, cancel = context.WithTimeout(ctx, etcdmanager.DefaultEtcdTimeout)
+				defer cancel()
+			}
+
 			// Build conditional transaction based on ModRevision
 			// Always check that ModRevision matches expected value (0 for new shards)
-			txn := client.Txn(ctx).
+			txn := client.Txn(txnCtx).
 				If(clientv3.Compare(clientv3.ModRevision(key), "=", shardInfo.ModRevision)).
 				Then(clientv3.OpPut(key, value))
 
@@ -856,9 +871,11 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
-				// Retrieve current ModRevision for diagnostics
+				// Retrieve current ModRevision for diagnostics with deadline
+				getCtx, getCancel := context.WithTimeout(context.Background(), etcdmanager.DefaultEtcdTimeout)
+				defer getCancel()
 				var currentModRev int64
-				getResp, getErr := client.Get(ctx, key)
+				getResp, getErr := client.Get(getCtx, key)
 				if getErr == nil && len(getResp.Kvs) > 0 {
 					currentModRev = getResp.Kvs[0].ModRevision
 				}
