@@ -46,6 +46,46 @@ func TestGateServerConfig_DefaultCallTimeout(t *testing.T) {
 	})
 }
 
+// TestGateServerConfig_DefaultDeleteTimeout tests that the default delete timeout is set correctly
+func TestGateServerConfig_DefaultDeleteTimeout(t *testing.T) {
+	t.Run("DefaultTimeoutSet", func(t *testing.T) {
+		config := &GateServerConfig{
+			ListenAddress:    "localhost:50000",
+			AdvertiseAddress: "localhost:50000",
+			EtcdAddress:      "localhost:2379",
+		}
+
+		err := validateConfig(config)
+		if err != nil {
+			t.Fatalf("validateConfig failed: %v", err)
+		}
+
+		expectedTimeout := 10 * time.Second
+		if config.DefaultDeleteTimeout != expectedTimeout {
+			t.Errorf("Expected DefaultDeleteTimeout to be %v, got %v", expectedTimeout, config.DefaultDeleteTimeout)
+		}
+	})
+
+	t.Run("CustomTimeoutPreserved", func(t *testing.T) {
+		customTimeout := 30 * time.Second
+		config := &GateServerConfig{
+			ListenAddress:        "localhost:50000",
+			AdvertiseAddress:     "localhost:50000",
+			EtcdAddress:          "localhost:2379",
+			DefaultDeleteTimeout: customTimeout,
+		}
+
+		err := validateConfig(config)
+		if err != nil {
+			t.Fatalf("validateConfig failed: %v", err)
+		}
+
+		if config.DefaultDeleteTimeout != customTimeout {
+			t.Errorf("Expected DefaultDeleteTimeout to be preserved at %v, got %v", customTimeout, config.DefaultDeleteTimeout)
+		}
+	})
+}
+
 // TestContextDeadlineApplication tests that deadline is properly applied to context
 func TestContextDeadlineApplication(t *testing.T) {
 	t.Run("NoDeadline", func(t *testing.T) {

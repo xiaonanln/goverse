@@ -19,13 +19,14 @@ import (
 
 // GateServerConfig holds configuration for the gate server
 type GateServerConfig struct {
-	ListenAddress      string        // Address to listen on for client connections (e.g., ":49000")
-	AdvertiseAddress   string        // Address to advertise to the cluster (e.g., "localhost:49000")
-	HTTPListenAddress  string        // Optional: HTTP address for REST API and metrics (e.g., ":8080")
-	EtcdAddress        string        // Address of etcd for cluster state
-	EtcdPrefix         string        // Optional: etcd key prefix (default: "/goverse")
-	NumShards          int           // Optional: number of shards in the cluster (default: 8192)
-	DefaultCallTimeout time.Duration // Optional: default timeout for CallObject operations (default: 300s)
+	ListenAddress        string        // Address to listen on for client connections (e.g., ":49000")
+	AdvertiseAddress     string        // Address to advertise to the cluster (e.g., "localhost:49000")
+	HTTPListenAddress    string        // Optional: HTTP address for REST API and metrics (e.g., ":8080")
+	EtcdAddress          string        // Address of etcd for cluster state
+	EtcdPrefix           string        // Optional: etcd key prefix (default: "/goverse")
+	NumShards            int           // Optional: number of shards in the cluster (default: 8192)
+	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
+	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 10s)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
@@ -106,6 +107,9 @@ func validateConfig(config *GateServerConfig) error {
 	}
 	if config.DefaultCallTimeout <= 0 {
 		config.DefaultCallTimeout = 30 * time.Second // Default 30 seconds
+	}
+	if config.DefaultDeleteTimeout <= 0 {
+		config.DefaultDeleteTimeout = 10 * time.Second // Default 10 seconds
 	}
 
 	return nil
@@ -286,6 +290,10 @@ func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObject
 
 // DeleteObject implements the DeleteObject RPC
 func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
+	// Apply default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultDeleteTimeout)
+	defer cancel()
+
 	// Call the cluster to delete the object
 	err := s.cluster.DeleteObject(ctx, req.Id)
 	if err != nil {
