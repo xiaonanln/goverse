@@ -119,8 +119,9 @@ func TestGateNodeIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create gate cluster
+	gateAddr := testutil.GetFreeAddress()
 	gwConfig := &gate.GateConfig{
-		AdvertiseAddress: "localhost:49001",
+		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       testPrefix,
 	}
@@ -145,12 +146,13 @@ func TestGateNodeIntegration(t *testing.T) {
 		gateCluster.Stop(ctx)
 		gw.Stop()
 	})
-	t.Logf("Created gate cluster at localhost:49001")
+	t.Logf("Created gate cluster at %s", gateAddr)
 
 	// Create node cluster using mustNewCluster
-	nodeCluster := mustNewCluster(ctx, t, "localhost:47001", testPrefix)
+	nodeAddr := testutil.GetFreeAddress()
+	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	testNode := nodeCluster.GetThisNode()
-	t.Logf("Created node cluster at localhost:47001")
+	t.Logf("Created node cluster at %s", nodeAddr)
 
 	// Register test object type on the node
 	testNode.RegisterObjectType((*TestGateNodeObject)(nil))
@@ -161,7 +163,7 @@ func TestGateNodeIntegration(t *testing.T) {
 	// Start mock gRPC server for the node to handle inter-cluster communication
 	mockServer := testutil.NewMockGoverseServer()
 	mockServer.SetNode(testNode) // Assign the actual node to the mock server
-	testServer := testutil.NewTestServerHelper("localhost:47001", mockServer)
+	testServer := testutil.NewTestServerHelper(nodeAddr, mockServer)
 	err = testServer.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
@@ -200,8 +202,8 @@ func TestGateNodeIntegration(t *testing.T) {
 		}
 
 		// Verify the object was created on the node
-		if targetNode != "localhost:47001" {
-			t.Fatalf("Expected target node localhost:47001, got %s", targetNode)
+		if targetNode != nodeAddr {
+			t.Fatalf("Expected target node %s, got %s", nodeAddr, targetNode)
 		}
 
 		// Wait for async object creation to complete
@@ -233,8 +235,8 @@ func TestGateNodeIntegration(t *testing.T) {
 			}
 
 			// Verify the object was created on the correct node
-			if targetNode != "localhost:47001" {
-				t.Fatalf("Expected target node localhost:47001, got %s", targetNode)
+			if targetNode != nodeAddr {
+				t.Fatalf("Expected target node %s, got %s", nodeAddr, targetNode)
 			}
 
 			// Wait for async object creation to complete

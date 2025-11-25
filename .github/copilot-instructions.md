@@ -134,7 +134,8 @@ Never access `provider.storage` directly (causes races).
 ```go
 mockServer := testutil.NewMockGoverseServer()
 mockServer.SetNode(node1)
-testServer := testutil.NewTestServerHelper("localhost:47001", mockServer)
+nodeAddr := testutil.GetFreeAddress()  // Dynamic port allocation
+testServer := testutil.NewTestServerHelper(nodeAddr, mockServer)
 testServer.Start(ctx)
 defer testServer.Stop()
 ```
