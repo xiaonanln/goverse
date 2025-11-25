@@ -339,6 +339,45 @@ func TestGateHTTPIntegration(t *testing.T) {
 	})
 }
 
+// curlPostHelper executes a curl POST request and returns the parsed status code and response body.
+// If requestBody is nil, it sends a POST request without a body.
+func curlPostHelper(t *testing.T, url string, requestBody []byte) (statusCode int, bodyBytes []byte) {
+	t.Helper()
+
+	var cmd *exec.Cmd
+	if requestBody != nil {
+		cmd = exec.Command("curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
+			"-H", "Content-Type: application/json",
+			"-d", string(requestBody),
+			url)
+	} else {
+		cmd = exec.Command("curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
+			"-H", "Content-Type: application/json",
+			url)
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("curl command failed: %v", err)
+	}
+
+	// Parse output - last line is the status code
+	lines := bytes.Split(output, []byte("\n"))
+	if len(lines) < 2 {
+		t.Fatalf("Unexpected curl output format: %s", string(output))
+	}
+
+	statusCodeLine := string(lines[len(lines)-1])
+	bodyBytes = bytes.Join(lines[:len(lines)-1], []byte("\n"))
+
+	parsedCode, err := strconv.Atoi(statusCodeLine)
+	if err != nil {
+		t.Fatalf("Failed to parse status code from curl output: %v", err)
+	}
+
+	return parsedCode, bodyBytes
+}
+
 // curlCallObjectHelper makes an HTTP call to the CallObject endpoint using curl and returns the response
 func curlCallObjectHelper(t *testing.T, httpBaseURL, objType, objID, method, message string) (statusCode int, echoResp *structpb.Struct, rawOutput string) {
 	t.Helper()
@@ -368,34 +407,10 @@ func curlCallObjectHelper(t *testing.T, httpBaseURL, objType, objID, method, mes
 
 	url := fmt.Sprintf("%s/api/v1/objects/call/%s/%s/%s", httpBaseURL, objType, objID, method)
 
-	// Use curl with -w to get HTTP status code
-	cmd := exec.Command("curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
-		"-H", "Content-Type: application/json",
-		"-d", string(reqBody),
-		url)
-
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("curl command failed: %v", err)
-	}
-
-	// Parse output - last line is the status code
-	lines := bytes.Split(output, []byte("\n"))
-	if len(lines) < 2 {
-		t.Fatalf("Unexpected curl output format: %s", string(output))
-	}
-
-	statusCodeLine := string(lines[len(lines)-1])
-	bodyBytes := bytes.Join(lines[:len(lines)-1], []byte("\n"))
-
-	parsedCode, err := strconv.Atoi(statusCodeLine)
-	if err != nil {
-		t.Fatalf("Failed to parse status code from curl output: %v", err)
-	}
-	statusCode = parsedCode
+	statusCode, bodyBytes := curlPostHelper(t, url, reqBody)
 
 	if statusCode != http.StatusOK {
-		return statusCode, nil, string(output)
+		return statusCode, nil, string(bodyBytes)
 	}
 
 	var httpResp HTTPResponse
@@ -418,7 +433,7 @@ func curlCallObjectHelper(t *testing.T, httpBaseURL, objType, objID, method, mes
 		t.Fatalf("Failed to unmarshal response struct: %v", err)
 	}
 
-	return statusCode, &respStruct, string(output)
+	return statusCode, &respStruct, string(bodyBytes)
 }
 
 // TestGateHTTPIntegrationWithCurl tests the HTTP API using curl as client.
@@ -513,28 +528,7 @@ func TestGateHTTPIntegrationWithCurl(t *testing.T) {
 		// POST /api/v1/objects/create/{type}/{id}
 		url := fmt.Sprintf("%s/api/v1/objects/create/%s/%s", httpBaseURL, objType, objID)
 
-		cmd := exec.Command("curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
-			"-H", "Content-Type: application/json",
-			url)
-
-		output, err := cmd.Output()
-		if err != nil {
-			t.Fatalf("curl command failed: %v", err)
-		}
-
-		// Parse output - last line is the status code
-		lines := bytes.Split(output, []byte("\n"))
-		if len(lines) < 2 {
-			t.Fatalf("Unexpected curl output format: %s", string(output))
-		}
-
-		statusCodeLine := string(lines[len(lines)-1])
-		bodyBytes := bytes.Join(lines[:len(lines)-1], []byte("\n"))
-
-		statusCode, err := strconv.Atoi(statusCodeLine)
-		if err != nil {
-			t.Fatalf("Failed to parse status code from curl output: %v", err)
-		}
+		statusCode, bodyBytes := curlPostHelper(t, url, nil)
 
 		if statusCode != http.StatusOK {
 			t.Fatalf("Expected status 200, got %d. Body: %s", statusCode, string(bodyBytes))
@@ -598,28 +592,7 @@ func TestGateHTTPIntegrationWithCurl(t *testing.T) {
 		// POST /api/v1/objects/delete/{id}
 		url := fmt.Sprintf("%s/api/v1/objects/delete/%s", httpBaseURL, objID)
 
-		cmd := exec.Command("curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
-			"-H", "Content-Type: application/json",
-			url)
-
-		output, err := cmd.Output()
-		if err != nil {
-			t.Fatalf("curl command failed: %v", err)
-		}
-
-		// Parse output - last line is the status code
-		lines := bytes.Split(output, []byte("\n"))
-		if len(lines) < 2 {
-			t.Fatalf("Unexpected curl output format: %s", string(output))
-		}
-
-		statusCodeLine := string(lines[len(lines)-1])
-		bodyBytes := bytes.Join(lines[:len(lines)-1], []byte("\n"))
-
-		statusCode, err := strconv.Atoi(statusCodeLine)
-		if err != nil {
-			t.Fatalf("Failed to parse status code from curl output: %v", err)
-		}
+		statusCode, bodyBytes := curlPostHelper(t, url, nil)
 
 		if statusCode != http.StatusOK {
 			t.Fatalf("Expected status 200, got %d. Body: %s", statusCode, string(bodyBytes))
