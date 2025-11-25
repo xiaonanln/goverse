@@ -14,7 +14,21 @@ const (
 	DefaultPrefix    = "/goverse"
 	NodeLeaseTTL     = 15 // seconds
 	NodeKeepAliveTTL = 5  // seconds
+
+	// DefaultEtcdTimeout is the default timeout for etcd operations.
+	// Per TIMEOUT_DESIGN.md, etcd operations should have a 5 second timeout.
+	DefaultEtcdTimeout = 5 * time.Second
 )
+
+// withEtcdDeadline ensures the context has a deadline for etcd operations.
+// If the context already has a deadline, it returns the original context.
+// Otherwise, it returns a new context with DefaultEtcdTimeout.
+func withEtcdDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, DefaultEtcdTimeout)
+}
 
 // EtcdManager manages the connection to etcd
 type EtcdManager struct {
@@ -139,6 +153,9 @@ func (mgr *EtcdManager) Put(ctx context.Context, key, value string) error {
 		return fmt.Errorf("etcd client not connected")
 	}
 
+	ctx, cancel := withEtcdDeadline(ctx)
+	defer cancel()
+
 	_, err := mgr.client.Put(ctx, key, value)
 	if err != nil {
 		return fmt.Errorf("failed to put key %s: %w", key, err)
@@ -176,7 +193,9 @@ func (mgr *EtcdManager) RegisterKeyLease(ctx context.Context, key string, value 
 	// Put the key immediately with the current lease (if exists)
 	// The sharedLeaseLoop will re-put all keys when creating a new lease
 	if mgr.sharedLeaseID != 0 {
-		_, err := mgr.client.Put(ctx, key, value, clientv3.WithLease(mgr.sharedLeaseID))
+		putCtx, cancel := withEtcdDeadline(ctx)
+		_, err := mgr.client.Put(putCtx, key, value, clientv3.WithLease(mgr.sharedLeaseID))
+		cancel()
 		if err != nil {
 			mgr.logger.Warnf("Failed to put key %s: %v (will be retried by lease loop)", key, err)
 		} else {
@@ -198,7 +217,9 @@ func (mgr *EtcdManager) UnregisterKeyLease(ctx context.Context, key string) erro
 
 	// Delete the key from etcd
 	if mgr.client != nil {
-		_, err := mgr.client.Delete(ctx, key)
+		deleteCtx, cancel := withEtcdDeadline(ctx)
+		_, err := mgr.client.Delete(deleteCtx, key)
+		cancel()
 		if err != nil {
 			mgr.logger.Warnf("Failed to delete key %s: %v", key, err)
 		} else {
@@ -222,7 +243,7 @@ func (mgr *EtcdManager) UnregisterKeyLease(ctx context.Context, key string) erro
 
 		// Revoke the lease
 		if mgr.sharedLeaseID != 0 && mgr.client != nil {
-			revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			revokeCtx, cancel := context.WithTimeout(context.Background(), DefaultEtcdTimeout)
 			defer cancel()
 
 			_, err := mgr.client.Revoke(revokeCtx, mgr.sharedLeaseID)
@@ -302,7 +323,7 @@ func (mgr *EtcdManager) maintainSharedLease(ctx context.Context, ttl int64) erro
 
 	if oldLeaseID != 0 {
 		mgr.logger.Infof("Revoking stale shared lease %d before creating new lease", oldLeaseID)
-		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		revokeCtx, cancel := context.WithTimeout(context.Background(), DefaultEtcdTimeout)
 		_, err := mgr.client.Revoke(revokeCtx, oldLeaseID)
 		cancel()
 		if err != nil {
@@ -310,8 +331,10 @@ func (mgr *EtcdManager) maintainSharedLease(ctx context.Context, ttl int64) erro
 		}
 	}
 
-	// Create a new lease
-	lease, err := mgr.client.Grant(ctx, ttl)
+	// Create a new lease with proper timeout
+	grantCtx, grantCancel := context.WithTimeout(ctx, DefaultEtcdTimeout)
+	lease, err := mgr.client.Grant(grantCtx, ttl)
+	grantCancel()
 	if err != nil {
 		return fmt.Errorf("failed to grant shared lease: %w", err)
 	}
@@ -325,7 +348,7 @@ func (mgr *EtcdManager) maintainSharedLease(ctx context.Context, ttl int64) erro
 
 	// Ensure the lease is revoked when this function exits
 	defer func() {
-		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		revokeCtx, cancel := context.WithTimeout(context.Background(), DefaultEtcdTimeout)
 		defer cancel()
 
 		_, err := mgr.client.Revoke(revokeCtx, lease.ID)
@@ -352,7 +375,9 @@ func (mgr *EtcdManager) maintainSharedLease(ctx context.Context, ttl int64) erro
 	mgr.sharedKeysMu.Unlock()
 
 	for key, value := range keysCopy {
-		_, err := mgr.client.Put(ctx, key, value, clientv3.WithLease(lease.ID))
+		putCtx, putCancel := context.WithTimeout(ctx, DefaultEtcdTimeout)
+		_, err := mgr.client.Put(putCtx, key, value, clientv3.WithLease(lease.ID))
+		putCancel()
 		if err != nil {
 			mgr.logger.Warnf("Failed to put key %s with shared lease: %v", key, err)
 			return fmt.Errorf("failed to put key %s: %w", key, err)
@@ -360,7 +385,8 @@ func (mgr *EtcdManager) maintainSharedLease(ctx context.Context, ttl int64) erro
 		mgr.logger.Debugf("Put key=%s with shared lease %d", key, lease.ID)
 	}
 
-	// Keep the lease alive
+	// Keep the lease alive - this is a long-running operation and uses the parent context
+	// The etcd client handles keepalive internally with appropriate timeouts
 	keepAliveCh, err := mgr.client.KeepAlive(ctx, lease.ID)
 	if err != nil {
 		return fmt.Errorf("failed to keep alive shared lease: %w", err)
@@ -391,6 +417,9 @@ func (mgr *EtcdManager) getAllNodesForTesting(ctx context.Context) ([]string, in
 	if mgr.client == nil {
 		return nil, 0, fmt.Errorf("etcd client not connected")
 	}
+
+	ctx, cancel := withEtcdDeadline(ctx)
+	defer cancel()
 
 	nodesPrefix := mgr.prefix + "/nodes/"
 	resp, err := mgr.client.Get(ctx, nodesPrefix, clientv3.WithPrefix())
