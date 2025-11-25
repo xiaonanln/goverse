@@ -90,7 +90,7 @@ Add `BaseObject.CheckTimeout(ctx)` helper for object methods to periodically che
 - **PushMessageToClient**: 5 seconds (push delivery should be immediate or fail fast)
 - **Node-to-node calls**: 25 seconds (slightly less than CallObject to allow propagation)
 - **Etcd operations**: 60 seconds (allows for transient network issues and cluster recovery)
-- **gRPC connection**: 10 seconds (connection establishment)
+- **gRPC connection**: 30 seconds (connection establishment)
 - **Maximum timeout**: 5 minutes (safety limit)
 
 **Guidelines for users:**
@@ -99,7 +99,7 @@ Add `BaseObject.CheckTimeout(ctx)` helper for object methods to periodically che
 - Complex operations: 1-2 minutes
 - Long-running operations: Use async pattern instead of long timeout
 - Push messages: 5 seconds (fail fast if client unreachable)
-- Infrastructure operations (etcd, connections): 10-60 seconds
+- Infrastructure operations (etcd, connections): 30-60 seconds
 
 ### 7. Monitoring and Metrics
 

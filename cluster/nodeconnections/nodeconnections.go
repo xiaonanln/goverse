@@ -4,11 +4,19 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+	// DefaultConnectionTimeout is the default timeout for gRPC connection establishment.
+	// Per TIMEOUT_DESIGN.md, gRPC connection operations should have a 30 second timeout.
+	DefaultConnectionTimeout = 30 * time.Second
 )
 
 // NodeConnection represents a gRPC connection to a single node
@@ -79,8 +87,17 @@ func (nc *NodeConnections) connectToNode(nodeAddr string) error {
 
 	nc.logger.Infof("Connecting to node %s", nodeAddr)
 
-	// Establish gRPC connection
-	conn, err := grpc.NewClient(nodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Configure connection parameters with timeout per TIMEOUT_DESIGN.md
+	connectParams := grpc.ConnectParams{
+		Backoff:           backoff.DefaultConfig,
+		MinConnectTimeout: DefaultConnectionTimeout,
+	}
+
+	// Establish gRPC connection with connection timeout
+	conn, err := grpc.NewClient(nodeAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(connectParams),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to node %s: %w", nodeAddr, err)
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
@@ -15,6 +16,10 @@ import (
 const (
 	defaultInspectorAddress    = "localhost:8081"
 	defaultHealthCheckInterval = 5 * time.Second
+
+	// DefaultConnectionTimeout is the default timeout for gRPC connection establishment.
+	// Per TIMEOUT_DESIGN.md, gRPC connection operations should have a 30 second timeout.
+	DefaultConnectionTimeout = 30 * time.Second
 )
 
 // InspectorManager manages the connection and communication with the Inspector service.
@@ -143,7 +148,16 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 // connectLocked attempts to connect to the Inspector service.
 // Must be called with im.mu held.
 func (im *InspectorManager) connectLocked() error {
-	conn, err := grpc.NewClient(im.inspectorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Configure connection parameters with timeout per TIMEOUT_DESIGN.md
+	connectParams := grpc.ConnectParams{
+		Backoff:           backoff.DefaultConfig,
+		MinConnectTimeout: DefaultConnectionTimeout,
+	}
+
+	conn, err := grpc.NewClient(im.inspectorAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(connectParams),
+	)
 	if err != nil {
 		return err
 	}
