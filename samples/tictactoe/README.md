@@ -33,10 +33,13 @@ A simple web-based Tic Tac Toe game demonstrating the Goverse distributed object
      --advertise-client-urls http://localhost:2379
    ```
 
-2. **Start the server**:
+2. **Start the server** (runs both Node and HTTP Gate):
    ```bash
    cd samples/tictactoe/server
    go run .
+   # This starts:
+   #   - Goverse Node on localhost:50051
+   #   - HTTP Gate on localhost:49000 (gRPC) and :8080 (REST API)
    ```
 
 3. **Serve the web client**:
