@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
@@ -76,6 +77,7 @@ func TestWaitForClusterReady_BecomesReady(t *testing.T) {
 
 // mockFullCluster is a mock implementation of FullClusterChecker for testing
 type mockFullCluster struct {
+	mu                   sync.RWMutex
 	readyChan            chan bool
 	name                 string
 	advertiseAddr        string
@@ -97,18 +99,26 @@ func (m *mockFullCluster) String() string {
 }
 
 func (m *mockFullCluster) GetNodes() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.nodes
 }
 
 func (m *mockFullCluster) GetGates() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.gates
 }
 
 func (m *mockFullCluster) IsReady() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.isReady
 }
 
 func (m *mockFullCluster) IsGateConnected(gateAddr string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.connectedGates[gateAddr]
 }
 
@@ -125,7 +135,20 @@ func (m *mockFullCluster) IsGate() bool {
 }
 
 func (m *mockFullCluster) IsShardMappingComplete(ctx context.Context, numShards int) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.shardMappingComplete
+}
+
+// setReady sets the mock cluster state to ready with proper synchronization
+func (m *mockFullCluster) setReady(nodes, gates []string, connectedGates map[string]bool, shardMappingComplete bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.isReady = true
+	m.nodes = nodes
+	m.gates = gates
+	m.connectedGates = connectedGates
+	m.shardMappingComplete = shardMappingComplete
 }
 
 func newMockFullClusterNode(name, addr string) *mockFullCluster {
@@ -231,23 +254,23 @@ func TestWaitForClustersReady_BecomesReady(t *testing.T) {
 	node := newMockFullClusterNode("node1", "localhost:7001")
 	gate := newMockFullClusterGate("gate1", "localhost:9001")
 
-	// Initially not ready
-	node.isReady = false
-	gate.isReady = false
+	// Initially not ready (default state from constructor)
 
-	// Make it ready after a short delay
+	// Make it ready after a short delay using thread-safe setReady method
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		node.isReady = true
-		node.nodes = []string{"localhost:7001"}
-		node.gates = []string{"localhost:9001"}
-		node.connectedGates["localhost:9001"] = true
-		node.shardMappingComplete = true
-
-		gate.isReady = true
-		gate.nodes = []string{"localhost:7001"}
-		gate.gates = []string{"localhost:9001"}
-		gate.shardMappingComplete = true
+		node.setReady(
+			[]string{"localhost:7001"},
+			[]string{"localhost:9001"},
+			map[string]bool{"localhost:9001": true},
+			true,
+		)
+		gate.setReady(
+			[]string{"localhost:7001"},
+			[]string{"localhost:9001"},
+			nil,
+			true,
+		)
 	}()
 
 	start := time.Now()
