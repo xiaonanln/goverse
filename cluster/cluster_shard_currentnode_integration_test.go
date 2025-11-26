@@ -25,8 +25,7 @@ func TestClusterShardCurrentNodeClaiming(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:51002", testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
-	testutil.WaitForClusterReady(t, cluster1)
-	testutil.WaitForClusterReady(t, cluster2)
+	testutil.WaitForClustersReady(t, cluster1, cluster2)
 
 	// Test that shards have been claimed by the appropriate nodes
 	t.Run("ShardOwnershipClaiming", func(t *testing.T) {

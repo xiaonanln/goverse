@@ -33,11 +33,8 @@ func TestGateClusterCanBecomeReady(t *testing.T) {
 
 	// Wait for both clusters to become ready
 	// The gate cluster should become ready once it has consensus state
-	testutil.WaitForClusterReady(t, nodeCluster)
-	t.Logf("✓ Node cluster is ready")
-
-	testutil.WaitForClusterReady(t, gateCluster)
-	t.Logf("✓ Gate cluster is ready")
+	testutil.WaitForClustersReady(t, nodeCluster, gateCluster)
+	t.Logf("✓ Both node and gate clusters are ready")
 
 	// Verify both clusters are ready
 	if !nodeCluster.IsReady() {

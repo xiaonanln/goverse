@@ -140,8 +140,7 @@ func TestGateCallObjectTimeout(t *testing.T) {
 
 	gateClient := gate_pb.NewGateServiceClient(conn)
 
-	testutil.WaitForClusterReady(t, nodeCluster)
-	testutil.WaitForClusterReady(t, gateServer.cluster)
+	testutil.WaitForClustersReady(t, nodeCluster, gateServer.cluster)
 
 	t.Run("DefaultTimeoutApplied", func(t *testing.T) {
 		// Create object via the gate (same as other integration tests)

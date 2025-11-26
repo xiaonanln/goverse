@@ -81,8 +81,7 @@ func TestDistributedCreateObject(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Wait for shard mapping to be initialized (cluster.Start already handles StartNodeConnections and StartShardMappingManagement)
-	testutil.WaitForClusterReady(t, cluster1)
-	testutil.WaitForClusterReady(t, cluster2)
+	testutil.WaitForClustersReady(t, cluster1, cluster2)
 
 	// Verify shard mapping is ready
 	_ = cluster1.GetShardMapping(ctx)

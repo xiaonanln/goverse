@@ -379,9 +379,7 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	t.Logf("Started mock node server 3 at %s", nodeAddr3)
 
 	// Wait for nodes to discover each other and stabilize
-	testutil.WaitForClusterReady(t, nodeCluster1)
-	testutil.WaitForClusterReady(t, nodeCluster2)
-	testutil.WaitForClusterReady(t, nodeCluster3)
+	testutil.WaitForClustersReady(t, nodeCluster1, nodeCluster2, nodeCluster3)
 
 	// Create and start Gate 1
 	gateAddr1 := testutil.GetFreeAddress()
