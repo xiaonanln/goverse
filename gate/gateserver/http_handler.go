@@ -46,15 +46,34 @@ type HTTPErrorResponse struct {
 func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Object operations
-	mux.HandleFunc("/api/v1/objects/call/", s.handleCallObject)
-	mux.HandleFunc("/api/v1/objects/create/", s.handleCreateObject)
-	mux.HandleFunc("/api/v1/objects/delete/", s.handleDeleteObject)
+	// Object operations with CORS support
+	mux.HandleFunc("/api/v1/objects/call/", s.corsMiddleware(s.handleCallObject))
+	mux.HandleFunc("/api/v1/objects/create/", s.corsMiddleware(s.handleCreateObject))
+	mux.HandleFunc("/api/v1/objects/delete/", s.corsMiddleware(s.handleDeleteObject))
 
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux
+}
+
+// corsMiddleware adds CORS headers to allow cross-origin requests
+func (s *GateServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization")
+		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+
+		// Handle preflight requests
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next(w, r)
+	}
 }
 
 // handleCallObject handles HTTP POST /api/v1/objects/call/{type}/{id}/{method}
