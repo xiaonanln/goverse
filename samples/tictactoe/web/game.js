@@ -8,6 +8,7 @@ let serviceID = null;  // Which service object to talk to (service-1 to service-
 let userGameID = null; // Unique game ID for this user's session
 let gameState = null;
 let isLoading = false;
+let pollIntervalId = null; // Interval ID for polling game state
 
 // Initialize game on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -41,6 +42,10 @@ async function initGame() {
         console.log('Could not get state, starting new game:', error);
         await startNewGame();
     }
+    
+    // Start polling for game state updates (every 1 second)
+    // This ensures the UI stays in sync with the server since SSE is not available yet
+    startPolling();
 }
 
 // Generate a unique game ID for this user
@@ -442,4 +447,64 @@ function setStatus(message) {
 function setLoading(loading) {
     isLoading = loading;
     document.body.classList.toggle('loading', loading);
+}
+
+// Start polling for game state updates
+function startPolling() {
+    // Stop any existing polling
+    stopPolling();
+    
+    // Poll every 1 second
+    pollIntervalId = setInterval(async () => {
+        // Don't poll if already loading (to avoid request overlap)
+        if (isLoading) return;
+        
+        try {
+            await pollGameState();
+        } catch (error) {
+            console.log('Poll failed:', error);
+        }
+    }, 1000);
+}
+
+// Stop polling
+function stopPolling() {
+    if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+    }
+}
+
+// Poll game state without showing loading indicator
+async function pollGameState() {
+    try {
+        const request = createGetStateRequest(userGameID);
+        const response = await callObject('GetState', request);
+        const newState = parseGameState(response);
+        
+        // Only update if state has changed
+        if (hasStateChanged(newState)) {
+            gameState = newState;
+            updateBoard();
+            updateStatus();
+        }
+    } catch (error) {
+        // Silently ignore poll errors - the next poll will retry
+        console.debug('Poll error:', error);
+    }
+}
+
+// Check if the game state has changed
+function hasStateChanged(newState) {
+    if (!gameState) return true;
+    if (gameState.status !== newState.status) return true;
+    if (gameState.winner !== newState.winner) return true;
+    if (gameState.lastAiMove !== newState.lastAiMove) return true;
+    
+    // Check board
+    for (let i = 0; i < 9; i++) {
+        if (gameState.board[i] !== newState.board[i]) return true;
+    }
+    
+    return false;
 }
