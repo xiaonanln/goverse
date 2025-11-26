@@ -103,6 +103,8 @@ func WaitForClustersReady(t testing.TB, clusters ...FullClusterChecker) {
 			expectedNodes = append(expectedNodes, c.GetAdvertiseAddress())
 		} else if c.IsGate() {
 			expectedGates = append(expectedGates, c.GetAdvertiseAddress())
+		} else {
+			t.Fatalf("WaitForClustersReady: cluster %s is neither a node nor a gate", c.String())
 		}
 	}
 
