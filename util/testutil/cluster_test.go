@@ -76,16 +76,16 @@ func TestWaitForClusterReady_BecomesReady(t *testing.T) {
 
 // mockFullCluster is a mock implementation of FullClusterChecker for testing
 type mockFullCluster struct {
-	readyChan              chan bool
-	name                   string
-	advertiseAddr          string
-	isNode                 bool
-	isGate                 bool
-	isReady                bool
-	nodes                  []string
-	gates                  []string
-	connectedGates         map[string]bool
-	shardMappingComplete   bool
+	readyChan            chan bool
+	name                 string
+	advertiseAddr        string
+	isNode               bool
+	isGate               bool
+	isReady              bool
+	nodes                []string
+	gates                []string
+	connectedGates       map[string]bool
+	shardMappingComplete bool
 }
 
 func (m *mockFullCluster) ClusterReady() <-chan bool {

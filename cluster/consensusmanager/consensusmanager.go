@@ -62,13 +62,12 @@ func (sm *ShardMapping) IsFullyAssignedAndClaimed(numShards int) bool {
 // CurrentNode equal to their TargetNode, meaning no shards are in migration state.
 // This indicates that the cluster has fully stabilized and all shard migrations are complete.
 func (sm *ShardMapping) AllShardsHaveMatchingCurrentAndTarget(numShards int) bool {
-	if len(sm.Shards) != numShards {
+	// First check if all shards are fully assigned and claimed
+	if !sm.IsFullyAssignedAndClaimed(numShards) {
 		return false
 	}
+	// Then check that all shards have matching CurrentNode and TargetNode
 	for _, shardInfo := range sm.Shards {
-		if shardInfo.TargetNode == "" || shardInfo.CurrentNode == "" {
-			return false
-		}
 		if shardInfo.TargetNode != shardInfo.CurrentNode {
 			return false
 		}
