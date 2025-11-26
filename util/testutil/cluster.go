@@ -88,6 +88,34 @@ func WaitForClusterReady(t testing.TB, cluster ClusterReadyWaiter) {
 //   - clusters: Variadic list of clusters implementing FullClusterChecker
 func WaitForClustersReady(t testing.TB, clusters ...FullClusterChecker) {
 	t.Helper()
+	waitForClustersReadyInternal(t, true, clusters...)
+}
+
+// WaitForClustersReadyWithoutGateConnections waits for multiple clusters to be ready,
+// but skips the gate-to-node connection check. This is useful for tests where:
+//   - Gate clusters are created without a real gate server (no gRPC server)
+//   - Gates cannot actually connect to nodes via RegisterGate RPC
+//   - Only etcd-level cluster state synchronization is being tested
+//
+// This function performs the same checks as WaitForClustersReady except for
+// gate connections to nodes.
+//
+// Usage:
+//
+//	testutil.WaitForClustersReadyWithoutGateConnections(t, nodeCluster, gateCluster)
+//
+// Parameters:
+//   - t: The testing.TB instance for the current test
+//   - clusters: Variadic list of clusters implementing FullClusterChecker
+func WaitForClustersReadyWithoutGateConnections(t testing.TB, clusters ...FullClusterChecker) {
+	t.Helper()
+	waitForClustersReadyInternal(t, false, clusters...)
+}
+
+// waitForClustersReadyInternal is the shared implementation for WaitForClustersReady
+// and WaitForClustersReadyWithoutGateConnections.
+func waitForClustersReadyInternal(t testing.TB, checkGateConnections bool, clusters ...FullClusterChecker) {
+	t.Helper()
 
 	if len(clusters) == 0 {
 		t.Fatal("WaitForClustersReady requires at least one cluster")
@@ -108,11 +136,15 @@ func WaitForClustersReady(t testing.TB, clusters ...FullClusterChecker) {
 		}
 	}
 
-	t.Logf("WaitForClustersReady: waiting for %d nodes and %d gates to be fully ready",
-		len(expectedNodes), len(expectedGates))
+	suffix := ""
+	if !checkGateConnections {
+		suffix = " (without gate connections)"
+	}
+	t.Logf("WaitForClustersReady: waiting for %d nodes and %d gates to be fully ready%s",
+		len(expectedNodes), len(expectedGates), suffix)
 
 	// Use WaitFor with comprehensive checks
-	WaitFor(t, WaitForClustersReadyTimeout, "all clusters to be fully ready", func() bool {
+	WaitFor(t, WaitForClustersReadyTimeout, "all clusters to be fully ready"+suffix, func() bool {
 		// Check 1: All clusters are marked as ready
 		for _, c := range clusters {
 			if !c.IsReady() {
@@ -152,12 +184,15 @@ func WaitForClustersReady(t testing.TB, clusters ...FullClusterChecker) {
 		}
 
 		// Check 3: All gates are registered (connected) to all nodes
-		for _, c := range clusters {
-			if c.IsNode() {
-				for _, gateAddr := range expectedGates {
-					if !c.IsGateConnected(gateAddr) {
-						t.Logf("  Node %s doesn't have gate %s connected", c.String(), gateAddr)
-						return false
+		// Skip this check if checkGateConnections is false (gates don't have real servers)
+		if checkGateConnections {
+			for _, c := range clusters {
+				if c.IsNode() {
+					for _, gateAddr := range expectedGates {
+						if !c.IsGateConnected(gateAddr) {
+							t.Logf("  Node %s doesn't have gate %s connected", c.String(), gateAddr)
+							return false
+						}
 					}
 				}
 			}
@@ -174,5 +209,5 @@ func WaitForClustersReady(t testing.TB, clusters ...FullClusterChecker) {
 		return true
 	})
 
-	t.Logf("WaitForClustersReady: all %d clusters are fully ready", len(clusters))
+	t.Logf("WaitForClustersReady: all %d clusters are fully ready%s", len(clusters), suffix)
 }
