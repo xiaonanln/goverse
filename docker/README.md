@@ -127,7 +127,7 @@ The PostgreSQL instance is configured to:
 
 This configuration is suitable for development but should be hardened for production use.
 
-For more information about using PostgreSQL with Goverse objects, see [docs/postgres-setup.md](../docs/postgres-setup.md).
+For more information about using PostgreSQL with Goverse objects, see [docs/POSTGRES_SETUP.md](../docs/POSTGRES_SETUP.md).
 
 ## etcd Setup
 

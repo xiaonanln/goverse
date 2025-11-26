@@ -490,7 +490,7 @@ GoVerse supports optional PostgreSQL persistence for distributed objects, enabli
 
 ### Quick Start
 
-**1. Set up PostgreSQL** (see [postgres-setup.md](postgres-setup.md)):
+**1. Set up PostgreSQL** (see [POSTGRES_SETUP.md](POSTGRES_SETUP.md)):
 
 ```bash
 # Create database and user
@@ -585,7 +585,7 @@ object.LoadObject(ctx, provider, loadedUser, "user-123")
 ### Examples and Documentation
 
 - **Full Example**: See `examples/persistence/main.go` for a complete working example
-- **Setup Guide**: See `docs/postgres-setup.md` for detailed PostgreSQL setup instructions
+- **Setup Guide**: See `docs/POSTGRES_SETUP.md` for detailed PostgreSQL setup instructions
 - **Production Guide**: Learn about SSL, connection pooling, and performance tuning
 
 ---
@@ -645,7 +645,7 @@ This script is used in CI/CD but can also be run locally for testing.
 
 - [Push Messaging](PUSH_MESSAGING.md): Real-time server-to-client message delivery
 - [Prometheus Integration](PROMETHEUS_INTEGRATION.md): Metrics for monitoring and observability
-- [PostgreSQL Setup](postgres-setup.md): Guide for setting up object persistence with PostgreSQL
+- [PostgreSQL Setup](POSTGRES_SETUP.md): Guide for setting up object persistence with PostgreSQL
 - [Persistence Example](../examples/persistence/): Complete example of using PostgreSQL persistence
 - [Inspector UI](../inspector/web/index.html): Visualize cluster state and objects
 - [Chat Sample](../samples/chat/): Example distributed chat with multiple rooms and real-time messaging

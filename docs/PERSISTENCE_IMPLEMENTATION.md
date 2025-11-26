@@ -100,7 +100,7 @@ goverse/
 ├── examples/persistence/       # NEW DIRECTORY
 │   └── main.go                 # Complete working example
 ├── docs/                       # NEW DIRECTORY
-│   └── postgres-setup.md       # Setup and usage guide
+│   └── POSTGRES_SETUP.md       # Setup and usage guide
 ├── go.mod                      # Added lib/pq dependency
 └── README.md                   # Updated with persistence info
 ```
@@ -323,7 +323,7 @@ type MyObject struct {
 ```
 
 ### Step 3: Setup Database
-Follow `docs/postgres-setup.md`
+Follow `docs/POSTGRES_SETUP.md`
 
 ### Step 4: Enable Persistence
 ```go

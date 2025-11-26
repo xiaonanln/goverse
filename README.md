@@ -110,7 +110,7 @@ High-level objectives for future development:
 - **RPC timeout configuration** - Configurable timeouts for CallObject/CreateObject with proper propagation across node boundaries (see [TIMEOUT_DESIGN.md](docs/TIMEOUT_DESIGN.md))
 
 ### Gate & Client Features
-- **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility (see [GATE_DESIGN.md](docs/design/GATE_DESIGN.md))
+- **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility (see [HTTP_GATE.md](docs/design/HTTP_GATE.md))
 - **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
 - **Gate object call filtering** - Whitelist/blacklist patterns for security and API governance
 - **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
