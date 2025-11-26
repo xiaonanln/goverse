@@ -77,7 +77,7 @@ func main() {
 
 	// Run the server (this blocks)
 	log.Printf("Node running on port %d (waiting for %d total nodes)", *port, *minQuorum)
-	if err := server.Run(); err != nil {
+	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

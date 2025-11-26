@@ -30,7 +30,7 @@ func main() {
 		panic(err)
 	}
 	initializeChatServer()
-	err = server.Run()
+	err = server.Run(context.Background())
 	if err != nil {
 		panic(err)
 	}
