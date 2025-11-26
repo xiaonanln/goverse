@@ -109,26 +109,11 @@ func TestGateCallObjectTimeout(t *testing.T) {
 		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
-	gateCtx, gateCancel := context.WithCancel(ctx)
-	t.Cleanup(gateCancel)
 	t.Cleanup(func() { gateServer.Stop() })
 
-	// Start the gate server in a goroutine
-	gwStarted := make(chan error, 1)
-	go func() {
-		gwStarted <- gateServer.Start(gateCtx)
-	}()
-
-	// Wait for gate to be ready
-	time.Sleep(1 * time.Second)
-	select {
-	case err := <-gwStarted:
-		if err != nil {
-			t.Fatalf("Gate server failed to start: %v", err)
-		}
-		t.Fatalf("Gate server exited prematurely")
-	default:
-		// Gate server is running
+	// Start the gate server (non-blocking)
+	if err := gateServer.Start(ctx); err != nil {
+		t.Fatalf("Gate server failed to start: %v", err)
 	}
 
 	// Create gRPC client to gate

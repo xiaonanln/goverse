@@ -155,10 +155,7 @@ func (s *GateServer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start HTTP server: %w", err)
 	}
 
-	// Wait for context cancellation
-	<-ctx.Done()
-	s.logger.Infof("Gate server context cancelled, initiating shutdown")
-
+	s.logger.Infof("Gate server started successfully")
 	return nil
 }
 
