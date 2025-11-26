@@ -82,6 +82,66 @@ func TestValidateServerConfig_ValidConfig(t *testing.T) {
 	}
 }
 
+// TestServerRun_ContextCancellation verifies that Server.Run() exits when the context is canceled
+func TestServerRun_ContextCancellation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+
+	// Use PrepareEtcdPrefix to ensure etcd is available and get test isolation
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	listenAddr := testutil.GetFreeAddress()
+	config := &ServerConfig{
+		ListenAddress:             listenAddr,
+		AdvertiseAddress:          listenAddr,
+		EtcdAddress:               "localhost:2379",
+		EtcdPrefix:                etcdPrefix,
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
+		NumShards:                 testutil.TestNumShards,
+	}
+
+	server, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	// Create a cancellable context for Run
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start server in background
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- server.Run(ctx)
+	}()
+
+	// Give server time to start
+	time.Sleep(2 * time.Second)
+
+	// Verify server is still running
+	select {
+	case err := <-serverDone:
+		t.Fatalf("Server Run() exited prematurely with error: %v", err)
+	default:
+		// Expected: server is still running
+	}
+
+	// Cancel the context to trigger shutdown
+	cancel()
+
+	// Wait for server to stop (with timeout)
+	select {
+	case err := <-serverDone:
+		// Server should exit without error (or with context.Canceled)
+		if err != nil && err != context.Canceled {
+			t.Logf("Server stopped with error: %v (this may be acceptable)", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Server did not stop within timeout after context cancellation")
+	}
+}
+
 func TestServerConfig_NodeStabilityDuration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
@@ -332,8 +392,10 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	// Start server in background
 	serverDone := make(chan error, 1)
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
 	go func() {
-		serverDone <- server.Run()
+		serverDone <- server.Run(serverCtx)
 	}()
 
 	// Give server time to start and register with etcd
@@ -358,7 +420,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 
 	err = mgr.Connect()
 	if err != nil {
-		server.cancel()
+		serverCancel()
 		<-serverDone
 		t.Fatalf("Failed to connect to etcd: %v", err)
 	}
@@ -460,7 +522,7 @@ func TestServerStartupWithEtcd(t *testing.T) {
 		len(uniqueNodes), len(shardMapping.Shards))
 
 	// Gracefully stop the server
-	server.cancel()
+	serverCancel()
 
 	// Wait for server to stop (with timeout)
 	select {

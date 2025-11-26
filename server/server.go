@@ -121,7 +121,7 @@ func validateServerConfig(config *ServerConfig) error {
 	return nil
 }
 
-func (server *Server) Run() error {
+func (server *Server) Run(ctx context.Context) error {
 	// Ensure context is canceled when the server stops
 	defer server.cancel()
 
@@ -167,13 +167,15 @@ func (server *Server) Run() error {
 		}()
 	}
 
-	// Handle both signals and context cancellation for graceful shutdown
+	// Handle signals, context cancellation, or passed-in context for graceful shutdown
 	go func() {
 		select {
 		case <-sigChan:
 			server.logger.Infof("Received shutdown signal, stopping servers...")
 		case <-server.ctx.Done():
 			server.logger.Infof("Context cancelled, stopping servers...")
+		case <-ctx.Done():
+			server.logger.Infof("Run context done, stopping servers...")
 		}
 		grpcServer.GracefulStop()
 		if metricsServer != nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -44,7 +45,7 @@ func main() {
 	// goverseapi.RegisterObjectType((*MyObject)(nil))
 
 	// Start the server (this blocks until shutdown)
-	if err := server.Run(); err != nil {
+	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
