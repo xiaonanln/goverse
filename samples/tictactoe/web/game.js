@@ -1,8 +1,32 @@
 // Tic Tac Toe Game Client
 // Communicates with Goverse HTTP Gate
 
-const API_BASE = 'http://localhost:8080/api/v1';
+// API base URL - uses same protocol as the page, can be overridden via query param ?api=...
+const API_BASE = getApiBase();
 const OBJECT_TYPE = 'TicTacToeService';
+
+function getApiBase() {
+    // Check for override in query params
+    const params = new URLSearchParams(window.location.search);
+    const apiOverride = params.get('api');
+    if (apiOverride) {
+        return apiOverride;
+    }
+    
+    // Default: same host as page, port 8080, same protocol
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    
+    // For GitHub Codespaces, the port is in the hostname (e.g., xxx-8080.app.github.dev)
+    if (hostname.includes('.app.github.dev')) {
+        // Replace the port in the hostname
+        const baseHostname = hostname.replace(/-\d+\.app\.github\.dev$/, '');
+        return `${protocol}//${baseHostname}-8080.app.github.dev/api/v1`;
+    }
+    
+    // For local development
+    return `${protocol}//${hostname}:8080/api/v1`;
+}
 
 let serviceID = null;  // Which service object to talk to (service-1 to service-10)
 let userGameID = null; // Unique game ID for this user's session

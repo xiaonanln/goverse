@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/xiaonanln/goverse/gate/gateserver"
@@ -21,6 +24,13 @@ func main() {
 	)
 	flag.Parse()
 
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	serverLogger.Infof("Starting TicTacToe server...")
 	serverLogger.Infof("  Node address: %s", *nodeAddr)
 	serverLogger.Infof("  Gate address: %s", *gateAddr)
@@ -35,19 +45,20 @@ func main() {
 		server, err := goverseapi.NewServer(config)
 		if err != nil {
 			serverLogger.Errorf("Failed to create server: %v", err)
-			panic(err)
+			cancel()
+			return
 		}
 
 		// Register TicTacToeService object type
 		goverseapi.RegisterObjectType((*TicTacToeService)(nil))
 
-		// Keep service objects running - this goroutine runs forever
-		go ensureServiceObjects()
+		// Keep service objects running
+		go ensureServiceObjects(ctx)
 
 		err = server.Run()
 		if err != nil {
 			serverLogger.Errorf("Server error: %v", err)
-			panic(err)
+			cancel()
 		}
 	}()
 
@@ -65,36 +76,66 @@ func main() {
 	gateServer, err := gateserver.NewGateServer(gateConfig)
 	if err != nil {
 		serverLogger.Errorf("Failed to create gate server: %v", err)
-		panic(err)
+		return
 	}
 
-	ctx := context.Background()
-	err = gateServer.Start(ctx)
-	if err != nil {
-		serverLogger.Errorf("Failed to start gate server: %v", err)
-		panic(err)
-	}
+	// Start gate server in a goroutine
+	go func() {
+		err := gateServer.Start(ctx)
+		if err != nil {
+			serverLogger.Errorf("Failed to start gate server: %v", err)
+			cancel()
+		}
+	}()
+
+	// Give gate some time to start
+	time.Sleep(500 * time.Millisecond)
 
 	serverLogger.Infof("TicTacToe server started successfully!")
 	serverLogger.Infof("  REST API: http://localhost%s", *httpAddr)
 	serverLogger.Infof("  Web UI: Serve samples/tictactoe/web with a web server")
+	fmt.Println("\nPress Ctrl+C to stop the server...")
 
-	// Wait forever
-	select {}
+	// Wait for shutdown signal or context cancellation
+	select {
+	case <-sigCh:
+		serverLogger.Infof("Received shutdown signal, stopping servers...")
+	case <-ctx.Done():
+		serverLogger.Infof("Context cancelled, stopping servers...")
+	}
+
+	// Cancel context to stop all goroutines
+	cancel()
+
+	// Give servers time to gracefully shutdown
+	time.Sleep(500 * time.Millisecond)
+
+	serverLogger.Infof("TicTacToe server stopped.")
 }
 
 // ensureServiceObjects keeps the service objects alive by periodically creating them
-// This goroutine runs forever until server shutdown
+// This goroutine runs until context is cancelled
 // Creating an object that already exists is a no-op
-func ensureServiceObjects() {
+func ensureServiceObjects(ctx context.Context) {
 	serverLogger.Infof("Waiting for cluster to be ready...")
-	<-goverseapi.ClusterReady()
-	serverLogger.Infof("Cluster is ready, starting service object maintenance...")
+	select {
+	case <-goverseapi.ClusterReady():
+		serverLogger.Infof("Cluster is ready, starting service object maintenance...")
+	case <-ctx.Done():
+		serverLogger.Infof("Context cancelled while waiting for cluster")
+		return
+	}
 
 	// Initial delay before first creation
-	time.Sleep(5 * time.Second)
+	select {
+	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
+		return
+	}
 
-	ctx := context.Background()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		// Create/ensure all service objects exist
 		for i := 1; i <= 10; i++ {
@@ -108,7 +149,13 @@ func ensureServiceObjects() {
 			}
 		}
 
-		// Wait before next check - objects should stay alive, but we periodically ensure they exist
-		time.Sleep(30 * time.Second)
+		// Wait before next check or context cancellation
+		select {
+		case <-ticker.C:
+			// Continue to next iteration
+		case <-ctx.Done():
+			serverLogger.Infof("Service object maintenance stopped")
+			return
+		}
 	}
 }
