@@ -334,14 +334,29 @@ func (c *Cluster) getAdvertiseAddr() string {
 	return ""
 }
 
+// GetAdvertiseAddress returns the advertise address of this cluster (node or gate)
+func (c *Cluster) GetAdvertiseAddress() string {
+	return c.getAdvertiseAddr()
+}
+
 // isNode returns true if this cluster is a node cluster
 func (c *Cluster) isNode() bool {
 	return c.node != nil
 }
 
+// IsNode returns true if this cluster is a node cluster
+func (c *Cluster) IsNode() bool {
+	return c.isNode()
+}
+
 // isGate returns true if this cluster is a gate cluster
 func (c *Cluster) isGate() bool {
 	return c.gate != nil
+}
+
+// IsGate returns true if this cluster is a gate cluster
+func (c *Cluster) IsGate() bool {
+	return c.isGate()
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -979,6 +994,17 @@ func (c *Cluster) IsLeader() bool {
 // GetShardMapping retrieves the current shard mapping
 func (c *Cluster) GetShardMapping(ctx context.Context) *consensusmanager.ShardMapping {
 	return c.consensusManager.GetShardMapping()
+}
+
+// IsShardMappingComplete returns true if all shards have CurrentNode == TargetNode,
+// meaning no shards are in migration state and the cluster has fully stabilized.
+// numShards is the expected total number of shards.
+func (c *Cluster) IsShardMappingComplete(ctx context.Context, numShards int) bool {
+	mapping := c.consensusManager.GetShardMapping()
+	if mapping == nil {
+		return false
+	}
+	return mapping.AllShardsHaveMatchingCurrentAndTarget(numShards)
 }
 
 // GetCurrentNodeForObject returns the node address that should handle the given object ID
