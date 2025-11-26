@@ -8,25 +8,26 @@ import (
 	tictactoe_pb "github.com/xiaonanln/goverse/samples/tictactoe/proto"
 )
 
-// TicTacToe represents a Tic Tac Toe game instance
-type TicTacToe struct {
-	goverseapi.BaseObject
-
-	mu         sync.Mutex
+// TicTacToeGame represents a single game instance (not a distributed object)
+type TicTacToeGame struct {
+	gameID     string
 	board      [9]string // "", "X", or "O"
 	status     string    // "playing", "x_wins", "o_wins", "draw"
 	moves      int       // Total moves made
 	lastAIMove int32     // Last AI move position, -1 if none
 }
 
-// OnCreated is called when the object is created
-func (g *TicTacToe) OnCreated() {
-	g.Logger.Infof("TicTacToe %s created", g.Id())
-	g.resetGame()
+// newGame creates a new TicTacToeGame with initial state
+func newGame(gameID string) *TicTacToeGame {
+	return &TicTacToeGame{
+		gameID:     gameID,
+		status:     "playing",
+		lastAIMove: -1,
+	}
 }
 
-// resetGame resets the game to initial state
-func (g *TicTacToe) resetGame() {
+// reset resets the game to initial state
+func (g *TicTacToeGame) reset() {
 	for i := range g.board {
 		g.board[i] = ""
 	}
@@ -35,80 +36,8 @@ func (g *TicTacToe) resetGame() {
 	g.lastAIMove = -1
 }
 
-// NewGame resets the game and returns the current state
-func (g *TicTacToe) NewGame(ctx context.Context, req *tictactoe_pb.MoveRequest) (*tictactoe_pb.GameState, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	g.Logger.Infof("TicTacToe %s: NewGame called", g.Id())
-	g.resetGame()
-
-	return g.getGameState(), nil
-}
-
-// MakeMove handles a player move and returns the game state after AI response
-func (g *TicTacToe) MakeMove(ctx context.Context, req *tictactoe_pb.MoveRequest) (*tictactoe_pb.GameState, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	position := int(req.GetPosition())
-	g.Logger.Infof("TicTacToe %s: MakeMove called with position %d", g.Id(), position)
-
-	// Validate game is still playing
-	if g.status != "playing" {
-		g.Logger.Warnf("TicTacToe %s: Game already ended with status %s", g.Id(), g.status)
-		return g.getGameState(), nil
-	}
-
-	// Validate position
-	if position < 0 || position > 8 {
-		g.Logger.Warnf("TicTacToe %s: Invalid position %d", g.Id(), position)
-		return g.getGameState(), nil
-	}
-
-	// Check if position is already taken
-	if g.board[position] != "" {
-		g.Logger.Warnf("TicTacToe %s: Position %d already taken", g.Id(), position)
-		return g.getGameState(), nil
-	}
-
-	// Player makes move (X)
-	g.board[position] = "X"
-	g.moves++
-	g.lastAIMove = -1
-
-	// Check for win or draw after player move
-	g.updateStatus()
-	if g.status != "playing" {
-		return g.getGameState(), nil
-	}
-
-	// AI makes move (O)
-	aiMove := g.findAIMove()
-	if aiMove >= 0 {
-		g.board[aiMove] = "O"
-		g.moves++
-		g.lastAIMove = int32(aiMove)
-		g.Logger.Infof("TicTacToe %s: AI moves to position %d", g.Id(), aiMove)
-	}
-
-	// Check for win or draw after AI move
-	g.updateStatus()
-
-	return g.getGameState(), nil
-}
-
-// GetState returns the current game state
-func (g *TicTacToe) GetState(ctx context.Context, req *tictactoe_pb.MoveRequest) (*tictactoe_pb.GameState, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	g.Logger.Infof("TicTacToe %s: GetState called", g.Id())
-	return g.getGameState(), nil
-}
-
 // getGameState returns the current game state as proto message
-func (g *TicTacToe) getGameState() *tictactoe_pb.GameState {
+func (g *TicTacToeGame) getGameState() *tictactoe_pb.GameState {
 	board := make([]string, 9)
 	for i, v := range g.board {
 		board[i] = v
@@ -122,6 +51,7 @@ func (g *TicTacToe) getGameState() *tictactoe_pb.GameState {
 	}
 
 	return &tictactoe_pb.GameState{
+		GameId:     g.gameID,
 		Board:      board,
 		Status:     g.status,
 		Winner:     winner,
@@ -130,7 +60,7 @@ func (g *TicTacToe) getGameState() *tictactoe_pb.GameState {
 }
 
 // updateStatus checks for a win or draw and updates the status
-func (g *TicTacToe) updateStatus() {
+func (g *TicTacToeGame) updateStatus() {
 	// Winning combinations
 	winPatterns := [][3]int{
 		{0, 1, 2}, // top row
@@ -167,7 +97,7 @@ func (g *TicTacToe) updateStatus() {
 // 3. Take center if available
 // 4. Take a corner
 // 5. Take any edge
-func (g *TicTacToe) findAIMove() int {
+func (g *TicTacToeGame) findAIMove() int {
 	// 1. Check for winning move
 	if move := g.findWinningMove("O"); move >= 0 {
 		return move
@@ -203,7 +133,7 @@ func (g *TicTacToe) findAIMove() int {
 }
 
 // findWinningMove finds a winning move for the given player
-func (g *TicTacToe) findWinningMove(player string) int {
+func (g *TicTacToeGame) findWinningMove(player string) int {
 	winPatterns := [][3]int{
 		{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // rows
 		{0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // columns
@@ -232,4 +162,122 @@ func (g *TicTacToe) findWinningMove(player string) int {
 	}
 
 	return -1
+}
+
+// TicTacToeService is a distributed object that manages multiple TicTacToeGame instances
+type TicTacToeService struct {
+	goverseapi.BaseObject
+
+	mu    sync.Mutex
+	games map[string]*TicTacToeGame // gameID -> game
+}
+
+// OnCreated is called when the service object is created
+func (s *TicTacToeService) OnCreated() {
+	s.Logger.Infof("TicTacToeService %s created", s.Id())
+	s.games = make(map[string]*TicTacToeGame)
+}
+
+// getOrCreateGame retrieves an existing game or creates a new one
+func (s *TicTacToeService) getOrCreateGame(gameID string) *TicTacToeGame {
+	game, exists := s.games[gameID]
+	if !exists {
+		game = newGame(gameID)
+		s.games[gameID] = game
+		s.Logger.Infof("TicTacToeService %s: created new game %s", s.Id(), gameID)
+	}
+	return game
+}
+
+// NewGame creates or resets a game and returns the current state
+func (s *TicTacToeService) NewGame(ctx context.Context, req *tictactoe_pb.NewGameRequest) (*tictactoe_pb.GameState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	gameID := req.GetGameId()
+	if gameID == "" {
+		gameID = "default"
+	}
+
+	s.Logger.Infof("TicTacToeService %s: NewGame called for game %s", s.Id(), gameID)
+
+	game := s.getOrCreateGame(gameID)
+	game.reset()
+
+	return game.getGameState(), nil
+}
+
+// MakeMove handles a player move and returns the game state after AI response
+func (s *TicTacToeService) MakeMove(ctx context.Context, req *tictactoe_pb.MoveRequest) (*tictactoe_pb.GameState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	gameID := req.GetGameId()
+	if gameID == "" {
+		gameID = "default"
+	}
+	position := int(req.GetPosition())
+
+	s.Logger.Infof("TicTacToeService %s: MakeMove called for game %s, position %d", s.Id(), gameID, position)
+
+	game := s.getOrCreateGame(gameID)
+
+	// Validate game is still playing
+	if game.status != "playing" {
+		s.Logger.Warnf("TicTacToeService %s: Game %s already ended with status %s", s.Id(), gameID, game.status)
+		return game.getGameState(), nil
+	}
+
+	// Validate position
+	if position < 0 || position > 8 {
+		s.Logger.Warnf("TicTacToeService %s: Invalid position %d for game %s", s.Id(), position, gameID)
+		return game.getGameState(), nil
+	}
+
+	// Check if position is already taken
+	if game.board[position] != "" {
+		s.Logger.Warnf("TicTacToeService %s: Position %d already taken for game %s", s.Id(), position, gameID)
+		return game.getGameState(), nil
+	}
+
+	// Player makes move (X)
+	game.board[position] = "X"
+	game.moves++
+	game.lastAIMove = -1
+
+	// Check for win or draw after player move
+	game.updateStatus()
+	if game.status != "playing" {
+		return game.getGameState(), nil
+	}
+
+	// AI makes move (O)
+	aiMove := game.findAIMove()
+	if aiMove >= 0 {
+		game.board[aiMove] = "O"
+		game.moves++
+		game.lastAIMove = int32(aiMove)
+		s.Logger.Infof("TicTacToeService %s: AI moves to position %d for game %s", s.Id(), aiMove, gameID)
+	}
+
+	// Check for win or draw after AI move
+	game.updateStatus()
+
+	return game.getGameState(), nil
+}
+
+// GetState returns the current game state
+func (s *TicTacToeService) GetState(ctx context.Context, req *tictactoe_pb.GetStateRequest) (*tictactoe_pb.GameState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	gameID := req.GetGameId()
+	if gameID == "" {
+		gameID = "default"
+	}
+
+	s.Logger.Infof("TicTacToeService %s: GetState called for game %s", s.Id(), gameID)
+
+	game := s.getOrCreateGame(gameID)
+	return game.getGameState(), nil
 }
