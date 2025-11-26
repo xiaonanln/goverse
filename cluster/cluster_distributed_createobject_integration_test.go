@@ -230,9 +230,7 @@ func TestDistributedCreateObject_EvenDistribution(t *testing.T) {
 	}
 
 	// Wait for nodes to discover each other and shard mapping to initialize
-	for _, c := range clusters {
-		testutil.WaitForClusterReady(t, c)
-	}
+	testutil.WaitForClustersReady(t, clusters[0], clusters[1], clusters[2])
 
 	// Test shard distribution by getting target nodes for 100 object IDs
 	numObjects := 100
