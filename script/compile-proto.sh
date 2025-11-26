@@ -7,6 +7,7 @@ PROTO_FILES=(
     "client/proto/gate.proto"
     "inspector/proto/inspector.proto"
     "samples/chat/proto/chat.proto"
+    "samples/tictactoe/proto/tictactoe.proto"
 )
 
 # Common protoc options for Go
