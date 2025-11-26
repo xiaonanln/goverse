@@ -7,7 +7,8 @@ A simple web-based Tic Tac Toe game demonstrating the Goverse distributed object
 - **Player vs AI**: Play as X against a simple but strategic AI opponent (O)
 - **Distributed Architecture**: Uses Goverse virtual actor model for game state management
 - **HTTP REST API**: Web client communicates via HTTP Gate
-- **Fixed Game Pool**: 10 persistent game objects (`game-1` through `game-10`)
+- **Service-Based Design**: 10 TicTacToeService objects (`service-1` through `service-10`) manage multiple games
+- **Unlimited Games**: Each service can host many concurrent games, each identified by a unique game ID
 - **Session Persistence**: Game ID saved in localStorage for page refresh
 
 ## Quick Start
@@ -54,38 +55,54 @@ A simple web-based Tic Tac Toe game demonstrating the Goverse distributed object
 ## Architecture
 
 ```
-┌─────────────────┐     HTTP REST      ┌─────────────────┐     gRPC      ┌─────────────────┐
-│   Web Browser   │ ─────────────────> │   HTTP Gate     │ ────────────> │  Goverse Node   │
-│   (HTML/JS)     │ <───────────────── │   (:8080)       │ <──────────── │  (TicTacToe)    │
-└─────────────────┘                    └─────────────────┘               └─────────────────┘
+┌─────────────────┐     HTTP REST      ┌─────────────────┐     gRPC      ┌─────────────────────────────┐
+│   Web Browser   │ ─────────────────> │   HTTP Gate     │ ────────────> │   Goverse Node              │
+│   (HTML/JS)     │ <───────────────── │   (:8080)       │ <──────────── │   TicTacToeService (1-10)   │
+└─────────────────┘                    └─────────────────┘               │     └── TicTacToeGame (N)   │
+                                                                         └─────────────────────────────┘
 ```
+
+### Design
+
+- **TicTacToeService**: Distributed object (10 instances: service-1 to service-10)
+  - Each service can manage many concurrent games
+  - Services are distributed across nodes for load balancing
+  
+- **TicTacToeGame**: Plain struct (not a distributed object)
+  - Stores game state: board, status, moves, AI move history
+  - Created on-demand when a user starts a new game
+  - Each game has a unique ID (e.g., `user-abc123-1699999999999`)
 
 ## API Endpoints
 
+All requests include a `game_id` to identify the specific game within the service.
+
 ### Create/Reset Game
 ```bash
-POST /api/v1/objects/call/TicTacToe/{game-id}/NewGame
+POST /api/v1/objects/call/TicTacToeService/{service-id}/NewGame
+# Request includes: game_id (string)
 ```
 
 ### Make a Move
 ```bash
-POST /api/v1/objects/call/TicTacToe/{game-id}/MakeMove
-# Request body: {"request": "<base64 protobuf>"}
-# Position: 0-8 (top-left to bottom-right)
+POST /api/v1/objects/call/TicTacToeService/{service-id}/MakeMove
+# Request includes: game_id (string), position (0-8)
 ```
 
 ### Get Game State
 ```bash
-POST /api/v1/objects/call/TicTacToe/{game-id}/GetState
+POST /api/v1/objects/call/TicTacToeService/{service-id}/GetState
+# Request includes: game_id (string)
 ```
 
 ## Game State
 
 The game state includes:
+- `game_id`: Unique identifier for this game
 - `board`: Array of 9 strings ("", "X", or "O")
 - `status`: "playing", "x_wins", "o_wins", or "draw"
 - `winner`: "", "X", or "O"
-- `lastAiMove`: -1 or 0-8
+- `last_ai_move`: -1 or 0-8
 
 ## AI Strategy
 
@@ -107,7 +124,7 @@ go run . --node-addr=localhost:50052  # Different terminal
 go run . --node-addr=localhost:50053  # Different terminal
 ```
 
-Games are automatically distributed across nodes via consistent hashing.
+Services are automatically distributed across nodes via consistent hashing.
 
 ## Project Structure
 
@@ -120,7 +137,7 @@ samples/tictactoe/
 │   └── tictactoe.pb.go # Generated Go code
 ├── server/
 │   ├── main.go         # Server entry point
-│   └── tictactoe.go    # TicTacToe object implementation
+│   └── tictactoe.go    # TicTacToeService and TicTacToeGame implementation
 └── web/
     ├── index.html      # Game UI
     ├── style.css       # Styling

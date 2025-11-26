@@ -7,18 +7,40 @@ import (
 	tictactoe_pb "github.com/xiaonanln/goverse/samples/tictactoe/proto"
 )
 
-func TestTicTacToe_NewGame(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeGame_NewGame(t *testing.T) {
+	game := newGame("test-game")
 
-	state, err := game.NewGame(context.Background(), &tictactoe_pb.MoveRequest{})
+	if game.status != "playing" {
+		t.Errorf("Expected status 'playing', got '%s'", game.status)
+	}
+
+	for i, cell := range game.board {
+		if cell != "" {
+			t.Errorf("Expected empty cell at position %d, got '%s'", i, cell)
+		}
+	}
+
+	if game.lastAIMove != -1 {
+		t.Errorf("Expected lastAIMove -1, got %d", game.lastAIMove)
+	}
+}
+
+func TestTicTacToeService_NewGame(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated()
+
+	state, err := service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "user-123"})
 	if err != nil {
 		t.Fatalf("NewGame failed: %v", err)
 	}
 
 	if state.Status != "playing" {
 		t.Errorf("Expected status 'playing', got '%s'", state.Status)
+	}
+
+	if state.GameId != "user-123" {
+		t.Errorf("Expected GameId 'user-123', got '%s'", state.GameId)
 	}
 
 	if len(state.Board) != 9 {
@@ -36,13 +58,16 @@ func TestTicTacToe_NewGame(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_MakeMove_ValidMove(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeService_MakeMove_ValidMove(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated()
+
+	// Start a new game first
+	service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "user-123"})
 
 	// Make a move at center
-	state, err := game.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{Position: 4})
+	state, err := service.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{GameId: "user-123", Position: 4})
 	if err != nil {
 		t.Fatalf("MakeMove failed: %v", err)
 	}
@@ -69,13 +94,16 @@ func TestTicTacToe_MakeMove_ValidMove(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_MakeMove_InvalidPosition(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeService_MakeMove_InvalidPosition(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated()
+
+	// Start a new game first
+	service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "user-123"})
 
 	// Try invalid position
-	state, err := game.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{Position: 10})
+	state, err := service.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{GameId: "user-123", Position: 10})
 	if err != nil {
 		t.Fatalf("MakeMove failed: %v", err)
 	}
@@ -88,16 +116,19 @@ func TestTicTacToe_MakeMove_InvalidPosition(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_MakeMove_OccupiedPosition(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeService_MakeMove_OccupiedPosition(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated()
+
+	// Start a new game first
+	service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "user-123"})
 
 	// Make first move
-	game.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{Position: 4})
+	service.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{GameId: "user-123", Position: 4})
 
 	// Try to move to same position
-	state, err := game.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{Position: 4})
+	state, err := service.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{GameId: "user-123", Position: 4})
 	if err != nil {
 		t.Fatalf("MakeMove failed: %v", err)
 	}
@@ -108,16 +139,19 @@ func TestTicTacToe_MakeMove_OccupiedPosition(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_GetState(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeService_GetState(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated()
+
+	// Start a new game first
+	service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "user-123"})
 
 	// Make a move first
-	game.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{Position: 0})
+	service.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{GameId: "user-123", Position: 0})
 
 	// Get state
-	state, err := game.GetState(context.Background(), &tictactoe_pb.MoveRequest{})
+	state, err := service.GetState(context.Background(), &tictactoe_pb.GetStateRequest{GameId: "user-123"})
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
@@ -128,36 +162,28 @@ func TestTicTacToe_GetState(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_WinCondition(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeGame_WinCondition(t *testing.T) {
+	game := newGame("test-game")
 
 	// Manually set up a winning board for testing
-	// We'll directly manipulate the board to test win detection
-	game.mu.Lock()
 	game.board[0] = "X"
 	game.board[1] = "X"
 	game.board[2] = "X"
 	game.moves = 3
 	game.updateStatus()
-	game.mu.Unlock()
 
 	if game.status != "x_wins" {
 		t.Errorf("Expected status 'x_wins', got '%s'", game.status)
 	}
 }
 
-func TestTicTacToe_DrawCondition(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeGame_DrawCondition(t *testing.T) {
+	game := newGame("test-game")
 
 	// Manually set up a draw board
 	// X O X
 	// X O O
 	// O X X
-	game.mu.Lock()
 	game.board[0] = "X"
 	game.board[1] = "O"
 	game.board[2] = "X"
@@ -169,26 +195,21 @@ func TestTicTacToe_DrawCondition(t *testing.T) {
 	game.board[8] = "X"
 	game.moves = 9
 	game.updateStatus()
-	game.mu.Unlock()
 
 	if game.status != "draw" {
 		t.Errorf("Expected status 'draw', got '%s'", game.status)
 	}
 }
 
-func TestTicTacToe_AIBlocksWin(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeGame_AIBlocksWin(t *testing.T) {
+	game := newGame("test-game")
 
 	// Set up a scenario where AI needs to block
 	// Player has two in a row and AI should block
-	game.mu.Lock()
 	game.board[0] = "X"
 	game.board[1] = "X"
 	// Position 2 is empty - AI should block here
 	game.moves = 2
-	game.mu.Unlock()
 
 	move := game.findAIMove()
 	if move != 2 {
@@ -196,20 +217,16 @@ func TestTicTacToe_AIBlocksWin(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_AITakesWin(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeGame_AITakesWin(t *testing.T) {
+	game := newGame("test-game")
 
 	// Set up a scenario where AI can win
-	game.mu.Lock()
 	game.board[0] = "O"
 	game.board[1] = "O"
 	// Position 2 is empty - AI should win here
 	game.board[3] = "X"
 	game.board[4] = "X"
 	game.moves = 4
-	game.mu.Unlock()
 
 	move := game.findAIMove()
 	if move != 2 {
@@ -217,19 +234,42 @@ func TestTicTacToe_AITakesWin(t *testing.T) {
 	}
 }
 
-func TestTicTacToe_AITakesCenter(t *testing.T) {
-	game := &TicTacToe{}
-	game.OnInit(game, "test-game")
-	game.OnCreated()
+func TestTicTacToeGame_AITakesCenter(t *testing.T) {
+	game := newGame("test-game")
 
 	// Player takes a corner, AI should take center
-	game.mu.Lock()
 	game.board[0] = "X"
 	game.moves = 1
-	game.mu.Unlock()
 
 	move := game.findAIMove()
 	if move != 4 {
 		t.Errorf("AI should take center (4), but chose %d", move)
+	}
+}
+
+func TestTicTacToeService_MultipleGames(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated()
+
+	// Create two different games
+	service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "game-1"})
+	service.NewGame(context.Background(), &tictactoe_pb.NewGameRequest{GameId: "game-2"})
+
+	// Make moves in game-1
+	service.MakeMove(context.Background(), &tictactoe_pb.MoveRequest{GameId: "game-1", Position: 0})
+
+	// Check game-1 state
+	state1, _ := service.GetState(context.Background(), &tictactoe_pb.GetStateRequest{GameId: "game-1"})
+	if state1.Board[0] != "X" {
+		t.Errorf("Game-1 should have X at position 0")
+	}
+
+	// Check game-2 state - should be empty
+	state2, _ := service.GetState(context.Background(), &tictactoe_pb.GetStateRequest{GameId: "game-2"})
+	for i, cell := range state2.Board {
+		if cell != "" {
+			t.Errorf("Game-2 position %d should be empty, got '%s'", i, cell)
+		}
 	}
 }

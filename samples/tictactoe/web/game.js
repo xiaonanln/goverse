@@ -2,9 +2,10 @@
 // Communicates with Goverse HTTP Gate
 
 const API_BASE = 'http://localhost:8080/api/v1';
-const OBJECT_TYPE = 'TicTacToe';
+const OBJECT_TYPE = 'TicTacToeService';
 
-let gameID = null;
+let serviceID = null;  // Which service object to talk to (service-1 to service-10)
+let userGameID = null; // Unique game ID for this user's session
 let gameState = null;
 let isLoading = false;
 
@@ -15,12 +16,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize or restore game
 async function initGame() {
-    // Get or create game ID from localStorage
-    gameID = localStorage.getItem('tictactoe_game_id');
-    if (!gameID) {
-        gameID = chooseGameID();
-        localStorage.setItem('tictactoe_game_id', gameID);
+    // Get or create user's game ID from localStorage
+    userGameID = localStorage.getItem('tictactoe_user_game_id');
+    if (!userGameID) {
+        userGameID = generateUserGameID();
+        localStorage.setItem('tictactoe_user_game_id', userGameID);
     }
+    
+    // Choose a service object to talk to (1-10)
+    serviceID = chooseServiceID();
     
     updateGameIDDisplay();
     
@@ -39,15 +43,20 @@ async function initGame() {
     }
 }
 
-// Choose a game ID from the fixed pool (1-10)
-function chooseGameID() {
-    const gameNumber = Math.floor(Math.random() * 10) + 1;
-    return 'game-' + gameNumber;
+// Generate a unique game ID for this user
+function generateUserGameID() {
+    return 'user-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+}
+
+// Choose a service ID from the fixed pool (1-10)
+function chooseServiceID() {
+    const serviceNumber = Math.floor(Math.random() * 10) + 1;
+    return 'service-' + serviceNumber;
 }
 
 // Update game ID display
 function updateGameIDDisplay() {
-    document.getElementById('game-id').textContent = 'Game: ' + gameID;
+    document.getElementById('game-id').textContent = 'Game: ' + userGameID.substring(0, 15) + '...';
 }
 
 // Handle cell click
@@ -76,7 +85,7 @@ async function makeMove(position) {
     
     try {
         // Create MoveRequest protobuf
-        const request = createMoveRequest(position);
+        const request = createMoveRequest(userGameID, position);
         const response = await callObject('MakeMove', request);
         gameState = parseGameState(response);
         updateBoard();
@@ -95,11 +104,8 @@ async function startNewGame() {
     setStatus('Starting new game...');
     
     try {
-        // First ensure the object exists
-        await createObjectIfNeeded();
-        
-        // Call NewGame method
-        const request = createEmptyRequest();
+        // Call NewGame method with our game ID
+        const request = createNewGameRequest(userGameID);
         const response = await callObject('NewGame', request);
         gameState = parseGameState(response);
         updateBoard();
@@ -117,7 +123,7 @@ async function getGameState() {
     setLoading(true);
     
     try {
-        const request = createEmptyRequest();
+        const request = createGetStateRequest(userGameID);
         const response = await callObject('GetState', request);
         gameState = parseGameState(response);
         updateBoard();
@@ -130,29 +136,9 @@ async function getGameState() {
     }
 }
 
-// Create object if it doesn't exist
-async function createObjectIfNeeded() {
-    try {
-        const url = `${API_BASE}/objects/create/${OBJECT_TYPE}/${gameID}`;
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        if (!response.ok && !data.error?.includes('already exists')) {
-            console.log('Create response:', data);
-        }
-    } catch (error) {
-        console.log('Create object error (may already exist):', error);
-    }
-}
-
 // Call object method via HTTP Gate
 async function callObject(method, requestBytes) {
-    const url = `${API_BASE}/objects/call/${OBJECT_TYPE}/${gameID}/${method}`;
+    const url = `${API_BASE}/objects/call/${OBJECT_TYPE}/${serviceID}/${method}`;
     
     const response = await fetch(url, {
         method: 'POST',
@@ -173,55 +159,62 @@ async function callObject(method, requestBytes) {
     return data.response;
 }
 
+// Create NewGameRequest protobuf (base64 encoded Any)
+function createNewGameRequest(gameId) {
+    // NewGameRequest: game_id (string, field 1)
+    const gameIdBytes = new TextEncoder().encode(gameId);
+    const reqBytes = new Uint8Array([
+        0x0A, // field 1, wire type 2 (length-delimited): (1 << 3) | 2 = 10
+        gameIdBytes.length,
+        ...gameIdBytes
+    ]);
+    
+    return wrapInAny('tictactoe.NewGameRequest', reqBytes);
+}
+
 // Create MoveRequest protobuf (base64 encoded Any)
-function createMoveRequest(position) {
-    // MoveRequest: position (int32, field 1)
-    // Protobuf encoding: field_number << 3 | wire_type
-    // int32 uses wire type 0 (varint)
-    const moveReqBytes = new Uint8Array([
-        0x08, // field 1, wire type 0 (varint): (1 << 3) | 0 = 8
+function createMoveRequest(gameId, position) {
+    // MoveRequest: game_id (string, field 1), position (int32, field 2)
+    const gameIdBytes = new TextEncoder().encode(gameId);
+    const reqBytes = new Uint8Array([
+        0x0A, // field 1, wire type 2 (length-delimited): (1 << 3) | 2 = 10
+        gameIdBytes.length,
+        ...gameIdBytes,
+        0x10, // field 2, wire type 0 (varint): (2 << 3) | 0 = 16
         position & 0x7F // varint encoding of position (0-8 fits in one byte)
     ]);
     
-    // Wrap in google.protobuf.Any
-    // Any has two fields:
-    // 1. type_url (string, field 1)
-    // 2. value (bytes, field 2)
-    const typeUrl = 'type.googleapis.com/tictactoe.MoveRequest';
+    return wrapInAny('tictactoe.MoveRequest', reqBytes);
+}
+
+// Create GetStateRequest protobuf (base64 encoded Any)
+function createGetStateRequest(gameId) {
+    // GetStateRequest: game_id (string, field 1)
+    const gameIdBytes = new TextEncoder().encode(gameId);
+    const reqBytes = new Uint8Array([
+        0x0A, // field 1, wire type 2 (length-delimited): (1 << 3) | 2 = 10
+        gameIdBytes.length,
+        ...gameIdBytes
+    ]);
+    
+    return wrapInAny('tictactoe.GetStateRequest', reqBytes);
+}
+
+// Wrap a message in google.protobuf.Any
+function wrapInAny(typeName, messageBytes) {
+    const typeUrl = 'type.googleapis.com/' + typeName;
     const typeUrlBytes = new TextEncoder().encode(typeUrl);
     
     // Build Any message
     const anyBytes = new Uint8Array([
         // Field 1: type_url (string)
         0x0A, // (1 << 3) | 2 = 10
-        typeUrlBytes.length, // length
+        typeUrlBytes.length,
         ...typeUrlBytes,
         // Field 2: value (bytes)
         0x12, // (2 << 3) | 2 = 18
-        moveReqBytes.length, // length
-        ...moveReqBytes
-    ]);
-    
-    return base64Encode(anyBytes);
-}
-
-// Create empty request (for NewGame and GetState)
-// These methods don't use the position field, so we send an empty MoveRequest
-function createEmptyRequest() {
-    // Create an empty MoveRequest protobuf wrapped in Any
-    // Empty message has no fields, so just the type URL and empty value
-    const typeUrl = 'type.googleapis.com/tictactoe.MoveRequest';
-    const typeUrlBytes = new TextEncoder().encode(typeUrl);
-    
-    // Build Any message with empty value
-    const anyBytes = new Uint8Array([
-        // Field 1: type_url (string)
-        0x0A, // (1 << 3) | 2 = 10
-        typeUrlBytes.length, // length
-        ...typeUrlBytes,
-        // Field 2: value (bytes) - empty
-        0x12, // (2 << 3) | 2 = 18
-        0x00  // length = 0
+        messageBytes.length,
+        ...messageBytes
     ]);
     
     return base64Encode(anyBytes);
@@ -279,8 +272,15 @@ function parseAny(bytes) {
 }
 
 // Parse GameState protobuf
+// GameState fields:
+//   1: game_id (string)
+//   2: board (repeated string)
+//   3: status (string)
+//   4: winner (string)
+//   5: last_ai_move (int32)
 function parseGameStateFromBytes(bytes) {
     let offset = 0;
+    let gameId = '';
     const board = ['', '', '', '', '', '', '', '', ''];
     let status = 'playing';
     let winner = '';
@@ -293,6 +293,11 @@ function parseGameStateFromBytes(bytes) {
         const wireType = fieldWire & 0x07;
         
         if (fieldNumber === 1 && wireType === 2) {
+            // game_id (string)
+            const len = bytes[offset++];
+            gameId = new TextDecoder().decode(bytes.slice(offset, offset + len));
+            offset += len;
+        } else if (fieldNumber === 2 && wireType === 2) {
             // board (repeated string)
             const len = bytes[offset++];
             if (len > 0) {
@@ -300,20 +305,18 @@ function parseGameStateFromBytes(bytes) {
             }
             boardIndex++;
             offset += len;
-        } else if (fieldNumber === 2 && wireType === 2) {
+        } else if (fieldNumber === 3 && wireType === 2) {
             // status (string)
             const len = bytes[offset++];
             status = new TextDecoder().decode(bytes.slice(offset, offset + len));
             offset += len;
-        } else if (fieldNumber === 3 && wireType === 2) {
+        } else if (fieldNumber === 4 && wireType === 2) {
             // winner (string)
             const len = bytes[offset++];
             winner = new TextDecoder().decode(bytes.slice(offset, offset + len));
             offset += len;
-        } else if (fieldNumber === 4 && wireType === 0) {
+        } else if (fieldNumber === 5 && wireType === 0) {
             // last_ai_move (int32, varint)
-            // Protobuf int32 uses standard varint encoding
-            // Negative values are encoded as 10-byte varints (full 64-bit two's complement)
             let value = 0;
             let shift = 0;
             let b;
@@ -322,18 +325,14 @@ function parseGameStateFromBytes(bytes) {
                 value |= (b & 0x7F) << shift;
                 shift += 7;
             } while (b & 0x80);
-            // Protobuf encodes negative int32 values as 10-byte varints using
-            // 64-bit two's complement representation. Using JavaScript's bitwise OR
-            // with 0 correctly converts to a 32-bit signed integer.
+            // Convert to signed 32-bit integer
             lastAiMove = value | 0;
         } else {
             // Skip unknown field
             if (wireType === 0) {
-                // Skip varint bytes: each byte except the last has the high bit (0x80) set
-                // We skip all continuation bytes then skip the final byte
                 while (offset < bytes.length) {
                     const b = bytes[offset++];
-                    if ((b & 0x80) === 0) break; // Last byte of varint
+                    if ((b & 0x80) === 0) break;
                 }
             } else if (wireType === 2) {
                 const len = bytes[offset++];
@@ -342,7 +341,7 @@ function parseGameStateFromBytes(bytes) {
         }
     }
     
-    return { board, status, winner, lastAiMove };
+    return { gameId, board, status, winner, lastAiMove };
 }
 
 // Base64 encode

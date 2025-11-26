@@ -38,11 +38,11 @@ func main() {
 			panic(err)
 		}
 
-		// Register TicTacToe object type
-		goverseapi.RegisterObjectType((*TicTacToe)(nil))
+		// Register TicTacToeService object type
+		goverseapi.RegisterObjectType((*TicTacToeService)(nil))
 
-		// Create game objects when cluster is ready
-		go createGameObjects()
+		// Keep service objects running - this goroutine runs forever
+		go ensureServiceObjects()
 
 		err = server.Run()
 		if err != nil {
@@ -83,22 +83,32 @@ func main() {
 	select {}
 }
 
-// createGameObjects creates the fixed pool of game objects
-func createGameObjects() {
+// ensureServiceObjects keeps the service objects alive by periodically creating them
+// This goroutine runs forever until server shutdown
+// Creating an object that already exists is a no-op
+func ensureServiceObjects() {
 	serverLogger.Infof("Waiting for cluster to be ready...")
 	<-goverseapi.ClusterReady()
-	serverLogger.Infof("Cluster is ready, creating game objects in 5 seconds...")
+	serverLogger.Infof("Cluster is ready, starting service object maintenance...")
+
+	// Initial delay before first creation
 	time.Sleep(5 * time.Second)
 
 	ctx := context.Background()
-	for i := 1; i <= 10; i++ {
-		gameID := fmt.Sprintf("game-%d", i)
-		_, err := goverseapi.CreateObject(ctx, "TicTacToe", gameID)
-		if err != nil {
-			serverLogger.Warnf("Failed to create %s (may already exist): %v", gameID, err)
-		} else {
-			serverLogger.Infof("Created game object: %s", gameID)
+	for {
+		// Create/ensure all service objects exist
+		for i := 1; i <= 10; i++ {
+			serviceID := fmt.Sprintf("service-%d", i)
+			_, err := goverseapi.CreateObject(ctx, "TicTacToeService", serviceID)
+			if err != nil {
+				// This is expected if object already exists
+				serverLogger.Debugf("CreateObject %s: %v", serviceID, err)
+			} else {
+				serverLogger.Infof("Created service object: %s", serviceID)
+			}
 		}
+
+		// Wait before next check - objects should stay alive, but we periodically ensure they exist
+		time.Sleep(30 * time.Second)
 	}
-	serverLogger.Infof("All game objects created!")
 }

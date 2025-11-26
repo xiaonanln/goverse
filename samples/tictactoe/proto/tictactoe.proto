@@ -2,13 +2,23 @@ syntax = "proto3";
 package tictactoe;
 option go_package = "github.com/xiaonanln/goverse/samples/tictactoe/tictactoe_pb";
 
+message NewGameRequest {
+  string game_id = 1;  // Unique game ID for this user's game
+}
+
 message MoveRequest {
-  int32 position = 1;  // 0-8, representing board position
+  string game_id = 1;  // Unique game ID for this user's game
+  int32 position = 2;  // 0-8, representing board position
+}
+
+message GetStateRequest {
+  string game_id = 1;  // Unique game ID for this user's game
 }
 
 message GameState {
-  repeated string board = 1;   // 9 elements: "", "X", or "O"
-  string status = 2;           // "playing", "x_wins", "o_wins", "draw"
-  string winner = 3;           // "", "X", or "O"
-  int32 last_ai_move = 4;      // -1 if no AI move yet, or 0-8
+  string game_id = 1;          // Game ID
+  repeated string board = 2;   // 9 elements: "", "X", or "O"
+  string status = 3;           // "playing", "x_wins", "o_wins", "draw"
+  string winner = 4;           // "", "X", or "O"
+  int32 last_ai_move = 5;      // -1 if no AI move yet, or 0-8
 }
