@@ -262,7 +262,14 @@ function parseAny(bytes) {
         } else {
             // Skip unknown field
             if (wireType === 0) {
-                while (bytes[offset++] & 0x80) {}
+                // Skip varint - continue while high bit is set
+                while (offset < bytes.length && (bytes[offset] & 0x80)) {
+                    offset++;
+                }
+                // Skip the last byte (with high bit not set)
+                if (offset < bytes.length) {
+                    offset++;
+                }
             } else if (wireType === 2) {
                 const len = bytes[offset++];
                 offset += len;
@@ -308,6 +315,7 @@ function parseGameStateFromBytes(bytes) {
         } else if (fieldNumber === 4 && wireType === 0) {
             // last_ai_move (int32, varint)
             // Protobuf int32 uses standard varint encoding
+            // Negative values are encoded as 10-byte varints (full 64-bit two's complement)
             let value = 0;
             let shift = 0;
             let b;
@@ -316,19 +324,21 @@ function parseGameStateFromBytes(bytes) {
                 value |= (b & 0x7F) << shift;
                 shift += 7;
             } while (b & 0x80);
-            // For int32, we need to handle two's complement for negative values
-            // But since we only use -1 and 0-8, and -1 would be encoded as a large number,
-            // we handle it by checking if value is very large (indicating negative)
-            if (value > 0x7FFFFFFF) {
-                // Two's complement for negative values
-                lastAiMove = value - 0x100000000;
-            } else {
-                lastAiMove = value;
-            }
+            // For int32, negative values have the sign bit set (bit 31)
+            // JavaScript bitwise operations treat numbers as 32-bit signed integers
+            // Using bitwise OR with 0 converts to 32-bit signed integer
+            lastAiMove = value | 0;
         } else {
             // Skip unknown field
             if (wireType === 0) {
-                while (offset < bytes.length && bytes[offset++] & 0x80) {}
+                // Skip varint - continue while high bit is set
+                while (offset < bytes.length && (bytes[offset] & 0x80)) {
+                    offset++;
+                }
+                // Skip the last byte (with high bit not set)
+                if (offset < bytes.length) {
+                    offset++;
+                }
             } else if (wireType === 2) {
                 const len = bytes[offset++];
                 offset += len;
