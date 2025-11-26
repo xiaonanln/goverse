@@ -206,9 +206,25 @@ function createMoveRequest(position) {
 }
 
 // Create empty request (for NewGame and GetState)
+// These methods don't use the position field, so we send an empty MoveRequest
 function createEmptyRequest() {
-    // Empty MoveRequest (just use position = 0, it will be ignored)
-    return createMoveRequest(0);
+    // Create an empty MoveRequest protobuf wrapped in Any
+    // Empty message has no fields, so just the type URL and empty value
+    const typeUrl = 'type.googleapis.com/tictactoe.MoveRequest';
+    const typeUrlBytes = new TextEncoder().encode(typeUrl);
+    
+    // Build Any message with empty value
+    const anyBytes = new Uint8Array([
+        // Field 1: type_url (string)
+        0x0A, // (1 << 3) | 2 = 10
+        typeUrlBytes.length, // length
+        ...typeUrlBytes,
+        // Field 2: value (bytes) - empty
+        0x12, // (2 << 3) | 2 = 18
+        0x00  // length = 0
+    ]);
+    
+    return base64Encode(anyBytes);
 }
 
 // Parse GameState from response
@@ -291,6 +307,7 @@ function parseGameStateFromBytes(bytes) {
             offset += len;
         } else if (fieldNumber === 4 && wireType === 0) {
             // last_ai_move (int32, varint)
+            // Protobuf int32 uses standard varint encoding
             let value = 0;
             let shift = 0;
             let b;
@@ -299,12 +316,14 @@ function parseGameStateFromBytes(bytes) {
                 value |= (b & 0x7F) << shift;
                 shift += 7;
             } while (b & 0x80);
-            // Handle zigzag for signed int32
-            lastAiMove = (value >>> 1) ^ -(value & 1);
-            if (lastAiMove === 0 && value === 0) {
-                // Check if it's actually -1 encoded
-                // In standard int32, -1 would be a large number
-                // But Goverse uses standard int32 encoding, so 0 means 0
+            // For int32, we need to handle two's complement for negative values
+            // But since we only use -1 and 0-8, and -1 would be encoded as a large number,
+            // we handle it by checking if value is very large (indicating negative)
+            if (value > 0x7FFFFFFF) {
+                // Two's complement for negative values
+                lastAiMove = value - 0x100000000;
+            } else {
+                lastAiMove = value;
             }
         } else {
             // Skip unknown field
