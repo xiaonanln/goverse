@@ -24,8 +24,7 @@ func TestClusterShardMappingIntegration(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:50002", testPrefix)
 
 	// Wait for leader election and shard mapping to stabilize
-	testutil.WaitForClusterReady(t, cluster1)
-	testutil.WaitForClusterReady(t, cluster2)
+	testutil.WaitForClustersReady(t, cluster1, cluster2)
 
 	// Test leader detection
 	t.Run("LeaderDetection", func(t *testing.T) {

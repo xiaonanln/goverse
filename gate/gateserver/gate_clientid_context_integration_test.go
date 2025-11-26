@@ -395,8 +395,7 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 	}
 
 	// Wait for shard mapping to be initialized
-	testutil.WaitForClusterReady(t, node1Cluster)
-	testutil.WaitForClusterReady(t, node2Cluster)
+	testutil.WaitForClustersReady(t, node1Cluster, node2Cluster)
 
 	// Client connects to gate
 	conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))

@@ -120,6 +120,20 @@ func TestWithEtcd(t *testing.T) {
 }
 ```
 
+### Integration Test Readiness
+
+**Use `testutil.WaitForClustersReady()` to ensure all clusters are fully ready** before test assertions:
+```go
+// Wait for multiple clusters (nodes and gates) to be fully ready
+testutil.WaitForClustersReady(t, nodeCluster1, nodeCluster2, gateCluster)
+```
+
+This is preferred over multiple `WaitForClusterReady()` calls because:
+- Performs comprehensive cross-cluster validation
+- Ensures all nodes see each other in cluster state
+- Verifies gates are connected to all nodes
+- Confirms shard mappings are complete (CurrentNode == TargetNode)
+
 ### Mock Helpers
 
 **Persistence**: Use `node.NewMockPersistenceProvider()` - **only access via thread-safe methods**:

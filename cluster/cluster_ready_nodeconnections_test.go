@@ -59,8 +59,7 @@ func TestClusterReadyMultiNode(t *testing.T) {
 	cluster2 := mustNewCluster(ctx, t, "localhost:47112", testPrefix)
 
 	// Wait for both clusters to be ready (cluster.Start already handles all initialization)
-	testutil.WaitForClusterReady(t, cluster1)
-	testutil.WaitForClusterReady(t, cluster2)
+	testutil.WaitForClustersReady(t, cluster1, cluster2)
 
 	// Verify both clusters are ready
 	if !cluster1.IsReady() {
