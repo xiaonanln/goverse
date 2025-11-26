@@ -189,24 +189,9 @@ func TestGateHTTPIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gate server in a goroutine
-	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel)
-
-	gwStarted := make(chan error, 1)
-	go func() {
-		gwStarted <- gwServer.Start(gwStartCtx)
-	}()
-
-	// Wait for gate to be ready
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted:
-		if err != nil {
-			t.Fatalf("Gate server failed to start: %v", err)
-		}
-	default:
-		// Gate is running
+	// Start the gate server (non-blocking)
+	if err := gwServer.Start(ctx); err != nil {
+		t.Fatalf("Gate server failed to start: %v", err)
 	}
 	t.Logf("Started real gate server at gRPC=%s, HTTP=%s", gateAddr, httpAddr)
 
@@ -474,24 +459,9 @@ func TestGateHTTPIntegrationWithCurl(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gate server in a goroutine
-	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel)
-
-	gwStarted := make(chan error, 1)
-	go func() {
-		gwStarted <- gwServer.Start(gwStartCtx)
-	}()
-
-	// Wait for gate to be ready
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted:
-		if err != nil {
-			t.Fatalf("Gate server failed to start: %v", err)
-		}
-	default:
-		// Gate is running
+	// Start the gate server (non-blocking)
+	if err := gwServer.Start(ctx); err != nil {
+		t.Fatalf("Gate server failed to start: %v", err)
 	}
 	t.Logf("Started real gate server at gRPC=%s, HTTP=%s", gateAddr, httpAddr)
 

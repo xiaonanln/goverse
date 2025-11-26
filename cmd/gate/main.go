@@ -38,29 +38,22 @@ func main() {
 	}
 
 	// Create context for server lifecycle
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
+
+	// Start gate server (non-blocking)
+	if err := gateserver.Start(ctx); err != nil {
+		log.Fatalf("Failed to start gate server: %v", err)
+	}
+
+	log.Println("Gate server started")
 
 	// Handle signals for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start gate server in goroutine
-	serverDone := make(chan error, 1)
-	go func() {
-		serverDone <- gateserver.Start(ctx)
-	}()
-
-	// Wait for shutdown signal or server error
-	select {
-	case <-sigChan:
-		log.Println("Received shutdown signal")
-		cancel() // Cancel context to trigger server shutdown
-	case err := <-serverDone:
-		if err != nil {
-			log.Printf("Gate server error: %v", err)
-		}
-	}
+	// Wait for shutdown signal
+	<-sigChan
+	log.Println("Received shutdown signal")
 
 	// Stop the gate server
 	if err := gateserver.Stop(); err != nil {

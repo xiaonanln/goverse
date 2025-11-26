@@ -120,18 +120,13 @@ func TestGateServerStartStop(t *testing.T) {
 		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	// Create context
+	ctx := context.Background()
 
-	// Start server in goroutine
-	serverDone := make(chan error, 1)
-	go func() {
-		serverDone <- server.Start(ctx)
-	}()
-
-	// Give server time to start
-	time.Sleep(100 * time.Millisecond)
+	// Start server (non-blocking)
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Server.Start() returned error: %v", err)
+	}
 
 	// Verify server is listening by attempting connection
 	conn, err := grpc.NewClient(listenAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -144,19 +139,6 @@ func TestGateServerStartStop(t *testing.T) {
 	client := gate_pb.NewGateServiceClient(conn)
 	if client == nil {
 		t.Fatalf("Failed to create gate client")
-	}
-
-	// Cancel context to trigger shutdown
-	cancel()
-
-	// Wait for server to stop
-	select {
-	case err := <-serverDone:
-		if err != nil {
-			t.Fatalf("Server.Start() returned error: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Server did not stop within timeout")
 	}
 
 	// Stop server
@@ -180,13 +162,13 @@ func TestGateServerMultipleStops(t *testing.T) {
 		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	// Create context
+	ctx := context.Background()
 
-	// Start server
-	go server.Start(ctx)
-	time.Sleep(100 * time.Millisecond)
+	// Start server (non-blocking)
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Server.Start() returned error: %v", err)
+	}
 
 	// Stop multiple times should not panic or error
 	if err := server.Stop(); err != nil {
@@ -214,13 +196,13 @@ func TestGateServerRPCMethods(t *testing.T) {
 	}
 	defer server.Stop()
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	// Create context
+	ctx := context.Background()
 
-	// Start server
-	go server.Start(ctx)
-	time.Sleep(200 * time.Millisecond)
+	// Start server (non-blocking)
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Server.Start() returned error: %v", err)
+	}
 
 	// Connect to server
 	conn, err := grpc.NewClient(listenAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -399,12 +381,12 @@ func TestGateServerGracefulShutdown(t *testing.T) {
 		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
-	// Start server
-	go server.Start(ctx)
-	time.Sleep(200 * time.Millisecond)
+	// Start server (non-blocking)
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Server.Start() returned error: %v", err)
+	}
 
 	// Create a client connection
 	conn, err := grpc.NewClient(listenAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -450,11 +432,12 @@ func TestGateServerMetrics(t *testing.T) {
 		t.Fatalf("Failed to create gate server: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
-	// Start server
-	go server.Start(ctx)
+	// Start server (non-blocking)
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Server.Start() returned error: %v", err)
+	}
 
 	// Try to fetch metrics with retries - the HTTP server starts quickly
 	var resp *http.Response

@@ -98,24 +98,9 @@ func TestClientIDInContext(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gateway server in a goroutine
-	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel)
-
-	gwStarted := make(chan error, 1)
-	go func() {
-		gwStarted <- gwServer.Start(gwStartCtx)
-	}()
-
-	// Wait for gateway to be ready
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted:
-		if err != nil {
-			t.Fatalf("Gateway server failed to start: %v", err)
-		}
-	default:
-		// Gateway is running
+	// Start the gateway server (non-blocking)
+	if err := gwServer.Start(ctx); err != nil {
+		t.Fatalf("Gateway server failed to start: %v", err)
 	}
 
 	// Wait for shard mapping to be initialized
@@ -374,24 +359,9 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gateway server in a goroutine
-	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel)
-
-	gwStarted := make(chan error, 1)
-	go func() {
-		gwStarted <- gwServer.Start(gwStartCtx)
-	}()
-
-	// Wait for gateway to be ready
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted:
-		if err != nil {
-			t.Fatalf("Gateway server failed to start: %v", err)
-		}
-	default:
-		// Gateway is running
+	// Start the gateway server (non-blocking)
+	if err := gwServer.Start(ctx); err != nil {
+		t.Fatalf("Gateway server failed to start: %v", err)
 	}
 
 	// Wait for shard mapping to be initialized

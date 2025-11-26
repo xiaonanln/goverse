@@ -132,24 +132,9 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer.Stop() })
 
-	// Start the gate server in a goroutine
-	gwStartCtx, gwStartCancel := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel)
-
-	gwStarted := make(chan error, 1)
-	go func() {
-		gwStarted <- gwServer.Start(gwStartCtx)
-	}()
-
-	// Wait for gate to be ready
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted:
-		if err != nil {
-			t.Fatalf("Gate server failed to start: %v", err)
-		}
-	default:
-		// Gate is running
+	// Start the gate server (non-blocking)
+	if err := gwServer.Start(ctx); err != nil {
+		t.Fatalf("Gate server failed to start: %v", err)
 	}
 	t.Logf("Started real gate server at %s", gateAddr)
 
@@ -396,22 +381,9 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer1.Stop() })
 
-	gwStartCtx1, gwStartCancel1 := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel1)
-
-	gwStarted1 := make(chan error, 1)
-	go func() {
-		gwStarted1 <- gwServer1.Start(gwStartCtx1)
-	}()
-
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted1:
-		if err != nil {
-			t.Fatalf("Gate server 1 failed to start: %v", err)
-		}
-	default:
-		// Gate is running
+	// Start the gate server 1 (non-blocking)
+	if err := gwServer1.Start(ctx); err != nil {
+		t.Fatalf("Gate server 1 failed to start: %v", err)
 	}
 	t.Logf("Started gate server 1 at %s", gateAddr1)
 
@@ -430,22 +402,9 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 	}
 	t.Cleanup(func() { gwServer2.Stop() })
 
-	gwStartCtx2, gwStartCancel2 := context.WithCancel(ctx)
-	t.Cleanup(gwStartCancel2)
-
-	gwStarted2 := make(chan error, 1)
-	go func() {
-		gwStarted2 <- gwServer2.Start(gwStartCtx2)
-	}()
-
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-gwStarted2:
-		if err != nil {
-			t.Fatalf("Gate server 2 failed to start: %v", err)
-		}
-	default:
-		// Gate is running
+	// Start the gate server 2 (non-blocking)
+	if err := gwServer2.Start(ctx); err != nil {
+		t.Fatalf("Gate server 2 failed to start: %v", err)
 	}
 	t.Logf("Started gate server 2 at %s", gateAddr2)
 
