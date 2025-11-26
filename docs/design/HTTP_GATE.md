@@ -1,18 +1,18 @@
 # HTTP Gate Design
 
-> **Status**: Design Document  
-> This document describes the HTTP gate support for Goverse, enabling HTTP clients to interact with objects and receive push notifications.
+> **Status**: Partially Implemented  
+> This document describes the HTTP gate support for Goverse, enabling HTTP clients to interact with objects.
 
 ---
 
 ## Goals
 
 Enable HTTP clients to:
-- **Call object methods** via HTTP REST API
-- **Create and delete objects** via HTTP REST API
-- **Receive pushed messages** from objects in real-time via HTTP mechanisms
+- **Call object methods** via HTTP REST API ✅ Implemented
+- **Create and delete objects** via HTTP REST API ✅ Implemented
+- **Receive pushed messages** from objects in real-time via SSE ❌ Not yet implemented
 
-All HTTP functionality should integrate seamlessly with the existing gate architecture without duplicating logic.
+All HTTP functionality integrates with the existing gate architecture without duplicating logic.
 
 ---
 
@@ -21,47 +21,84 @@ All HTTP functionality should integrate seamlessly with the existing gate archit
 The HTTP gate runs alongside the existing gRPC gate, sharing the same core `Gate` and `Cluster` components:
 
 ```
-HTTP Client ──> HTTP Handler ──> Gate ──> Cluster ──> Node ──> Objects
-                                     ↓
-gRPC Client ──> gRPC Handler ────────┘
+HTTP Client ──> HTTP Handler ──> GateServer ──> Cluster ──> Node ──> Objects
+                                          ↓
+gRPC Client ──> gRPC Handler ─────────────┘
 ```
 
 **Key principle**: HTTP handlers are thin protocol adapters that translate HTTP requests/responses to the same internal gate operations used by gRPC.
 
 ---
 
+## Current Implementation
+
+### Configuration
+
+HTTP is enabled by setting `HTTPListenAddress` in `GateServerConfig`:
+
+```go
+type GateServerConfig struct {
+    ListenAddress     string        // gRPC address (e.g., ":49000")
+    AdvertiseAddress  string        // Address advertised to cluster
+    HTTPListenAddress string        // HTTP address for REST API (e.g., ":8080")
+    EtcdAddress       string        // etcd address for cluster state
+    EtcdPrefix        string        // etcd key prefix (default: "/goverse")
+    NumShards         int           // Number of shards (default: 8192)
+
+    DefaultCallTimeout   time.Duration // Default CallObject timeout (default: 30s)
+    DefaultDeleteTimeout time.Duration // Default DeleteObject timeout (default: 30s)
+    DefaultCreateTimeout time.Duration // Default CreateObject timeout (default: 30s)
+}
+```
+
+### HTTP Server Settings
+
+The HTTP server is configured with sensible defaults:
+- Read timeout: 30 seconds
+- Write timeout: 30 seconds
+- Read header timeout: 10 seconds
+- Idle timeout: 120 seconds
+
+---
+
 ## HTTP REST API
 
-### Base Design
-
-All object operations use a consistent URL structure with action prefixes. Requests use protobuf `Any` message encoding:
+### Base URL
 
 ```
-Base URL: http://gate-host:port/api/v1
+http://gate-host:port/api/v1
 ```
 
-**Encoding**: All requests must encode protobuf messages as `google.protobuf.Any`, marshal to bytes, and send as POST data in the format:
+### Encoding
+
+All requests use **protobuf `Any` bytes** encoded as base64 JSON:
+
+```json
+{
+  "request": "<base64-encoded protobuf Any bytes>"
+}
+```
+
+This maintains type safety and consistency with the gRPC interface.
+
+### Endpoints
+
+#### 1. Call Object Method
+
+**Endpoint:** `POST /api/v1/objects/call/{type}/{id}/{method}`
+
+**Request:**
 ```json
 {
   "request": "<base64-encoded Any bytes>"
 }
 ```
 
-### Endpoints
+**Headers:**
+- `Content-Type: application/json`
+- `X-Client-ID: <client-id>` (optional, for push messaging context)
 
-#### 1. Call Object Method
-
-**Request:**
-```
-POST /api/v1/objects/call/{type}/{id}/{method}
-Content-Type: application/json
-
-{
-  "request": "<base64-encoded Any bytes>"
-}
-```
-
-**Response:**
+**Response (success):**
 ```json
 {
   "response": "<base64-encoded Any bytes>"
@@ -69,53 +106,53 @@ Content-Type: application/json
 ```
 
 **Example:**
-```
-POST /api/v1/objects/call/ChatRoom/room-123/SendMessage
-Content-Type: application/json
-
-// Client must:
-// 1. Create SendMessageArgs protobuf message
-// 2. Wrap it in google.protobuf.Any
-// 3. Marshal to bytes and base64 encode
-// 4. Send as:
-{
-  "request": "ChtDaGF0Um9vbS5TZW5kTWVzc2FnZUFyZ3MS..."
-}
+```bash
+curl -X POST http://localhost:8080/api/v1/objects/call/Counter/my-counter/Increment \
+  -H "Content-Type: application/json" \
+  -d '{"request":"CiZ0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5wcm90b2J1Zi5JbnQzMlZhbHVlEgIIBQ=="}'
 ```
 
 #### 2. Create Object
 
-**Request:**
-```
-POST /api/v1/objects/create/{type}/{id}
-Content-Type: application/json
+**Endpoint:** `POST /api/v1/objects/create/{type}/{id}`
 
-{
-  "request": "<base64-encoded Any bytes>"  // Optional creation arguments
-}
-```
+**Request:** Empty body or optional creation arguments
 
-**Response:**
+**Response (success):**
 ```json
 {
   "id": "object-id"
 }
 ```
 
+**Example:**
+```bash
+curl -X POST http://localhost:8080/api/v1/objects/create/Counter/my-counter
+```
+
 #### 3. Delete Object
 
-**Request:**
-```
-POST /api/v1/objects/delete/{id}
-Content-Type: application/json
-```
+**Endpoint:** `POST /api/v1/objects/delete/{id}`
 
-**Response:**
+**Request:** Empty body
+
+**Response (success):**
 ```json
 {
   "success": true
 }
 ```
+
+**Example:**
+```bash
+curl -X POST http://localhost:8080/api/v1/objects/delete/my-counter
+```
+
+#### 4. Prometheus Metrics
+
+**Endpoint:** `GET /metrics`
+
+Returns Prometheus-formatted metrics for monitoring.
 
 ### Error Handling
 
@@ -128,245 +165,70 @@ All errors return appropriate HTTP status codes with JSON error details:
 }
 ```
 
-Common status codes:
-- `200 OK`: Success
-- `400 Bad Request`: Invalid request format
-- `404 Not Found`: Object not found
-- `500 Internal Server Error`: Server-side error
+**Error codes:**
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `METHOD_NOT_ALLOWED` | 405 | Only POST is allowed |
+| `INVALID_PATH` | 400 | URL path format is incorrect |
+| `INVALID_PARAMETERS` | 400 | Required parameters are empty |
+| `INVALID_BODY` | 400 | Failed to read request body |
+| `INVALID_JSON` | 400 | Failed to parse JSON |
+| `INVALID_BASE64` | 400 | Failed to decode base64 |
+| `INVALID_PROTOBUF` | 400 | Failed to unmarshal protobuf |
+| `OBJECT_NOT_FOUND` | 404 | Object does not exist |
+| `CALL_FAILED` | 500 | Internal server error |
+| `CREATE_FAILED` | 500 | Object creation failed |
+| `DELETE_FAILED` | 500 | Object deletion failed |
+| `MARSHAL_ERROR` | 500 | Failed to marshal response |
 
 ---
 
-## Push Messaging
+## Client Usage Example
 
-HTTP push messaging requires special handling since HTTP is request-response based. Goverse uses **Server-Sent Events (SSE)** for HTTP push messaging.
-
-### Server-Sent Events (SSE)
-
-**Why SSE:**
-- Native browser support with `EventSource` API
-- Simple protocol built on HTTP
-- Automatic reconnection on connection loss
-- Efficient one-way server→client streaming
-- Sufficient for most push notification use cases
-
-**Design:**
-
-1. **Client registration:**
-   ```
-   GET /api/v1/events/stream
-   Accept: text/event-stream
-   ```
-
-2. **Server response:**
-   ```
-   HTTP/1.1 200 OK
-   Content-Type: text/event-stream
-   Cache-Control: no-cache
-   Connection: keep-alive
-
-   event: register
-   data: {"clientId": "gate-addr/unique-id"}
-
-   event: message
-   data: {"type": "ChatMessage", "payload": {...}}
-
-   event: message
-   data: {"type": "Notification", "payload": {...}}
-   ```
-
-3. **Message format:**
-   - `event: register` - Initial registration response with client ID
-   - `event: message` - Pushed messages from objects
-   - `event: heartbeat` - Keep-alive signals (every 30s)
-
-4. **Client usage (JavaScript):**
-   ```javascript
-   const eventSource = new EventSource('/api/v1/events/stream');
-   
-   eventSource.addEventListener('register', (e) => {
-     const { clientId } = JSON.parse(e.data);
-     // Use clientId in subsequent API calls
-   });
-   
-   eventSource.addEventListener('message', (e) => {
-     const msg = JSON.parse(e.data);
-     // Handle pushed message
-   });
-   ```
-
----
-
-## Implementation Strategy
-
-### Phase 1: HTTP REST API (Core Operations)
-
-Add HTTP handlers to `gate/gateserver/`:
+### Encoding Protobuf Messages for HTTP
 
 ```go
-type HTTPGateServer struct {
-    gateServer *GateServer
-    httpServer    *http.Server
-}
+package main
 
-func (s *HTTPGateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
-    // Extract type, id, method from URL path
-    // Parse request body: {"request": "<base64-encoded Any bytes>"}
-    // Decode base64 and unmarshal to google.protobuf.Any
-    // Call s.gateServer.cluster.CallObjectAnyRequest()
-    // Marshal response Any to base64 and return
-}
+import (
+    "encoding/base64"
+    "fmt"
+    "google.golang.org/protobuf/proto"
+    "google.golang.org/protobuf/types/known/anypb"
+    "google.golang.org/protobuf/types/known/wrapperspb"
+)
 
-func (s *HTTPGateServer) handleCreateObject(w http.ResponseWriter, r *http.Request) {
-    // Extract type, id from URL path
-    // Parse optional request body with Any bytes
-    // Call s.gateServer.cluster.CreateObject()
-    // Return object ID
-}
-
-func (s *HTTPGateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
-    // Extract id from URL path
-    // Call s.gateServer.cluster.DeleteObject()
-    // Return success response
-}
-```
-
-### Phase 2: Server-Sent Events (Push Messaging)
-
-Implement SSE streaming handler:
-
-```go
-func (s *HTTPGateServer) handleEventStream(w http.ResponseWriter, r *http.Request) {
-    // Set SSE headers
-    w.Header().Set("Content-Type", "text/event-stream")
-    w.Header().Set("Cache-Control", "no-cache")
-    w.Header().Set("Connection", "keep-alive")
-    
-    // Register client with gate
-    clientProxy := s.gateServer.gate.Register(r.Context())
-    defer s.gateServer.gate.Unregister(clientProxy.GetID())
-    
-    // Send registration event
-    fmt.Fprintf(w, "event: register\ndata: {\"clientId\":\"%s\"}\n\n", clientProxy.GetID())
-    w.(http.Flusher).Flush()
-    
-    // Stream messages
-    for {
-        select {
-        case <-r.Context().Done():
-            return
-        case msg := <-clientProxy.MessageChan():
-            // Convert protobuf message to JSON for SSE transport
-            // Write as SSE event
-            fmt.Fprintf(w, "event: message\ndata: %s\n\n", jsonMsg)
-            w.(http.Flusher).Flush()
-        }
+func encodeRequest(msg proto.Message) (string, error) {
+    // Step 1: Wrap message in google.protobuf.Any
+    anyReq, err := anypb.New(msg)
+    if err != nil {
+        return "", err
     }
+
+    // Step 2: Marshal to bytes
+    reqBytes, err := proto.Marshal(anyReq)
+    if err != nil {
+        return "", err
+    }
+
+    // Step 3: Base64 encode
+    return base64.StdEncoding.EncodeToString(reqBytes), nil
+}
+
+func main() {
+    // Create an Int32 value to increment counter by 5
+    msg := &wrapperspb.Int32Value{Value: 5}
+    encoded, _ := encodeRequest(msg)
+    
+    fmt.Printf(`curl -X POST http://localhost:8080/api/v1/objects/call/Counter/my-counter/Increment \
+  -H "Content-Type: application/json" \
+  -d '{"request":"%s"}'`, encoded)
 }
 ```
 
----
-
-## Key Design Choices
-
-### 1. Protobuf Encoding
-
-**Choice**: Use protobuf `Any` bytes for HTTP API requests, not JSON.
-
-**Rationale**:
-- Goverse is highly protobuf-centric
-- Maintains type safety and consistency with gRPC interface
-- Clients must encode proto messages into `google.protobuf.Any`, marshal to bytes, and base64-encode for HTTP transport
-- Gate can forward Any bytes directly to cluster without re-marshaling
-- No lossy JSON conversion or schema ambiguity
-
-### 2. URL Structure
-
-**Choice**: Action-based URLs with operation prefix: `/objects/{action}/{type}/{id}/{method}`
-
-**Rationale**:
-- Explicit action naming (call, create, delete) for clarity
-- All operations use POST for consistency and to avoid HTTP method limitations
-- Type and ID clearly separated in path
-- Method name at end for call operations
-
-### 3. Push Mechanism
-
-**Choice**: Use Server-Sent Events (SSE) exclusively for HTTP push messaging.
-
-**Rationale**:
-- SSE is sufficient for server→client push notifications
-- Native browser support with simple API
-- HTTP-based, works through most proxies
-- Automatic reconnection handling
-- For bidirectional needs, clients should use gRPC gate
-
-### 4. Authentication & Authorization
-
-**Approach**: HTTP middleware at gate level
-
-**Design considerations**:
-- HTTP gate can add auth middleware (JWT, API keys, etc.)
-- Auth context passed to objects via request context or arguments
-- Objects should not trust client-provided identity fields
-- Future: Per-object/per-method access control policies
-
-### 5. HTTP Server Integration
-
-**Choice**: Run HTTP server alongside gRPC server in same process.
-
-**Rationale**:
-- Share same gate and cluster instances
-- Simpler deployment (one binary)
-- Option to run on different ports for separation
-
----
-
-## Configuration Example
-
-```go
-type GateServerConfig struct {
-    // gRPC
-    GRPCListenAddress    string // e.g., ":49000"
-    
-    // HTTP
-    HTTPListenAddress    string // e.g., ":8080"
-    HTTPEnabled          bool   // Enable HTTP gate
-    
-    // Common
-    AdvertiseAddress string
-    EtcdAddress      string
-    EtcdPrefix       string
-}
-```
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- HTTP handler request/response parsing
-- JSON <-> Protobuf conversion
-- Error handling and status codes
-
-### Integration Tests
-- End-to-end HTTP CallObject/CreateObject/DeleteObject
-- SSE stream lifecycle (connect, receive, disconnect)
-- HTTP + gRPC clients interacting with same objects
-- Push message delivery to both HTTP and gRPC clients
-
-### Manual Testing
-- Browser-based HTTP client (fetch API + EventSource)
-- curl commands for REST API
-- Multi-client chat scenario (HTTP + gRPC clients)
-
----
-
-## Example Usage
-
-### Chat via HTTP REST API
+### JavaScript Example
 
 ```javascript
-// Helper function to encode protobuf message for HTTP
 async function callObject(type, id, method, protoMessage) {
   // 1. Wrap proto message in google.protobuf.Any
   const anyMessage = new google.protobuf.Any();
@@ -385,78 +247,104 @@ async function callObject(type, id, method, protoMessage) {
   
   return response.json();
 }
-
-// Join room
-const joinArgs = new chat.JoinArgs();
-joinArgs.setUserName('alice');
-joinArgs.setClientId(clientId);
-await callObject('ChatRoom', 'room-1', 'Join', joinArgs);
-
-// Send message
-const sendArgs = new chat.SendMessageArgs();
-sendArgs.setUserName('alice');
-sendArgs.setMessage('Hello!');
-await callObject('ChatRoom', 'room-1', 'SendMessage', sendArgs);
-```
-
-### Chat with SSE Push
-
-```javascript
-// Connect to event stream
-const eventSource = new EventSource('/api/v1/events/stream');
-let clientId;
-
-eventSource.addEventListener('register', (e) => {
-  const data = JSON.parse(e.data);
-  clientId = data.clientId;
-  
-  // Now join room with clientId
-  joinRoom(clientId);
-});
-
-eventSource.addEventListener('message', (e) => {
-  const msg = JSON.parse(e.data);
-  if (msg.type === 'ChatMessage') {
-    displayMessage(msg.payload);
-  }
-});
 ```
 
 ---
 
-## Migration Path
+## Implementation Details
 
-For existing gRPC clients, no changes required. HTTP support is additive:
+### Source Files
 
-1. **Phase 1**: Deploy HTTP gate with REST API support (call, create, delete)
-2. **Phase 2**: Add SSE streaming for push notifications
-3. **Phase 3**: Build example web UI using HTTP + SSE
+- `gate/gateserver/http_handler.go` - HTTP handler implementation
+- `gate/gateserver/http_handler_test.go` - Unit tests
+- `examples/httpgate/main.go` - Example usage
 
-HTTP and gRPC clients can coexist and interact seamlessly through the same object layer.
+### Key Functions
+
+| Function | Description |
+|----------|-------------|
+| `setupHTTPRoutes()` | Configures HTTP routes |
+| `handleCallObject()` | Handles `/api/v1/objects/call/{type}/{id}/{method}` |
+| `handleCreateObject()` | Handles `/api/v1/objects/create/{type}/{id}` |
+| `handleDeleteObject()` | Handles `/api/v1/objects/delete/{id}` |
+| `startHTTPServer()` | Starts the HTTP server |
+| `stopHTTPServer()` | Gracefully stops the HTTP server |
+
+---
+
+## Future Work: Push Messaging via SSE
+
+> **Status**: Not yet implemented
+
+HTTP push messaging will use **Server-Sent Events (SSE)** to deliver messages from objects to clients.
+
+### Planned Design
+
+**Endpoint:** `GET /api/v1/events/stream`
+
+**Response:**
+```
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+
+event: register
+data: {"clientId": "gate-addr/unique-id"}
+
+event: message
+data: {"type": "ChatMessage", "payload": {...}}
+
+event: heartbeat
+data: {}
+```
+
+**Why SSE:**
+- Native browser support with `EventSource` API
+- Simple protocol built on HTTP
+- Automatic reconnection on connection loss
+- Efficient one-way server→client streaming
+- For bidirectional needs, clients should use gRPC gate
+
+### Planned Client Usage
+
+```javascript
+const eventSource = new EventSource('/api/v1/events/stream');
+
+eventSource.addEventListener('register', (e) => {
+  const { clientId } = JSON.parse(e.data);
+  // Use clientId in subsequent API calls
+});
+
+eventSource.addEventListener('message', (e) => {
+  const msg = JSON.parse(e.data);
+  // Handle pushed message
+});
+```
 
 ---
 
 ## Future Enhancements
 
-- **GraphQL API**: Alternative to REST for complex queries
-- **WebRTC**: For peer-to-peer media streaming scenarios
-- **HTTP/2 Server Push**: Alternative to SSE (less browser support)
-- **Rate limiting**: Per-client request throttling
-- **CORS configuration**: For browser-based clients
-- **API documentation**: OpenAPI/Swagger spec generation
-- **SDK generation**: Auto-generated client libraries for popular languages
+- **Server-Sent Events (SSE)** - Real-time push messaging
+- **Authentication middleware** - JWT, API keys
+- **Rate limiting** - Per-client request throttling
+- **CORS configuration** - For browser-based clients
+- **OpenAPI/Swagger spec** - API documentation generation
+- **GraphQL API** - Alternative to REST for complex queries
 
 ---
 
 ## Summary
 
-This design enables HTTP clients to fully participate in the Goverse ecosystem:
+The HTTP gate provides a REST API for Goverse object operations:
 
-- **HTTP REST API** with action-based URLs for object operations (call, create, delete)
-- **Protobuf encoding** maintains type safety and consistency with gRPC
-- **Server-Sent Events** enable efficient real-time push notifications
-- **Thin protocol layer** maintains separation between transport and business logic
-- **Shared infrastructure** ensures consistency between HTTP and gRPC clients
-- **Incremental implementation** allows phased rollout with backward compatibility
+| Feature | Status |
+|---------|--------|
+| Call object methods | ✅ Implemented |
+| Create objects | ✅ Implemented |
+| Delete objects | ✅ Implemented |
+| Prometheus metrics | ✅ Implemented |
+| Push messaging (SSE) | ❌ Not yet implemented |
 
-The HTTP gate preserves Goverse's core architectural principles while making the platform accessible to web browsers and HTTP-native tooling.
+The implementation uses protobuf `Any` encoding for type safety and shares the same cluster infrastructure as the gRPC gate, ensuring consistency between HTTP and gRPC clients.
