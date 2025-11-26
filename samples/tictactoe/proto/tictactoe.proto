@@ -1,0 +1,14 @@
+syntax = "proto3";
+package tictactoe;
+option go_package = "github.com/xiaonanln/goverse/samples/tictactoe/tictactoe_pb";
+
+message MoveRequest {
+  int32 position = 1;  // 0-8, representing board position
+}
+
+message GameState {
+  repeated string board = 1;   // 9 elements: "", "X", or "O"
+  string status = 2;           // "playing", "x_wins", "o_wins", "draw"
+  string winner = 3;           // "", "X", or "O"
+  int32 last_ai_move = 4;      // -1 if no AI move yet, or 0-8
+}

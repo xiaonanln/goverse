@@ -1,0 +1,104 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"time"
+
+	"github.com/xiaonanln/goverse/gate/gateserver"
+	"github.com/xiaonanln/goverse/goverseapi"
+	"github.com/xiaonanln/goverse/util/logger"
+)
+
+var serverLogger = logger.NewLogger("TicTacToeServer")
+
+func main() {
+	var (
+		nodeAddr = flag.String("node-addr", "localhost:50051", "Node listen/advertise address")
+		gateAddr = flag.String("gate-addr", "localhost:49000", "Gate gRPC listen address")
+		httpAddr = flag.String("http-addr", ":8080", "HTTP listen address for REST API")
+	)
+	flag.Parse()
+
+	serverLogger.Infof("Starting TicTacToe server...")
+	serverLogger.Infof("  Node address: %s", *nodeAddr)
+	serverLogger.Infof("  Gate address: %s", *gateAddr)
+	serverLogger.Infof("  HTTP address: %s", *httpAddr)
+
+	// Start the node server in a goroutine
+	go func() {
+		config := &goverseapi.ServerConfig{
+			ListenAddress:    *nodeAddr,
+			AdvertiseAddress: *nodeAddr,
+		}
+		server, err := goverseapi.NewServer(config)
+		if err != nil {
+			serverLogger.Errorf("Failed to create server: %v", err)
+			panic(err)
+		}
+
+		// Register TicTacToe object type
+		goverseapi.RegisterObjectType((*TicTacToe)(nil))
+
+		// Create game objects when cluster is ready
+		go createGameObjects()
+
+		err = server.Run()
+		if err != nil {
+			serverLogger.Errorf("Server error: %v", err)
+			panic(err)
+		}
+	}()
+
+	// Give the node some time to start
+	time.Sleep(2 * time.Second)
+
+	// Start the gate server
+	gateConfig := &gateserver.GateServerConfig{
+		ListenAddress:     *gateAddr,
+		AdvertiseAddress:  *gateAddr,
+		HTTPListenAddress: *httpAddr,
+		EtcdAddress:       "localhost:2379",
+	}
+
+	gateServer, err := gateserver.NewGateServer(gateConfig)
+	if err != nil {
+		serverLogger.Errorf("Failed to create gate server: %v", err)
+		panic(err)
+	}
+
+	ctx := context.Background()
+	err = gateServer.Start(ctx)
+	if err != nil {
+		serverLogger.Errorf("Failed to start gate server: %v", err)
+		panic(err)
+	}
+
+	serverLogger.Infof("TicTacToe server started successfully!")
+	serverLogger.Infof("  REST API: http://localhost%s", *httpAddr)
+	serverLogger.Infof("  Web UI: Serve samples/tictactoe/web with a web server")
+
+	// Wait forever
+	select {}
+}
+
+// createGameObjects creates the fixed pool of game objects
+func createGameObjects() {
+	serverLogger.Infof("Waiting for cluster to be ready...")
+	<-goverseapi.ClusterReady()
+	serverLogger.Infof("Cluster is ready, creating game objects in 5 seconds...")
+	time.Sleep(5 * time.Second)
+
+	ctx := context.Background()
+	for i := 1; i <= 10; i++ {
+		gameID := fmt.Sprintf("game-%d", i)
+		_, err := goverseapi.CreateObject(ctx, "TicTacToe", gameID)
+		if err != nil {
+			serverLogger.Warnf("Failed to create %s (may already exist): %v", gameID, err)
+		} else {
+			serverLogger.Infof("Created game object: %s", gameID)
+		}
+	}
+	serverLogger.Infof("All game objects created!")
+}
