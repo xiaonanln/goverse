@@ -15,7 +15,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 - Virtual objects with automatic lifecycle & activation
 - Sharded placement using etcd
-- Gate architecture with streaming gRPC
+- Gate architecture with streaming gRPC and HTTP REST API
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics
