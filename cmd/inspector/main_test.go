@@ -68,7 +68,7 @@ func TestInspectorEtcdRegistration(t *testing.T) {
 	inspectorKey := mgr.GetPrefix() + "/inspector"
 	inspectorAddress := ":8081"
 
-	_, err = mgr.RegisterKeyLease(ctx, inspectorKey, inspectorAddress, InspectorLeaseTTL)
+	_, err = mgr.RegisterKeyLease(ctx, inspectorKey, inspectorAddress, etcdmanager.NodeLeaseTTL)
 	if err != nil {
 		t.Fatalf("Failed to register inspector with etcd: %v", err)
 	}

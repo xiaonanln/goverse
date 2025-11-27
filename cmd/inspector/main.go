@@ -21,11 +21,6 @@ import (
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 )
 
-const (
-	// InspectorLeaseTTL is the TTL for the inspector key in etcd
-	InspectorLeaseTTL = 15 // seconds
-)
-
 func serveHTTP(pg *graph.GoverseGraph, addr string, shutdownChan chan struct{}) error {
 	staticDir := "inspector/web"
 	handler := CreateHTTPHandler(pg, staticDir)
@@ -80,7 +75,7 @@ func serveGRPC(pg *graph.GoverseGraph, addr string, shutdownChan chan struct{}) 
 func main() {
 	// Parse command-line flags
 	etcdAddress := flag.String("etcd-address", "", "etcd server address (e.g., localhost:2379). If empty, etcd registration is disabled.")
-	etcdPrefix := flag.String("etcd-prefix", "", "etcd key prefix (defaults to /goverse)")
+	etcdPrefix := flag.String("etcd-prefix", "", "etcd key prefix (defaults to "+etcdmanager.DefaultPrefix+" if empty)")
 	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address")
 	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
 	flag.Parse()
@@ -115,7 +110,7 @@ func main() {
 		// Use grpcAddr as the inspector address (this is the gRPC endpoint that nodes connect to)
 		inspectorAddress := *grpcAddr
 		ctx := context.Background()
-		_, err = etcdMgr.RegisterKeyLease(ctx, inspectorKey, inspectorAddress, InspectorLeaseTTL)
+		_, err = etcdMgr.RegisterKeyLease(ctx, inspectorKey, inspectorAddress, etcdmanager.NodeLeaseTTL)
 		if err != nil {
 			log.Fatalf("Failed to register inspector with etcd: %v", err)
 		}
