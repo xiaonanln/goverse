@@ -16,6 +16,9 @@ Examples:
     python counter.py get visitors
     python counter.py reset visitors
     python counter.py delete visitors
+
+Prerequisites:
+    pip install grpcio grpcio-tools protobuf
 """
 
 import argparse
@@ -25,130 +28,12 @@ import sys
 import urllib.request
 import urllib.error
 
+from google.protobuf.any_pb2 import Any
+
+from proto import counter_pb2
+
 # Base URL for the Gate HTTP API
 BASE_URL = "http://localhost:48000/api/v1/objects"
-
-
-def encode_any(type_url: str, value: bytes) -> bytes:
-    """Encode a protobuf message as google.protobuf.Any."""
-    # Manual Any encoding: type_url (field 1, string) + value (field 2, bytes)
-    result = b""
-    if type_url:
-        # Field 1, wire type 2 (length-delimited) = 0x0a
-        type_url_bytes = type_url.encode("utf-8")
-        result += b"\x0a" + _encode_varint(len(type_url_bytes)) + type_url_bytes
-    if value:
-        # Field 2, wire type 2 (length-delimited) = 0x12
-        result += b"\x12" + _encode_varint(len(value)) + value
-    return result
-
-
-def decode_any(data: bytes) -> tuple:
-    """Decode a google.protobuf.Any message, returns (type_url, value)."""
-    type_url = ""
-    value = b""
-    pos = 0
-    while pos < len(data):
-        if pos >= len(data):
-            break
-        tag = data[pos]
-        pos += 1
-        field_num = tag >> 3
-        wire_type = tag & 0x07
-        
-        if wire_type == 2:  # Length-delimited
-            length, bytes_read = _decode_varint(data[pos:])
-            pos += bytes_read
-            field_data = data[pos:pos + length]
-            pos += length
-            
-            if field_num == 1:
-                type_url = field_data.decode("utf-8")
-            elif field_num == 2:
-                value = field_data
-    return type_url, value
-
-
-def decode_counter_response(data: bytes) -> dict:
-    """Decode a CounterResponse protobuf message."""
-    name = ""
-    value = 0
-    pos = 0
-    while pos < len(data):
-        if pos >= len(data):
-            break
-        tag = data[pos]
-        pos += 1
-        field_num = tag >> 3
-        wire_type = tag & 0x07
-        
-        if wire_type == 0:  # Varint
-            val, bytes_read = _decode_varint(data[pos:])
-            pos += bytes_read
-            if field_num == 2:
-                # Handle signed int32
-                if val > 0x7FFFFFFF:
-                    val -= 0x100000000
-                value = val
-        elif wire_type == 2:  # Length-delimited
-            length, bytes_read = _decode_varint(data[pos:])
-            pos += bytes_read
-            field_data = data[pos:pos + length]
-            pos += length
-            if field_num == 1:
-                name = field_data.decode("utf-8")
-    return {"name": name, "value": value}
-
-
-def _encode_varint(value: int) -> bytes:
-    """Encode an integer as a varint."""
-    result = []
-    while value > 127:
-        result.append((value & 0x7F) | 0x80)
-        value >>= 7
-    result.append(value)
-    return bytes(result)
-
-
-def _decode_varint(data: bytes) -> tuple:
-    """Decode a varint, returns (value, bytes_consumed)."""
-    result = 0
-    shift = 0
-    pos = 0
-    while pos < len(data):
-        byte = data[pos]
-        result |= (byte & 0x7F) << shift
-        pos += 1
-        if (byte & 0x80) == 0:
-            break
-        shift += 7
-    return result, pos
-
-
-def encode_increment_request(amount: int) -> bytes:
-    """Encode an IncrementRequest protobuf message."""
-    # Field 1 (amount), wire type 0 (varint)
-    if amount < 0:
-        # Handle negative numbers as unsigned varint
-        amount = amount & 0xFFFFFFFF
-    return b"\x08" + _encode_varint(amount)
-
-
-def encode_decrement_request(amount: int) -> bytes:
-    """Encode a DecrementRequest protobuf message."""
-    if amount < 0:
-        amount = amount & 0xFFFFFFFF
-    return b"\x08" + _encode_varint(amount)
-
-
-def encode_get_request() -> bytes:
-    """Encode a GetRequest protobuf message (empty)."""
-    return b""
-
-
-def encode_reset_request() -> bytes:
-    """Encode a ResetRequest protobuf message (empty)."""
-    return b""
 
 
 def http_post(url: str, data: dict = None) -> dict:
@@ -186,68 +71,80 @@ def create_counter(name: str):
 
 def get_counter(name: str):
     """Get the current value of a counter."""
-    request_bytes = encode_get_request()
-    any_bytes = encode_any("type.googleapis.com/counter.GetRequest", request_bytes)
-    encoded = base64.b64encode(any_bytes).decode("utf-8")
+    request = counter_pb2.GetRequest()
+    any_msg = Any()
+    any_msg.Pack(request)
+    encoded = base64.b64encode(any_msg.SerializeToString()).decode("utf-8")
     
     url = f"{BASE_URL}/call/Counter/Counter-{name}/Get"
     response = http_post(url, {"request": encoded})
     
     if "response" in response:
         resp_bytes = base64.b64decode(response["response"])
-        _, value_bytes = decode_any(resp_bytes)
-        counter = decode_counter_response(value_bytes)
-        print(f"Counter {name} = {counter['value']}")
+        any_resp = Any()
+        any_resp.ParseFromString(resp_bytes)
+        counter_resp = counter_pb2.CounterResponse()
+        any_resp.Unpack(counter_resp)
+        print(f"Counter {name} = {counter_resp.value}")
     else:
         print(f"Counter {name} = 0")
 
 
 def increment_counter(name: str, amount: int):
     """Increment a counter by the specified amount."""
-    request_bytes = encode_increment_request(amount)
-    any_bytes = encode_any("type.googleapis.com/counter.IncrementRequest", request_bytes)
-    encoded = base64.b64encode(any_bytes).decode("utf-8")
+    request = counter_pb2.IncrementRequest(amount=amount)
+    any_msg = Any()
+    any_msg.Pack(request)
+    encoded = base64.b64encode(any_msg.SerializeToString()).decode("utf-8")
     
     url = f"{BASE_URL}/call/Counter/Counter-{name}/Increment"
     response = http_post(url, {"request": encoded})
     
     if "response" in response:
         resp_bytes = base64.b64decode(response["response"])
-        _, value_bytes = decode_any(resp_bytes)
-        counter = decode_counter_response(value_bytes)
-        print(f"Counter {name} = {counter['value']}")
+        any_resp = Any()
+        any_resp.ParseFromString(resp_bytes)
+        counter_resp = counter_pb2.CounterResponse()
+        any_resp.Unpack(counter_resp)
+        print(f"Counter {name} = {counter_resp.value}")
 
 
 def decrement_counter(name: str, amount: int):
     """Decrement a counter by the specified amount."""
-    request_bytes = encode_decrement_request(amount)
-    any_bytes = encode_any("type.googleapis.com/counter.DecrementRequest", request_bytes)
-    encoded = base64.b64encode(any_bytes).decode("utf-8")
+    request = counter_pb2.DecrementRequest(amount=amount)
+    any_msg = Any()
+    any_msg.Pack(request)
+    encoded = base64.b64encode(any_msg.SerializeToString()).decode("utf-8")
     
     url = f"{BASE_URL}/call/Counter/Counter-{name}/Decrement"
     response = http_post(url, {"request": encoded})
     
     if "response" in response:
         resp_bytes = base64.b64decode(response["response"])
-        _, value_bytes = decode_any(resp_bytes)
-        counter = decode_counter_response(value_bytes)
-        print(f"Counter {name} = {counter['value']}")
+        any_resp = Any()
+        any_resp.ParseFromString(resp_bytes)
+        counter_resp = counter_pb2.CounterResponse()
+        any_resp.Unpack(counter_resp)
+        print(f"Counter {name} = {counter_resp.value}")
 
 
 def reset_counter(name: str):
     """Reset a counter to zero."""
-    request_bytes = encode_reset_request()
-    any_bytes = encode_any("type.googleapis.com/counter.ResetRequest", request_bytes)
-    encoded = base64.b64encode(any_bytes).decode("utf-8")
+    request = counter_pb2.ResetRequest()
+    any_msg = Any()
+    any_msg.Pack(request)
+    encoded = base64.b64encode(any_msg.SerializeToString()).decode("utf-8")
     
     url = f"{BASE_URL}/call/Counter/Counter-{name}/Reset"
     response = http_post(url, {"request": encoded})
     
     if "response" in response:
         resp_bytes = base64.b64decode(response["response"])
-        _, value_bytes = decode_any(resp_bytes)
-        counter = decode_counter_response(value_bytes)
-        print(f"Counter {name} = {counter['value']}")
+        any_resp = Any()
+        any_resp.ParseFromString(resp_bytes)
+        counter_resp = counter_pb2.CounterResponse()
+        any_resp.Unpack(counter_resp)
+        print(f"Counter {name} = {counter_resp.value}")
 
 
 def delete_counter(name: str):
