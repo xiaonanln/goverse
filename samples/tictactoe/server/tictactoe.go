@@ -105,28 +105,34 @@ func (g *TicTacToeGame) updateStatus() {
 }
 
 // findAIMove finds the best move for AI (O) using simple strategy
-// 1. Take winning move if available
-// 2. Block opponent's winning move
-// 3. Take center if available
-// 4. Take a corner
-// 5. Take any edge
+// 1. 20% chance: Make a random move (to make AI less perfect)
+// 2. Take winning move if available
+// 3. Block opponent's winning move
+// 4. Take center if available
+// 5. Take a corner
+// 6. Take any edge
 func (g *TicTacToeGame) findAIMove() int {
-	// 1. Check for winning move
+	// 1. 20% chance to make a random move
+	if time.Now().UnixNano()%100 < 20 {
+		return g.findRandomMove()
+	}
+
+	// 2. Check for winning move
 	if move := g.findWinningMove("O"); move >= 0 {
 		return move
 	}
 
-	// 2. Block opponent's winning move
+	// 3. Block opponent's winning move
 	if move := g.findWinningMove("X"); move >= 0 {
 		return move
 	}
 
-	// 3. Take center if available
+	// 4. Take center if available
 	if g.board[4] == "" {
 		return 4
 	}
 
-	// 4. Take a corner
+	// 5. Take a corner
 	corners := []int{0, 2, 6, 8}
 	for _, corner := range corners {
 		if g.board[corner] == "" {
@@ -134,7 +140,7 @@ func (g *TicTacToeGame) findAIMove() int {
 		}
 	}
 
-	// 5. Take any edge
+	// 6. Take any edge
 	edges := []int{1, 3, 5, 7}
 	for _, edge := range edges {
 		if g.board[edge] == "" {
@@ -143,6 +149,25 @@ func (g *TicTacToeGame) findAIMove() int {
 	}
 
 	return -1 // No move available
+}
+
+// findRandomMove finds a random empty position on the board
+func (g *TicTacToeGame) findRandomMove() int {
+	// Collect all empty positions
+	emptyPositions := []int{}
+	for i, cell := range g.board {
+		if cell == "" {
+			emptyPositions = append(emptyPositions, i)
+		}
+	}
+
+	if len(emptyPositions) == 0 {
+		return -1
+	}
+
+	// Pick a random position using time-based randomness
+	randomIndex := time.Now().UnixNano() % int64(len(emptyPositions))
+	return emptyPositions[randomIndex]
 }
 
 // findWinningMove finds a winning move for the given player
