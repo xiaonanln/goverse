@@ -47,6 +47,7 @@ type Counter struct {
     value int
 }
 
+// Object methods use protobuf types for HTTP/gRPC compatibility
 func (c *Counter) Add(ctx context.Context, req *wrapperspb.Int32Value) (*wrapperspb.Int32Value, error) {
     c.mu.Lock()
     defer c.mu.Unlock()
@@ -64,7 +65,10 @@ func main() {
         ListenAddress:    "localhost:47000",
         AdvertiseAddress: "localhost:47000",
     }
-    server, _ := goverseapi.NewServer(config)
+    server, err := goverseapi.NewServer(config)
+    if err != nil {
+        log.Fatalf("Failed to create server: %v", err)
+    }
     goverseapi.RegisterObjectType((*Counter)(nil))
     
     // Create Counter object when cluster is ready
