@@ -1,13 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# Proto files to compile
+# Proto files to compile (samples have their own compile-proto.sh scripts)
 PROTO_FILES=(
     "proto/goverse.proto"
     "client/proto/gate.proto"
     "inspector/proto/inspector.proto"
-    "samples/chat/proto/chat.proto"
-    "samples/tictactoe/proto/tictactoe.proto"
 )
 
 # Common protoc options for Go
@@ -31,7 +29,6 @@ if command -v python3 &> /dev/null; then
     touch proto/__init__.py
     touch inspector/proto/__init__.py
     touch client/proto/__init__.py
-    touch samples/chat/proto/__init__.py
     
     # Generate Python proto files from goverse.proto
     if [[ -f "proto/goverse.proto" ]]; then
@@ -70,34 +67,6 @@ if command -v python3 &> /dev/null; then
             echo "  ✅ Python proto files generated for client/proto/gate.proto"
         else
             echo "  Note: Failed to generate Python proto files for gate.proto"
-        fi
-    fi
-    
-    # Generate Python proto files from samples/chat/proto/chat.proto
-    if [[ -f "samples/chat/proto/chat.proto" ]]; then
-        if python3 -m grpc_tools.protoc \
-            -I. \
-            --python_out=. \
-            --grpc_python_out=. \
-            samples/chat/proto/chat.proto 2>&1; then
-            echo "  ✅ Python proto files generated for samples/chat/proto/chat.proto"
-        else
-            echo "  Note: Failed to generate Python proto files for chat.proto"
-        fi
-    fi
-    
-    # Generate Python proto files from samples/tictactoe/proto/tictactoe.proto
-    if [[ -f "samples/tictactoe/proto/tictactoe.proto" ]]; then
-        # Ensure python output directory exists
-        mkdir -p samples/tictactoe/proto/python
-        touch samples/tictactoe/proto/python/__init__.py
-        if python3 -m grpc_tools.protoc \
-            -Isamples/tictactoe/proto \
-            --python_out=samples/tictactoe/proto/python \
-            samples/tictactoe/proto/tictactoe.proto 2>&1; then
-            echo "  ✅ Python proto files generated for samples/tictactoe/proto/tictactoe.proto"
-        else
-            echo "  Note: Failed to generate Python proto files for tictactoe.proto"
         fi
     fi
 else

@@ -2,11 +2,38 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
 	tictactoe_pb "github.com/xiaonanln/goverse/samples/tictactoe/proto"
 )
+
+func TestMain(m *testing.M) {
+	// Run compile-proto.sh before tests
+	// Find the sample root directory (parent of server directory)
+	wd, err := os.Getwd()
+	if err != nil {
+		panic("failed to get working directory: " + err.Error())
+	}
+	sampleDir := filepath.Dir(wd)
+	compileScript := filepath.Join(sampleDir, "compile-proto.sh")
+
+	// Check if compile-proto.sh exists and run it
+	if _, err := os.Stat(compileScript); err == nil {
+		cmd := exec.Command("bash", compileScript)
+		cmd.Dir = sampleDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			panic("failed to run compile-proto.sh: " + err.Error())
+		}
+	}
+
+	os.Exit(m.Run())
+}
 
 func TestTicTacToeGame_NewGame(t *testing.T) {
 	game := newGame("test-game")
