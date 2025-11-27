@@ -36,7 +36,7 @@ if command -v python3 &> /dev/null; then
             -I. \
             --python_out=. \
             --grpc_python_out=. \
-            proto/goverse.proto 2>/dev/null; then
+            proto/goverse.proto 2>&1; then
             echo "  ✅ Python proto files generated for proto/goverse.proto"
         else
             echo "  Note: Python grpcio-tools not available, skipping Python proto generation"
@@ -50,7 +50,7 @@ if command -v python3 &> /dev/null; then
             -I. \
             --python_out=. \
             --grpc_python_out=. \
-            inspector/proto/inspector.proto 2>/dev/null; then
+            inspector/proto/inspector.proto 2>&1; then
             echo "  ✅ Python proto files generated for inspector/proto/inspector.proto"
         else
             echo "  Note: Failed to generate Python proto files for inspector.proto"
@@ -63,7 +63,7 @@ if command -v python3 &> /dev/null; then
             -I. \
             --python_out=. \
             --grpc_python_out=. \
-            client/proto/gate.proto 2>/dev/null; then
+            client/proto/gate.proto 2>&1; then
             echo "  ✅ Python proto files generated for client/proto/gate.proto"
         else
             echo "  Note: Failed to generate Python proto files for gate.proto"
