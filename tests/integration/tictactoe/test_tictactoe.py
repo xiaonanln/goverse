@@ -6,7 +6,8 @@ This script:
 1. Builds and runs the TicTacToe server
 2. Waits for the server to be ready
 3. Uses HTTP REST API to start a new game with a random client ID and random TicTacToeService object
-4. Stops the server and verifies it quits properly
+4. Plays a complete game by making random moves until the game ends
+5. Stops the server and verifies it quits properly
 """
 
 import base64
@@ -110,6 +111,19 @@ def create_new_game_request(game_id):
     return base64.b64encode(any_msg.SerializeToString()).decode('ascii')
 
 
+def create_move_request(game_id, position):
+    """Create a MoveRequest protobuf wrapped in Any, base64 encoded."""
+    # Create the protobuf message
+    req = tictactoe_pb2.MoveRequest(game_id=game_id, position=position)
+    
+    # Wrap in google.protobuf.Any
+    any_msg = any_pb2.Any()
+    any_msg.Pack(req)
+    
+    # Serialize and encode to base64
+    return base64.b64encode(any_msg.SerializeToString()).decode('ascii')
+
+
 def parse_game_state_response(response_base64):
     """Parse the GameState from a base64-encoded Any response.
     
@@ -133,6 +147,20 @@ def parse_game_state_response(response_base64):
     }
 
 
+def print_board(board):
+    """Print the TicTacToe board in a readable format."""
+    print("\n  Board:")
+    for row in range(3):
+        cells = []
+        for col in range(3):
+            pos = row * 3 + col
+            cell = board[pos] if board[pos] else str(pos)
+            cells.append(cell)
+        print(f"    {cells[0]} | {cells[1]} | {cells[2]}")
+        if row < 2:
+            print("   -----------")
+
+
 def call_new_game(service_id, game_id, client_id):
     """Call the NewGame method via HTTP REST API.
     
@@ -144,6 +172,38 @@ def call_new_game(service_id, game_id, client_id):
     url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/TicTacToeService/{service_id}/NewGame'
     request_body = json.dumps({
         'request': create_new_game_request(game_id)
+    }).encode('utf-8')
+    
+    req = urllib.request.Request(
+        url,
+        data=request_body,
+        headers={
+            'Content-Type': 'application/json',
+            'X-Client-ID': client_id
+        },
+        method='POST'
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response_data = json.loads(response.read().decode('utf-8'))
+            return parse_game_state_response(response_data['response'])
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        raise RuntimeError(f"HTTP {e.code}: {error_body}")
+
+
+def call_make_move(service_id, game_id, position, client_id):
+    """Call the MakeMove method via HTTP REST API.
+    
+    Returns the parsed GameState response.
+    """
+    import urllib.request
+    import urllib.error
+    
+    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/TicTacToeService/{service_id}/MakeMove'
+    request_body = json.dumps({
+        'request': create_move_request(game_id, position)
     }).encode('utf-8')
     
     req = urllib.request.Request(
@@ -324,12 +384,67 @@ def main():
                 return 1
             
             print("✅ Game state verified successfully!")
+            print_board(game_state['board'])
             
         except Exception as e:
             print(f"❌ Failed to start new game: {e}")
             return 1
         
-        # Step 5: Stop the server
+        # Step 5: Play the game until it ends
+        print("\n--- Step 5: Playing the game ---")
+        
+        move_count = 0
+        max_moves = 20  # Safety limit (shouldn't need more than 9 moves for a full board)
+        
+        try:
+            while game_state['status'] == 'playing' and move_count < max_moves:
+                # Find empty positions
+                empty_positions = [i for i, cell in enumerate(game_state['board']) if cell == '']
+                
+                if not empty_positions:
+                    print("❌ No empty positions but game status is still 'playing'")
+                    return 1
+                
+                # Pick a random empty position
+                position = random.choice(empty_positions)
+                print(f"\n  Move {move_count + 1}: Player X plays at position {position}")
+                
+                # Make the move
+                game_state = call_make_move(service_id, game_id, position, client_id)
+                move_count += 1
+                
+                # Display the board
+                print_board(game_state['board'])
+                print(f"  Status: {game_state['status']}")
+                
+                if game_state['last_ai_move'] >= 0:
+                    print(f"  AI (O) played at position {game_state['last_ai_move']}")
+                
+                if game_state['status'] != 'playing':
+                    print(f"\n  🎮 Game ended: {game_state['status']}")
+                    if game_state['winner']:
+                        print(f"  🏆 Winner: {game_state['winner']}")
+                    break
+            
+            if move_count >= max_moves:
+                print(f"❌ Game did not end after {max_moves} moves")
+                return 1
+            
+            # Verify game ended with a valid status
+            valid_end_states = ['x_wins', 'o_wins', 'draw']
+            if game_state['status'] not in valid_end_states:
+                print(f"❌ Invalid end status: {game_state['status']}")
+                return 1
+            
+            print(f"\n✅ Game completed successfully after {move_count} moves!")
+            
+        except Exception as e:
+            print(f"❌ Failed during gameplay: {e}")
+            import traceback
+            traceback.print_exc()
+            return 1
+        
+        # Step 6: Stop the server
         print("\n--- Step 5: Stopping TicTacToe server ---")
         exit_code = stop_server(process)
         process = None  # Prevent double cleanup
