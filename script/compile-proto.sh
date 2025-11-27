@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Proto files to compile (samples have their own compile-proto.sh scripts)
+# Proto files to compile (samples are compiled at the end of this script)
 PROTO_FILES=(
     "proto/goverse.proto"
     "client/proto/gate.proto"
@@ -72,5 +72,18 @@ if command -v python3 &> /dev/null; then
 else
     echo "  Note: python3 not found, skipping Python proto generation"
 fi
+
+# Compile proto files for all samples
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "Compiling sample proto files..."
+for script in "$REPO_ROOT"/samples/*/compile-proto.sh; do
+    if [ -f "$script" ]; then
+        echo "  Running $script"
+        chmod +x "$script"
+        "$script"
+    fi
+done
 
 echo "Proto compilation completed."

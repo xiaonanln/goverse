@@ -43,14 +43,6 @@ runs:
       run: |
         chmod +x ./script/compile-proto.sh
         ./script/compile-proto.sh
-        # Compile proto files for all samples
-        for script in samples/*/compile-proto.sh; do
-          if [ -f "$script" ]; then
-            echo "Running $script"
-            chmod +x "$script"
-            "$script"
-          fi
-        done
 
     - name: Tidy Go modules
       shell: bash
