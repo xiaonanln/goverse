@@ -19,4 +19,23 @@ else
     exit 1
 fi
 
+# Generate Python proto files if python3 is available
+if command -v python3 &> /dev/null; then
+    # Ensure proto directory is a Python package
+    touch proto/__init__.py
+    
+    if python3 -m grpc_tools.protoc \
+        -I. \
+        --python_out=. \
+        --grpc_python_out=. \
+        proto/counter.proto 2>&1; then
+        echo "  ✅ Python proto files generated for proto/counter.proto"
+    else
+        echo "  Note: Python grpcio-tools not available, skipping Python proto generation"
+        echo "        Install with: pip install grpcio-tools"
+    fi
+else
+    echo "  Note: python3 not found, skipping Python proto generation"
+fi
+
 echo "Counter proto compilation completed."
