@@ -9,7 +9,7 @@ from google.protobuf import any_pb2
 
 # Import generated proto files
 import sys
-REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 
 from client.proto import gate_pb2, gate_pb2_grpc

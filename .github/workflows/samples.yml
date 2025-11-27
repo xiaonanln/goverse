@@ -34,7 +34,7 @@ jobs:
           GOCOVERDIR: /tmp/coverage
           ENABLE_COVERAGE: "true"
         run: |
-          python3 tests/integration/test_chat.py
+          python3 tests/samples/chat/test_chat.py
       
       - name: Convert coverage data to text format
         run: |
@@ -73,7 +73,7 @@ jobs:
         env:
           ENABLE_RACE: "true"
         run: |
-          python3 tests/integration/test_chat.py
+          python3 tests/samples/chat/test_chat.py
 
   test-tictactoe:
     runs-on: ubuntu-latest
@@ -96,7 +96,7 @@ jobs:
           GOCOVERDIR: /tmp/coverage
           ENABLE_COVERAGE: "true"
         run: |
-          python3 tests/integration/tictactoe/test_tictactoe.py
+          python3 tests/samples/tictactoe/test_tictactoe.py
       
       - name: Convert coverage data to text format
         run: |
@@ -135,4 +135,4 @@ jobs:
         env:
           ENABLE_RACE: "true"
         run: |
-          python3 tests/integration/tictactoe/test_tictactoe.py
+          python3 tests/samples/tictactoe/test_tictactoe.py

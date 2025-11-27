@@ -22,9 +22,9 @@ import time
 import uuid
 from pathlib import Path
 
-# Repo root (tests/integration/tictactoe/test_tictactoe.py -> repo root)
+# Repo root (tests/samples/tictactoe/test_tictactoe.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
-sys.path.insert(0, str(REPO_ROOT / 'tests' / 'integration'))
+sys.path.insert(0, str(REPO_ROOT / 'tests' / 'samples'))
 
 from BinaryHelper import BinaryHelper
 

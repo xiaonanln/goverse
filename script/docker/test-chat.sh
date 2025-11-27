@@ -24,7 +24,7 @@ mkdir -p "$GOCOVERDIR"
 
 # Run the test
 TEST_EXIT_CODE=0
-if python3 tests/integration/test_chat.py "$@"; then
+if python3 tests/samples/chat/test_chat.py "$@"; then
     echo
     echo "========================================"
     echo "✓ All tests passed"
