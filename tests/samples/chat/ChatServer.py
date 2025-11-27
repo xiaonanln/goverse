@@ -10,10 +10,16 @@ import time
 from pathlib import Path
 from typing import Dict, List, Any
 from google.protobuf.any_pb2 import Any as AnyProto
-from BinaryHelper import BinaryHelper
 
-# Repo root (tests/integration/ChatServer.py -> repo root)
-REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+# Add repo root and samples directory to path
+import sys
+REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+sys.path.insert(0, str(REPO_ROOT))
+# Expose the samples directory for shared modules like BinaryHelper
+SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
+sys.path.insert(0, str(SAMPLES_DIR))
+
+from BinaryHelper import BinaryHelper
 
 try:
     from proto import goverse_pb2

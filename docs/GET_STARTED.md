@@ -627,7 +627,7 @@ You can test the chat client/server functionality using the automated test scrip
 
 ```bash
 # Run the test script (requires protoc and Go protobuf plugins)
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 ```
 
 The test script will:

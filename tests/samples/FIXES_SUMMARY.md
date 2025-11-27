@@ -35,14 +35,14 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 **Solution**: Changed `ClientServiceStub` to `GateServiceStub` (the correct name from gate.proto)
 
-**Files Modified**: `tests/integration/ChatClient.py`
+**Files Modified**: `tests/samples/chat/ChatClient.py`
 
 ### 5. Wrong Proto Import References ✅ Fixed
 **Error**: `client_pb2` module not found
 
 **Solution**: Changed all `client_pb2` references to `gate_pb2` since the proto package is named `gate`
 
-**Files Modified**: `tests/integration/ChatClient.py`
+**Files Modified**: `tests/samples/chat/ChatClient.py`
 
 ### 6. Invalid -client-listen Flag ✅ Fixed
 **Error**: `flag provided but not defined: -client-listen`
@@ -55,9 +55,9 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 - Updated test_chat.py to start and connect to gate
 
 **Files Modified**: 
-- `tests/integration/ChatServer.py` 
-- `tests/integration/Gate.py` (new file)
-- `tests/integration/test_chat.py`
+- `tests/samples/chat/ChatServer.py` 
+- `tests/samples/chat/Gate.py` (new file)
+- `tests/samples/chat/test_chat.py`
 
 ### 7. Missing etcd ✅ Fixed
 **Error**: `ConsensusManager not ready: No nodes available`
@@ -83,7 +83,7 @@ docker run -d --name etcd-test \
 - `ListChatRooms` → calls `ChatRoomMgr` object with ID `ChatRoomMgr0`
 - `Join`, `SendMessage`, `GetRecentMessages` → call `ChatRoom` objects with ID `ChatRoom-<roomname>`
 
-**Files Modified**: `tests/integration/ChatClient.py`
+**Files Modified**: `tests/samples/chat/ChatClient.py`
 
 ## Architecture Changes
 
@@ -119,14 +119,14 @@ The test infrastructure now correctly implements the new gate architecture:
 ## Files Created/Modified
 
 ### New Files:
-- `tests/integration/Gate.py` - Gate process helper
-- `tests/integration/SETUP.md` - Setup documentation
-- `tests/integration/FIXES_SUMMARY.md` - This file
+- `tests/samples/chat/Gate.py` - Gate process helper
+- `tests/samples/chat/SETUP.md` - Setup documentation
+- `tests/samples/chat/FIXES_SUMMARY.md` - This file
 
 ### Modified Files:
-- `tests/integration/ChatClient.py` - Fixed proto references and object types
-- `tests/integration/ChatServer.py` - Removed invalid -client-listen flag
-- `tests/integration/test_chat.py` - Added gate support, disabled push test
+- `tests/samples/chat/ChatClient.py` - Fixed proto references and object types
+- `tests/samples/chat/ChatServer.py` - Removed invalid -client-listen flag
+- `tests/samples/chat/test_chat.py` - Added gate support, disabled push test
 
 ## Test Status
 
@@ -150,7 +150,7 @@ docker run -d --name etcd-test -p 2379:2379 gcr.io/etcd-development/etcd:v3.5.0 
 
 # Run test
 export PATH=$PATH:$(go env GOPATH)/bin
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 
 # Cleanup
 pkill -f "/tmp/inspector" || true

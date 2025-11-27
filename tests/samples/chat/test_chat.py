@@ -25,12 +25,15 @@ import json
 from pathlib import Path
 
 # Add the repo root to the path for proto imports
-REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
-# Expose the integration directory on sys.path so helper modules in this folder
+# Expose the chat directory on sys.path so helper modules in this folder
 # (e.g., ChatServer.py, Inspector.py, ChatClient.py) can be imported directly.
-INTEGRATION_DIR = REPO_ROOT / 'tests' / 'integration'
-sys.path.insert(0, str(INTEGRATION_DIR))
+CHAT_DIR = Path(__file__).parent.resolve()
+sys.path.insert(0, str(CHAT_DIR))
+# Expose the samples directory for shared modules like BinaryHelper
+SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
+sys.path.insert(0, str(SAMPLES_DIR))
 
 from ChatServer import ChatServer
 from Inspector import Inspector
@@ -170,7 +173,7 @@ def main():
     
     num_servers = args.num_servers
     
-    # Get the repository root directory (from tests/integration/test_chat.py -> repo root)
+    # Get the repository root directory (from tests/samples/chat/test_chat.py -> repo root)
     repo_root = Path(__file__).parent.parent.parent.resolve()
     os.chdir(repo_root)
     print(f"Working directory: {os.getcwd()}")

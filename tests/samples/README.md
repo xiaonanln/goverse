@@ -11,10 +11,10 @@ End-to-end integration test for the distributed chat application.
 **Usage:**
 ```bash
 # Single server test
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 
 # Multi-server clustered test
-python3 tests/integration/test_chat.py --num-servers 4
+python3 tests/samples/chat/test_chat.py --num-servers 4
 ```
 
 **What it tests:**
@@ -51,10 +51,10 @@ From the repository root:
 
 ```bash
 # Run single server integration test
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 
 # Run clustered integration test
-python3 tests/integration/test_chat.py --num-servers 4
+python3 tests/samples/chat/test_chat.py --num-servers 4
 ```
 
 ## CI Integration

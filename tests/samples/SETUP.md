@@ -62,10 +62,10 @@ curl http://localhost:2379/health
 
 ```bash
 # Run with default configuration (1 server)
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 
 # Run with multiple servers (clustered mode)
-python3 tests/integration/test_chat.py --num-servers 2
+python3 tests/samples/chat/test_chat.py --num-servers 2
 ```
 
 ## Architecture
@@ -125,7 +125,7 @@ export GOCOVERDIR=/tmp/coverage
 mkdir -p $GOCOVERDIR
 
 # Run tests
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 
 # Generate coverage report
 go tool covdata textfmt -i=$GOCOVERDIR -o coverage.txt

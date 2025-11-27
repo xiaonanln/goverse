@@ -33,7 +33,7 @@ jobs:
           GOCOVERDIR: /tmp/coverage
           ENABLE_COVERAGE: "true"
         run: |
-          python3 tests/integration/test_chat.py --num-servers 4
+          python3 tests/samples/chat/test_chat.py --num-servers 4
       
       - name: Convert coverage data to text format
         run: |

@@ -4,12 +4,18 @@ import os
 import subprocess
 import signal
 import socket
+import sys
 import time
 from pathlib import Path
-from BinaryHelper import BinaryHelper
 
-# Repo root (tests/integration/Gateway.py -> repo root)
-REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+# Repo root (tests/samples/chat/Gateway.py -> repo root)
+REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+sys.path.insert(0, str(REPO_ROOT))
+# Expose the samples directory for shared modules like BinaryHelper
+SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
+sys.path.insert(0, str(SAMPLES_DIR))
+
+from BinaryHelper import BinaryHelper
 
 
 class Gateway:

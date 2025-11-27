@@ -154,7 +154,7 @@ message Client_NewMessageNotification {
 Run the integration test to see push messaging in action:
 
 ```bash
-python3 tests/integration/test_chat.py
+python3 tests/samples/chat/test_chat.py
 ```
 
 For manual testing with two clients:
