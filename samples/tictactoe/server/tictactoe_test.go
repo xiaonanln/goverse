@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	tictactoe_pb "github.com/xiaonanln/goverse/samples/tictactoe/proto"
 )
@@ -271,5 +272,255 @@ func TestTicTacToeService_MultipleGames(t *testing.T) {
 		if cell != "" {
 			t.Errorf("Game-2 position %d should be empty, got '%s'", i, cell)
 		}
+	}
+}
+
+func TestTicTacToeService_CleanupFinishedGames(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	// Initialize games map directly to avoid starting cleanup routine
+	service.games = make(map[string]*TicTacToeGame)
+	service.stopCh = make(chan struct{})
+
+	// Create a finished game
+	game1 := newGame("finished-game")
+	game1.status = "x_wins"
+	service.games["finished-game"] = game1
+
+	// Create an active game
+	game2 := newGame("active-game")
+	service.games["active-game"] = game2
+
+	// Verify both games exist
+	if len(service.games) != 2 {
+		t.Fatalf("Expected 2 games, got %d", len(service.games))
+	}
+
+	// Run cleanup
+	service.cleanupGames()
+
+	// Verify only active game remains
+	if len(service.games) != 1 {
+		t.Fatalf("Expected 1 game after cleanup, got %d", len(service.games))
+	}
+
+	if _, exists := service.games["active-game"]; !exists {
+		t.Errorf("Expected active-game to still exist")
+	}
+
+	if _, exists := service.games["finished-game"]; exists {
+		t.Errorf("Expected finished-game to be cleaned up")
+	}
+}
+
+func TestTicTacToeService_CleanupExpiredGames(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	// Initialize games map directly to avoid starting cleanup routine
+	service.games = make(map[string]*TicTacToeGame)
+	service.stopCh = make(chan struct{})
+
+	// Create an expired game (older than maxGameAge)
+	expiredGame := newGame("expired-game")
+	expiredGame.createdAt = time.Now().Add(-15 * time.Minute) // 15 minutes old
+	service.games["expired-game"] = expiredGame
+
+	// Create a fresh game
+	freshGame := newGame("fresh-game")
+	service.games["fresh-game"] = freshGame
+
+	// Verify both games exist
+	if len(service.games) != 2 {
+		t.Fatalf("Expected 2 games, got %d", len(service.games))
+	}
+
+	// Run cleanup
+	service.cleanupGames()
+
+	// Verify only fresh game remains
+	if len(service.games) != 1 {
+		t.Fatalf("Expected 1 game after cleanup, got %d", len(service.games))
+	}
+
+	if _, exists := service.games["fresh-game"]; !exists {
+		t.Errorf("Expected fresh-game to still exist")
+	}
+
+	if _, exists := service.games["expired-game"]; exists {
+		t.Errorf("Expected expired-game to be cleaned up")
+	}
+}
+
+func TestTicTacToeService_Persistence(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	// Initialize games map directly to avoid starting cleanup routine
+	service.games = make(map[string]*TicTacToeGame)
+	service.stopCh = make(chan struct{})
+
+	// Create a game with some state
+	game := newGame("persist-game")
+	game.board[0] = "X"
+	game.board[4] = "O"
+	game.board[1] = "X"
+	game.moves = 3
+	game.status = "playing"
+	game.lastAIMove = 4
+	service.games["persist-game"] = game
+
+	// Serialize to data
+	data, err := service.ToData()
+	if err != nil {
+		t.Fatalf("ToData failed: %v", err)
+	}
+
+	if data == nil {
+		t.Fatalf("ToData returned nil data")
+	}
+
+	// Create a new service and restore from data
+	service2 := &TicTacToeService{}
+	service2.OnInit(service2, "test-service2")
+	service2.games = make(map[string]*TicTacToeGame)
+	service2.stopCh = make(chan struct{})
+
+	err = service2.FromData(data)
+	if err != nil {
+		t.Fatalf("FromData failed: %v", err)
+	}
+
+	// Verify the game was restored
+	if len(service2.games) != 1 {
+		t.Fatalf("Expected 1 game after FromData, got %d", len(service2.games))
+	}
+
+	restoredGame, exists := service2.games["persist-game"]
+	if !exists {
+		t.Fatalf("Expected persist-game to exist after FromData")
+	}
+
+	if restoredGame.board[0] != "X" {
+		t.Errorf("Expected board[0] = 'X', got '%s'", restoredGame.board[0])
+	}
+
+	if restoredGame.board[4] != "O" {
+		t.Errorf("Expected board[4] = 'O', got '%s'", restoredGame.board[4])
+	}
+
+	if restoredGame.board[1] != "X" {
+		t.Errorf("Expected board[1] = 'X', got '%s'", restoredGame.board[1])
+	}
+
+	if restoredGame.moves != 3 {
+		t.Errorf("Expected moves = 3, got %d", restoredGame.moves)
+	}
+
+	if restoredGame.status != "playing" {
+		t.Errorf("Expected status = 'playing', got '%s'", restoredGame.status)
+	}
+
+	if restoredGame.lastAIMove != 4 {
+		t.Errorf("Expected lastAIMove = 4, got %d", restoredGame.lastAIMove)
+	}
+}
+
+func TestTicTacToeService_Persistence_MultipleGames(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	// Initialize games map directly to avoid starting cleanup routine
+	service.games = make(map[string]*TicTacToeGame)
+	service.stopCh = make(chan struct{})
+
+	// Create multiple games with different states
+	game1 := newGame("game-1")
+	game1.board[0] = "X"
+	game1.status = "playing"
+	service.games["game-1"] = game1
+
+	game2 := newGame("game-2")
+	game2.board[4] = "O"
+	game2.status = "o_wins"
+	service.games["game-2"] = game2
+
+	// Serialize to data
+	data, err := service.ToData()
+	if err != nil {
+		t.Fatalf("ToData failed: %v", err)
+	}
+
+	// Create a new service and restore from data
+	service2 := &TicTacToeService{}
+	service2.OnInit(service2, "test-service2")
+	service2.games = make(map[string]*TicTacToeGame)
+	service2.stopCh = make(chan struct{})
+
+	err = service2.FromData(data)
+	if err != nil {
+		t.Fatalf("FromData failed: %v", err)
+	}
+
+	// Verify both games were restored
+	if len(service2.games) != 2 {
+		t.Fatalf("Expected 2 games after FromData, got %d", len(service2.games))
+	}
+
+	restoredGame1, exists := service2.games["game-1"]
+	if !exists {
+		t.Fatalf("Expected game-1 to exist after FromData")
+	}
+	if restoredGame1.board[0] != "X" {
+		t.Errorf("game-1: Expected board[0] = 'X', got '%s'", restoredGame1.board[0])
+	}
+
+	restoredGame2, exists := service2.games["game-2"]
+	if !exists {
+		t.Fatalf("Expected game-2 to exist after FromData")
+	}
+	if restoredGame2.status != "o_wins" {
+		t.Errorf("game-2: Expected status = 'o_wins', got '%s'", restoredGame2.status)
+	}
+}
+
+func TestTicTacToeService_Persistence_EmptyGames(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	// Initialize games map directly to avoid starting cleanup routine
+	service.games = make(map[string]*TicTacToeGame)
+	service.stopCh = make(chan struct{})
+
+	// Serialize empty games to data
+	data, err := service.ToData()
+	if err != nil {
+		t.Fatalf("ToData failed: %v", err)
+	}
+
+	// Create a new service and restore from data
+	service2 := &TicTacToeService{}
+	service2.OnInit(service2, "test-service2")
+	service2.games = make(map[string]*TicTacToeGame)
+	service2.stopCh = make(chan struct{})
+
+	err = service2.FromData(data)
+	if err != nil {
+		t.Fatalf("FromData failed: %v", err)
+	}
+
+	// Verify no games were restored
+	if len(service2.games) != 0 {
+		t.Errorf("Expected 0 games after FromData with empty data, got %d", len(service2.games))
+	}
+}
+
+func TestTicTacToeGame_CreatedAtOnReset(t *testing.T) {
+	game := newGame("test-game")
+	originalTime := game.createdAt
+
+	// Wait a tiny bit and reset
+	time.Sleep(1 * time.Millisecond)
+	game.reset()
+
+	// createdAt should be updated
+	if !game.createdAt.After(originalTime) {
+		t.Errorf("Expected createdAt to be updated after reset")
 	}
 }

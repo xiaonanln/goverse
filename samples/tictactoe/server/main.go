@@ -55,7 +55,7 @@ func main() {
 		// Keep service objects running
 		go ensureServiceObjects(ctx)
 
-		err = server.Run()
+		err = server.Run(ctx)
 		if err != nil {
 			serverLogger.Errorf("Server error: %v", err)
 			cancel()
