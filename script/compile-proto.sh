@@ -78,12 +78,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "Compiling sample proto files..."
+shopt -s nullglob  # Handle case where no matching scripts exist
 for script in "$REPO_ROOT"/samples/*/compile-proto.sh; do
-    if [ -f "$script" ]; then
-        echo "  Running $script"
-        chmod +x "$script"
-        "$script"
-    fi
+    echo "  Running $script"
+    chmod +x "$script"
+    "$script"
 done
+shopt -u nullglob  # Restore default behavior
 
 echo "Proto compilation completed."
