@@ -33,20 +33,32 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 ## Quick Start
 
+GoVerse uses a **Node + Gate** architecture:
+- **Node** hosts distributed objects and handles object lifecycle
+- **Gate** accepts client connections (gRPC and HTTP) and routes calls to nodes
+
+### 1. Define a Distributed Object
+
 ```go
+// counter.go
 type Counter struct {
     goverseapi.BaseObject
     mu    sync.Mutex
     value int
 }
 
-func (c *Counter) Add(ctx context.Context, n int) (int, error) {
+func (c *Counter) Add(ctx context.Context, req *wrapperspb.Int32Value) (*wrapperspb.Int32Value, error) {
     c.mu.Lock()
     defer c.mu.Unlock()
-    c.value += n
-    return c.value, nil
+    c.value += int(req.GetValue())
+    return &wrapperspb.Int32Value{Value: int32(c.value)}, nil
 }
+```
 
+### 2. Start a Node (Object Server)
+
+```go
+// node/main.go
 func main() {
     config := &goverseapi.ServerConfig{
         ListenAddress:    "localhost:47000",
@@ -55,14 +67,36 @@ func main() {
     server, _ := goverseapi.NewServer(config)
     goverseapi.RegisterObjectType((*Counter)(nil))
     
-    // Create and call object
-    goverseapi.CreateObject(ctx, "Counter", "Counter-1", nil)
-    resp, _ := goverseapi.CallObject(ctx, "Counter-1", "Add", 5)
-    fmt.Println("Counter value:", resp.(int))
+    // Create Counter object when cluster is ready
+    go func() {
+        <-goverseapi.ClusterReady()
+        goverseapi.CreateObject(context.Background(), "Counter", "my-counter")
+    }()
     
-    server.Run()
+    server.Run(context.Background())
 }
 ```
+
+### 3. Start a Gate (Client-Facing Server)
+
+```bash
+# Start the gate with HTTP API enabled
+go run ./cmd/gate/ -http-listen=:8080
+```
+
+### 4. Access via HTTP
+
+```bash
+# Create an object
+curl -X POST http://localhost:8080/api/v1/objects/create/Counter/my-counter
+
+# Call object method (increment by 5)
+curl -X POST http://localhost:8080/api/v1/objects/call/Counter/my-counter/Add \
+  -H "Content-Type: application/json" \
+  -d '{"request":"CiZ0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5wcm90b2J1Zi5JbnQzMlZhbHVlEgIIBQ=="}'
+```
+
+> The request body contains a base64-encoded protobuf `Any` message. See [HTTP_GATE.md](docs/design/HTTP_GATE.md) for encoding details.
 
 ---
 
