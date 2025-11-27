@@ -45,14 +45,6 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
    go run .
    ```
 
-4. **Test with helper script**:
-   ```bash
-   cd samples/counter
-   ./counter.sh create test
-   ./counter.sh increment test 5
-   ./counter.sh get test
-   ```
-
 ## Architecture
 
 ```
@@ -78,65 +70,12 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
   - Counters are created on-demand when first accessed
   - Runs as a Goverse node
 
-## Helper Script Usage
-
-The `counter.sh` script provides a convenient way to interact with counters:
-
-```bash
-# Create a counter
-./counter.sh create visitors
-# Output: Created counter: Counter-visitors
-
-# Get current value (starts at 0)
-./counter.sh get visitors
-# Output: Counter visitors = 0
-
-# Increment by 1
-./counter.sh increment visitors 1
-# Output: Counter visitors = 1
-
-# Increment by 10
-./counter.sh increment visitors 10
-# Output: Counter visitors = 11
-
-# Decrement by 5
-./counter.sh decrement visitors 5
-# Output: Counter visitors = 6
-
-# Reset to 0
-./counter.sh reset visitors
-# Output: Counter visitors = 0
-
-# Delete counter
-./counter.sh delete visitors
-# Output: Deleted counter: Counter-visitors
-```
-
-### Multiple Independent Counters
-
-```bash
-# Each counter maintains its own state
-./counter.sh create pageviews
-./counter.sh create downloads
-./counter.sh create logins
-
-./counter.sh increment pageviews 100
-./counter.sh increment downloads 50
-./counter.sh increment logins 25
-
-# They're independent objects
-./counter.sh get pageviews  # Output: Counter pageviews = 100
-./counter.sh get downloads  # Output: Counter downloads = 50
-./counter.sh get logins     # Output: Counter logins = 25
-```
-
 ## Project Structure
 
 ```
 samples/counter/
 ├── DESIGN.md              # Design document
 ├── README.md              # This file
-├── counter.sh             # Helper script for testing
 ├── proto/
 │   └── counter.proto      # Protocol buffer definitions
 ├── server/
