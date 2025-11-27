@@ -271,3 +271,168 @@ func TestSetupHTTPRoutes(t *testing.T) {
 	// Verify the mux is not nil - that's all we can test without a full setup
 	// The actual route handlers are tested in other test functions
 }
+
+func TestHandleEventsStream_MethodNotAllowed(t *testing.T) {
+	// Test that only GET method is allowed for SSE endpoint
+	tests := []struct {
+		name           string
+		method         string
+		expectedStatus int
+		expectedCode   string
+	}{
+		{
+			name:           "method not allowed - POST",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedCode:   "METHOD_NOT_ALLOWED",
+		},
+		{
+			name:           "method not allowed - PUT",
+			method:         http.MethodPut,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedCode:   "METHOD_NOT_ALLOWED",
+		},
+		{
+			name:           "method not allowed - DELETE",
+			method:         http.MethodDelete,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedCode:   "METHOD_NOT_ALLOWED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gs := &GateServer{}
+
+			req := httptest.NewRequest(tt.method, "/api/v1/events/stream", nil)
+			w := httptest.NewRecorder()
+
+			gs.handleEventsStream(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("Failed to read response body: %v", err)
+			}
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
+			}
+
+			var errResp HTTPErrorResponse
+			if err := json.Unmarshal(bodyBytes, &errResp); err != nil {
+				t.Fatalf("Failed to decode error response: %v", err)
+			}
+
+			if errResp.Code != tt.expectedCode {
+				t.Fatalf("Expected error code %s, got %s", tt.expectedCode, errResp.Code)
+			}
+		})
+	}
+}
+
+func TestSSEEventTypes(t *testing.T) {
+	// Test that SSE event types are correctly structured
+
+	t.Run("SSERegisterEvent", func(t *testing.T) {
+		event := SSERegisterEvent{ClientID: "test-client-123"}
+		jsonData, err := json.Marshal(event)
+		if err != nil {
+			t.Fatalf("Failed to marshal SSERegisterEvent: %v", err)
+		}
+
+		var decoded SSERegisterEvent
+		if err := json.Unmarshal(jsonData, &decoded); err != nil {
+			t.Fatalf("Failed to unmarshal SSERegisterEvent: %v", err)
+		}
+
+		if decoded.ClientID != "test-client-123" {
+			t.Fatalf("Expected clientId 'test-client-123', got '%s'", decoded.ClientID)
+		}
+	})
+
+	t.Run("SSEMessageEvent", func(t *testing.T) {
+		event := SSEMessageEvent{
+			Type:    "type.googleapis.com/google.protobuf.StringValue",
+			Payload: "SGVsbG8gV29ybGQ=", // Base64 for "Hello World"
+		}
+		jsonData, err := json.Marshal(event)
+		if err != nil {
+			t.Fatalf("Failed to marshal SSEMessageEvent: %v", err)
+		}
+
+		var decoded SSEMessageEvent
+		if err := json.Unmarshal(jsonData, &decoded); err != nil {
+			t.Fatalf("Failed to unmarshal SSEMessageEvent: %v", err)
+		}
+
+		if decoded.Type != "type.googleapis.com/google.protobuf.StringValue" {
+			t.Fatalf("Expected type 'type.googleapis.com/google.protobuf.StringValue', got '%s'", decoded.Type)
+		}
+		if decoded.Payload != "SGVsbG8gV29ybGQ=" {
+			t.Fatalf("Expected payload 'SGVsbG8gV29ybGQ=', got '%s'", decoded.Payload)
+		}
+	})
+
+	t.Run("SSEHeartbeatEvent", func(t *testing.T) {
+		event := SSEHeartbeatEvent{}
+		jsonData, err := json.Marshal(event)
+		if err != nil {
+			t.Fatalf("Failed to marshal SSEHeartbeatEvent: %v", err)
+		}
+
+		// Heartbeat should be an empty JSON object
+		if string(jsonData) != "{}" {
+			t.Fatalf("Expected '{}', got '%s'", string(jsonData))
+		}
+	})
+}
+
+func TestWriteSSEEvent(t *testing.T) {
+	// Test the writeSSEEvent helper function
+	gs := &GateServer{}
+
+	tests := []struct {
+		name      string
+		eventType string
+		data      interface{}
+		expected  string
+	}{
+		{
+			name:      "register event",
+			eventType: "register",
+			data:      SSERegisterEvent{ClientID: "client-123"},
+			expected:  "event: register\ndata: {\"clientId\":\"client-123\"}\n\n",
+		},
+		{
+			name:      "heartbeat event",
+			eventType: "heartbeat",
+			data:      SSEHeartbeatEvent{},
+			expected:  "event: heartbeat\ndata: {}\n\n",
+		},
+		{
+			name:      "message event",
+			eventType: "message",
+			data:      SSEMessageEvent{Type: "test.type", Payload: "YWJj"},
+			expected:  "event: message\ndata: {\"type\":\"test.type\",\"payload\":\"YWJj\"}\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			err := gs.writeSSEEvent(w, w, tt.eventType, tt.data)
+			if err != nil {
+				t.Fatalf("writeSSEEvent failed: %v", err)
+			}
+
+			result := w.Body.String()
+			if result != tt.expected {
+				t.Fatalf("Expected:\n%q\nGot:\n%q", tt.expected, result)
+			}
+		})
+	}
+}
