@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -16,6 +17,8 @@ const (
 	cleanupInterval = 1 * time.Minute
 	// maxGameAge is the maximum age of a game before it's cleaned up
 	maxGameAge = 10 * time.Minute
+
+	dumbAIMoveProbability = 10 // 20% chance to make a random move
 )
 
 // TicTacToeGame represents a single game instance (not a distributed object)
@@ -113,7 +116,7 @@ func (g *TicTacToeGame) updateStatus() {
 // 6. Take any edge
 func (g *TicTacToeGame) findAIMove() int {
 	// 1. 20% chance to make a random move
-	if time.Now().UnixNano()%100 < 20 {
+	if rand.Intn(100) < dumbAIMoveProbability {
 		return g.findRandomMove()
 	}
 
