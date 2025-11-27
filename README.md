@@ -89,6 +89,15 @@ Full documentation:
 
 ---
 
+## Samples
+
+| Sample | Description |
+|--------|-------------|
+| [Chat](samples/chat/) | Distributed chat application with real-time push messaging |
+| [Tic Tac Toe](samples/tictactoe/) | Web-based game demonstrating HTTP Gate with REST API |
+
+---
+
 ## Status & Roadmap
 
 Current status: **Alpha**
