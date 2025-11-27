@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net"
 	"net/http"
@@ -14,9 +15,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/inspector"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+)
+
+const (
+	// InspectorLeaseTTL is the TTL for the inspector key in etcd
+	InspectorLeaseTTL = 15 // seconds
 )
 
 func serveHTTP(pg *graph.GoverseGraph, addr string, shutdownChan chan struct{}) error {
@@ -71,6 +78,13 @@ func serveGRPC(pg *graph.GoverseGraph, addr string, shutdownChan chan struct{}) 
 }
 
 func main() {
+	// Parse command-line flags
+	etcdAddress := flag.String("etcd-address", "", "etcd server address (e.g., localhost:2379). If empty, etcd registration is disabled.")
+	etcdPrefix := flag.String("etcd-prefix", "", "etcd key prefix (defaults to /goverse)")
+	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address")
+	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
+	flag.Parse()
+
 	pg := graph.NewGoverseGraph()
 
 	// Create shutdown channel
@@ -83,9 +97,34 @@ func main() {
 	// Track server completion
 	serversDone := make(chan struct{}, 2)
 
+	// Setup etcd registration if etcd address is provided
+	var etcdMgr *etcdmanager.EtcdManager
+	var inspectorKey string
+	if *etcdAddress != "" {
+		var err error
+		etcdMgr, err = etcdmanager.NewEtcdManager(*etcdAddress, *etcdPrefix)
+		if err != nil {
+			log.Fatalf("Failed to create etcd manager: %v", err)
+		}
+		if err := etcdMgr.Connect(); err != nil {
+			log.Fatalf("Failed to connect to etcd: %v", err)
+		}
+
+		// Register inspector address in etcd under /goverse/inspector
+		inspectorKey = etcdMgr.GetPrefix() + "/inspector"
+		// Use grpcAddr as the inspector address (this is the gRPC endpoint that nodes connect to)
+		inspectorAddress := *grpcAddr
+		ctx := context.Background()
+		_, err = etcdMgr.RegisterKeyLease(ctx, inspectorKey, inspectorAddress, InspectorLeaseTTL)
+		if err != nil {
+			log.Fatalf("Failed to register inspector with etcd: %v", err)
+		}
+		log.Printf("Registered inspector at %s in etcd with key %s", inspectorAddress, inspectorKey)
+	}
+
 	// Start gRPC server
 	go func() {
-		if err := serveGRPC(pg, ":8081", shutdownChan); err != nil {
+		if err := serveGRPC(pg, *grpcAddr, shutdownChan); err != nil {
 			log.Printf("gRPC server error: %v", err)
 		}
 		log.Println("gRPC server stopped")
@@ -94,7 +133,7 @@ func main() {
 
 	// Start HTTP server in a goroutine
 	go func() {
-		if err := serveHTTP(pg, ":8080", shutdownChan); err != nil {
+		if err := serveHTTP(pg, *httpAddr, shutdownChan); err != nil {
 			log.Printf("HTTP server error: %v", err)
 		}
 		log.Println("HTTP server stopped")
@@ -105,6 +144,20 @@ func main() {
 	<-sigChan
 	log.Println("Received shutdown signal")
 	close(shutdownChan)
+
+	// Unregister from etcd if registered
+	if etcdMgr != nil && inspectorKey != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := etcdMgr.UnregisterKeyLease(ctx, inspectorKey); err != nil {
+			log.Printf("Failed to unregister inspector from etcd: %v", err)
+		} else {
+			log.Printf("Unregistered inspector from etcd")
+		}
+		cancel()
+		if err := etcdMgr.Close(); err != nil {
+			log.Printf("Failed to close etcd manager: %v", err)
+		}
+	}
 
 	// Wait for both servers to stop with timeout
 	timeout := time.After(5 * time.Second)
