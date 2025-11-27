@@ -14,9 +14,9 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 ## Key Features
 
 - Virtual objects with automatic lifecycle & activation
-- Sharded placement using etcd
+- Sharded placement using etcd with dynamic object & shard rebalancing across nodes
 - Gate architecture with streaming gRPC
-- Automatic rebalancing & fault recovery
+- Automatic failover & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics
 - Inspector UI for visualizing object topology
