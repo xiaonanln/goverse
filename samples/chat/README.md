@@ -82,8 +82,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 samples/chat/
 ├── README.md           # This file
 ├── proto/
-│   ├── chat.proto      # Protocol definitions
-│   └── __init__.py     # Python package marker
+│   └── chat.proto      # Protocol definitions
 ├── server/
 │   ├── chat_server.go  # Server entry point
 │   ├── ChatRoom.go     # ChatRoom object implementation
