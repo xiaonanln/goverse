@@ -97,12 +97,13 @@ Once the node creates the `my-counter` object, you can call its methods via the 
 
 ```bash
 # Call object method (increment by 5)
+# The request body is a base64-encoded protobuf Any containing Int32Value{Value: 5}
 curl -X POST http://localhost:8080/api/v1/objects/call/Counter/my-counter/Add \
   -H "Content-Type: application/json" \
   -d '{"request":"CiZ0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5wcm90b2J1Zi5JbnQzMlZhbHVlEgIIBQ=="}'
 ```
 
-> The request body contains a base64-encoded protobuf `Any` message. See [HTTP_GATE.md](docs/design/HTTP_GATE.md) for encoding details.
+> See [HTTP_GATE.md](docs/design/HTTP_GATE.md) for details on encoding protobuf messages and the [httpgate example](examples/httpgate/) for a helper to generate these values.
 
 ---
 
