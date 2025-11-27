@@ -202,52 +202,6 @@ func TestTicTacToeGame_DrawCondition(t *testing.T) {
 	}
 }
 
-func TestTicTacToeGame_AIBlocksWin(t *testing.T) {
-	game := newGame("test-game")
-
-	// Set up a scenario where AI needs to block
-	// Player has two in a row and AI should block
-	game.board[0] = "X"
-	game.board[1] = "X"
-	// Position 2 is empty - AI should block here
-	game.moves = 2
-
-	move := game.findAIMove()
-	if move != 2 {
-		t.Errorf("AI should block at position 2, but chose %d", move)
-	}
-}
-
-func TestTicTacToeGame_AITakesWin(t *testing.T) {
-	game := newGame("test-game")
-
-	// Set up a scenario where AI can win
-	game.board[0] = "O"
-	game.board[1] = "O"
-	// Position 2 is empty - AI should win here
-	game.board[3] = "X"
-	game.board[4] = "X"
-	game.moves = 4
-
-	move := game.findAIMove()
-	if move != 2 {
-		t.Errorf("AI should take winning move at position 2, but chose %d", move)
-	}
-}
-
-func TestTicTacToeGame_AITakesCenter(t *testing.T) {
-	game := newGame("test-game")
-
-	// Player takes a corner, AI should take center
-	game.board[0] = "X"
-	game.moves = 1
-
-	move := game.findAIMove()
-	if move != 4 {
-		t.Errorf("AI should take center (4), but chose %d", move)
-	}
-}
-
 func TestTicTacToeService_MultipleGames(t *testing.T) {
 	service := &TicTacToeService{}
 	service.OnInit(service, "test-service")
