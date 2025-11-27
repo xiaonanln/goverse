@@ -10,10 +10,6 @@ inputs:
     description: 'Install and start PostgreSQL'
     required: false
     default: 'true'
-  enable-py-grpc:
-    description: 'Install Python gRPC tools (grpcio and grpcio-tools)'
-    required: false
-    default: 'false'
 
 runs:
   using: "composite"
@@ -37,7 +33,6 @@ runs:
         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
     - name: Install Python gRPC tools
-      if: inputs.enable-py-grpc == 'true'
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
