@@ -29,7 +29,7 @@ if command -v python3 &> /dev/null; then
         -Iproto \
         --python_out=proto/python \
         --grpc_python_out=proto/python \
-        proto/tictactoe.proto 2>&1; then
+        proto/tictactoe.proto 2>/dev/null; then
         echo "  ✅ Python proto files generated for proto/tictactoe.proto"
     else
         echo "  Note: Python grpcio-tools not available, skipping Python proto generation"

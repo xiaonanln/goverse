@@ -28,7 +28,7 @@ if command -v python3 &> /dev/null; then
         -I. \
         --python_out=. \
         --grpc_python_out=. \
-        proto/chat.proto 2>&1; then
+        proto/chat.proto 2>/dev/null; then
         echo "  ✅ Python proto files generated for proto/chat.proto"
     else
         echo "  Note: Python grpcio-tools not available, skipping Python proto generation"
