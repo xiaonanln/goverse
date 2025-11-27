@@ -45,6 +45,39 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
    go run .
    ```
 
+4. **Use the CLI to interact with counters**:
+   ```bash
+   cd samples/counter
+   python counter.py create visitors
+   python counter.py increment visitors 5
+   python counter.py get visitors
+   # Output: Counter visitors = 5
+   ```
+
+## CLI Usage
+
+The `counter.py` script provides a simple interface to interact with counters:
+
+```bash
+# Create a counter
+python counter.py create visitors
+
+# Get current value
+python counter.py get visitors
+
+# Increment by an amount
+python counter.py increment visitors 10
+
+# Decrement by an amount
+python counter.py decrement visitors 3
+
+# Reset to zero
+python counter.py reset visitors
+
+# Delete a counter
+python counter.py delete visitors
+```
+
 ## Architecture
 
 ```
@@ -76,6 +109,7 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
 samples/counter/
 ├── DESIGN.md              # Design document
 ├── README.md              # This file
+├── counter.py             # CLI to interact with counters
 ├── proto/
 │   └── counter.proto      # Protocol buffer definitions
 ├── server/
