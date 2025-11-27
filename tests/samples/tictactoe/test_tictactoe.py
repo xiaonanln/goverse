@@ -44,7 +44,7 @@ try:
     import tictactoe_pb2
 except ImportError as e:
     print(f"ERROR: Failed to import tictactoe_pb2: {e}")
-    print("Run: ./samples/tictactoe/proto/generate_python.sh")
+    print("Proto files should be compiled beforehand via ./samples/tictactoe/compile-proto.sh")
     sys.exit(1)
 
 # Server ports
