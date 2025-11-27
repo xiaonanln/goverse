@@ -15,6 +15,7 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
 ### Prerequisites
 
 - Go 1.21+
+- Python 3.8+ with protobuf: `pip install grpcio grpcio-tools protobuf`
 - etcd (for cluster coordination)
 - A Gate server (for HTTP client connections)
 
@@ -45,7 +46,13 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
    go run .
    ```
 
-4. **Use the CLI to interact with counters**:
+4. **Compile proto files** (first time only):
+   ```bash
+   cd samples/counter
+   ./compile-proto.sh
+   ```
+
+5. **Use the CLI to interact with counters**:
    ```bash
    cd samples/counter
    python counter.py create visitors
