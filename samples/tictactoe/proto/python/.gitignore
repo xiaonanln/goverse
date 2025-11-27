@@ -1,0 +1,3 @@
+# Generated Python protobuf code
+*.py
+!__init__.py

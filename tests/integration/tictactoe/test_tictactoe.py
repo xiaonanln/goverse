@@ -27,6 +27,25 @@ sys.path.insert(0, str(REPO_ROOT / 'tests' / 'integration'))
 
 from BinaryHelper import BinaryHelper
 
+# Import protobuf libraries
+try:
+    from google.protobuf import any_pb2
+    from google.protobuf.message import Message
+except ImportError:
+    print("ERROR: protobuf library not found. Install with: pip install protobuf")
+    sys.exit(1)
+
+# Import TicTacToe protobuf messages
+PROTO_PYTHON_DIR = REPO_ROOT / 'samples' / 'tictactoe' / 'proto' / 'python'
+sys.path.insert(0, str(PROTO_PYTHON_DIR))
+
+try:
+    import tictactoe_pb2
+except ImportError as e:
+    print(f"ERROR: Failed to import tictactoe_pb2: {e}")
+    print("Run: ./samples/tictactoe/proto/generate_python.sh")
+    sys.exit(1)
+
 # Server ports
 NODE_PORT = 50051
 GATE_PORT = 49000
@@ -79,147 +98,38 @@ def check_port(port, timeout=30):
 
 
 def create_new_game_request(game_id):
-    """Create a NewGameRequest protobuf wrapped in Any, base64 encoded.
-    
-    NewGameRequest: game_id (string, field 1)
-    
-    Note: This simplified encoder assumes lengths fit in a single byte (<128).
-    This is sufficient for test game IDs which are typically short (e.g., 'test-abc123-1234567890').
-    """
-    game_id_bytes = game_id.encode('utf-8')
-    if len(game_id_bytes) >= 128:
-        raise ValueError(f"Game ID too long ({len(game_id_bytes)} bytes), must be < 128 bytes")
-    
-    # Build NewGameRequest protobuf
-    req_bytes = bytes([
-        0x0A,  # field 1, wire type 2 (length-delimited): (1 << 3) | 2 = 10
-        len(game_id_bytes),
-    ]) + game_id_bytes
+    """Create a NewGameRequest protobuf wrapped in Any, base64 encoded."""
+    # Create the protobuf message
+    req = tictactoe_pb2.NewGameRequest(game_id=game_id)
     
     # Wrap in google.protobuf.Any
-    type_url = 'type.googleapis.com/tictactoe.NewGameRequest'
-    type_url_bytes = type_url.encode('utf-8')
+    any_msg = any_pb2.Any()
+    any_msg.Pack(req)
     
-    any_bytes = bytes([
-        0x0A,  # field 1: type_url (string)
-        len(type_url_bytes),
-    ]) + type_url_bytes + bytes([
-        0x12,  # field 2: value (bytes)
-        len(req_bytes),
-    ]) + req_bytes
-    
-    return base64.b64encode(any_bytes).decode('ascii')
+    # Serialize and encode to base64
+    return base64.b64encode(any_msg.SerializeToString()).decode('ascii')
 
 
 def parse_game_state_response(response_base64):
     """Parse the GameState from a base64-encoded Any response.
     
     Returns a dict with game_id, board, status, winner, last_ai_move.
-    
-    Note: This simplified decoder assumes field lengths fit in a single byte (<128).
-    This is sufficient for TicTacToe game states where all fields are short strings.
     """
+    # Decode base64 and parse Any message
     response_bytes = base64.b64decode(response_base64)
+    any_msg = any_pb2.Any()
+    any_msg.ParseFromString(response_bytes)
     
-    # Parse Any message to extract value field
-    offset = 0
-    value = b''
-    
-    while offset < len(response_bytes):
-        field_wire = response_bytes[offset]
-        offset += 1
-        field_number = field_wire >> 3
-        wire_type = field_wire & 0x07
-        
-        if field_number == 2 and wire_type == 2:
-            # value (bytes)
-            length = response_bytes[offset]
-            offset += 1
-            value = response_bytes[offset:offset + length]
-            offset += length
-        elif wire_type == 2:
-            # Skip length-delimited field
-            length = response_bytes[offset]
-            offset += 1
-            offset += length
-        elif wire_type == 0:
-            # Skip varint
-            while offset < len(response_bytes) and (response_bytes[offset] & 0x80):
-                offset += 1
-            offset += 1
-    
-    # Parse GameState from value
-    offset = 0
-    game_id = ''
-    board = ['', '', '', '', '', '', '', '', '']
-    status = 'playing'
-    winner = ''
-    last_ai_move = -1
-    board_index = 0
-    
-    while offset < len(value):
-        field_wire = value[offset]
-        offset += 1
-        field_number = field_wire >> 3
-        wire_type = field_wire & 0x07
-        
-        if field_number == 1 and wire_type == 2:
-            # game_id (string)
-            length = value[offset]
-            offset += 1
-            game_id = value[offset:offset + length].decode('utf-8')
-            offset += length
-        elif field_number == 2 and wire_type == 2:
-            # board (repeated string)
-            length = value[offset]
-            offset += 1
-            if board_index < 9:  # Protect against index out of bounds
-                if length > 0:
-                    board[board_index] = value[offset:offset + length].decode('utf-8')
-                board_index += 1
-            offset += length
-        elif field_number == 3 and wire_type == 2:
-            # status (string)
-            length = value[offset]
-            offset += 1
-            status = value[offset:offset + length].decode('utf-8')
-            offset += length
-        elif field_number == 4 and wire_type == 2:
-            # winner (string)
-            length = value[offset]
-            offset += 1
-            winner = value[offset:offset + length].decode('utf-8')
-            offset += length
-        elif field_number == 5 and wire_type == 0:
-            # last_ai_move (int32, varint)
-            varint_value = 0
-            shift = 0
-            while offset < len(value):
-                b = value[offset]
-                offset += 1
-                varint_value |= (b & 0x7F) << shift
-                shift += 7
-                if not (b & 0x80):
-                    break
-            # Convert to signed 32-bit integer
-            last_ai_move = varint_value if varint_value < 0x80000000 else varint_value - 0x100000000
-        elif wire_type == 2:
-            # Skip length-delimited field
-            length = value[offset]
-            offset += 1
-            offset += length
-        elif wire_type == 0:
-            # Skip varint
-            while offset < len(value) and (value[offset] & 0x80):
-                offset += 1
-            offset += 1
+    # Unpack to GameState
+    game_state = tictactoe_pb2.GameState()
+    any_msg.Unpack(game_state)
     
     return {
-        'game_id': game_id,
-        'board': board,
-        'status': status,
-        'winner': winner,
-        'last_ai_move': last_ai_move
+        'game_id': game_state.game_id,
+        'board': list(game_state.board),
+        'status': game_state.status,
+        'winner': game_state.winner,
+        'last_ai_move': game_state.last_ai_move
     }
 
 
