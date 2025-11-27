@@ -3,9 +3,19 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/xiaonanln/goverse/goverseapi"
 	tictactoe_pb "github.com/xiaonanln/goverse/samples/tictactoe/proto"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
+)
+
+const (
+	// cleanupInterval is how often to run periodic cleanup
+	cleanupInterval = 1 * time.Minute
+	// maxGameAge is the maximum age of a game before it's cleaned up
+	maxGameAge = 10 * time.Minute
 )
 
 // TicTacToeGame represents a single game instance (not a distributed object)
@@ -15,6 +25,7 @@ type TicTacToeGame struct {
 	status     string    // "playing", "x_wins", "o_wins", "draw"
 	moves      int       // Total moves made
 	lastAIMove int32     // Last AI move position, -1 if none
+	createdAt  time.Time // Time when the game was created
 }
 
 // newGame creates a new TicTacToeGame with initial state
@@ -23,6 +34,7 @@ func newGame(gameID string) *TicTacToeGame {
 		gameID:     gameID,
 		status:     "playing",
 		lastAIMove: -1,
+		createdAt:  time.Now(),
 	}
 }
 
@@ -34,6 +46,7 @@ func (g *TicTacToeGame) reset() {
 	g.status = "playing"
 	g.moves = 0
 	g.lastAIMove = -1
+	g.createdAt = time.Now()
 }
 
 // getGameState returns the current game state as proto message
@@ -168,14 +181,195 @@ func (g *TicTacToeGame) findWinningMove(player string) int {
 type TicTacToeService struct {
 	goverseapi.BaseObject
 
-	mu    sync.Mutex
-	games map[string]*TicTacToeGame // gameID -> game
+	mu        sync.Mutex
+	games     map[string]*TicTacToeGame // gameID -> game
+	stopCh    chan struct{}             // channel to signal cleanup goroutine to stop
+	cleanupWg sync.WaitGroup            // wait group for cleanup goroutine
 }
 
 // OnCreated is called when the service object is created
 func (s *TicTacToeService) OnCreated() {
 	s.Logger.Infof("TicTacToeService %s created", s.Id())
-	s.games = make(map[string]*TicTacToeGame)
+	if s.games == nil {
+		s.games = make(map[string]*TicTacToeGame)
+	}
+	s.stopCh = make(chan struct{})
+	s.startCleanupRoutine()
+}
+
+// startCleanupRoutine starts a goroutine that periodically cleans up old and finished games
+func (s *TicTacToeService) startCleanupRoutine() {
+	s.cleanupWg.Add(1)
+	go func() {
+		defer s.cleanupWg.Done()
+		ticker := time.NewTicker(cleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-s.stopCh:
+				s.Logger.Infof("TicTacToeService %s: cleanup routine stopped", s.Id())
+				return
+			case <-ticker.C:
+				s.cleanupGames()
+			}
+		}
+	}()
+	s.Logger.Infof("TicTacToeService %s: cleanup routine started (interval: %v, max age: %v)", s.Id(), cleanupInterval, maxGameAge)
+}
+
+// cleanupGames removes finished games and games that are older than maxGameAge
+func (s *TicTacToeService) cleanupGames() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	var finishedCount, expiredCount int
+
+	for gameID, game := range s.games {
+		// Cleanup finished games (x_wins, o_wins, draw)
+		if game.status != "playing" {
+			delete(s.games, gameID)
+			finishedCount++
+			continue
+		}
+
+		// Cleanup games older than maxGameAge
+		if now.Sub(game.createdAt) > maxGameAge {
+			delete(s.games, gameID)
+			expiredCount++
+		}
+	}
+
+	if finishedCount > 0 || expiredCount > 0 {
+		s.Logger.Infof("TicTacToeService %s: cleaned up %d finished games, %d expired games (%d remaining)",
+			s.Id(), finishedCount, expiredCount, len(s.games))
+	}
+}
+
+// ToData serializes the TicTacToeService state for persistence
+// Thread-safe implementation with mutex to handle concurrent access during periodic persistence
+func (s *TicTacToeService) ToData() (proto.Message, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Serialize each game to a map structure
+	gamesData := make(map[string]interface{})
+	for gameID, game := range s.games {
+		// Convert board to list of strings
+		boardList := make([]interface{}, 9)
+		for i, cell := range game.board {
+			boardList[i] = cell
+		}
+
+		gameData := map[string]interface{}{
+			"gameID":     game.gameID,
+			"board":      boardList,
+			"status":     game.status,
+			"moves":      float64(game.moves),
+			"lastAIMove": float64(game.lastAIMove),
+			"createdAt":  game.createdAt.UnixNano(),
+		}
+		gamesData[gameID] = gameData
+	}
+
+	data, err := structpb.NewStruct(map[string]interface{}{
+		"id":    s.Id(),
+		"type":  s.Type(),
+		"games": gamesData,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// FromData deserializes the TicTacToeService state from persistence
+// Thread-safe implementation with mutex to handle concurrent access during object initialization
+func (s *TicTacToeService) FromData(data proto.Message) error {
+	if data == nil {
+		return nil
+	}
+
+	structData, ok := data.(*structpb.Struct)
+	if !ok {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Initialize games map if needed
+	if s.games == nil {
+		s.games = make(map[string]*TicTacToeGame)
+	}
+
+	// Load games from the saved data
+	gamesField, ok := structData.Fields["games"]
+	if !ok {
+		return nil
+	}
+
+	gamesStruct := gamesField.GetStructValue()
+	if gamesStruct == nil {
+		return nil
+	}
+
+	for gameID, gameValue := range gamesStruct.Fields {
+		gameStruct := gameValue.GetStructValue()
+		if gameStruct == nil {
+			continue
+		}
+
+		game := &TicTacToeGame{
+			gameID:     gameID,
+			status:     "playing",
+			lastAIMove: -1,
+			createdAt:  time.Now(),
+		}
+
+		// Restore gameID
+		if v, ok := gameStruct.Fields["gameID"]; ok {
+			game.gameID = v.GetStringValue()
+		}
+
+		// Restore board
+		if v, ok := gameStruct.Fields["board"]; ok {
+			boardList := v.GetListValue()
+			if boardList != nil {
+				for i, cell := range boardList.Values {
+					if i < 9 {
+						game.board[i] = cell.GetStringValue()
+					}
+				}
+			}
+		}
+
+		// Restore status
+		if v, ok := gameStruct.Fields["status"]; ok {
+			game.status = v.GetStringValue()
+		}
+
+		// Restore moves
+		if v, ok := gameStruct.Fields["moves"]; ok {
+			game.moves = int(v.GetNumberValue())
+		}
+
+		// Restore lastAIMove
+		if v, ok := gameStruct.Fields["lastAIMove"]; ok {
+			game.lastAIMove = int32(v.GetNumberValue())
+		}
+
+		// Restore createdAt
+		if v, ok := gameStruct.Fields["createdAt"]; ok {
+			game.createdAt = time.Unix(0, int64(v.GetNumberValue()))
+		}
+
+		s.games[gameID] = game
+	}
+
+	s.Logger.Infof("TicTacToeService %s: loaded %d games from persistence", s.Id(), len(s.games))
+	return nil
 }
 
 // getOrCreateGame retrieves an existing game or creates a new one
