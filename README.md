@@ -14,6 +14,9 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 ## Key Features
 
 - Virtual objects with automatic lifecycle & activation
+- Sharded placement using etcd with dynamic object & shard rebalancing across nodes
+- Gate architecture with streaming gRPC
+- Automatic failover & fault recovery
 - Sharded placement using etcd
 - Gate architecture with streaming gRPC and HTTP REST API
 - Automatic rebalancing & fault recovery
