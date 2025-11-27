@@ -524,3 +524,20 @@ func TestTicTacToeGame_CreatedAtOnReset(t *testing.T) {
 		t.Errorf("Expected createdAt to be updated after reset")
 	}
 }
+
+func TestTicTacToeService_StopCleanup(t *testing.T) {
+	service := &TicTacToeService{}
+	service.OnInit(service, "test-service")
+	service.OnCreated() // This starts the cleanup routine
+
+	// Verify service was created successfully
+	if service.games == nil {
+		t.Fatalf("Expected games map to be initialized")
+	}
+
+	// Stop the cleanup routine
+	service.StopCleanup()
+
+	// Calling StopCleanup again should not panic (idempotent)
+	service.StopCleanup()
+}

@@ -177,7 +177,10 @@ func (g *TicTacToeGame) findWinningMove(player string) int {
 	return -1
 }
 
-// TicTacToeService is a distributed object that manages multiple TicTacToeGame instances
+// TicTacToeService is a distributed object that manages multiple TicTacToeGame instances.
+// Note: The cleanup goroutine runs for the lifetime of this service object.
+// Since TicTacToeService objects are designed as long-lived service singletons,
+// the cleanup goroutine will be stopped when the server process terminates.
 type TicTacToeService struct {
 	goverseapi.BaseObject
 
@@ -195,6 +198,18 @@ func (s *TicTacToeService) OnCreated() {
 	}
 	s.stopCh = make(chan struct{})
 	s.startCleanupRoutine()
+}
+
+// StopCleanup stops the cleanup goroutine gracefully.
+// This method can be called to stop the cleanup routine if needed.
+func (s *TicTacToeService) StopCleanup() {
+	select {
+	case <-s.stopCh:
+		// Already closed
+	default:
+		close(s.stopCh)
+	}
+	s.cleanupWg.Wait()
 }
 
 // startCleanupRoutine starts a goroutine that periodically cleans up old and finished games
