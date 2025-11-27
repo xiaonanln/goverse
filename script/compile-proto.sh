@@ -85,6 +85,21 @@ if command -v python3 &> /dev/null; then
             echo "  Note: Failed to generate Python proto files for chat.proto"
         fi
     fi
+    
+    # Generate Python proto files from samples/tictactoe/proto/tictactoe.proto
+    if [[ -f "samples/tictactoe/proto/tictactoe.proto" ]]; then
+        # Ensure python output directory exists
+        mkdir -p samples/tictactoe/proto/python
+        touch samples/tictactoe/proto/python/__init__.py
+        if python3 -m grpc_tools.protoc \
+            -Isamples/tictactoe/proto \
+            --python_out=samples/tictactoe/proto/python \
+            samples/tictactoe/proto/tictactoe.proto 2>&1; then
+            echo "  ✅ Python proto files generated for samples/tictactoe/proto/tictactoe.proto"
+        else
+            echo "  Note: Failed to generate Python proto files for tictactoe.proto"
+        fi
+    fi
 else
     echo "  Note: python3 not found, skipping Python proto generation"
 fi
