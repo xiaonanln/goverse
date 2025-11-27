@@ -110,27 +110,46 @@ Response: {"success": true}
 
 ### Protocol Buffers
 
+Full proto definition (`proto/counter.proto`):
+
 ```protobuf
+syntax = "proto3";
+
+package counter;
+
+option go_package = "github.com/xiaonanln/goverse/samples/counter/proto;counter_pb";
+
+// IncrementRequest is the request to increment a counter
 message IncrementRequest {
-  int32 amount = 1;
+  int32 amount = 1; // Amount to increment (can be negative)
 }
 
+// DecrementRequest is the request to decrement a counter
 message DecrementRequest {
-  int32 amount = 1;
+  int32 amount = 1; // Amount to decrement (can be negative)
 }
 
+// GetRequest is the request to get the current counter value
 message GetRequest {
   // Empty - no parameters needed
 }
 
+// ResetRequest is the request to reset the counter to zero
 message ResetRequest {
   // Empty - no parameters needed
 }
 
+// CounterResponse is the response for all counter operations
 message CounterResponse {
-  string name = 1;
-  int32 value = 2;
+  string name = 1;  // Counter name (object ID without "Counter-" prefix)
+  int32 value = 2;  // Current counter value
 }
+```
+
+Compile with:
+```bash
+cd samples/counter
+./compile-proto.sh
 ```
 
 ## Counter Object Implementation
