@@ -445,7 +445,7 @@ def main():
             return 1
         
         # Step 6: Stop the server
-        print("\n--- Step 5: Stopping TicTacToe server ---")
+        print("\n--- Step 6: Stopping TicTacToe server ---")
         exit_code = stop_server(process)
         process = None  # Prevent double cleanup
         

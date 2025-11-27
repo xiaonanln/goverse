@@ -174,7 +174,7 @@ def main():
     num_servers = args.num_servers
     
     # Get the repository root directory (from tests/samples/chat/test_chat.py -> repo root)
-    repo_root = Path(__file__).parent.parent.parent.resolve()
+    repo_root = Path(__file__).parent.parent.parent.parent.resolve()
     os.chdir(repo_root)
     print(f"Working directory: {os.getcwd()}")
     
