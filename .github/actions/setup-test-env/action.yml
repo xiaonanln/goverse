@@ -1,5 +1,19 @@
 name: 'Setup Test Environment'
-description: 'Setup Go, protoc, etcd, and PostgreSQL for testing'
+description: 'Setup Go, protoc, etcd, PostgreSQL, and Python gRPC tools for testing'
+
+inputs:
+  enable-etcd:
+    description: 'Install and start etcd'
+    required: false
+    default: 'true'
+  enable-postgres:
+    description: 'Install and start PostgreSQL'
+    required: false
+    default: 'true'
+  enable-py-grpc:
+    description: 'Install Python gRPC tools (grpcio and grpcio-tools)'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -33,6 +47,7 @@ runs:
       run: go mod tidy
 
     - name: Install and start etcd
+      if: inputs.enable-etcd == 'true'
       shell: bash
       run: |
         sudo apt-get install -y etcd-server
@@ -49,6 +64,7 @@ runs:
         done
 
     - name: Install and start PostgreSQL
+      if: inputs.enable-postgres == 'true'
       shell: bash
       run: |
         sudo apt-get install -y postgresql postgresql-client
@@ -67,3 +83,10 @@ runs:
           echo "Waiting for PostgreSQL to start... ($i/10)"
           sleep 1
         done
+
+    - name: Install Python gRPC tools
+      if: inputs.enable-py-grpc == 'true'
+      shell: bash
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install grpcio grpcio-tools

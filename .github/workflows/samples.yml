@@ -20,50 +20,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
         with:
-          go-version: '>=1.21'
-      
-      - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          protoc --version
-      
-      - name: Install Go protobuf plugins
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-      - name: Ensure Python proto tools (grpcio-tools) and runtime (grpcio) are available
-        run: |
-          # Install what's required for generating Python protos and running the tests
-          python3 -m pip install --upgrade pip
-          python3 -m pip install grpcio grpcio-tools
-      
-      - name: Compile protobuf files
-        run: |
-          chmod +x ./script/compile-proto.sh
-          ./script/compile-proto.sh
-      
-      - name: Tidy Go modules
-        run: go mod tidy
-      
-      - name: Install and start etcd
-        run: |
-          sudo apt-get install -y etcd-server
-          sudo systemctl start etcd
-          sudo systemctl status etcd --no-pager
-          # Wait for etcd to be ready
-          for i in {1..10}; do
-            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
-              echo "etcd is ready"
-              break
-            fi
-            echo "Waiting for etcd to start... ($i/10)"
-            sleep 1
-          done
+          enable-postgres: 'false'
+          enable-py-grpc: 'true'
 
       - name: Create coverage directory
         run: mkdir -p /tmp/coverage
@@ -102,50 +63,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
         with:
-          go-version: '>=1.21'
-      
-      - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          protoc --version
-      
-      - name: Install Go protobuf plugins
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-      - name: Ensure Python proto tools (grpcio-tools) and runtime (grpcio) are available
-        run: |
-          # Install what's required for generating Python protos and running the tests
-          python3 -m pip install --upgrade pip
-          python3 -m pip install grpcio grpcio-tools
-      
-      - name: Compile protobuf files
-        run: |
-          chmod +x ./script/compile-proto.sh
-          ./script/compile-proto.sh
-      
-      - name: Tidy Go modules
-        run: go mod tidy
-      
-      - name: Install and start etcd
-        run: |
-          sudo apt-get install -y etcd-server
-          sudo systemctl start etcd
-          sudo systemctl status etcd --no-pager
-          # Wait for etcd to be ready
-          for i in {1..10}; do
-            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
-              echo "etcd is ready"
-              break
-            fi
-            echo "Waiting for etcd to start... ($i/10)"
-            sleep 1
-          done
+          enable-postgres: 'false'
+          enable-py-grpc: 'true'
       
       - name: Run chat client/server test with race detector
         env:
@@ -160,44 +82,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
         with:
-          go-version: '>=1.21'
-      
-      - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          protoc --version
-      
-      - name: Install Go protobuf plugins
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-      
-      - name: Compile protobuf files
-        run: |
-          chmod +x ./script/compile-proto.sh
-          ./script/compile-proto.sh
-      
-      - name: Tidy Go modules
-        run: go mod tidy
-      
-      - name: Install and start etcd
-        run: |
-          sudo apt-get install -y etcd-server
-          sudo systemctl start etcd
-          sudo systemctl status etcd --no-pager
-          # Wait for etcd to be ready
-          for i in {1..10}; do
-            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
-              echo "etcd is ready"
-              break
-            fi
-            echo "Waiting for etcd to start... ($i/10)"
-            sleep 1
-          done
+          enable-postgres: 'false'
 
       - name: Create coverage directory
         run: mkdir -p /tmp/coverage
@@ -236,44 +124,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
         with:
-          go-version: '>=1.21'
-      
-      - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          protoc --version
-      
-      - name: Install Go protobuf plugins
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-      
-      - name: Compile protobuf files
-        run: |
-          chmod +x ./script/compile-proto.sh
-          ./script/compile-proto.sh
-      
-      - name: Tidy Go modules
-        run: go mod tidy
-      
-      - name: Install and start etcd
-        run: |
-          sudo apt-get install -y etcd-server
-          sudo systemctl start etcd
-          sudo systemctl status etcd --no-pager
-          # Wait for etcd to be ready
-          for i in {1..10}; do
-            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
-              echo "etcd is ready"
-              break
-            fi
-            echo "Waiting for etcd to start... ($i/10)"
-            sleep 1
-          done
+          enable-postgres: 'false'
       
       - name: Run tictactoe server test with race detector
         env:
