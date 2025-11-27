@@ -42,6 +42,25 @@ type HTTPErrorResponse struct {
 	Code  string `json:"code"`
 }
 
+// SSERegisterEvent represents the register event payload for SSE
+type SSERegisterEvent struct {
+	ClientID string `json:"clientId"`
+}
+
+// SSEMessageEvent represents a push message event payload for SSE
+type SSEMessageEvent struct {
+	Type    string `json:"type"`    // Protobuf type URL from Any
+	Payload string `json:"payload"` // Base64-encoded protobuf Any bytes
+}
+
+// SSEHeartbeatEvent represents a heartbeat event payload for SSE
+type SSEHeartbeatEvent struct {
+	// Empty struct - heartbeat has no payload
+}
+
+// sseHeartbeatInterval is the interval between SSE heartbeat events
+const sseHeartbeatInterval = 30 * time.Second
+
 // setupHTTPRoutes configures HTTP routes for the gate server
 func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
@@ -50,6 +69,9 @@ func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/v1/objects/call/", s.corsMiddleware(s.handleCallObject))
 	mux.HandleFunc("/api/v1/objects/create/", s.corsMiddleware(s.handleCreateObject))
 	mux.HandleFunc("/api/v1/objects/delete/", s.corsMiddleware(s.handleDeleteObject))
+
+	// SSE events stream for push messaging
+	mux.HandleFunc("/api/v1/events/stream", s.corsMiddleware(s.handleEventsStream))
 
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
@@ -228,6 +250,105 @@ func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) 
 	// Write response
 	httpResp := HTTPDeleteResponse{Success: true}
 	s.writeJSON(w, http.StatusOK, httpResp)
+}
+
+// handleEventsStream handles GET /api/v1/events/stream for Server-Sent Events (SSE)
+// This allows HTTP clients to receive pushed messages from objects in real-time.
+func (s *GateServer) handleEventsStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only GET method is allowed for SSE")
+		return
+	}
+
+	// Verify the response writer supports flushing (required for SSE)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		s.writeError(w, http.StatusInternalServerError, "SSE_NOT_SUPPORTED", "Streaming not supported by server")
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// Register client with the gate
+	ctx := r.Context()
+	clientProxy := s.gate.Register(ctx)
+	clientID := clientProxy.GetID()
+
+	// Make sure to unregister when done
+	defer s.gate.Unregister(clientID)
+
+	s.logger.Infof("SSE client connected: %s", clientID)
+
+	// Send register event with client ID
+	regEvent := SSERegisterEvent{ClientID: clientID}
+	if err := s.writeSSEEvent(w, flusher, "register", regEvent); err != nil {
+		s.logger.Errorf("Failed to send register event to SSE client %s: %v", clientID, err)
+		return
+	}
+
+	// Create heartbeat ticker
+	heartbeatTicker := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeatTicker.Stop()
+
+	// Stream messages to the client
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Infof("SSE client %s disconnected: %v", clientID, ctx.Err())
+			return
+		case <-heartbeatTicker.C:
+			// Send heartbeat to keep connection alive
+			if err := s.writeSSEEvent(w, flusher, "heartbeat", SSEHeartbeatEvent{}); err != nil {
+				s.logger.Errorf("Failed to send heartbeat to SSE client %s: %v", clientID, err)
+				return
+			}
+		case anyMsg, ok := <-clientProxy.MessageChan():
+			if !ok {
+				s.logger.Infof("SSE client %s message channel closed", clientID)
+				return
+			}
+
+			// Marshal Any to bytes and encode as base64
+			msgBytes, err := proto.Marshal(anyMsg)
+			if err != nil {
+				s.logger.Errorf("Failed to marshal message for SSE client %s: %v", clientID, err)
+				continue
+			}
+
+			// Create message event with type and base64-encoded payload
+			msgEvent := SSEMessageEvent{
+				Type:    anyMsg.GetTypeUrl(),
+				Payload: base64.StdEncoding.EncodeToString(msgBytes),
+			}
+
+			if err := s.writeSSEEvent(w, flusher, "message", msgEvent); err != nil {
+				s.logger.Errorf("Failed to send message to SSE client %s: %v", clientID, err)
+				return
+			}
+
+			s.logger.Debugf("Sent message to SSE client %s", clientID)
+		}
+	}
+}
+
+// writeSSEEvent writes a Server-Sent Event to the response writer
+func (s *GateServer) writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, eventType string, data interface{}) error {
+	// Marshal data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event data: %w", err)
+	}
+
+	// Write SSE format: event: <type>\ndata: <json>\n\n
+	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, jsonData); err != nil {
+		return fmt.Errorf("failed to write SSE event: %w", err)
+	}
+
+	flusher.Flush()
+	return nil
 }
 
 // writeJSON writes a JSON response with the given status code

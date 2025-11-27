@@ -1,6 +1,6 @@
 # HTTP Gate Design
 
-> **Status**: Partially Implemented  
+> **Status**: Fully Implemented  
 > This document describes the HTTP gate support for Goverse, enabling HTTP clients to interact with objects.
 
 ---
@@ -10,7 +10,7 @@
 Enable HTTP clients to:
 - **Call object methods** via HTTP REST API ✅ Implemented
 - **Create and delete objects** via HTTP REST API ✅ Implemented
-- **Receive pushed messages** from objects in real-time via SSE ❌ Not yet implemented
+- **Receive pushed messages** from objects in real-time via SSE ✅ Implemented
 
 All HTTP functionality integrates with the existing gate architecture without duplicating logic.
 
@@ -255,8 +255,9 @@ async function callObject(type, id, method, protoMessage) {
 
 ### Source Files
 
-- `gate/gateserver/http_handler.go` - HTTP handler implementation
+- `gate/gateserver/http_handler.go` - HTTP handler implementation (includes SSE)
 - `gate/gateserver/http_handler_test.go` - Unit tests
+- `gate/gateserver/gate_sse_integration_test.go` - SSE integration tests
 - `examples/httpgate/main.go` - Example usage
 
 ### Key Functions
@@ -267,20 +268,25 @@ async function callObject(type, id, method, protoMessage) {
 | `handleCallObject()` | Handles `/api/v1/objects/call/{type}/{id}/{method}` |
 | `handleCreateObject()` | Handles `/api/v1/objects/create/{type}/{id}` |
 | `handleDeleteObject()` | Handles `/api/v1/objects/delete/{id}` |
+| `handleEventsStream()` | Handles `/api/v1/events/stream` (SSE) |
+| `writeSSEEvent()` | Writes SSE events to the response |
 | `startHTTPServer()` | Starts the HTTP server |
 | `stopHTTPServer()` | Gracefully stops the HTTP server |
 
 ---
 
-## Future Work: Push Messaging via SSE
+## Push Messaging via SSE
 
-> **Status**: Not yet implemented
+> **Status**: ✅ Implemented
 
-HTTP push messaging will use **Server-Sent Events (SSE)** to deliver messages from objects to clients.
+HTTP push messaging uses **Server-Sent Events (SSE)** to deliver messages from objects to clients in real-time.
 
-### Planned Design
+### Endpoint
 
 **Endpoint:** `GET /api/v1/events/stream`
+
+**Headers:**
+- `Accept: text/event-stream` (optional but recommended)
 
 **Response:**
 ```
@@ -293,43 +299,75 @@ event: register
 data: {"clientId": "gate-addr/unique-id"}
 
 event: message
-data: {"type": "ChatMessage", "payload": {...}}
+data: {"type": "type.googleapis.com/...", "payload": "<base64-encoded protobuf Any>"}
 
 event: heartbeat
 data: {}
 ```
 
-**Why SSE:**
-- Native browser support with `EventSource` API
-- Simple protocol built on HTTP
-- Automatic reconnection on connection loss
-- Efficient one-way server→client streaming
-- For bidirectional needs, clients should use gRPC gate
+### Event Types
 
-### Planned Client Usage
+| Event | Description |
+|-------|-------------|
+| `register` | First event, contains the assigned client ID |
+| `message` | Push message from an object, contains type and base64-encoded payload |
+| `heartbeat` | Keepalive event sent every 30 seconds |
 
+### Message Format
+
+The `message` event payload contains:
+- `type`: The protobuf type URL from the `google.protobuf.Any` wrapper
+- `payload`: Base64-encoded protobuf `Any` bytes
+
+### Client Usage
+
+**JavaScript/Browser:**
 ```javascript
 const eventSource = new EventSource('/api/v1/events/stream');
 
 eventSource.addEventListener('register', (e) => {
   const { clientId } = JSON.parse(e.data);
-  // Use clientId in subsequent API calls
+  console.log('Registered with ID:', clientId);
+  // Use clientId in X-Client-ID header for subsequent API calls
 });
 
 eventSource.addEventListener('message', (e) => {
-  const msg = JSON.parse(e.data);
-  // Handle pushed message
+  const { type, payload } = JSON.parse(e.data);
+  // Decode base64 payload to get protobuf Any bytes
+  const anyBytes = atob(payload);
+  // Unmarshal using your protobuf library
+  console.log('Received message of type:', type);
 });
+
+eventSource.addEventListener('heartbeat', (e) => {
+  console.log('Heartbeat received');
+});
+
+eventSource.onerror = (e) => {
+  console.error('SSE connection error:', e);
+  // EventSource automatically reconnects
+};
 ```
+
+**curl (for testing):**
+```bash
+curl -N http://localhost:8080/api/v1/events/stream
+```
+
+### Why SSE
+
+- **Native browser support** with `EventSource` API
+- **Simple protocol** built on HTTP
+- **Automatic reconnection** on connection loss
+- **Efficient one-way** server→client streaming
+- For bidirectional needs, clients should use gRPC gate
 
 ---
 
 ## Future Enhancements
 
-- **Server-Sent Events (SSE)** - Real-time push messaging
 - **Authentication middleware** - JWT, API keys
 - **Rate limiting** - Per-client request throttling
-- **CORS configuration** - For browser-based clients
 - **OpenAPI/Swagger spec** - API documentation generation
 - **GraphQL API** - Alternative to REST for complex queries
 
@@ -345,6 +383,6 @@ The HTTP gate provides a REST API for Goverse object operations:
 | Create objects | ✅ Implemented |
 | Delete objects | ✅ Implemented |
 | Prometheus metrics | ✅ Implemented |
-| Push messaging (SSE) | ❌ Not yet implemented |
+| Push messaging (SSE) | ✅ Implemented |
 
 The implementation uses protobuf `Any` encoding for type safety and shares the same cluster infrastructure as the gRPC gate, ensuring consistency between HTTP and gRPC clients.
