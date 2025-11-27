@@ -1,0 +1,142 @@
+name: Test TicTacToe Server
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+        
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  test-tictactoe:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '>=1.21'
+      
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
+      - name: Install Go protobuf plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      
+      - name: Compile protobuf files
+        run: |
+          chmod +x ./script/compile-proto.sh
+          ./script/compile-proto.sh
+      
+      - name: Tidy Go modules
+        run: go mod tidy
+      
+      - name: Install and start etcd
+        run: |
+          sudo apt-get install -y etcd-server
+          sudo systemctl start etcd
+          sudo systemctl status etcd --no-pager
+          # Wait for etcd to be ready
+          for i in {1..10}; do
+            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
+              echo "etcd is ready"
+              break
+            fi
+            echo "Waiting for etcd to start... ($i/10)"
+            sleep 1
+          done
+
+      - name: Create coverage directory
+        run: mkdir -p /tmp/coverage
+      
+      - name: Run tictactoe server test with coverage
+        env:
+          GOCOVERDIR: /tmp/coverage
+          ENABLE_COVERAGE: "true"
+        run: |
+          python3 tests/integration/tictactoe/test_tictactoe.py
+      
+      - name: Convert coverage data to text format
+        run: |
+          # We collect runtime coverage under a single directory (/tmp/coverage),
+          # so we can convert it directly without a merge step.
+          if [ -d /tmp/coverage ]; then
+            go tool covdata textfmt -i=/tmp/coverage -o=coverage-tictactoe.out
+          else
+            echo "No coverage data found at /tmp/coverage"; exit 0;
+          fi
+
+      - name: Upload coverage to Codecov
+        if: ${{ hashFiles('coverage-tictactoe.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-tictactoe.out
+          flags: tictactoe-integration
+          name: tictactoe-integration
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-tictactoe-race:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '>=1.21'
+      
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
+      - name: Install Go protobuf plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      
+      - name: Compile protobuf files
+        run: |
+          chmod +x ./script/compile-proto.sh
+          ./script/compile-proto.sh
+      
+      - name: Tidy Go modules
+        run: go mod tidy
+      
+      - name: Install and start etcd
+        run: |
+          sudo apt-get install -y etcd-server
+          sudo systemctl start etcd
+          sudo systemctl status etcd --no-pager
+          # Wait for etcd to be ready
+          for i in {1..10}; do
+            if curl -s http://localhost:2379/health > /dev/null 2>&1; then
+              echo "etcd is ready"
+              break
+            fi
+            echo "Waiting for etcd to start... ($i/10)"
+            sleep 1
+          done
+      
+      - name: Run tictactoe server test with race detector
+        env:
+          ENABLE_RACE: "true"
+        run: |
+          python3 tests/integration/tictactoe/test_tictactoe.py
