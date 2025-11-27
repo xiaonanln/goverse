@@ -24,7 +24,6 @@ jobs:
         uses: ./.github/actions/setup-test-env
         with:
           enable-postgres: 'false'
-          enable-py-grpc: 'true'
 
       - name: Create coverage directory
         run: mkdir -p /tmp/coverage
@@ -110,7 +109,6 @@ jobs:
         uses: ./.github/actions/setup-test-env
         with:
           enable-postgres: 'false'
-          enable-py-grpc: 'true'
       
       - name: Run chat client/server test with race detector
         env:
@@ -129,7 +127,6 @@ jobs:
         uses: ./.github/actions/setup-test-env
         with:
           enable-postgres: 'false'
-          enable-py-grpc: 'true'
 
       - name: Create coverage directory
         run: mkdir -p /tmp/coverage
@@ -172,7 +169,6 @@ jobs:
         uses: ./.github/actions/setup-test-env
         with:
           enable-postgres: 'false'
-          enable-py-grpc: 'true'
       
       - name: Run tictactoe server test with race detector
         env:
