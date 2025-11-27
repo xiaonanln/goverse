@@ -117,7 +117,8 @@ High-level objectives for future development:
 - **Client reconnection & backoff** - Automatic retry logic with exponential backoff
 
 ### Performance & Scalability
-- **Configurable shard count** - Move beyond fixed 8192 shards for extreme scale
+- ~~**Configurable shard count** - Move beyond fixed 8192 shards for extreme scale~~ ✅ Done
+- **Runtime shard count reconfiguration** - Allow dynamic shard count changes without cluster restart
 
 ### Observability & Operations
 - **Enhanced metrics & alerting** - More granular Prometheus metrics, SLO tracking
