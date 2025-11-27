@@ -70,7 +70,10 @@ func main() {
     // Create Counter object when cluster is ready
     go func() {
         <-goverseapi.ClusterReady()
-        goverseapi.CreateObject(context.Background(), "Counter", "my-counter")
+        _, err := goverseapi.CreateObject(context.Background(), "Counter", "my-counter")
+        if err != nil {
+            log.Printf("Failed to create counter: %v", err)
+        }
     }()
     
     server.Run(context.Background())
@@ -86,10 +89,9 @@ go run ./cmd/gate/ -http-listen=:8080
 
 ### 4. Access via HTTP
 
-```bash
-# Create an object
-curl -X POST http://localhost:8080/api/v1/objects/create/Counter/my-counter
+Once the node creates the `my-counter` object, you can call its methods via the gate's HTTP API:
 
+```bash
 # Call object method (increment by 5)
 curl -X POST http://localhost:8080/api/v1/objects/call/Counter/my-counter/Add \
   -H "Content-Type: application/json" \
