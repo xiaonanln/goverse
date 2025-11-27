@@ -117,7 +117,18 @@ jobs:
             exit 1
           fi
       
+      - name: Build tictactoe server
+        run: |
+          echo "Building tictactoe server..."
+          go build -o tictactoe-server.out ./samples/tictactoe/server
+          if [ -f "./tictactoe-server.out" ]; then
+            echo "✅ Tictactoe server binary built successfully"
+          else
+            echo "❌ Tictactoe server binary not found"
+            exit 1
+          fi
+      
       - name: List all build artifacts
         run: |
           echo "Build completed! Generated binaries:"
-          ls -la inspector* gate* server* client* 2>/dev/null || echo "No binaries found matching pattern"
+          ls -la inspector* gate* server* client* tictactoe* 2>/dev/null || echo "No binaries found matching pattern"
