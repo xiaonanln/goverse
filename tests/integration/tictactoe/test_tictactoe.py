@@ -82,8 +82,14 @@ def create_new_game_request(game_id):
     """Create a NewGameRequest protobuf wrapped in Any, base64 encoded.
     
     NewGameRequest: game_id (string, field 1)
+    
+    Note: This simplified encoder assumes lengths fit in a single byte (<128).
+    This is sufficient for test game IDs which are typically short (e.g., 'test-abc123-1234567890').
     """
     game_id_bytes = game_id.encode('utf-8')
+    if len(game_id_bytes) >= 128:
+        raise ValueError(f"Game ID too long ({len(game_id_bytes)} bytes), must be < 128 bytes")
+    
     # Build NewGameRequest protobuf
     req_bytes = bytes([
         0x0A,  # field 1, wire type 2 (length-delimited): (1 << 3) | 2 = 10
@@ -109,6 +115,9 @@ def parse_game_state_response(response_base64):
     """Parse the GameState from a base64-encoded Any response.
     
     Returns a dict with game_id, board, status, winner, last_ai_move.
+    
+    Note: This simplified decoder assumes field lengths fit in a single byte (<128).
+    This is sufficient for TicTacToe game states where all fields are short strings.
     """
     response_bytes = base64.b64decode(response_base64)
     
@@ -164,9 +173,10 @@ def parse_game_state_response(response_base64):
             # board (repeated string)
             length = value[offset]
             offset += 1
-            if length > 0:
-                board[board_index] = value[offset:offset + length].decode('utf-8')
-            board_index += 1
+            if board_index < 9:  # Protect against index out of bounds
+                if length > 0:
+                    board[board_index] = value[offset:offset + length].decode('utf-8')
+                board_index += 1
             offset += length
         elif field_number == 3 and wire_type == 2:
             # status (string)
