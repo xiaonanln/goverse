@@ -424,6 +424,7 @@ func TestWriteSSEEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 
+			// httptest.ResponseRecorder implements both http.ResponseWriter and http.Flusher
 			err := gs.writeSSEEvent(w, w, tt.eventType, tt.data)
 			if err != nil {
 				t.Fatalf("writeSSEEvent failed: %v", err)
