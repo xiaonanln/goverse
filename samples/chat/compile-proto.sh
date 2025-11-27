@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Common protoc options for Go
-PROTOC_OPTS="--go_out=. --go_opt=paths=source_relative"
+PROTOC_OPTS="--go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative"
 
 echo "Compiling chat proto files..."
 
@@ -27,6 +27,7 @@ if command -v python3 &> /dev/null; then
     if python3 -m grpc_tools.protoc \
         -I. \
         --python_out=. \
+        --grpc_python_out=. \
         proto/chat.proto 2>&1; then
         echo "  ✅ Python proto files generated for proto/chat.proto"
     else
