@@ -11,6 +11,7 @@ echo
 
 ./script/compile-proto.sh
 ./samples/chat/compile-proto.sh
+./samples/tictactoe/compile-proto.sh
 
 echo
 echo "Running Go unit tests..."
