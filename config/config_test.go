@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -272,7 +273,7 @@ func TestConfigValidation(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected error but got nil")
 				}
-				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
 				}
 			} else {
@@ -282,19 +283,6 @@ func TestConfigValidation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestGetNodeByID(t *testing.T) {
