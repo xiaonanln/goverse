@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/xiaonanln/goverse/config"
-	"github.com/xiaonanln/goverse/goverseapi"
+	"github.com/xiaonanln/goverse/server"
 )
 
 const (
@@ -52,7 +52,7 @@ func NewLoader(fs *flag.FlagSet) *Loader {
 // When --config is provided, only --node-id is allowed; other flags are forbidden.
 // When --config is not provided, CLI flags are used and --node-id defaults to advertise address.
 // Returns an error if configuration is invalid.
-func (l *Loader) Load(args []string) (*goverseapi.ServerConfig, error) {
+func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 	if !l.fs.Parsed() {
 		if err := l.fs.Parse(args); err != nil {
 			return nil, fmt.Errorf("failed to parse flags: %w", err)
@@ -98,7 +98,7 @@ func (l *Loader) Load(args []string) (*goverseapi.ServerConfig, error) {
 			advertiseAddr = nodeCfg.GRPCAddr
 		}
 
-		return &goverseapi.ServerConfig{
+		return &server.ServerConfig{
 			ListenAddress:        listenAddr,
 			AdvertiseAddress:     advertiseAddr,
 			MetricsListenAddress: nodeCfg.HTTPAddr,
@@ -114,7 +114,7 @@ func (l *Loader) Load(args []string) (*goverseapi.ServerConfig, error) {
 		*l.nodeID = *l.advertiseAddr
 	}
 
-	return &goverseapi.ServerConfig{
+	return &server.ServerConfig{
 		ListenAddress:        *l.listenAddr,
 		AdvertiseAddress:     *l.advertiseAddr,
 		MetricsListenAddress: *l.httpListenAddr,
@@ -133,7 +133,7 @@ func (l *Loader) GetNodeID() string {
 // Get is a convenience function that creates a Loader with default flags,
 // parses os.Args[1:], and returns the ServerConfig.
 // It panics on error.
-func Get() *goverseapi.ServerConfig {
+func Get() *server.ServerConfig {
 	loader := NewLoader(nil)
 	cfg, err := loader.Load(os.Args[1:])
 	if err != nil {

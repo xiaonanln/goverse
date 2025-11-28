@@ -45,7 +45,7 @@ func main() {
 
 	log.Printf("Starting node on port %d with minimum quorum requirement: %d", *port, *minQuorum)
 
-	server, err := goverseapi.NewServer(config)
+	server, err := goverseapi.NewServerWithConfig(config)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
