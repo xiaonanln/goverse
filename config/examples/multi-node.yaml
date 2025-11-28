@@ -1,0 +1,40 @@
+# GoVerse Multi-Node Production Configuration
+#
+# This configuration demonstrates a production setup with:
+# - Multiple etcd endpoints for high availability
+# - Two nodes for distributed object hosting
+# - One gate for client connections
+#
+# Notes:
+# - Replace endpoint and address values with your actual infrastructure.
+# - Ensure advertise_addr values are reachable from other nodes.
+# - Keep secrets (if any) in separate files or environment variables.
+#
+# See docs/config-design.md for full schema documentation.
+
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-1.prod.local:2379"
+      - "etcd-2.prod.local:2379"
+      - "etcd-3.prod.local:2379"
+    prefix: "/goverse/production"
+
+nodes:
+  - id: "node-a"
+    grpc_addr: "10.0.1.10:50051"
+    advertise_addr: "node-a.cluster.example.com:50051"
+    http_addr: "10.0.1.10:8080"
+
+  - id: "node-b"
+    grpc_addr: "10.0.1.11:50051"
+    advertise_addr: "node-b.cluster.example.com:50051"
+    http_addr: "10.0.1.11:8080"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "10.0.2.10:60051"

@@ -431,3 +431,57 @@ func TestGetNumShards(t *testing.T) {
 		t.Errorf("expected 8192, got %d", shards)
 	}
 }
+
+func TestLoadExampleConfigs(t *testing.T) {
+	tests := []struct {
+		name           string
+		file           string
+		expectedNodes  int
+		expectedGates  int
+		expectedShards int
+	}{
+		{
+			name:           "single-node",
+			file:           "examples/single-node.yaml",
+			expectedNodes:  1,
+			expectedGates:  0,
+			expectedShards: 8192,
+		},
+		{
+			name:           "multi-node",
+			file:           "examples/multi-node.yaml",
+			expectedNodes:  2,
+			expectedGates:  1,
+			expectedShards: 8192,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := LoadConfig(tt.file)
+			if err != nil {
+				t.Fatalf("LoadConfig(%s) failed: %v", tt.file, err)
+			}
+
+			if len(cfg.Nodes) != tt.expectedNodes {
+				t.Errorf("expected %d nodes, got %d", tt.expectedNodes, len(cfg.Nodes))
+			}
+
+			if len(cfg.Gates) != tt.expectedGates {
+				t.Errorf("expected %d gates, got %d", tt.expectedGates, len(cfg.Gates))
+			}
+
+			if cfg.Cluster.Shards != tt.expectedShards {
+				t.Errorf("expected %d shards, got %d", tt.expectedShards, cfg.Cluster.Shards)
+			}
+
+			if cfg.Version != 1 {
+				t.Errorf("expected version 1, got %d", cfg.Version)
+			}
+
+			if cfg.Cluster.Provider != "etcd" {
+				t.Errorf("expected provider etcd, got %s", cfg.Cluster.Provider)
+			}
+		})
+	}
+}
