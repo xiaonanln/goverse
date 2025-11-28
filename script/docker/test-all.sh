@@ -1,11 +1,11 @@
 #!/bin/bash
-# Run chat integration tests inside Docker container
+# Run all integration tests inside Docker container
 # This script is meant to be run inside the xiaonanln/goverse:dev container
 
 set -euo pipefail
 
 echo "========================================"
-echo "Starting Chat Integration Tests"
+echo "Starting Integration Tests"
 echo "========================================"
 echo
 
@@ -41,8 +41,26 @@ export GOCOVERDIR=/tmp/coverage
 # Create coverage directory
 mkdir -p "$GOCOVERDIR"
 
-# Run the test
+# Run the counter sample test first
 TEST_EXIT_CODE=0
+echo "Running counter sample tests..."
+if ! python3 tests/samples/counter/test_counter.py; then
+    TEST_EXIT_CODE=$?
+    echo
+    echo "========================================"
+    echo "✗ Counter sample tests failed with exit code $TEST_EXIT_CODE"
+    echo "========================================"
+    # Clean up and exit early
+    if [ -d "/app/default.etcd" ]; then
+        rm -rf /app/default.etcd || true
+    fi
+    exit $TEST_EXIT_CODE
+fi
+echo "✓ Counter sample tests passed"
+echo
+
+# Run the chat sample test
+echo "Running chat sample tests..."
 if python3 tests/samples/chat/test_chat.py "$@"; then
     echo
     echo "========================================"
@@ -52,7 +70,7 @@ else
     TEST_EXIT_CODE=$?
     echo
     echo "========================================"
-    echo "✗ Tests failed with exit code $TEST_EXIT_CODE"
+    echo "✗ Chat sample tests failed with exit code $TEST_EXIT_CODE"
     echo "========================================"
 fi
 
