@@ -20,6 +20,16 @@ type EtcdConfig struct {
 	Prefix    string   `yaml:"prefix"`
 }
 
+// PostgresConfig holds PostgreSQL database connection configuration
+type PostgresConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
+	SSLMode  string `yaml:"sslmode"` // Use "require" in production
+}
+
 // NodeConfig holds configuration for a single node
 type NodeConfig struct {
 	ID            string `yaml:"id"`
@@ -36,10 +46,11 @@ type GateConfig struct {
 
 // Config is the root configuration structure
 type Config struct {
-	Version int           `yaml:"version"`
-	Cluster ClusterConfig `yaml:"cluster"`
-	Nodes   []NodeConfig  `yaml:"nodes"`
-	Gates   []GateConfig  `yaml:"gates"`
+	Version  int            `yaml:"version"`
+	Cluster  ClusterConfig  `yaml:"cluster"`
+	Postgres PostgresConfig `yaml:"postgres"`
+	Nodes    []NodeConfig   `yaml:"nodes"`
+	Gates    []GateConfig   `yaml:"gates"`
 }
 
 // LoadConfig loads configuration from a YAML file

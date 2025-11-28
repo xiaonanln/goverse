@@ -19,6 +19,14 @@ cluster:
       - "127.0.0.1:2379"
     prefix: "/goverse"
 
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "goverse"
+  password: "goverse"
+  database: "goverse"
+  sslmode: "disable"
+
 nodes:
   - id: "node-1"
     grpc_addr: "0.0.0.0:9101"
@@ -63,6 +71,26 @@ gates:
 
 	if cfg.Cluster.Etcd.Prefix != "/goverse" {
 		t.Errorf("expected prefix /goverse, got %s", cfg.Cluster.Etcd.Prefix)
+	}
+
+	// Validate postgres config
+	if cfg.Postgres.Host != "localhost" {
+		t.Errorf("expected postgres host localhost, got %s", cfg.Postgres.Host)
+	}
+	if cfg.Postgres.Port != 5432 {
+		t.Errorf("expected postgres port 5432, got %d", cfg.Postgres.Port)
+	}
+	if cfg.Postgres.User != "goverse" {
+		t.Errorf("expected postgres user goverse, got %s", cfg.Postgres.User)
+	}
+	if cfg.Postgres.Password != "goverse" {
+		t.Errorf("expected postgres password goverse, got %s", cfg.Postgres.Password)
+	}
+	if cfg.Postgres.Database != "goverse" {
+		t.Errorf("expected postgres database goverse, got %s", cfg.Postgres.Database)
+	}
+	if cfg.Postgres.SSLMode != "disable" {
+		t.Errorf("expected postgres sslmode disable, got %s", cfg.Postgres.SSLMode)
 	}
 
 	if len(cfg.Nodes) != 2 {
