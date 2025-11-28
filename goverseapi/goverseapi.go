@@ -5,6 +5,7 @@ import (
 
 	"github.com/xiaonanln/goverse/client"
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/cmd/node/nodeconfig"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/server"
@@ -21,7 +22,41 @@ type BaseObject = object.BaseObject
 type BaseClient = client.BaseClient
 type Cluster = cluster.Cluster
 
-func NewServer(config *ServerConfig) (*Server, error) {
+// NewServer creates a Server using command-line flags.
+// This is the recommended way to create a server in applications.
+// This is a convenience wrapper around nodeconfig.Get() and NewServerWithConfig().
+//
+// Supports both CLI flags and config file modes:
+//
+// CLI mode:
+//
+//	go run . --listen :47000 --advertise localhost:47000 --etcd localhost:2379
+//
+// Config file mode:
+//
+//	go run . --config config.yaml --node-id node1
+//
+// Available flags:
+//   - --listen: Node listen address (default: :48000)
+//   - --advertise: Node advertise address (default: localhost:48000)
+//   - --http-listen: HTTP listen address for metrics
+//   - --etcd: Etcd address (default: localhost:2379)
+//   - --etcd-prefix: Etcd key prefix (default: /goverse)
+//   - --config: Path to YAML config file
+//   - --node-id: Node ID (required with --config)
+//
+// Panics on configuration errors or server creation failures.
+func NewServer() *Server {
+	config := nodeconfig.Get()
+	server, err := NewServerWithConfig(config)
+	if err != nil {
+		panic(err)
+	}
+	return server
+}
+
+// NewServerWithConfig creates a Server with the given configuration.
+func NewServerWithConfig(config *ServerConfig) (*Server, error) {
 	return server.NewServer(config)
 }
 

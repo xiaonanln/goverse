@@ -198,7 +198,7 @@ func main() {
         AdvertiseAddress: "localhost:47000",
     }
     
-    server, err := goverseapi.NewServer(config)
+    server, err := goverseapi.NewServerWithConfig(config)
     if err != nil {
         panic(err)
     }
@@ -298,10 +298,10 @@ func (room *ChatRoom) SendMessage(ctx context.Context, req *chat_pb.ChatRoom_Sen
 ```go
 func main() {
     config := &goverseapi.ServerConfig{
-        ListenAddress:       "localhost:47000",
-        AdvertiseAddress:    "localhost:47000",
+        ListenAddress:    "localhost:47000",
+        AdvertiseAddress: "localhost:47000",
     }
-    server, err := goverseapi.NewServer(config)
+    server, err := goverseapi.NewServerWithConfig(config)
     if err != nil {
         panic(err)
     }
@@ -425,7 +425,7 @@ config := &goverseapi.ServerConfig{
     MinQuorum:        3, // Require at least 3 nodes before cluster is ready
 }
 
-server, err := goverseapi.NewServer(config)
+server, err := goverseapi.NewServerWithConfig(config)
 ```
 
 **Key Points:**
@@ -458,7 +458,7 @@ config := &goverseapi.ServerConfig{
     NodeStabilityDuration: 5 * time.Second, // Wait 5s for stability (default: 10s)
 }
 
-server, err := goverseapi.NewServer(config)
+server, err := goverseapi.NewServerWithConfig(config)
 ```
 
 **Key Points:**

@@ -25,7 +25,7 @@ func main() {
 	}
 
 	// Create and run the server
-	server, err := goverseapi.NewServer(config)
+	server, err := goverseapi.NewServerWithConfig(config)
 	if err != nil {
 		panic(err)
 	}
