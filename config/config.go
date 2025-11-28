@@ -75,6 +75,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("unsupported cluster provider: %s (only 'etcd' is supported)", c.Cluster.Provider)
 	}
 
+	if c.Cluster.Shards <= 0 {
+		return fmt.Errorf("cluster shards must be specified and positive")
+	}
+
 	if len(c.Cluster.Etcd.Endpoints) == 0 {
 		return fmt.Errorf("at least one etcd endpoint is required")
 	}
@@ -154,10 +158,7 @@ func (c *Config) GetEtcdPrefix() string {
 	return c.Cluster.Etcd.Prefix
 }
 
-// GetNumShards returns the number of shards, defaulting to 8192 if not specified
+// GetNumShards returns the number of shards
 func (c *Config) GetNumShards() int {
-	if c.Cluster.Shards <= 0 {
-		return 8192
-	}
 	return c.Cluster.Shards
 }
