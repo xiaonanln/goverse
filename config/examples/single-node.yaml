@@ -1,0 +1,24 @@
+# GoVerse Single-Node Development Configuration
+#
+# This configuration is suitable for local development with a single node.
+# Requires etcd running on localhost:2379.
+#
+# See docs/config-design.md for full schema documentation.
+
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "dev-node"
+    grpc_addr: "127.0.0.1:50051"
+    advertise_addr: "127.0.0.1:50051"
+    http_addr: "127.0.0.1:8080"
+
+gates: []
