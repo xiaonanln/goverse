@@ -40,8 +40,10 @@ type NodeConfig struct {
 
 // GateConfig holds configuration for a single gate
 type GateConfig struct {
-	ID       string `yaml:"id"`
-	GRPCAddr string `yaml:"grpc_addr"`
+	ID            string `yaml:"id"`
+	GRPCAddr      string `yaml:"grpc_addr"`
+	AdvertiseAddr string `yaml:"advertise_addr"`
+	HTTPAddr      string `yaml:"http_addr"`
 }
 
 // Config is the root configuration structure
