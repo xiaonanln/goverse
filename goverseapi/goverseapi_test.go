@@ -4,31 +4,31 @@ import (
 	"testing"
 )
 
-func TestNewServer(t *testing.T) {
+func TestNewServerWithConfig(t *testing.T) {
 	config := &ServerConfig{
 		ListenAddress:    "localhost:7070",
 		AdvertiseAddress: "localhost:7070",
 	}
 
-	server, err := NewServer(config)
+	server, err := NewServerWithConfig(config)
 	if err != nil {
-		t.Fatalf("NewServer failed: %v", err)
+		t.Fatalf("NewServerWithConfig failed: %v", err)
 	}
 
 	if server == nil {
-		t.Fatal("NewServer should return a server instance")
+		t.Fatal("NewServerWithConfig should return a server instance")
 	}
 }
 
-func TestNewServer_InvalidConfig(t *testing.T) {
+func TestNewServerWithConfig_InvalidConfig(t *testing.T) {
 	// Test with nil config - should return error
-	_, err := NewServer(nil)
+	_, err := NewServerWithConfig(nil)
 	if err == nil {
-		t.Fatal("NewServer with nil config should return error")
+		t.Fatal("NewServerWithConfig with nil config should return error")
 	}
 	expectedMsg := "invalid server configuration: config cannot be nil"
 	if err.Error() != expectedMsg {
-		t.Fatalf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("NewServerWithConfig error = %v; want %v", err.Error(), expectedMsg)
 	}
 
 	// Test with empty ListenAddress - should return error
@@ -36,13 +36,13 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 		ListenAddress:    "",
 		AdvertiseAddress: "localhost:7072",
 	}
-	_, err = NewServer(config)
+	_, err = NewServerWithConfig(config)
 	if err == nil {
-		t.Fatal("NewServer with empty ListenAddress should return error")
+		t.Fatal("NewServerWithConfig with empty ListenAddress should return error")
 	}
 	expectedMsg = "invalid server configuration: ListenAddress cannot be empty"
 	if err.Error() != expectedMsg {
-		t.Fatalf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("NewServerWithConfig error = %v; want %v", err.Error(), expectedMsg)
 	}
 
 	// Test with empty AdvertiseAddress - should return error
@@ -50,13 +50,13 @@ func TestNewServer_InvalidConfig(t *testing.T) {
 		ListenAddress:    "localhost:7074",
 		AdvertiseAddress: "",
 	}
-	_, err = NewServer(config)
+	_, err = NewServerWithConfig(config)
 	if err == nil {
-		t.Fatal("NewServer with empty AdvertiseAddress should return error")
+		t.Fatal("NewServerWithConfig with empty AdvertiseAddress should return error")
 	}
 	expectedMsg = "invalid server configuration: AdvertiseAddress cannot be empty"
 	if err.Error() != expectedMsg {
-		t.Fatalf("NewServer error = %v; want %v", err.Error(), expectedMsg)
+		t.Fatalf("NewServerWithConfig error = %v; want %v", err.Error(), expectedMsg)
 	}
 }
 
