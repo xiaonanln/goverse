@@ -12,16 +12,23 @@ import (
 	"github.com/xiaonanln/goverse/gate/gateserver"
 )
 
+const (
+	defaultListenAddr    = ":49000"
+	defaultAdvertiseAddr = "localhost:49000"
+	defaultEtcdAddr      = "localhost:2379"
+	defaultEtcdPrefix    = "/goverse"
+)
+
 func main() {
 	// Parse command line flags
 	var (
 		configPath     = flag.String("config", "", "Path to YAML config file")
 		gateID         = flag.String("gate-id", "", "Gate ID (required if config is provided)")
-		listenAddr     = flag.String("listen", ":49000", "Gate listen address")
-		advertiseAddr  = flag.String("advertise", "localhost:49000", "Gate advertise address")
+		listenAddr     = flag.String("listen", defaultListenAddr, "Gate listen address")
+		advertiseAddr  = flag.String("advertise", defaultAdvertiseAddr, "Gate advertise address")
 		httpListenAddr = flag.String("http-listen", "", "HTTP listen address for REST API and metrics (optional, e.g., ':8080')")
-		etcdAddr       = flag.String("etcd", "localhost:2379", "Etcd address")
-		etcdPrefix     = flag.String("etcd-prefix", "/goverse", "Etcd key prefix")
+		etcdAddr       = flag.String("etcd", defaultEtcdAddr, "Etcd address")
+		etcdPrefix     = flag.String("etcd-prefix", defaultEtcdPrefix, "Etcd key prefix")
 	)
 	flag.Parse()
 
@@ -40,10 +47,10 @@ func main() {
 			log.Fatalf("Failed to find gate config: %v", err)
 		}
 		// Use config values, with flags as overrides only if they differ from defaults
-		if *listenAddr == ":49000" {
+		if *listenAddr == defaultListenAddr {
 			*listenAddr = gateCfg.GRPCAddr
 		}
-		if *advertiseAddr == "localhost:49000" {
+		if *advertiseAddr == defaultAdvertiseAddr {
 			if gateCfg.AdvertiseAddr != "" {
 				*advertiseAddr = gateCfg.AdvertiseAddr
 			} else {
@@ -53,10 +60,10 @@ func main() {
 		if *httpListenAddr == "" && gateCfg.HTTPAddr != "" {
 			*httpListenAddr = gateCfg.HTTPAddr
 		}
-		if *etcdAddr == "localhost:2379" {
+		if *etcdAddr == defaultEtcdAddr {
 			*etcdAddr = cfg.GetEtcdAddress()
 		}
-		if *etcdPrefix == "/goverse" {
+		if *etcdPrefix == defaultEtcdPrefix {
 			*etcdPrefix = cfg.GetEtcdPrefix()
 		}
 		numShards = cfg.GetNumShards()
