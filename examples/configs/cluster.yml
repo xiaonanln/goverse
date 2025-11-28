@@ -1,0 +1,46 @@
+# GoVerse cluster configuration example
+# 
+# This configuration file demonstrates a typical multi-node GoVerse cluster setup.
+# You can start a node using: goverse-node --config cluster.yml --node-id node-1
+
+version: 1
+
+cluster:
+  # Number of shards in the cluster (same for all nodes/gates).
+  # Default: 8192
+  shards: 8192
+
+  # Cluster metadata / consensus provider.
+  # Currently only "etcd" is supported.
+  provider: "etcd"
+
+  etcd:
+    # Etcd endpoints, no scheme, just host:port.
+    endpoints:
+      - "127.0.0.1:2379"
+
+    # Etcd key prefix for this GoVerse cluster.
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+  - id: "node-2"
+    grpc_addr: "0.0.0.0:9102"
+    advertise_addr: "node-2.local:9102"
+    http_addr: "0.0.0.0:8102"
+
+  - id: "node-3"
+    grpc_addr: "0.0.0.0:9103"
+    advertise_addr: "node-3.local:9103"
+    http_addr: "0.0.0.0:8103"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "0.0.0.0:10001"
+
+  - id: "gate-2"
+    grpc_addr: "0.0.0.0:10002"
