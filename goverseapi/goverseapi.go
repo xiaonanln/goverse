@@ -5,8 +5,8 @@ import (
 
 	"github.com/xiaonanln/goverse/client"
 	"github.com/xiaonanln/goverse/cluster"
-	"github.com/xiaonanln/goverse/cmd/node/nodeconfig"
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/node/nodeconfig"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/server"
 	"github.com/xiaonanln/goverse/util/callcontext"
