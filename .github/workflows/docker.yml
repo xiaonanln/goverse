@@ -48,7 +48,6 @@ jobs:
   
   test-in-docker-dev:
     runs-on: ubuntu-latest
-    needs: build-dev
     
     steps:
       - name: Checkout code
