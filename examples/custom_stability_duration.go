@@ -33,7 +33,7 @@ func main() {
 	}
 
 	// Create the server
-	server, err := goverseapi.NewServer(config)
+	server, err := goverseapi.NewServerWithConfig(config)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}

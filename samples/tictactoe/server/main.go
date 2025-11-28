@@ -42,7 +42,7 @@ func main() {
 			ListenAddress:    *nodeAddr,
 			AdvertiseAddress: *nodeAddr,
 		}
-		server, err := goverseapi.NewServer(config)
+		server, err := goverseapi.NewServerWithConfig(config)
 		if err != nil {
 			serverLogger.Errorf("Failed to create server: %v", err)
 			cancel()
