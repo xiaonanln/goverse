@@ -17,12 +17,14 @@ import (
 var serverLogger = logger.NewLogger("TicTacToeServer")
 
 func main() {
+	// Gate-specific flags (node uses standard goverseapi flags)
 	var (
-		nodeAddr = flag.String("node-addr", "localhost:50051", "Node listen/advertise address")
 		gateAddr = flag.String("gate-addr", "localhost:49000", "Gate gRPC listen address")
 		httpAddr = flag.String("http-addr", ":8080", "HTTP listen address for REST API")
 	)
-	flag.Parse()
+
+	// Create the server (this parses flags internally)
+	server := goverseapi.NewServer()
 
 	// Set up signal handling for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -32,30 +34,18 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	serverLogger.Infof("Starting TicTacToe server...")
-	serverLogger.Infof("  Node address: %s", *nodeAddr)
 	serverLogger.Infof("  Gate address: %s", *gateAddr)
 	serverLogger.Infof("  HTTP address: %s", *httpAddr)
 
 	// Start the node server in a goroutine
 	go func() {
-		config := &goverseapi.ServerConfig{
-			ListenAddress:    *nodeAddr,
-			AdvertiseAddress: *nodeAddr,
-		}
-		server, err := goverseapi.NewServerWithConfig(config)
-		if err != nil {
-			serverLogger.Errorf("Failed to create server: %v", err)
-			cancel()
-			return
-		}
-
 		// Register TicTacToeService object type
 		goverseapi.RegisterObjectType((*TicTacToeService)(nil))
 
 		// Keep service objects running
 		go ensureServiceObjects(ctx)
 
-		err = server.Run(ctx)
+		err := server.Run(ctx)
 		if err != nil {
 			serverLogger.Errorf("Server error: %v", err)
 			cancel()

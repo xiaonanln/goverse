@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 
 	"github.com/xiaonanln/goverse/goverseapi"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -11,28 +10,12 @@ import (
 var serverLogger = logger.NewLogger("CounterServer")
 
 func main() {
-	var (
-		listenAddr        = flag.String("listen", "localhost:47000", "Server listen address")
-		advertiseAddr     = flag.String("advertise", "localhost:47000", "Server advertise address")
-		metricsListenAddr = flag.String("metrics-listen", "localhost:9100", "Metrics listen address")
-	)
-	flag.Parse()
-
-	config := &goverseapi.ServerConfig{
-		ListenAddress:        *listenAddr,
-		AdvertiseAddress:     *advertiseAddr,
-		MetricsListenAddress: *metricsListenAddr,
-	}
-
-	// Create and run the server
-	server, err := goverseapi.NewServerWithConfig(config)
-	if err != nil {
-		panic(err)
-	}
+	// Create and run the server using command-line flags
+	server := goverseapi.NewServer()
 
 	initializeCounterServer()
 
-	err = server.Run(context.Background())
+	err := server.Run(context.Background())
 	if err != nil {
 		panic(err)
 	}
