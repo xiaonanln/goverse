@@ -120,16 +120,55 @@ func TestConfigValidation(t *testing.T) {
 			name: "unsupported provider",
 			config: Config{
 				Version: 1,
-				Cluster: ClusterConfig{Provider: "consul"},
+				Cluster: ClusterConfig{Provider: "consul", Shards: 8192},
 			},
 			wantErr: true,
 			errMsg:  "unsupported cluster provider",
+		},
+		{
+			name: "missing shards",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "cluster shards must be specified",
+		},
+		{
+			name: "zero shards",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Shards:   0,
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "cluster shards must be specified",
+		},
+		{
+			name: "negative shards",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Shards:   -1,
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "cluster shards must be specified",
 		},
 		{
 			name: "missing etcd endpoints",
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Prefix: "/goverse"},
 				},
@@ -142,6 +181,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}},
 				},
@@ -154,6 +194,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -167,6 +208,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -183,6 +225,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -196,6 +239,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -209,6 +253,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -222,6 +267,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -238,6 +284,7 @@ func TestConfigValidation(t *testing.T) {
 			config: Config{
 				Version: 1,
 				Cluster: ClusterConfig{
+					Shards:   8192,
 					Provider: "etcd",
 					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
 				},
@@ -379,13 +426,8 @@ func TestGetNumShards(t *testing.T) {
 		t.Errorf("expected 4096, got %d", shards)
 	}
 
-	cfg.Cluster.Shards = 0
+	cfg.Cluster.Shards = 8192
 	if shards := cfg.GetNumShards(); shards != 8192 {
-		t.Errorf("expected default 8192, got %d", shards)
-	}
-
-	cfg.Cluster.Shards = -1
-	if shards := cfg.GetNumShards(); shards != 8192 {
-		t.Errorf("expected default 8192, got %d", shards)
+		t.Errorf("expected 8192, got %d", shards)
 	}
 }
