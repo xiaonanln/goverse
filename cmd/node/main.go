@@ -23,6 +23,7 @@ func main() {
 		metricsAddr   = flag.String("metrics", "", "HTTP address for Prometheus metrics (optional, e.g., ':9090')")
 		etcdAddr      = flag.String("etcd", "localhost:2379", "Etcd address")
 		etcdPrefix    = flag.String("etcd-prefix", "/goverse", "Etcd key prefix")
+		numShards     = flag.Int("shards", 8192, "Number of shards in the cluster")
 	)
 	flag.Parse()
 
@@ -69,6 +70,7 @@ func main() {
 			MetricsListenAddress: *metricsAddr,
 			EtcdAddress:          *etcdAddr,
 			EtcdPrefix:           *etcdPrefix,
+			NumShards:            *numShards,
 		}
 
 		log.Printf("Starting node with direct configuration (listen: %s, advertise: %s)", *listenAddr, *advertiseAddr)
