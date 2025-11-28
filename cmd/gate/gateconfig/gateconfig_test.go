@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +36,11 @@ func TestLoaderWithCLIFlags(t *testing.T) {
 	if cfg.EtcdPrefix != "/myapp" {
 		t.Errorf("expected EtcdPrefix /myapp, got %s", cfg.EtcdPrefix)
 	}
+
+	// In CLI-only mode, gate-id should default to advertise address
+	if loader.GetGateID() != "myhost:50000" {
+		t.Errorf("expected GateID myhost:50000, got %s", loader.GetGateID())
+	}
 }
 
 func TestLoaderWithDefaults(t *testing.T) {
@@ -57,6 +63,31 @@ func TestLoaderWithDefaults(t *testing.T) {
 	}
 	if cfg.EtcdPrefix != DefaultEtcdPrefix {
 		t.Errorf("expected EtcdPrefix %s, got %s", DefaultEtcdPrefix, cfg.EtcdPrefix)
+	}
+
+	// In CLI-only mode with defaults, gate-id should default to advertise address
+	if loader.GetGateID() != DefaultAdvertiseAddr {
+		t.Errorf("expected GateID %s, got %s", DefaultAdvertiseAddr, loader.GetGateID())
+	}
+}
+
+func TestLoaderWithExplicitGateID(t *testing.T) {
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-gate-id", "my-custom-gate",
+		"-advertise", "myhost:50000",
+	}
+
+	_, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Explicit gate-id should be used
+	if loader.GetGateID() != "my-custom-gate" {
+		t.Errorf("expected GateID my-custom-gate, got %s", loader.GetGateID())
 	}
 }
 
@@ -124,7 +155,7 @@ gates:
 	}
 }
 
-func TestLoaderConfigFileWithCLIOverrides(t *testing.T) {
+func TestLoaderConfigFileWithCLIOverridesForbidden(t *testing.T) {
 	// Create a temp config file
 	configContent := `
 version: 1
@@ -154,32 +185,51 @@ gates:
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	loader := NewLoader(fs)
-
-	// CLI flags should override config file values
-	args := []string{
-		"-config", configPath,
-		"-gate-id", "gate-1",
-		"-listen", ":60000",
-		"-advertise", "override.local:60000",
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "listen flag with config",
+			args:    []string{"-config", configPath, "-gate-id", "gate-1", "-listen", ":60000"},
+			wantErr: "--listen cannot be used with --config",
+		},
+		{
+			name:    "advertise flag with config",
+			args:    []string{"-config", configPath, "-gate-id", "gate-1", "-advertise", "override.local:60000"},
+			wantErr: "--advertise cannot be used with --config",
+		},
+		{
+			name:    "http-listen flag with config",
+			args:    []string{"-config", configPath, "-gate-id", "gate-1", "-http-listen", ":8080"},
+			wantErr: "--http-listen cannot be used with --config",
+		},
+		{
+			name:    "etcd flag with config",
+			args:    []string{"-config", configPath, "-gate-id", "gate-1", "-etcd", "other:2379"},
+			wantErr: "--etcd cannot be used with --config",
+		},
+		{
+			name:    "etcd-prefix flag with config",
+			args:    []string{"-config", configPath, "-gate-id", "gate-1", "-etcd-prefix", "/other"},
+			wantErr: "--etcd-prefix cannot be used with --config",
+		},
 	}
 
-	cfg, err := loader.Load(args)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			loader := NewLoader(fs)
 
-	// These should be from CLI, not config file
-	if cfg.ListenAddress != ":60000" {
-		t.Errorf("expected ListenAddress :60000 (CLI override), got %s", cfg.ListenAddress)
-	}
-	if cfg.AdvertiseAddress != "override.local:60000" {
-		t.Errorf("expected AdvertiseAddress override.local:60000 (CLI override), got %s", cfg.AdvertiseAddress)
-	}
-	// These should be from config file
-	if cfg.EtcdAddress != "etcd-cluster:2379" {
-		t.Errorf("expected EtcdAddress etcd-cluster:2379, got %s", cfg.EtcdAddress)
+			_, err := loader.Load(tt.args)
+			if err == nil {
+				t.Fatalf("expected error but got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("expected error containing %q, got %q", tt.wantErr, err.Error())
+			}
+		})
 	}
 }
 
