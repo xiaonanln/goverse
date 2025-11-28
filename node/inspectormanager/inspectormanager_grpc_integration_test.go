@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
-	"github.com/xiaonanln/goverse/inspector"
+	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,7 +29,7 @@ func startTestInspectorServer(t *testing.T) (*grpc.Server, *graph.GoverseGraph, 
 
 	pg := graph.NewGoverseGraph()
 	grpcServer := grpc.NewServer()
-	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.NewService(pg))
+	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.New(pg))
 
 	// Start server in background
 	go func() {
@@ -328,7 +328,7 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 
 	pg = graph.NewGoverseGraph()
 	grpcServer = grpc.NewServer()
-	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.NewService(pg))
+	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.New(pg))
 
 	go func() {
 		if err := grpcServer.Serve(listener); err != nil {
@@ -621,7 +621,7 @@ func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
 
 	pg := graph.NewGoverseGraph()
 	grpcServer := grpc.NewServer()
-	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.NewService(pg))
+	inspector_pb.RegisterInspectorServiceServer(grpcServer, inspector.New(pg))
 
 	// Start server in background
 	go func() {

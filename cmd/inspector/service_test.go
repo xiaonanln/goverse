@@ -8,15 +8,19 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
-	"github.com/xiaonanln/goverse/inspector"
+	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
+	"github.com/xiaonanln/goverse/cmd/inspector/inspectserver"
+	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+type GoverseNode = models.GoverseNode
+
 func TestInspectorService_Ping(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := inspector.NewService(pg)
+	svc := inspector.New(pg)
 
 	resp, err := svc.Ping(context.Background(), &inspector_pb.Empty{})
 	if err != nil {
@@ -108,7 +112,7 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pg := graph.NewGoverseGraph()
-			svc := inspector.NewService(pg)
+			svc := inspector.New(pg)
 
 			// Register node if needed
 			if tt.registerNode {
@@ -216,7 +220,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pg := graph.NewGoverseGraph()
-			svc := inspector.NewService(pg)
+			svc := inspector.New(pg)
 
 			resp, err := svc.RegisterNode(context.Background(), tt.req)
 			if (err != nil) != tt.wantErr {
@@ -243,7 +247,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 
 func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := inspector.NewService(pg)
+	svc := inspector.New(pg)
 
 	// First registration with obj1 and obj2
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
@@ -285,7 +289,7 @@ func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 
 func TestInspectorService_UnregisterNode(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := inspector.NewService(pg)
+	svc := inspector.New(pg)
 
 	// Register a node first
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
@@ -332,7 +336,7 @@ func TestInspectorService_UnregisterNode(t *testing.T) {
 
 func TestCreateHTTPHandler(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	handler := CreateHTTPHandler(pg, "inspector/web")
+	handler := inspectserver.CreateHTTPHandler(pg, "inspector/web")
 
 	if handler == nil {
 		t.Fatal("CreateHTTPHandler() should not return nil")
@@ -373,7 +377,7 @@ func TestCreateHTTPHandler(t *testing.T) {
 
 	t.Run("graph endpoint returns populated data", func(t *testing.T) {
 		// Add a node
-		svc := inspector.NewService(pg)
+		svc := inspector.New(pg)
 		_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
 			AdvertiseAddress: "localhost:47000",
 			Objects: []*inspector_pb.Object{
@@ -415,7 +419,7 @@ func TestCreateHTTPHandler(t *testing.T) {
 func TestInspectorService_Integration(t *testing.T) {
 	// Integration test covering multiple operations
 	pg := graph.NewGoverseGraph()
-	svc := inspector.NewService(pg)
+	svc := inspector.New(pg)
 
 	// Test ping
 	_, err := svc.Ping(context.Background(), &inspector_pb.Empty{})
@@ -495,7 +499,7 @@ func TestInspectorService_Integration(t *testing.T) {
 
 func TestInspectorService_ShardIDPropagation(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := inspector.NewService(pg)
+	svc := inspector.New(pg)
 
 	// Register a node
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{
@@ -537,7 +541,7 @@ func TestInspectorService_ShardIDPropagation(t *testing.T) {
 
 func TestInspectorService_RegisterNode_WithShardIDs(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	svc := inspector.NewService(pg)
+	svc := inspector.New(pg)
 
 	// Register a node with objects that have shard IDs
 	_, err := svc.RegisterNode(context.Background(), &inspector_pb.RegisterNodeRequest{

@@ -18,15 +18,15 @@ import (
 type GoverseNode = models.GoverseNode
 type GoverseObject = models.GoverseObject
 
-// Service implements the inspector gRPC service
-type Service struct {
+// Inspector implements the inspector gRPC service and manages inspector logic
+type Inspector struct {
 	inspector_pb.UnimplementedInspectorServiceServer
 	pg *graph.GoverseGraph
 }
 
-// NewService creates a new inspector service
-func NewService(pg *graph.GoverseGraph) *Service {
-	return &Service{pg: pg}
+// New creates a new Inspector
+func New(pg *graph.GoverseGraph) *Inspector {
+	return &Inspector{pg: pg}
 }
 
 func randPos() (int, int) {
@@ -34,12 +34,12 @@ func randPos() (int, int) {
 }
 
 // Ping handles ping requests
-func (s *Service) Ping(ctx context.Context, req *inspector_pb.Empty) (*inspector_pb.Empty, error) {
+func (i *Inspector) Ping(ctx context.Context, req *inspector_pb.Empty) (*inspector_pb.Empty, error) {
 	return &inspector_pb.Empty{}, nil
 }
 
 // AddOrUpdateObject handles object addition/update requests
-func (s *Service) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOrUpdateObjectRequest) (*inspector_pb.Empty, error) {
+func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOrUpdateObjectRequest) (*inspector_pb.Empty, error) {
 	o := req.GetObject()
 	if o == nil || o.Id == "" {
 		return &inspector_pb.Empty{}, nil
@@ -47,7 +47,7 @@ func (s *Service) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOr
 
 	// Check if the node is registered
 	nodeAddress := req.GetNodeAddress()
-	if !s.pg.IsNodeRegistered(nodeAddress) {
+	if !i.pg.IsNodeRegistered(nodeAddress) {
 		return nil, status.Errorf(codes.NotFound, "node not registered")
 	}
 
@@ -63,12 +63,12 @@ func (s *Service) AddOrUpdateObject(ctx context.Context, req *inspector_pb.AddOr
 		GoverseNodeID: nodeAddress,
 		ShardID:       int(o.ShardId),
 	}
-	s.pg.AddOrUpdateObject(obj)
+	i.pg.AddOrUpdateObject(obj)
 	return &inspector_pb.Empty{}, nil
 }
 
 // RemoveObject handles object removal requests
-func (s *Service) RemoveObject(ctx context.Context, req *inspector_pb.RemoveObjectRequest) (*inspector_pb.Empty, error) {
+func (i *Inspector) RemoveObject(ctx context.Context, req *inspector_pb.RemoveObjectRequest) (*inspector_pb.Empty, error) {
 	objectID := req.GetObjectId()
 	if objectID == "" {
 		return &inspector_pb.Empty{}, nil
@@ -76,17 +76,17 @@ func (s *Service) RemoveObject(ctx context.Context, req *inspector_pb.RemoveObje
 
 	// Check if the node is registered
 	nodeAddress := req.GetNodeAddress()
-	if !s.pg.IsNodeRegistered(nodeAddress) {
+	if !i.pg.IsNodeRegistered(nodeAddress) {
 		return nil, status.Errorf(codes.NotFound, "node not registered")
 	}
 
-	s.pg.RemoveObject(objectID)
+	i.pg.RemoveObject(objectID)
 	log.Printf("Object removed: object_id=%s, node=%s", objectID, nodeAddress)
 	return &inspector_pb.Empty{}, nil
 }
 
 // RegisterNode handles node registration requests
-func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRequest) (*inspector_pb.RegisterNodeResponse, error) {
+func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRequest) (*inspector_pb.RegisterNodeResponse, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
 		log.Println("RegisterNode called with empty advertise address")
@@ -106,7 +106,7 @@ func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNo
 		AdvertiseAddr: addr,
 		RegisteredAt:  time.Now(),
 	}
-	s.pg.AddOrUpdateNode(node)
+	i.pg.AddOrUpdateNode(node)
 
 	currentObjIDs := make(map[string]struct{})
 	for _, o := range req.GetObjects() {
@@ -114,7 +114,7 @@ func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNo
 			currentObjIDs[o.Id] = struct{}{}
 		}
 	}
-	s.pg.RemoveStaleObjects(addr, req.GetObjects())
+	i.pg.RemoveStaleObjects(addr, req.GetObjects())
 
 	for _, o := range req.GetObjects() {
 		if o == nil || o.Id == "" {
@@ -132,7 +132,7 @@ func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNo
 			GoverseNodeID: addr,
 			ShardID:       int(o.ShardId),
 		}
-		s.pg.AddOrUpdateObject(obj)
+		i.pg.AddOrUpdateObject(obj)
 	}
 
 	log.Printf("Node registered: advertise_addr=%s", addr)
@@ -140,10 +140,10 @@ func (s *Service) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNo
 }
 
 // UnregisterNode handles node unregistration requests
-func (s *Service) UnregisterNode(ctx context.Context, req *inspector_pb.UnregisterNodeRequest) (*inspector_pb.Empty, error) {
+func (i *Inspector) UnregisterNode(ctx context.Context, req *inspector_pb.UnregisterNodeRequest) (*inspector_pb.Empty, error) {
 	addr := req.GetAdvertiseAddress()
 
-	s.pg.RemoveNode(addr)
+	i.pg.RemoveNode(addr)
 	log.Printf("Node unregistered: advertise_addr=%s", addr)
 	return &inspector_pb.Empty{}, nil
 }
