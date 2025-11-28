@@ -5,6 +5,7 @@ package gateconfig
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate/gateserver"
@@ -106,10 +107,10 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 
 // Get is a convenience function that creates a Loader with default flags,
 // parses os.Args[1:], and returns the GateServerConfig.
-// It calls log.Fatalf on error.
+// It panics on error.
 func Get() *gateserver.GateServerConfig {
 	loader := NewLoader(nil)
-	cfg, err := loader.Load(nil) // nil means flags are already parsed or use os.Args
+	cfg, err := loader.Load(os.Args[1:])
 	if err != nil {
 		panic(fmt.Sprintf("Failed to load gate config: %v", err))
 	}
