@@ -59,9 +59,13 @@ func TestInspectorEtcdRegistration(t *testing.T) {
 
 	// Clean up after the test
 	t.Cleanup(func() {
+		client := mgr.GetClient()
+		if client == nil {
+			return
+		}
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
-		_, _ = mgr.GetClient().Delete(cleanupCtx, prefix+"/", clientv3.WithPrefix())
+		_, _ = client.Delete(cleanupCtx, prefix+"/", clientv3.WithPrefix())
 	})
 
 	// Test registering inspector address
