@@ -2,85 +2,25 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/xiaonanln/goverse/config"
+	"github.com/xiaonanln/goverse/cmd/gate/gateconfig"
 	"github.com/xiaonanln/goverse/gate/gateserver"
 )
 
-const (
-	defaultListenAddr    = ":49000"
-	defaultAdvertiseAddr = "localhost:49000"
-	defaultEtcdAddr      = "localhost:2379"
-	defaultEtcdPrefix    = "/goverse"
-)
-
 func main() {
-	// Parse command line flags
-	var (
-		configPath     = flag.String("config", "", "Path to YAML config file")
-		gateID         = flag.String("gate-id", "", "Gate ID (required if config is provided)")
-		listenAddr     = flag.String("listen", defaultListenAddr, "Gate listen address")
-		advertiseAddr  = flag.String("advertise", defaultAdvertiseAddr, "Gate advertise address")
-		httpListenAddr = flag.String("http-listen", "", "HTTP listen address for REST API and metrics (optional, e.g., ':8080')")
-		etcdAddr       = flag.String("etcd", defaultEtcdAddr, "Etcd address")
-		etcdPrefix     = flag.String("etcd-prefix", defaultEtcdPrefix, "Etcd key prefix")
-	)
-	flag.Parse()
-
-	var numShards int
-	if *configPath != "" {
-		// Load config from file
-		cfg, err := config.LoadConfig(*configPath)
-		if err != nil {
-			log.Fatalf("Failed to load config: %v", err)
-		}
-		if *gateID == "" {
-			log.Fatalf("--gate-id is required when using --config")
-		}
-		gateCfg, err := cfg.GetGateByID(*gateID)
-		if err != nil {
-			log.Fatalf("Failed to find gate config: %v", err)
-		}
-		// Use config values, with flags as overrides only if they differ from defaults
-		if *listenAddr == defaultListenAddr {
-			*listenAddr = gateCfg.GRPCAddr
-		}
-		if *advertiseAddr == defaultAdvertiseAddr {
-			if gateCfg.AdvertiseAddr != "" {
-				*advertiseAddr = gateCfg.AdvertiseAddr
-			} else {
-				*advertiseAddr = gateCfg.GRPCAddr
-			}
-		}
-		if *httpListenAddr == "" && gateCfg.HTTPAddr != "" {
-			*httpListenAddr = gateCfg.HTTPAddr
-		}
-		if *etcdAddr == defaultEtcdAddr {
-			*etcdAddr = cfg.GetEtcdAddress()
-		}
-		if *etcdPrefix == defaultEtcdPrefix {
-			*etcdPrefix = cfg.GetEtcdPrefix()
-		}
-		numShards = cfg.GetNumShards()
-	}
-
-	// Create gate server configuration
-	gateServerConfig := &gateserver.GateServerConfig{
-		ListenAddress:     *listenAddr,
-		AdvertiseAddress:  *advertiseAddr,
-		HTTPListenAddress: *httpListenAddr,
-		EtcdAddress:       *etcdAddr,
-		EtcdPrefix:        *etcdPrefix,
-		NumShards:         numShards,
+	// Get gate server configuration from flags and/or config file
+	loader := gateconfig.NewLoader(nil)
+	cfg, err := loader.Load(os.Args[1:])
+	if err != nil {
+		log.Fatalf("Failed to load gate config: %v", err)
 	}
 
 	// Create gateserver server
-	gateserver, err := gateserver.NewGateServer(gateServerConfig)
+	gateserver, err := gateserver.NewGateServer(cfg)
 	if err != nil {
 		log.Fatalf("Failed to create gate server: %v", err)
 	}
