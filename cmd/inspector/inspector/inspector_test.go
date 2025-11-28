@@ -12,7 +12,7 @@ import (
 // TestRemoveObject tests the RemoveObject RPC handler
 func TestRemoveObject(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	service := NewService(pg)
+	insp := New(pg)
 
 	// Register a node first
 	node := models.GoverseNode{
@@ -41,7 +41,7 @@ func TestRemoveObject(t *testing.T) {
 		NodeAddress: "localhost:47000",
 	}
 
-	_, err := service.RemoveObject(ctx, req)
+	_, err := insp.RemoveObject(ctx, req)
 	if err != nil {
 		t.Fatalf("RemoveObject failed: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRemoveObject(t *testing.T) {
 // TestRemoveObject_EmptyObjectID tests removing with empty object ID
 func TestRemoveObject_EmptyObjectID(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	service := NewService(pg)
+	insp := New(pg)
 
 	// Register a node
 	node := models.GoverseNode{
@@ -72,7 +72,7 @@ func TestRemoveObject_EmptyObjectID(t *testing.T) {
 	}
 
 	// Should not fail, just return empty
-	_, err := service.RemoveObject(ctx, req)
+	_, err := insp.RemoveObject(ctx, req)
 	if err != nil {
 		t.Fatalf("RemoveObject with empty ID should not fail: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRemoveObject_EmptyObjectID(t *testing.T) {
 // TestRemoveObject_NodeNotRegistered tests removing object from unregistered node
 func TestRemoveObject_NodeNotRegistered(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	service := NewService(pg)
+	insp := New(pg)
 
 	ctx := context.Background()
 	req := &inspector_pb.RemoveObjectRequest{
@@ -90,7 +90,7 @@ func TestRemoveObject_NodeNotRegistered(t *testing.T) {
 	}
 
 	// Should fail with NotFound error
-	_, err := service.RemoveObject(ctx, req)
+	_, err := insp.RemoveObject(ctx, req)
 	if err == nil {
 		t.Fatal("RemoveObject should fail when node is not registered")
 	}
@@ -99,7 +99,7 @@ func TestRemoveObject_NodeNotRegistered(t *testing.T) {
 // TestRemoveObject_NonExistentObject tests removing non-existent object
 func TestRemoveObject_NonExistentObject(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	service := NewService(pg)
+	insp := New(pg)
 
 	// Register a node
 	node := models.GoverseNode{
@@ -115,7 +115,7 @@ func TestRemoveObject_NonExistentObject(t *testing.T) {
 	}
 
 	// Should not fail even if object doesn't exist
-	_, err := service.RemoveObject(ctx, req)
+	_, err := insp.RemoveObject(ctx, req)
 	if err != nil {
 		t.Fatalf("RemoveObject should succeed even for non-existent object: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestRemoveObject_NonExistentObject(t *testing.T) {
 // TestRemoveObject_MultipleObjects tests removing one object from many
 func TestRemoveObject_MultipleObjects(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	service := NewService(pg)
+	insp := New(pg)
 
 	// Register a node
 	node := models.GoverseNode{
@@ -149,7 +149,7 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 		NodeAddress: "localhost:47000",
 	}
 
-	_, err := service.RemoveObject(ctx, req)
+	_, err := insp.RemoveObject(ctx, req)
 	if err != nil {
 		t.Fatalf("RemoveObject failed: %v", err)
 	}
