@@ -33,6 +33,7 @@ let currentRoom = null;
 let lastMsgTimestamp = 0;
 let pollIntervalId = null;
 let isLoading = false;
+let displayedMessages = new Set(); // Track displayed messages to avoid duplicates
 
 // Room icons mapping
 const roomIcons = {
@@ -129,6 +130,7 @@ async function joinChatroom(roomName) {
         
         currentRoom = roomName;
         lastMsgTimestamp = 0;
+        displayedMessages.clear(); // Clear displayed messages when joining new room
         
         // Switch to chat view
         document.getElementById('room-list-view').classList.add('hidden');
@@ -169,6 +171,7 @@ function leaveChatroom() {
     stopPolling();
     currentRoom = null;
     lastMsgTimestamp = 0;
+    displayedMessages.clear(); // Clear displayed messages when leaving
     
     // Switch back to room list view
     document.getElementById('chat-view').classList.add('hidden');
@@ -209,8 +212,20 @@ async function sendMessage() {
     }
 }
 
-// Display a message in the chat
+// Generate a unique message ID for deduplication
+function getMessageId(msg) {
+    return `${msg.userName}|${msg.timestamp}|${msg.message}`;
+}
+
+// Display a message in the chat (returns true if displayed, false if duplicate)
 function displayMessage(msg) {
+    // Check for duplicate
+    const msgId = getMessageId(msg);
+    if (displayedMessages.has(msgId)) {
+        return false;
+    }
+    displayedMessages.add(msgId);
+    
     const messagesEl = document.getElementById('messages');
     
     const isOwn = msg.userName === userName;
@@ -247,6 +262,7 @@ function displayMessage(msg) {
     
     // Scroll to bottom
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    return true;
 }
 
 // Poll for new messages
@@ -259,10 +275,8 @@ async function pollMessages() {
         const messages = parseGetRecentMessagesResponse(response);
         
         messages.forEach(msg => {
-            // Don't show our own messages again (we already displayed them optimistically)
-            if (msg.userName !== userName) {
-                displayMessage(msg);
-            }
+            // displayMessage handles deduplication internally
+            displayMessage(msg);
             if (msg.timestamp > lastMsgTimestamp) {
                 lastMsgTimestamp = msg.timestamp;
             }
