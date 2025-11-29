@@ -259,6 +259,9 @@ func TestSSEMethodNotAllowed(t *testing.T) {
 		t.Fatalf("Gate server failed to start: %v", err)
 	}
 
+	// Wait for cluster to be ready (this also ensures the HTTP server is listening)
+	testutil.WaitForClusterReady(t, nodeCluster)
+
 	sseURL := fmt.Sprintf("http://%s/api/v1/events/stream", httpAddr)
 	client := &http.Client{Timeout: 5 * time.Second}
 
