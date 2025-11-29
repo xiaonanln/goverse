@@ -87,7 +87,7 @@ type Player struct {
     goverseapi.BaseObject
     mu            sync.Mutex
     Username      string
-    PasswordHash  string    // Plain text for demo, hash in production
+    PasswordHash  string    // TODO: Hash passwords in production (plain text for demo only)
     Score         int32     // Player rating (starts at 1000)
     GamesPlayed   int32     // Total games
     GamesWon      int32     // Wins count
