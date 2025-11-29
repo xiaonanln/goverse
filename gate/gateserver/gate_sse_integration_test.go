@@ -259,6 +259,8 @@ func TestSSEMethodNotAllowed(t *testing.T) {
 		t.Fatalf("Gate server failed to start: %v", err)
 	}
 
+	time.Sleep(200 * time.Millisecond)
+
 	sseURL := fmt.Sprintf("http://%s/api/v1/events/stream", httpAddr)
 	client := &http.Client{Timeout: 5 * time.Second}
 
