@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Goverse Demo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>💬 Chat</h1>
+        <p class="subtitle">Powered by Goverse Distributed Runtime</p>
+        
+        <!-- Room List View -->
+        <div id="room-list-view" class="view">
+            <div class="user-info">
+                <label for="username-input">Your name:</label>
+                <input type="text" id="username-input" placeholder="Enter your name" maxlength="20">
+            </div>
+            
+            <h2>Available Chat Rooms</h2>
+            <div id="room-list" class="room-list">
+                <div class="loading-message">Loading rooms...</div>
+            </div>
+        </div>
+        
+        <!-- Chat View -->
+        <div id="chat-view" class="view hidden">
+            <div class="chat-header">
+                <button id="back-btn" class="back-btn" onclick="leaveChatroom()">← Back</button>
+                <span id="room-title">Room Name</span>
+                <span id="user-display" class="user-display"></span>
+            </div>
+            
+            <div id="messages" class="messages">
+                <!-- Messages will be inserted here -->
+            </div>
+            
+            <div class="message-input-container">
+                <input type="text" id="message-input" placeholder="Type a message..." maxlength="500">
+                <button id="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+        
+        <div class="status" id="status"></div>
+    </div>
+    
+    <script src="chat.js"></script>
+</body>
+</html>
