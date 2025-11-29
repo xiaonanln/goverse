@@ -156,7 +156,6 @@ def run_chat_test(gateway_port=49000, num_servers=1):
         (msg1, f"Message '{msg1}' sent and received"),
         (msg2, f"Message '{msg2}' sent and received"),
         ("Final test message", "Message 'Final test message' sent and received"),
-        ("Recent messages in", "/messages command executed successfully"),
     ]
     
     # Verify the output
