@@ -87,30 +87,10 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 		err := goverseapi.PushMessageToClient(ctx, clientID, notification)
 		if err != nil {
 			room.Logger.Warnf("Failed to push message to client %s: %v", clientID, err)
-			// Don't fail the send if push fails - client can still poll
 		} else {
 			room.Logger.Infof("Pushed message to client %s", clientID)
 		}
 	}
 
 	return &chat_pb.Client_SendChatMessageResponse{}, nil
-}
-
-func (room *ChatRoom) GetRecentMessages(ctx context.Context, request *chat_pb.ChatRoom_GetRecentMessagesRequest) (*chat_pb.ChatRoom_GetRecentMessagesResponse, error) {
-	room.mu.Lock()
-	defer room.mu.Unlock()
-
-	afterTimestamp := request.GetAfterTimestamp()
-	var recentMessages []*chat_pb.ChatMessage
-	for _, msg := range room.messages {
-		if msg.Timestamp > afterTimestamp {
-			recentMessages = append(recentMessages, msg)
-		}
-	}
-
-	room.Logger.Infof("GetRecentMessages in chatroom %s after %d: found %d messages", room.Id(), afterTimestamp, len(recentMessages))
-
-	return &chat_pb.ChatRoom_GetRecentMessagesResponse{
-		Messages: recentMessages,
-	}, nil
 }
