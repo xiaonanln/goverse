@@ -222,39 +222,6 @@ class ChatClient:
         )
         self._call_object("ChatRoom", f"ChatRoom-{self.room_name}", "SendMessage", request)
     
-    def get_recent_messages(self) -> List[Any]:
-        """Get recent messages from the current chatroom.
-        
-        Returns:
-            List of recent messages
-            
-        Raises:
-            RuntimeError: If not currently in a chatroom
-        """
-        if not self.room_name:
-            error_msg = "Error: You must join a chatroom first"
-            with self.output_lock:
-                self.output_buffer.append(error_msg)
-            raise RuntimeError(error_msg)
-        
-        request = chat_pb2.ChatRoom_GetRecentMessagesRequest(
-            after_timestamp=self.last_msg_timestamp
-        )
-        response_any = self._call_object("ChatRoom", f"ChatRoom-{self.room_name}", "GetRecentMessages", request)
-        
-        response = chat_pb2.ChatRoom_GetRecentMessagesResponse()
-        response_any.Unpack(response)
-        
-        with self.output_lock:
-            self.output_buffer.append(f"Recent messages in [{self.room_name}]:")
-            for msg in response.messages:
-                timestamp_str = time.strftime("%H:%M:%S", time.localtime(msg.timestamp // 1000000))
-                self.output_buffer.append(f"[{timestamp_str}] {msg.user_name}: {msg.message}")
-                if msg.timestamp > self.last_msg_timestamp:
-                    self.last_msg_timestamp = msg.timestamp
-        
-        return list(response.messages)
-    
     def get_output(self) -> str:
         """Get the current output from the client.
         
@@ -341,9 +308,6 @@ class ChatClient:
                 self.send_message(msg)
                 time.sleep(0.2)
             
-            self.get_recent_messages()
-            time.sleep(0.2)
-            
             # Add goodbye message
             with self.output_lock:
                 self.output_buffer.append("Goodbye!")
@@ -390,7 +354,6 @@ class ChatClient:
                 ("Hello from test!", "Message 'Hello from test!' sent and received"),
                 ("This is message 2", "Message 'This is message 2' sent and received"),
                 ("Final test message", "Message 'Final test message' sent and received"),
-                ("Recent messages in", "/messages command executed successfully"),
             ]
         
         print("\nVerifying test results...")

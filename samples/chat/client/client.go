@@ -28,13 +28,12 @@ const (
 )
 
 type ChatClient struct {
-	conn             *grpc.ClientConn
-	client           gate_pb.GateServiceClient
-	roomName         string
-	userName         string
-	logger           *logger.Logger
-	lastMsgTimestamp int64
-	clientID         string
+	conn     *grpc.ClientConn
+	client   gate_pb.GateServiceClient
+	roomName string
+	userName string
+	logger   *logger.Logger
+	clientID string
 }
 
 func NewChatClient(serverAddr, userID string) (*ChatClient, error) {
@@ -64,6 +63,13 @@ func NewChatClient(serverAddr, userID string) (*ChatClient, error) {
 
 func (c *ChatClient) Close() error {
 	return c.conn.Close()
+}
+
+// formatChatMessage formats a chat message for display
+func formatChatMessage(msg *chat_pb.ChatMessage) string {
+	// Timestamp is in microseconds
+	timestamp := time.UnixMicro(msg.Timestamp).Format("15:04:05")
+	return fmt.Sprintf("[%s] %s: %s", timestamp, msg.UserName, msg.Message)
 }
 
 func (c *ChatClient) CallObject(objectType, objectID, method string, arg proto.Message) (proto.Message, error) {
@@ -131,12 +137,8 @@ func (c *ChatClient) JoinChatroom(roomName string) error {
 	resp := respMsg.(*chat_pb.ChatRoom_JoinResponse)
 	c.logger.Infof("Joined chatroom %s", resp.RoomName)
 	c.roomName = roomName
-	c.lastMsgTimestamp = 0
 	for _, msg := range resp.GetRecentMessages() {
-		c.logger.Infof("Recent message: [%s] %s", msg.GetUserName(), msg.GetMessage())
-		if msg.Timestamp > c.lastMsgTimestamp {
-			c.lastMsgTimestamp = msg.Timestamp
-		}
+		fmt.Println(formatChatMessage(msg))
 	}
 	return nil
 }
@@ -160,35 +162,6 @@ func (c *ChatClient) SendMessage(message string) error {
 	return nil
 }
 
-func (c *ChatClient) GetRecentMessages() error {
-	if c.roomName == "" {
-		return fmt.Errorf("You must join a chatroom first with /join <room>")
-	}
-
-	// Call ChatRoom object directly
-	req := &chat_pb.ChatRoom_GetRecentMessagesRequest{
-		AfterTimestamp: c.lastMsgTimestamp, // Use stored timestamp
-	}
-	c.logger.Infof("Getting messages after timestamp: %d", c.lastMsgTimestamp)
-	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "GetRecentMessages", req)
-	if err != nil {
-		return fmt.Errorf("failed to get recent messages: %w", err)
-	}
-
-	resp := respMsg.(*chat_pb.ChatRoom_GetRecentMessagesResponse)
-	fmt.Printf("Recent messages in [%s]:\n", c.roomName)
-	for _, msg := range resp.Messages {
-		// Timestamp is in microseconds
-		timestamp := time.UnixMicro(msg.Timestamp).Format("15:04:05")
-		fmt.Printf("[%s] %s: %s\n", timestamp, msg.UserName, msg.Message)
-		// Update lastMsgTimestamp if this message is newer
-		if msg.Timestamp > c.lastMsgTimestamp {
-			c.lastMsgTimestamp = msg.Timestamp
-		}
-	}
-	return nil
-}
-
 // listenForMessages continuously listens for pushed messages from the server
 func (c *ChatClient) listenForMessages(stream gate_pb.GateService_RegisterClient) {
 	for {
@@ -208,15 +181,7 @@ func (c *ChatClient) listenForMessages(stream gate_pb.GateService_RegisterClient
 		switch notification := msg.(type) {
 		case *chat_pb.Client_NewMessageNotification:
 			// Display the pushed message
-			chatMsg := notification.Message
-			// Timestamp is in microseconds
-			timestamp := time.UnixMicro(chatMsg.Timestamp).Format("15:04:05")
-			fmt.Printf("\n[%s] %s: %s\n", timestamp, chatMsg.UserName, chatMsg.Message)
-
-			// Update last message timestamp
-			if chatMsg.Timestamp > c.lastMsgTimestamp {
-				c.lastMsgTimestamp = chatMsg.Timestamp
-			}
+			fmt.Printf("\n%s\n", formatChatMessage(notification.Message))
 
 			// Re-display prompt
 			if c.roomName != "" {
@@ -293,11 +258,6 @@ func (c *ChatClient) handleCommand(command string) {
 			fmt.Printf("Error joining chatroom: %v\n", err)
 		}
 
-	case "/messages":
-		if err := c.GetRecentMessages(); err != nil {
-			fmt.Printf("Error getting recent messages: %v\n", err)
-		}
-
 	case "/quit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -306,7 +266,6 @@ func (c *ChatClient) handleCommand(command string) {
 		fmt.Println("Commands:")
 		fmt.Println("  /list         - List all chatrooms")
 		fmt.Println("  /join <room>  - Join a chatroom")
-		fmt.Println("  /messages     - Show recent messages in current room")
 		fmt.Println("  /quit         - Quit the client")
 		fmt.Println("  /help         - Show this help")
 		fmt.Println("  <message>     - Send a message to current room")
