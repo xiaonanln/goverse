@@ -1,4 +1,4 @@
-package nodeconfig
+package serverconfig
 
 import (
 	"flag"

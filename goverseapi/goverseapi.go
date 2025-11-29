@@ -6,7 +6,7 @@ import (
 	"github.com/xiaonanln/goverse/client"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/node/nodeconfig"
+	"github.com/xiaonanln/goverse/node/serverconfig"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/server"
 	"github.com/xiaonanln/goverse/util/callcontext"
@@ -24,7 +24,7 @@ type Cluster = cluster.Cluster
 
 // NewServer creates a Server using command-line flags.
 // This is the recommended way to create a server in applications.
-// This is a convenience wrapper around nodeconfig.Get() and NewServerWithConfig().
+// This is a convenience wrapper around serverconfig.Get() and NewServerWithConfig().
 //
 // Supports both CLI flags and config file modes:
 //
@@ -47,7 +47,7 @@ type Cluster = cluster.Cluster
 //
 // Panics on configuration errors or server creation failures.
 func NewServer() *Server {
-	config := nodeconfig.Get()
+	config := serverconfig.Get()
 	server, err := NewServerWithConfig(config)
 	if err != nil {
 		panic(err)

@@ -1,6 +1,6 @@
-// Package nodeconfig handles command-line flags and config file loading
+// Package serverconfig handles command-line flags and config file loading
 // for the node process, returning a ServerConfig.
-package nodeconfig
+package serverconfig
 
 import (
 	"flag"
@@ -137,7 +137,7 @@ func Get() *server.ServerConfig {
 	loader := NewLoader(nil)
 	cfg, err := loader.Load(os.Args[1:])
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load node config: %v", err))
+		panic(fmt.Sprintf("Failed to load server config: %v", err))
 	}
 	return cfg
 }
