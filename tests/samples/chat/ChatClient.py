@@ -221,6 +221,12 @@ class ChatClient:
             message=message
         )
         self._call_object("ChatRoom", f"ChatRoom-{self.room_name}", "SendMessage", request)
+        
+        # Add sent message to output buffer (sender sees their own message locally)
+        # Server pushes messages to other clients, but not back to sender
+        timestamp_str = time.strftime("%H:%M:%S", time.localtime())
+        with self.output_lock:
+            self.output_buffer.append(f"[{timestamp_str}] {self.user_name}: {message}")
     
     def get_output(self) -> str:
         """Get the current output from the client.
