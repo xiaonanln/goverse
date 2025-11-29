@@ -325,11 +325,7 @@ function createJoinRequest(userName) {
     // ChatRoom_JoinRequest: user_name (string, field 1), client_id (string, field 2)
     const userNameBytes = new TextEncoder().encode(userName);
     // We don't need client_id for HTTP polling
-    const reqBytes = new Uint8Array([
-        0x0A, // field 1, wire type 2 (length-delimited)
-        userNameBytes.length,
-        ...userNameBytes
-    ]);
+    const reqBytes = encodeField(1, 2, userNameBytes);
     return wrapInAny('chat.ChatRoom_JoinRequest', reqBytes);
 }
 
@@ -338,14 +334,9 @@ function createSendMessageRequest(userName, message) {
     // ChatRoom_SendChatMessageRequest: user_name (string, field 1), message (string, field 2)
     const userNameBytes = new TextEncoder().encode(userName);
     const messageBytes = new TextEncoder().encode(message);
-    const reqBytes = new Uint8Array([
-        0x0A, // field 1, wire type 2
-        userNameBytes.length,
-        ...userNameBytes,
-        0x12, // field 2, wire type 2
-        messageBytes.length,
-        ...messageBytes
-    ]);
+    const field1 = encodeField(1, 2, userNameBytes);
+    const field2 = encodeField(2, 2, messageBytes);
+    const reqBytes = new Uint8Array([...field1, ...field2]);
     return wrapInAny('chat.ChatRoom_SendChatMessageRequest', reqBytes);
 }
 
@@ -361,22 +352,28 @@ function createGetRecentMessagesRequest(afterTimestamp) {
     return wrapInAny('chat.ChatRoom_GetRecentMessagesRequest', reqBytes);
 }
 
+// Encode a protobuf field with proper varint length encoding
+function encodeField(fieldNumber, wireType, data) {
+    const tag = (fieldNumber << 3) | wireType;
+    if (wireType === 2) {
+        // Length-delimited
+        const lenBytes = encodeVarint(data.length);
+        return new Uint8Array([tag, ...lenBytes, ...data]);
+    } else {
+        // For varint, data should already be encoded
+        return new Uint8Array([tag, ...data]);
+    }
+}
+
 // Wrap a message in google.protobuf.Any
 function wrapInAny(typeName, messageBytes) {
     const typeUrl = 'type.googleapis.com/' + typeName;
     const typeUrlBytes = new TextEncoder().encode(typeUrl);
     
-    // Build Any message
-    const anyBytes = new Uint8Array([
-        // Field 1: type_url (string)
-        0x0A, // (1 << 3) | 2 = 10
-        typeUrlBytes.length,
-        ...typeUrlBytes,
-        // Field 2: value (bytes)
-        0x12, // (2 << 3) | 2 = 18
-        messageBytes.length,
-        ...messageBytes
-    ]);
+    // Build Any message with proper varint length encoding
+    const field1 = encodeField(1, 2, typeUrlBytes);
+    const field2 = messageBytes.length > 0 ? encodeField(2, 2, messageBytes) : new Uint8Array([]);
+    const anyBytes = new Uint8Array([...field1, ...field2]);
     
     return base64Encode(anyBytes);
 }
@@ -397,7 +394,9 @@ function parseListChatRoomsResponse(responseBase64) {
         const wireType = fieldWire & 0x07;
         
         if (fieldNumber === 1 && wireType === 2) {
-            const len = any.value[offset++];
+            const lenResult = decodeVarint(any.value, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             rooms.push(new TextDecoder().decode(any.value.slice(offset, offset + len)));
             offset += len;
         } else {
@@ -424,11 +423,15 @@ function parseJoinResponse(responseBase64) {
         const wireType = fieldWire & 0x07;
         
         if (fieldNumber === 1 && wireType === 2) {
-            const len = any.value[offset++];
+            const lenResult = decodeVarint(any.value, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             roomName = new TextDecoder().decode(any.value.slice(offset, offset + len));
             offset += len;
         } else if (fieldNumber === 2 && wireType === 2) {
-            const len = any.value[offset++];
+            const lenResult = decodeVarint(any.value, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             const msgBytes = any.value.slice(offset, offset + len);
             recentMessages.push(parseChatMessage(msgBytes));
             offset += len;
@@ -455,7 +458,9 @@ function parseGetRecentMessagesResponse(responseBase64) {
         const wireType = fieldWire & 0x07;
         
         if (fieldNumber === 1 && wireType === 2) {
-            const len = any.value[offset++];
+            const lenResult = decodeVarint(any.value, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             const msgBytes = any.value.slice(offset, offset + len);
             messages.push(parseChatMessage(msgBytes));
             offset += len;
@@ -481,11 +486,15 @@ function parseChatMessage(bytes) {
         const wireType = fieldWire & 0x07;
         
         if (fieldNumber === 1 && wireType === 2) {
-            const len = bytes[offset++];
+            const lenResult = decodeVarint(bytes, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             userName = new TextDecoder().decode(bytes.slice(offset, offset + len));
             offset += len;
         } else if (fieldNumber === 2 && wireType === 2) {
-            const len = bytes[offset++];
+            const lenResult = decodeVarint(bytes, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             message = new TextDecoder().decode(bytes.slice(offset, offset + len));
             offset += len;
         } else if (fieldNumber === 3 && wireType === 0) {
@@ -514,12 +523,16 @@ function parseAny(bytes) {
         
         if (fieldNumber === 1 && wireType === 2) {
             // type_url (string)
-            const len = bytes[offset++];
+            const lenResult = decodeVarint(bytes, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             typeUrl = new TextDecoder().decode(bytes.slice(offset, offset + len));
             offset += len;
         } else if (fieldNumber === 2 && wireType === 2) {
             // value (bytes)
-            const len = bytes[offset++];
+            const lenResult = decodeVarint(bytes, offset);
+            const len = lenResult.value;
+            offset = lenResult.offset;
             value = bytes.slice(offset, offset + len);
             offset += len;
         } else {
@@ -539,8 +552,10 @@ function skipField(bytes, offset, wireType) {
             if ((b & 0x80) === 0) break;
         }
     } else if (wireType === 2) {
-        // Length-delimited
-        const len = bytes[offset++];
+        // Length-delimited - use varint for length
+        const lenResult = decodeVarint(bytes, offset);
+        const len = lenResult.value;
+        offset = lenResult.offset;
         offset += len;
     } else if (wireType === 5) {
         // Fixed32
