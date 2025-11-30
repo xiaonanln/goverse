@@ -16,14 +16,22 @@ const (
 
 // AccessRule defines a single access control rule
 type AccessRule struct {
-	Object string `yaml:"object"` // Pattern: literal string or /regexp/
-	Method string `yaml:"method"` // Pattern: literal string or /regexp/
-	Access string `yaml:"access"` // REJECT, INTERNAL, EXTERNAL, or ALLOW
+	Type   string `yaml:"type"`   // Required: object type pattern (literal or /regexp/)
+	ID     string `yaml:"id"`     // Optional: object ID pattern (omit to match all)
+	Method string `yaml:"method"` // Optional: method pattern (omit to match all)
+	Access string `yaml:"access"` // Required: REJECT, INTERNAL, EXTERNAL, or ALLOW
 }
 
 // PatternMatcher matches strings either exactly or via regexp
 type PatternMatcher interface {
 	Match(s string) bool
+}
+
+// matchAllMatcher always returns true (for omitted optional fields)
+type matchAllMatcher struct{}
+
+func (m matchAllMatcher) Match(s string) bool {
+	return true
 }
 
 // literalMatcher performs exact string matching
@@ -47,7 +55,7 @@ func (m *regexpMatcher) Match(s string) bool {
 // Note: The pattern inside /.../ should NOT already contain ^ or $ anchors,
 // as they will be added automatically. For example:
 //   - "/ChatRoom-.*/" will match "ChatRoom-123" but not "PrefixChatRoom-123"
-//   - "ChatRoomMgr0" (literal) will match exactly "ChatRoomMgr0"
+//   - "ChatRoomMgr" (literal) will match exactly "ChatRoomMgr"
 func parsePattern(pattern string) (PatternMatcher, error) {
 	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") && len(pattern) > 1 {
 		// Regexp pattern: /.../ - auto-anchor to match full string
@@ -63,9 +71,18 @@ func parsePattern(pattern string) (PatternMatcher, error) {
 	return literalMatcher(pattern), nil
 }
 
+// parsePatternOrMatchAll returns a matcher. Empty string matches all.
+func parsePatternOrMatchAll(pattern string) (PatternMatcher, error) {
+	if pattern == "" {
+		return matchAllMatcher{}, nil
+	}
+	return parsePattern(pattern)
+}
+
 // CompiledRule is a pre-compiled access control rule for runtime use
 type CompiledRule struct {
-	objectMatcher PatternMatcher
+	typeMatcher   PatternMatcher
+	idMatcher     PatternMatcher
 	methodMatcher PatternMatcher
 	access        string
 }
@@ -86,14 +103,23 @@ func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
 		compiled := &CompiledRule{access: rule.Access}
 		var err error
 
-		// Parse object pattern
-		compiled.objectMatcher, err = parsePattern(rule.Object)
+		// Type is required
+		if rule.Type == "" {
+			return nil, fmt.Errorf("missing type in rule %d", i)
+		}
+		compiled.typeMatcher, err = parsePattern(rule.Type)
 		if err != nil {
-			return nil, fmt.Errorf("invalid object pattern in rule %d: %w", i, err)
+			return nil, fmt.Errorf("invalid type pattern in rule %d: %w", i, err)
 		}
 
-		// Parse method pattern
-		compiled.methodMatcher, err = parsePattern(rule.Method)
+		// ID is optional (empty = match all)
+		compiled.idMatcher, err = parsePatternOrMatchAll(rule.ID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid id pattern in rule %d: %w", i, err)
+		}
+
+		// Method is optional (empty = match all)
+		compiled.methodMatcher, err = parsePatternOrMatchAll(rule.Method)
 		if err != nil {
 			return nil, fmt.Errorf("invalid method pattern in rule %d: %w", i, err)
 		}
@@ -102,6 +128,8 @@ func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
 		switch rule.Access {
 		case AccessReject, AccessInternal, AccessExternal, AccessAllow:
 			// OK
+		case "":
+			return nil, fmt.Errorf("missing access in rule %d", i)
 		default:
 			return nil, fmt.Errorf("invalid access level in rule %d: %q", i, rule.Access)
 		}
@@ -115,32 +143,33 @@ func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
 // CheckClientAccess checks if a client (via Gate) can access the object/method.
 // Returns nil if allowed, error if denied.
 // Client access is allowed for ALLOW and EXTERNAL access levels.
-func (v *AccessValidator) CheckClientAccess(objectID, method string) error {
-	access := v.findAccess(objectID, method)
+func (v *AccessValidator) CheckClientAccess(objectType, objectID, method string) error {
+	access := v.findAccess(objectType, objectID, method)
 
 	if access == AccessAllow || access == AccessExternal {
 		return nil
 	}
-	return fmt.Errorf("access denied for object %q method %q", objectID, method)
+	return fmt.Errorf("access denied for %s/%s method %q", objectType, objectID, method)
 }
 
 // CheckNodeAccess checks if a node (object-to-object) can access the object/method.
 // Returns nil if allowed, error if denied.
 // Node access is allowed for ALLOW and INTERNAL access levels.
-func (v *AccessValidator) CheckNodeAccess(objectID, method string) error {
-	access := v.findAccess(objectID, method)
+func (v *AccessValidator) CheckNodeAccess(objectType, objectID, method string) error {
+	access := v.findAccess(objectType, objectID, method)
 
 	if access == AccessAllow || access == AccessInternal {
 		return nil
 	}
-	return fmt.Errorf("access denied for object %q method %q", objectID, method)
+	return fmt.Errorf("access denied for %s/%s method %q", objectType, objectID, method)
 }
 
 // findAccess evaluates rules top-to-bottom and returns the access level.
 // Returns REJECT if no rule matches (default deny).
-func (v *AccessValidator) findAccess(objectID, method string) string {
+func (v *AccessValidator) findAccess(objectType, objectID, method string) string {
 	for _, rule := range v.rules {
-		if rule.objectMatcher.Match(objectID) &&
+		if rule.typeMatcher.Match(objectType) &&
+			rule.idMatcher.Match(objectID) &&
 			rule.methodMatcher.Match(method) {
 			return rule.access
 		}

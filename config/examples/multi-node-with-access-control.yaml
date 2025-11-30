@@ -42,10 +42,11 @@ gates:
 
 # Object access control rules
 # Evaluated top-to-bottom, first match wins
-# Each rule: object, method, access
+# Each rule: type (required), id (optional), method (optional), access (required)
 # Pattern matching:
-#   - Literal string: exact match (e.g., "ChatRoomMgr0")
-#   - /regexp/: regex full match (e.g., "/ChatRoom-.*/")
+#   - Literal string: exact match (e.g., "ChatRoomMgr")
+#   - /regexp/: regex full match (e.g., "/[a-zA-Z0-9_-]+/")
+#   - Omitted field: matches all (equivalent to /.*/)
 # Access levels: REJECT, INTERNAL, EXTERNAL, ALLOW
 #   - REJECT: Deny all access (clients and nodes)
 #   - INTERNAL: Allow only node-to-node calls, deny clients
@@ -53,41 +54,42 @@ gates:
 #   - ALLOW: Allow both clients and nodes
 object_access_rules:
   # ChatRoomMgr: singleton, clients can list rooms
-  - object: ChatRoomMgr0
+  - type: ChatRoomMgr
+    id: ChatRoomMgr0
     method: ListChatRooms
     access: ALLOW
   
   # ChatRoomMgr: other methods internal only
-  - object: ChatRoomMgr0
+  - type: ChatRoomMgr
     method: /.*/
     access: INTERNAL
 
   # ChatRoom: clients can interact with these methods
-  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+  - type: ChatRoom
+    id: /[a-zA-Z0-9_-]{1,50}/
     method: /(Join|Leave|SendMessage|GetMessages)/
     access: ALLOW
   
   # ChatRoom: other methods (NotifyMembers, etc.) internal only
-  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+  - type: ChatRoom
     method: /.*/
     access: INTERNAL
 
   # InternalScheduler: only accessible by nodes
-  - object: /InternalScheduler-.*/
-    method: /.*/
+  - type: InternalScheduler
     access: INTERNAL
 
   # Counter: clients can increment/decrement/get
-  - object: /Counter-[a-zA-Z0-9_-]+/
+  - type: Counter
+    id: /[a-zA-Z0-9_-]+/
     method: /(Increment|Decrement|Get)/
     access: ALLOW
   
   # Counter: Reset only from nodes
-  - object: /Counter-[a-zA-Z0-9_-]+/
+  - type: Counter
     method: Reset
     access: INTERNAL
 
   # Default: deny everything else
-  - object: /.*/
-    method: /.*/
+  - type: /.*/
     access: REJECT
