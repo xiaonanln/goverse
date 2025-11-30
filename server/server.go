@@ -250,9 +250,12 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		return nil, err
 	}
 
-	// Check node access if access validator is configured
-	// This validates access for node-to-node calls (object-to-object)
-	// Note: Requests from gates (with ClientId) were already validated at the gate layer
+	// Check node access if access validator is configured.
+	// This validates access using node-level rules (ALLOW or INTERNAL).
+	// Defense in depth: Both gates and nodes validate access. Gates check client
+	// access (ALLOW/EXTERNAL), nodes check node access (ALLOW/INTERNAL).
+	// A request that passes gate validation might be denied here if the access
+	// level is EXTERNAL (client-only). This ensures consistent enforcement.
 	if server.accessValidator != nil {
 		if err := server.accessValidator.CheckNodeAccess(req.GetId(), req.GetMethod()); err != nil {
 			server.logger.Warnf("Access denied for node call: object=%s, method=%s: %v", req.GetId(), req.GetMethod(), err)
