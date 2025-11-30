@@ -301,16 +301,7 @@ async function sendMessage() {
     try {
         const request = createSendMessageRequest(userName, message);
         await callObject('ChatRoom', 'ChatRoom-' + currentRoom, 'SendMessage', request);
-        
-        // Display our own message immediately (optimistic update)
-        const now = Date.now() * 1000; // Convert to microseconds
-        displayMessage({
-            userName: userName,
-            message: message,
-            timestamp: now
-        });
-        lastMsgTimestamp = now;
-        
+        // Message will be displayed when received via SSE push
     } catch (error) {
         console.error('Failed to send message:', error);
         setStatus('Failed to send message: ' + error.message, 'error');

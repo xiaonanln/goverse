@@ -36,7 +36,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 2. **Start the Gate server**:
    ```bash
    cd cmd/gate
-   go run .
+   go run . -http-listen :8080
    ```
 
 3. **Start the Chat server**:
@@ -53,10 +53,6 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 
 5. **Run the web client** (alternative):
    ```bash
-   # Start the Gate server with HTTP enabled
-   cd cmd/gate
-   go run . -http-listen :8080
-   
    # Serve the web client (in another terminal)
    cd samples/chat/web
    python3 -m http.server 3000
