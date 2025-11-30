@@ -1,0 +1,579 @@
+# Object Access Control Design
+
+> **Status**: Draft  
+> This document describes the config-based object access control feature for Goverse, enabling fine-grained control over which clients and objects can call specific methods.
+
+---
+
+## 1. Problem Statement
+
+Currently, when a `CallObject` RPC arrives at a node:
+- Objects are auto-created if they don't exist
+- Any method can be called on any object
+
+This creates security and resource concerns:
+
+- **Arbitrary object creation**: Clients can trigger creation of objects with any ID
+- **Invalid IDs**: No enforcement of naming conventions (e.g., `ChatRoom-{name}`)
+- **Unauthorized method calls**: Internal methods can be called by external clients
+- **Resource exhaustion**: Attackers could create millions of objects
+
+## 2. Goals
+
+1. **Validate object IDs** against configurable patterns before auto-creation
+2. **Control method access** - whitelist which methods clients can call
+3. **Gate-side filtering** to reject invalid requests before they reach nodes
+4. **Centralized configuration** shared by gates and nodes
+5. **Secure by default** with explicit allow-listing
+6. **Minimal performance impact** using compiled regex patterns
+
+## 3. Non-Goals
+
+- Complex validation logic (use code-based validation for that)
+- Authentication/authorization by user identity (separate concern)
+- Rate limiting (future feature)
+
+## 4. Design
+
+### 4.1 Configuration Format
+
+Add `object_access_rules` section to the existing YAML config:
+
+```yaml
+# config.yaml
+etcd:
+  address: localhost:2379
+  prefix: /goverse
+
+nodes:
+  - id: node1
+    grpc_addr: localhost:48000
+    advertise_addr: localhost:48000
+
+gates:
+  - id: gate1
+    grpc_addr: localhost:49000
+    http_addr: :8080
+
+# Object access control rules
+# Evaluated top-to-bottom, first match wins
+# Each rule: object, method, access
+# Pattern matching:
+#   - Literal string: exact match (e.g., "ChatRoomMgr0")
+#   - /regexp/: regex full match (e.g., "/ChatRoom-.*/")
+# Access levels: REJECT, INTERNAL, EXTERNAL, ALLOW
+#   - REJECT: Deny all access (clients and nodes)
+#   - INTERNAL: Allow only node-to-node calls, deny clients
+#   - EXTERNAL: Allow only client calls via gate, deny nodes
+#   - ALLOW: Allow both clients and nodes
+object_access_rules:
+  # ChatRoomMgr: singleton, clients can list rooms
+  - object: ChatRoomMgr0
+    method: ListChatRooms
+    access: ALLOW
+  
+  # ChatRoomMgr: other methods internal only
+  - object: ChatRoomMgr0
+    method: /.*/
+    access: INTERNAL
+
+  # ChatRoom: clients can interact with these methods
+  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+    method: /(Join|Leave|SendMessage|GetMessages)/
+    access: ALLOW
+  
+  # ChatRoom: other methods (NotifyMembers, etc.) internal only
+  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+    method: /.*/
+    access: INTERNAL
+
+  # InternalScheduler: only accessible by nodes
+  - object: /InternalScheduler-.*/
+    method: /.*/
+    access: INTERNAL
+
+  # Counter: clients can increment/decrement/get
+  - object: /Counter-[a-zA-Z0-9_-]+/
+    method: /(Increment|Decrement|Get)/
+    access: ALLOW
+  
+  # Counter: Reset only from nodes
+  - object: /Counter-[a-zA-Z0-9_-]+/
+    method: Reset
+    access: INTERNAL
+
+  # Default: deny everything else
+  - object: /.*/
+    method: /.*/
+    access: REJECT
+```
+
+### 4.2 Access Control Semantics
+
+**Rule format:**
+
+| Field | Description |
+|-------|-------------|
+| `object` | Pattern matching object ID. Literal string for exact match, or `/regexp/` for regex. |
+| `method` | Pattern matching method name. Literal string for exact match, or `/regexp/` for regex. |
+| `access` | Access level: `REJECT`, `INTERNAL`, `EXTERNAL`, or `ALLOW` |
+
+**Pattern matching:**
+- `ChatRoomMgr0` - Literal string, matches exactly `"ChatRoomMgr0"`
+- `/ChatRoom-.*/` - Regex, matches full string against pattern (auto-anchored)
+- `/.*/` - Regex, matches any string (wildcard)
+
+Note: Regex patterns are automatically anchored to match the **full string** (like `^...$`), not a substring.
+
+**Access levels:**
+
+| Level | Client (via Gate) | Node (object-to-object) |
+|-------|-------------------|-------------------------|
+| `REJECT` | ✗ Denied | ✗ Denied |
+| `INTERNAL` | ✗ Denied | ✓ Allowed |
+| `EXTERNAL` | ✓ Allowed | ✗ Denied |
+| `ALLOW` | ✓ Allowed | ✓ Allowed |
+
+**Evaluation:**
+1. Rules are evaluated **top-to-bottom**
+2. **First matching rule wins** (object AND method must both match)
+3. If no rule matches, access is **denied by default**
+4. Order matters - put specific rules before general ones
+
+**Common patterns:**
+
+```yaml
+# Allow specific methods to clients, rest to nodes only
+- object: /MyObject-.*/
+  method: /(PublicMethod1|PublicMethod2)/
+  access: ALLOW
+- object: /MyObject-.*/
+  method: /.*/
+  access: INTERNAL
+
+# Internal-only object
+- object: /InternalService-.*/
+  method: /.*/
+  access: INTERNAL
+
+# Completely block an object type
+- object: /Deprecated-.*/
+  method: /.*/
+  access: REJECT
+
+# Exact match for singleton object
+- object: ConfigManager0
+  method: GetConfig
+  access: ALLOW
+
+# Default deny (should be last rule)
+- object: /.*/
+  method: /.*/
+  access: REJECT
+```
+
+### 4.3 Validation Flow
+
+#### Gate-side (first line of defense)
+
+```
+┌─────────┐    CallObject("ChatRoom-General", "SendMessage", ...)
+│  Client │ ─────────────────────────────────────────────────────►
+└─────────┘
+                              │
+                              ▼
+                    ┌─────────────────────┐
+                    │        Gate         │
+                    │                     │
+                    │ For each rule:      │
+                    │  1. Match object ID │
+                    │  2. Match method    │
+                    │  3. If both match:  │
+                    │     check access    │
+                    └──────────┬──────────┘
+                               │
+       ┌───────────────┬───────┴───────┬───────────────┐
+       │               │               │               │
+       ▼               ▼               ▼               ▼
+    REJECT         INTERNAL        EXTERNAL         ALLOW
+       │               │               │               │
+       ▼               ▼               ▼               ▼
+  Return error    Return error   Forward to Node  Forward to Node
+```
+
+#### Node-side (enforces INTERNAL)
+
+```
+┌─────────┐    CallObject (from gate, access=ALLOW or EXTERNAL)
+│  Gate   │ ─────────────►  ┌─────────────────┐
+└─────────┘                 │      Node       │
+                            │                 │
+                            │ (already        │
+                            │  validated)     │
+                            │                 │
+                            │ Call method     │
+                            └─────────────────┘
+
+┌─────────┐    CallObject (object-to-object)
+│  Node   │ ─────────────►  ┌─────────────────┐
+│ (obj A) │                 │      Node       │
+└─────────┘                 │    (obj B)      │
+                            │                 │
+                            │ For each rule:  │
+                            │  match & check  │
+                            │  access level   │
+                            │                 │
+                            │ ALLOW or        │
+                            │ INTERNAL:       │
+                            │   Call method   │
+                            │                 │
+                            │ REJECT or       │
+                            │ EXTERNAL:       │
+                            │   Return error  │
+                            └─────────────────┘
+```
+
+### 4.4 Implementation Details
+
+#### Config struct additions
+
+```go
+// config/config.go
+
+type Config struct {
+    Etcd        EtcdConfig         `yaml:"etcd"`
+    Nodes       []NodeConfig       `yaml:"nodes"`
+    Gates       []GateConfig       `yaml:"gates"`
+    AccessRules []AccessRule       `yaml:"object_access_rules"`
+}
+
+// AccessRule defines a single access control rule
+type AccessRule struct {
+    Object string `yaml:"object"` // Pattern: literal string or /regexp/
+    Method string `yaml:"method"` // Pattern: literal string or /regexp/
+    Access string `yaml:"access"` // REJECT, INTERNAL, EXTERNAL, or ALLOW
+}
+
+// Access level constants
+const (
+    AccessReject     = "REJECT"
+    AccessInternal = "INTERNAL"
+    AccessExternal = "EXTERNAL"
+    AccessAllow      = "ALLOW"
+)
+
+// Compiled rules for runtime use
+type AccessValidator struct {
+    rules []*CompiledRule
+}
+
+type CompiledRule struct {
+    objectMatcher PatternMatcher
+    methodMatcher PatternMatcher
+    access        string
+}
+
+// PatternMatcher matches strings either exactly or via regexp
+type PatternMatcher interface {
+    Match(s string) bool
+}
+
+type literalMatcher string
+
+func (m literalMatcher) Match(s string) bool {
+    return string(m) == s
+}
+
+type regexpMatcher struct {
+    re *regexp.Regexp
+}
+
+func (m *regexpMatcher) Match(s string) bool {
+    return m.re.MatchString(s)
+}
+
+// parsePattern returns a matcher for literal strings or /regexp/ patterns.
+// Regexp patterns are auto-anchored to match the full string.
+func parsePattern(pattern string) (PatternMatcher, error) {
+    if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") && len(pattern) > 1 {
+        // Regexp pattern: /.../ - auto-anchor to match full string
+        regexStr := pattern[1 : len(pattern)-1]
+        regexStr = "^(?:" + regexStr + ")$"  // Auto-anchor for full match
+        re, err := regexp.Compile(regexStr)
+        if err != nil {
+            return nil, err
+        }
+        return &regexpMatcher{re: re}, nil
+    }
+    // Literal string: exact match
+    return literalMatcher(pattern), nil
+}
+
+func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
+    v := &AccessValidator{
+        rules: make([]*CompiledRule, 0, len(rules)),
+    }
+    
+    for i, rule := range rules {
+        compiled := &CompiledRule{access: rule.Access}
+        var err error
+        
+        // Parse object pattern
+        compiled.objectMatcher, err = parsePattern(rule.Object)
+        if err != nil {
+            return nil, fmt.Errorf("invalid object pattern in rule %d: %w", i, err)
+        }
+        
+        // Parse method pattern
+        compiled.methodMatcher, err = parsePattern(rule.Method)
+        if err != nil {
+            return nil, fmt.Errorf("invalid method pattern in rule %d: %w", i, err)
+        }
+        
+        // Validate access level
+        switch rule.Access {
+        case AccessReject, AccessInternal, AccessExternal, AccessAllow:
+            // OK
+        default:
+            return nil, fmt.Errorf("invalid access level in rule %d: %q", i, rule.Access)
+        }
+        
+        v.rules = append(v.rules, compiled)
+    }
+    
+    return v, nil
+}
+
+// CheckClientAccess checks if a client (via Gate) can access the object/method.
+// Returns nil if allowed, error if denied.
+func (v *AccessValidator) CheckClientAccess(objectID, method string) error {
+    access := v.findAccess(objectID, method)
+    
+    if access != AccessAllow && access != AccessExternal {
+        return fmt.Errorf("access denied for object %q method %q", objectID, method)
+    }
+    return nil
+}
+
+// CheckNodeAccess checks if a node (object-to-object) can access the object/method.
+// Returns nil if allowed, error if denied.
+func (v *AccessValidator) CheckNodeAccess(objectID, method string) error {
+    access := v.findAccess(objectID, method)
+    
+    if access == AccessReject || access == AccessExternal {
+        return fmt.Errorf("access denied for object %q method %q", objectID, method)
+    }
+    return nil
+}
+
+// findAccess evaluates rules top-to-bottom and returns the access level.
+// Returns REJECT if no rule matches (default deny).
+func (v *AccessValidator) findAccess(objectID, method string) string {
+    for _, rule := range v.rules {
+        if rule.objectMatcher.Match(objectID) && 
+           rule.methodMatcher.Match(method) {
+            return rule.access
+        }
+    }
+    // Default: deny
+    return AccessReject
+}
+```
+
+#### Gate integration
+
+```go
+// gate/gateserver/gate_server.go
+
+type GateServer struct {
+    // ... existing fields
+    accessValidator *config.AccessValidator
+}
+
+func (g *GateServer) handleCallObject(ctx context.Context, req *CallObjectRequest) (*CallObjectResponse, error) {
+    if g.accessValidator != nil {
+        // Check client access - requires ALLOW level
+        if err := g.accessValidator.CheckClientAccess(req.ObjectID, req.Method); err != nil {
+            return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+        }
+    }
+    
+    // Forward to node...
+}
+```
+
+#### Node integration
+
+```go
+// node/node.go
+
+// For requests coming from gate (already validated by gate)
+func (n *Node) handleGateRequest(ctx context.Context, objectID, method string) error {
+    // Gate already validated client access
+    // Node can optionally re-validate as defense in depth
+    // ...
+}
+
+// For requests coming from other nodes (object-to-object calls)
+func (n *Node) handleNodeRequest(ctx context.Context, objectID, method string) error {
+    if n.accessValidator != nil {
+        // Check node access - allows ALLOW or INTERNAL
+        if err := n.accessValidator.CheckNodeAccess(objectID, method); err != nil {
+            return fmt.Errorf("%w", err)
+        }
+    }
+    // ...
+}
+```
+
+### 4.5 CLI Mode (No Config File)
+
+When running without a config file (CLI mode), access rules can be:
+
+1. **Disabled** (default) - allow all objects (backward compatible)
+2. **Specified via flag** - simple patterns only
+
+```bash
+# No validation (backward compatible)
+go run . --listen :48000 --advertise localhost:48000
+
+# With basic pattern (optional enhancement)
+go run . --listen :48000 --access-rules "ChatRoom-.*:.*:ALLOW"
+```
+
+For production, using a config file is recommended.
+
+## 5. Error Messages
+
+Clear error messages help developers understand access control failures:
+
+| Scenario | Error Message |
+|----------|---------------|
+| No rule matches | `access denied for object "Foo-123" method "Bar"` |
+| Rule matches with REJECT | `access denied for object "Internal-1" method "Run"` |
+| Rule matches with INTERNAL (client) | `access denied for object "ChatRoom-1" method "NotifyMembers"` |
+
+## 6. Examples
+
+### Chat Application
+
+```yaml
+object_access_rules:
+  # ChatRoomMgr singleton: clients can list rooms
+  - object: ChatRoomMgr0
+    method: ListChatRooms
+    access: ALLOW
+  
+  # ChatRoomMgr: other methods internal only
+  - object: ChatRoomMgr0
+    method: /.*/
+    access: INTERNAL
+
+  # ChatRoom: clients can interact with these methods
+  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+    method: /(Join|Leave|SendMessage|GetMessages)/
+    access: ALLOW
+  
+  # ChatRoom: other methods (NotifyMembers, etc.) internal only
+  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+    method: /.*/
+    access: INTERNAL
+
+  # Default: deny everything else
+  - object: /.*/
+    method: /.*/
+    access: REJECT
+```
+
+**Client (via Gate) can:**
+- `CallObject("ChatRoomMgr0", "ListChatRooms", ...)` ✓
+- `CallObject("ChatRoom-General", "Join", ...)` ✓
+- `CallObject("ChatRoom-General", "SendMessage", ...)` ✓
+
+**Client cannot:**
+- `CallObject("ChatRoom-General", "NotifyMembers", ...)` ✗ (INTERNAL)
+- `CallObject("InternalScheduler-1", "Run", ...)` ✗ (no matching rule → REJECT)
+
+**Node (object-to-object) can:**
+- `CallObject("ChatRoom-General", "NotifyMembers", ...)` ✓ (INTERNAL)
+- `CallObject("ChatRoom-General", "SendMessage", ...)` ✓ (ALLOW)
+
+### Internal-only Objects
+
+```yaml
+object_access_rules:
+  # Scheduler: only accessible by other objects, not clients
+  - object: /InternalScheduler-.*/
+    method: /.*/
+    access: INTERNAL
+  
+  # Metrics collector: read-only for clients
+  - object: /MetricsCollector-.*/
+    method: GetMetrics
+    access: ALLOW
+  
+  # Metrics collector: write methods for nodes only
+  - object: /MetricsCollector-.*/
+    method: /(RecordMetric|Reset)/
+    access: INTERNAL
+
+  # Default deny
+  - object: /.*/
+    method: /.*/
+    access: REJECT
+```
+
+### Development Mode (Allow All)
+
+```yaml
+object_access_rules:
+  - object: /.*/
+    method: /.*/
+    access: ALLOW
+```
+
+**Warning**: Only use in development. All types and methods are allowed.
+
+## 7. Security Considerations
+
+1. **Default deny**: End the rule list with `object: /.*/`, `method: /.*/`, `access: REJECT`
+2. **Specific rules first**: Put narrow rules before broad ones (first match wins)
+3. **Minimal client access**: Use `ALLOW` only for methods clients truly need
+4. **Internal objects**: Use `INTERNAL` for internal-only objects
+5. **Restrictive patterns**: Be specific with object ID patterns (include length limits)
+6. **Rule ordering**: Review rule order carefully - a broad early rule can override later specific rules
+7. **Audit regularly**: Review access rules for overly permissive config
+
+## 8. Migration Path
+
+1. **Phase 1**: Add config parsing, no enforcement (logging only)
+2. **Phase 2**: Enforce on gates (client access)
+3. **Phase 3**: Enforce on nodes (node access, defense in depth)
+
+For existing deployments:
+- Start with a single rule: `object: /.*/`, `method: /.*/`, `access: ALLOW`
+- Add specific `INTERNAL` rules for internal-only objects
+- Add specific `ALLOW` rules for client-accessible methods
+- Remove the catch-all ALLOW rule and add `access: REJECT` at the end
+- Test thoroughly at each step
+
+## 9. Future Enhancements
+
+- **Rate limiting**: Limit requests per client/type/method
+- **Dynamic reload**: Update rules without restart
+- **Metrics**: Track access successes/failures per type/method/access-level
+- **Per-client rules**: Different access based on client identity
+- **Argument validation**: Validate method arguments
+
+## 10. Summary
+
+Config-based object access control provides:
+
+- **Linear rule list**: Rules evaluated top-to-bottom, first match wins
+- **Four access levels**: `REJECT`, `INTERNAL`, `EXTERNAL`, `ALLOW`
+- **Flexible patterns**: Literal strings for exact match, `/regexp/` for regex (auto-anchored)
+- **Client method control**: Gate enforces `ALLOW` or `EXTERNAL` for client requests
+- **Node method control**: Nodes enforce `ALLOW` or `INTERNAL` for object-to-object calls
+- **Gate filtering**: Reject invalid requests before they reach nodes
+- **Centralized control**: Single config file for gates and nodes
+- **Secure by default**: No matching rule = deny
