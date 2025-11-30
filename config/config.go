@@ -48,11 +48,12 @@ type GateConfig struct {
 
 // Config is the root configuration structure
 type Config struct {
-	Version  int            `yaml:"version"`
-	Cluster  ClusterConfig  `yaml:"cluster"`
-	Postgres PostgresConfig `yaml:"postgres"`
-	Nodes    []NodeConfig   `yaml:"nodes"`
-	Gates    []GateConfig   `yaml:"gates"`
+	Version     int            `yaml:"version"`
+	Cluster     ClusterConfig  `yaml:"cluster"`
+	Postgres    PostgresConfig `yaml:"postgres"`
+	Nodes       []NodeConfig   `yaml:"nodes"`
+	Gates       []GateConfig   `yaml:"gates"`
+	AccessRules []AccessRule   `yaml:"object_access_rules"` // Object access control rules
 }
 
 // LoadConfig loads configuration from a YAML file
@@ -174,4 +175,14 @@ func (c *Config) GetEtcdPrefix() string {
 // GetNumShards returns the number of shards
 func (c *Config) GetNumShards() int {
 	return c.Cluster.Shards
+}
+
+// NewAccessValidator creates an AccessValidator from the config's access rules.
+// Returns nil if no access rules are configured.
+// Returns an error if any rule has an invalid pattern or access level.
+func (c *Config) NewAccessValidator() (*AccessValidator, error) {
+	if len(c.AccessRules) == 0 {
+		return nil, nil
+	}
+	return NewAccessValidator(c.AccessRules)
 }

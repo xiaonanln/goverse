@@ -1,0 +1,93 @@
+# GoVerse Multi-Node Configuration with Access Control
+#
+# This configuration demonstrates a production setup with:
+# - Multiple etcd endpoints for high availability
+# - Two nodes for distributed object hosting
+# - One gate for client connections
+# - Object access control rules for security
+#
+# Notes:
+# - Replace endpoint and address values with your actual infrastructure.
+# - Ensure advertise_addr values are reachable from other nodes.
+# - Keep secrets (if any) in separate files or environment variables.
+#
+# See docs/design/OBJECT_ACCESS_CONTROL.md for access control documentation.
+
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-1.prod.local:2379"
+      - "etcd-2.prod.local:2379"
+      - "etcd-3.prod.local:2379"
+    prefix: "/goverse/production"
+
+nodes:
+  - id: "node-a"
+    grpc_addr: "10.0.1.10:50051"
+    advertise_addr: "node-a.cluster.example.com:50051"
+    http_addr: "10.0.1.10:8080"
+
+  - id: "node-b"
+    grpc_addr: "10.0.1.11:50051"
+    advertise_addr: "node-b.cluster.example.com:50051"
+    http_addr: "10.0.1.11:8080"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "10.0.2.10:60051"
+
+# Object access control rules
+# Evaluated top-to-bottom, first match wins
+# Each rule: object, method, access
+# Pattern matching:
+#   - Literal string: exact match (e.g., "ChatRoomMgr0")
+#   - /regexp/: regex full match (e.g., "/ChatRoom-.*/")
+# Access levels: REJECT, INTERNAL, EXTERNAL, ALLOW
+#   - REJECT: Deny all access (clients and nodes)
+#   - INTERNAL: Allow only node-to-node calls, deny clients
+#   - EXTERNAL: Allow only client calls via gate, deny nodes
+#   - ALLOW: Allow both clients and nodes
+object_access_rules:
+  # ChatRoomMgr: singleton, clients can list rooms
+  - object: ChatRoomMgr0
+    method: ListChatRooms
+    access: ALLOW
+  
+  # ChatRoomMgr: other methods internal only
+  - object: ChatRoomMgr0
+    method: /.*/
+    access: INTERNAL
+
+  # ChatRoom: clients can interact with these methods
+  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+    method: /(Join|Leave|SendMessage|GetMessages)/
+    access: ALLOW
+  
+  # ChatRoom: other methods (NotifyMembers, etc.) internal only
+  - object: /ChatRoom-[a-zA-Z0-9_-]{1,50}/
+    method: /.*/
+    access: INTERNAL
+
+  # InternalScheduler: only accessible by nodes
+  - object: /InternalScheduler-.*/
+    method: /.*/
+    access: INTERNAL
+
+  # Counter: clients can increment/decrement/get
+  - object: /Counter-[a-zA-Z0-9_-]+/
+    method: /(Increment|Decrement|Get)/
+    access: ALLOW
+  
+  # Counter: Reset only from nodes
+  - object: /Counter-[a-zA-Z0-9_-]+/
+    method: Reset
+    access: INTERNAL
+
+  # Default: deny everything else
+  - object: /.*/
+    method: /.*/
+    access: REJECT

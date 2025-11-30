@@ -462,25 +462,36 @@ func TestGetNumShards(t *testing.T) {
 
 func TestLoadExampleConfigs(t *testing.T) {
 	tests := []struct {
-		name           string
-		file           string
-		expectedNodes  int
-		expectedGates  int
-		expectedShards int
+		name               string
+		file               string
+		expectedNodes      int
+		expectedGates      int
+		expectedShards     int
+		expectedRulesCount int // Access rules count, 0 if none
 	}{
 		{
-			name:           "single-node",
-			file:           "examples/single-node.yaml",
-			expectedNodes:  1,
-			expectedGates:  0,
-			expectedShards: 8192,
+			name:               "single-node",
+			file:               "examples/single-node.yaml",
+			expectedNodes:      1,
+			expectedGates:      0,
+			expectedShards:     8192,
+			expectedRulesCount: 0,
 		},
 		{
-			name:           "multi-node",
-			file:           "examples/multi-node.yaml",
-			expectedNodes:  2,
-			expectedGates:  1,
-			expectedShards: 8192,
+			name:               "multi-node",
+			file:               "examples/multi-node.yaml",
+			expectedNodes:      2,
+			expectedGates:      1,
+			expectedShards:     8192,
+			expectedRulesCount: 0,
+		},
+		{
+			name:               "multi-node-with-access-control",
+			file:               "examples/multi-node-with-access-control.yaml",
+			expectedNodes:      2,
+			expectedGates:      1,
+			expectedShards:     8192,
+			expectedRulesCount: 8, // 8 access rules in the example
 		},
 	}
 
@@ -509,6 +520,21 @@ func TestLoadExampleConfigs(t *testing.T) {
 
 			if cfg.Cluster.Provider != "etcd" {
 				t.Errorf("expected provider etcd, got %s", cfg.Cluster.Provider)
+			}
+
+			if len(cfg.AccessRules) != tt.expectedRulesCount {
+				t.Errorf("expected %d access rules, got %d", tt.expectedRulesCount, len(cfg.AccessRules))
+			}
+
+			// If access rules are present, verify we can create a validator
+			if tt.expectedRulesCount > 0 {
+				v, err := cfg.NewAccessValidator()
+				if err != nil {
+					t.Errorf("failed to create access validator: %v", err)
+				}
+				if v == nil {
+					t.Error("expected non-nil access validator for config with access rules")
+				}
 			}
 		})
 	}

@@ -13,12 +13,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -30,21 +33,23 @@ type ServerConfig struct {
 	AdvertiseAddress          string
 	MetricsListenAddress      string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress               string
-	EtcdPrefix                string        // Optional: etcd key prefix for this cluster (default: "/goverse")
-	MinQuorum                 int           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
-	NodeStabilityDuration     time.Duration // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
-	ShardMappingCheckInterval time.Duration // Optional: how often to check if shard mapping needs updating (default: 5s)
-	NumShards                 int           // Optional: number of shards in the cluster (default: 8192)
+	EtcdPrefix                string                  // Optional: etcd key prefix for this cluster (default: "/goverse")
+	MinQuorum                 int                     // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
+	NodeStabilityDuration     time.Duration           // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
+	ShardMappingCheckInterval time.Duration           // Optional: how often to check if shard mapping needs updating (default: 5s)
+	NumShards                 int                     // Optional: number of shards in the cluster (default: 8192)
+	AccessValidator           *config.AccessValidator // Optional: access validator for node access control
 }
 
 type Server struct {
 	goverse_pb.UnimplementedGoverseServer
-	config  *ServerConfig
-	Node    *node.Node
-	ctx     context.Context
-	cancel  context.CancelFunc
-	logger  *logger.Logger
-	cluster *cluster.Cluster
+	config          *ServerConfig
+	Node            *node.Node
+	ctx             context.Context
+	cancel          context.CancelFunc
+	logger          *logger.Logger
+	cluster         *cluster.Cluster
+	accessValidator *config.AccessValidator
 }
 
 func NewServer(config *ServerConfig) (*Server, error) {
@@ -90,12 +95,13 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	cluster.SetThis(c)
 
 	server := &Server{
-		config:  config,
-		Node:    node,
-		ctx:     ctx,
-		cancel:  cancel,
-		logger:  logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
-		cluster: c,
+		config:          config,
+		Node:            node,
+		ctx:             ctx,
+		cancel:          cancel,
+		logger:          logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
+		cluster:         c,
+		accessValidator: config.AccessValidator,
 	}
 
 	return server, nil
@@ -242,6 +248,16 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 	// Validate that this object should be on this node
 	if err := server.validateObjectShardOwnership(ctx, req.GetId()); err != nil {
 		return nil, err
+	}
+
+	// Check node access if access validator is configured
+	// This validates access for node-to-node calls (object-to-object)
+	// Note: Requests from gates (with ClientId) were already validated at the gate layer
+	if server.accessValidator != nil {
+		if err := server.accessValidator.CheckNodeAccess(req.GetId(), req.GetMethod()); err != nil {
+			server.logger.Warnf("Access denied for node call: object=%s, method=%s: %v", req.GetId(), req.GetMethod(), err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
 	}
 
 	// Inject client_id into context if present in the request
