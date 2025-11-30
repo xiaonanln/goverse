@@ -296,6 +296,11 @@
     const NODE_TYPE_GATE = 'gate'
     const NODE_TYPE_OBJECT = 'object'
 
+    // Animation constants
+    const SIMULATION_ALPHA_FULL = 0.3      // Alpha for full graph updates
+    const SIMULATION_ALPHA_INCREMENTAL = 0.1 // Alpha for incremental updates (lower = less disruption)
+    const SSE_RECONNECT_DELAY = 3000       // SSE reconnect delay in milliseconds
+
     // Type colors for nodes and objects
     const typeColors = {
       node: '#4CAF50',
@@ -315,6 +320,26 @@
     let svg = null
     let g = null
     let zoom = null
+
+    // Helper function to upsert a node in the goverse_nodes array
+    function upsertNode(node) {
+      const existingIdx = graphData.goverse_nodes.findIndex(n => n.id === node.id)
+      if (existingIdx >= 0) {
+        graphData.goverse_nodes[existingIdx] = node
+      } else {
+        graphData.goverse_nodes.push(node)
+      }
+    }
+
+    // Helper function to upsert an object in the goverse_objects array
+    function upsertObject(obj) {
+      const existingIdx = graphData.goverse_objects.findIndex(o => o.id === obj.id)
+      if (existingIdx >= 0) {
+        graphData.goverse_objects[existingIdx] = obj
+      } else {
+        graphData.goverse_objects.push(obj)
+      }
+    }
 
     // Initialize D3 graph
     function initGraph() {
@@ -543,11 +568,11 @@
       labelSelection.text(d => d.label)
 
       // Restart simulation
-      simulation.alpha(0.3).restart()
+      simulation.alpha(SIMULATION_ALPHA_FULL).restart()
     }
 
     function dragStarted(event, d) {
-      if (!event.active) simulation.alphaTarget(0.3).restart()
+      if (!event.active) simulation.alphaTarget(SIMULATION_ALPHA_FULL).restart()
       d.fx = d.x
       d.fy = d.y
     }
@@ -849,13 +874,7 @@
         const data = JSON.parse(event.data)
         console.log('SSE node_added:', data)
         if (data.node) {
-          // Check if node already exists
-          const existingIdx = graphData.goverse_nodes.findIndex(n => n.id === data.node.id)
-          if (existingIdx >= 0) {
-            graphData.goverse_nodes[existingIdx] = data.node
-          } else {
-            graphData.goverse_nodes.push(data.node)
-          }
+          upsertNode(data.node)
           updateNodeList()
           updateGraphIncremental()
         }
@@ -865,10 +884,7 @@
         const data = JSON.parse(event.data)
         console.log('SSE node_updated:', data)
         if (data.node) {
-          const idx = graphData.goverse_nodes.findIndex(n => n.id === data.node.id)
-          if (idx >= 0) {
-            graphData.goverse_nodes[idx] = data.node
-          }
+          upsertNode(data.node)
           updateNodeList()
           // No need to restart simulation for updates
         }
@@ -888,13 +904,7 @@
         const data = JSON.parse(event.data)
         console.log('SSE object_added:', data)
         if (data.object) {
-          // Check if object already exists
-          const existingIdx = graphData.goverse_objects.findIndex(o => o.id === data.object.id)
-          if (existingIdx >= 0) {
-            graphData.goverse_objects[existingIdx] = data.object
-          } else {
-            graphData.goverse_objects.push(data.object)
-          }
+          upsertObject(data.object)
           updateGraphIncremental()
           if (document.getElementById('shard-view').classList.contains('active')) {
             updateShardView()
@@ -906,10 +916,7 @@
         const data = JSON.parse(event.data)
         console.log('SSE object_updated:', data)
         if (data.object) {
-          const idx = graphData.goverse_objects.findIndex(o => o.id === data.object.id)
-          if (idx >= 0) {
-            graphData.goverse_objects[idx] = data.object
-          }
+          upsertObject(data.object)
           // No need to restart simulation for updates
         }
       })
@@ -933,9 +940,9 @@
       eventSource.onerror = (error) => {
         console.error('SSE error:', error)
         if (eventSource.readyState === EventSource.CLOSED) {
-          console.log('SSE connection closed, reconnecting in 3 seconds...')
+          console.log(`SSE connection closed, reconnecting in ${SSE_RECONNECT_DELAY / 1000} seconds...`)
           if (reconnectTimeout) clearTimeout(reconnectTimeout)
-          reconnectTimeout = setTimeout(connectSSE, 3000)
+          reconnectTimeout = setTimeout(connectSSE, SSE_RECONNECT_DELAY)
         }
       }
 
@@ -1098,7 +1105,7 @@
       labelSelection.text(d => d.label)
 
       // Use very low alpha to minimize disruption
-      simulation.alpha(0.1).restart()
+      simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()
     }
 
     // Initialize
