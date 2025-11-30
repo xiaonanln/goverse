@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <title>Inspector Graph</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="d3.min.js"></script>
   <style>
-    html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; }
+    html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; overflow: hidden; }
     .container { display: flex; height: 100%; }
     .sidebar {
       width: 300px;
@@ -13,6 +14,8 @@
       border-right: 1px solid #ddd;
       overflow-y: auto;
       padding: 0;
+      display: flex;
+      flex-direction: column;
     }
     .sidebar h3 {
       margin: 0;
@@ -26,6 +29,8 @@
       list-style: none;
       margin: 0;
       padding: 0;
+      flex: 1;
+      overflow-y: auto;
     }
     .node-item {
       padding: 10px 20px;
@@ -45,102 +50,760 @@
       color: #666;
       margin-top: 4px;
     }
-    .graph-container {
+    .node-item .node-type {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-left: 8px;
+    }
+    .node-item .node-type.node { background: #4CAF50; color: white; }
+    .node-item .node-type.gate { background: #2196F3; color: white; }
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .tabs {
+      display: flex;
+      background: #333;
+      padding: 0;
+    }
+    .tab {
+      padding: 12px 24px;
+      background: #444;
+      color: #ccc;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .tab:hover {
+      background: #555;
+    }
+    .tab.active {
+      background: #fff;
+      color: #333;
+    }
+    .view-container {
       flex: 1;
       position: relative;
+      overflow: hidden;
     }
-    #sigma-container {
+    .view {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+    .view.active {
+      display: block;
+    }
+    #graph-container {
+      width: 100%;
+      height: 100%;
+      background: #fafafa;
+    }
+    #graph-container svg {
       width: 100%;
       height: 100%;
     }
+    .tooltip {
+      position: absolute;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 1000;
+      max-width: 300px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .tooltip.visible {
+      opacity: 1;
+    }
+    .tooltip .tooltip-title {
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+      padding-bottom: 6px;
+    }
+    .tooltip .tooltip-row {
+      margin: 4px 0;
+    }
+    .tooltip .tooltip-label {
+      color: #aaa;
+    }
+    .graph-node {
+      cursor: pointer;
+    }
+    .graph-node:hover {
+      filter: brightness(1.2);
+    }
+    .graph-link {
+      stroke: #999;
+      stroke-opacity: 0.6;
+    }
+    .node-label {
+      font-size: 10px;
+      fill: #333;
+      pointer-events: none;
+      text-anchor: middle;
+    }
+    #shard-container {
+      padding: 20px;
+      overflow-y: auto;
+      background: #fff;
+    }
+    .shard-chart {
+      margin-bottom: 30px;
+    }
+    .shard-chart h4 {
+      margin: 0 0 15px 0;
+      color: #333;
+    }
+    .shard-bar-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+    .shard-bar {
+      height: 24px;
+      min-width: 4px;
+      border-radius: 2px;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    .shard-bar:hover {
+      filter: brightness(1.2);
+      transform: scaleY(1.2);
+    }
+    .shard-stats {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: #f5f5f5;
+      padding: 15px 20px;
+      border-radius: 8px;
+      min-width: 120px;
+    }
+    .stat-card .stat-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #333;
+    }
+    .stat-card .stat-label {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+    .legend {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+    }
+    .zoom-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      z-index: 100;
+    }
+    .zoom-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: white;
+      border-radius: 6px;
+      font-size: 18px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      transition: background 0.2s;
+    }
+    .zoom-btn:hover {
+      background: #f0f0f0;
+    }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
 </head>
 <body>
   <div class="container">
     <div class="sidebar">
-      <h3>Nodes</h3>
-      <ul id="node-list" class="node-list">
-        <!-- Nodes will be populated here -->
-      </ul>
+      <h3>Cluster Nodes</h3>
+      <ul id="node-list" class="node-list"></ul>
     </div>
-    <div class="graph-container">
-      <div id="sigma-container"></div>
+    <div class="main-content">
+      <div class="tabs">
+        <button class="tab active" data-view="graph">Graph View</button>
+        <button class="tab" data-view="shard">Shard Distribution</button>
+      </div>
+      <div class="view-container">
+        <div id="graph-view" class="view active">
+          <div id="graph-container"></div>
+          <div class="zoom-controls">
+            <button class="zoom-btn" id="zoom-in">+</button>
+            <button class="zoom-btn" id="zoom-out">−</button>
+            <button class="zoom-btn" id="zoom-reset">⟲</button>
+          </div>
+        </div>
+        <div id="shard-view" class="view">
+          <div id="shard-container"></div>
+        </div>
+      </div>
     </div>
   </div>
+  <div class="tooltip" id="tooltip"></div>
 
   <script>
-    const { Graph } = graphology
-    const graph = new Graph()
+    // Type colors for nodes and objects
+    const typeColors = {
+      node: '#4CAF50',
+      gate: '#2196F3',
+      Counter: '#FF9800',
+      ChatRoom: '#9C27B0',
+      Player: '#E91E63',
+      GameSession: '#00BCD4',
+      Inventory: '#795548',
+      Leaderboard: '#607D8B',
+      default: '#999'
+    }
 
-    // Create Sigma instance with simplified configuration
-    const sigmaInstance = new Sigma(graph, document.getElementById('sigma-container'), {
-      defaultNodeType: 'circle'
-    })
+    // State
+    let graphData = { goverse_nodes: [], goverse_objects: [] }
+    let simulation = null
+    let svg = null
+    let g = null
+    let zoom = null
 
-    function updateGoverseNodeList(goverseNodes) {
+    // Initialize D3 graph
+    function initGraph() {
+      const container = document.getElementById('graph-container')
+      const width = container.clientWidth
+      const height = container.clientHeight
+
+      svg = d3.select('#graph-container')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+
+      // Add zoom behavior
+      zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+          g.attr('transform', event.transform)
+        })
+
+      svg.call(zoom)
+
+      // Main group for zoom/pan
+      g = svg.append('g')
+
+      // Links group
+      g.append('g').attr('class', 'links')
+
+      // Nodes group
+      g.append('g').attr('class', 'nodes')
+
+      // Labels group
+      g.append('g').attr('class', 'labels')
+
+      // Initialize force simulation
+      simulation = d3.forceSimulation()
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5))
+        .force('link', d3.forceLink().id(d => d.id).distance(100))
+        .on('tick', ticked)
+
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        const newWidth = container.clientWidth
+        const newHeight = container.clientHeight
+        svg.attr('width', newWidth).attr('height', newHeight)
+        simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2))
+        simulation.alpha(0.3).restart()
+      })
+
+      // Zoom controls
+      document.getElementById('zoom-in').addEventListener('click', () => {
+        svg.transition().duration(300).call(zoom.scaleBy, 1.3)
+      })
+      document.getElementById('zoom-out').addEventListener('click', () => {
+        svg.transition().duration(300).call(zoom.scaleBy, 0.7)
+      })
+      document.getElementById('zoom-reset').addEventListener('click', () => {
+        svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity)
+      })
+    }
+
+    function getNodeRadius(d) {
+      if (d.nodeType === 'node') return 25
+      if (d.nodeType === 'gate') return 22
+      return d.size ? Math.max(8, Math.min(20, d.size / 2)) : 12
+    }
+
+    function getNodeColor(d) {
+      if (d.nodeType === 'node') return typeColors.node
+      if (d.nodeType === 'gate') return typeColors.gate
+      return d.color || typeColors[d.type] || typeColors.default
+    }
+
+    function getNodeShape(d) {
+      if (d.nodeType === 'node') return 'square'
+      if (d.nodeType === 'gate') return 'diamond'
+      return 'circle'
+    }
+
+    function ticked() {
+      // Update node positions
+      g.select('.nodes').selectAll('.graph-node')
+        .attr('transform', d => `translate(${d.x}, ${d.y})`)
+
+      // Update label positions
+      g.select('.labels').selectAll('.node-label')
+        .attr('x', d => d.x)
+        .attr('y', d => d.y + getNodeRadius(d) + 14)
+
+      // Update link positions
+      g.select('.links').selectAll('.graph-link')
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y)
+    }
+
+    function updateGraph() {
+      // Build nodes array: cluster nodes/gates + objects
+      const nodes = []
+      const links = []
+      const nodeMap = new Map()
+
+      // Add cluster nodes (nodes and gates)
+      graphData.goverse_nodes.forEach(n => {
+        const node = {
+          id: n.id,
+          label: n.label || n.id,
+          nodeType: n.type || 'node',
+          advertiseAddr: n.advertise_addr,
+          color: n.color
+        }
+        nodes.push(node)
+        nodeMap.set(n.id, node)
+      })
+
+      // Add objects
+      graphData.goverse_objects.forEach(obj => {
+        const node = {
+          id: obj.id,
+          label: obj.label || obj.id,
+          nodeType: 'object',
+          type: obj.type,
+          shardId: obj.shard_id,
+          goverseNodeId: obj.goverse_node_id,
+          color: obj.color,
+          size: obj.size
+        }
+        nodes.push(node)
+        nodeMap.set(obj.id, node)
+
+        // Create link from object to its node
+        if (obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
+          links.push({
+            source: obj.id,
+            target: obj.goverse_node_id
+          })
+        }
+      })
+
+      // Update simulation
+      simulation.nodes(nodes)
+      simulation.force('link').links(links)
+
+      // Update links
+      const linkSelection = g.select('.links')
+        .selectAll('.graph-link')
+        .data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+
+      linkSelection.exit().remove()
+
+      linkSelection.enter()
+        .append('line')
+        .attr('class', 'graph-link')
+        .attr('stroke-width', 1.5)
+
+      // Update nodes
+      const nodeSelection = g.select('.nodes')
+        .selectAll('.graph-node')
+        .data(nodes, d => d.id)
+
+      nodeSelection.exit().remove()
+
+      const nodeEnter = nodeSelection.enter()
+        .append('g')
+        .attr('class', 'graph-node')
+        .call(d3.drag()
+          .on('start', dragStarted)
+          .on('drag', dragged)
+          .on('end', dragEnded))
+        .on('mouseover', showTooltip)
+        .on('mousemove', moveTooltip)
+        .on('mouseout', hideTooltip)
+
+      // Add shapes based on node type
+      nodeEnter.each(function(d) {
+        const el = d3.select(this)
+        const r = getNodeRadius(d)
+        const shape = getNodeShape(d)
+
+        if (shape === 'square') {
+          el.append('rect')
+            .attr('width', r * 2)
+            .attr('height', r * 2)
+            .attr('x', -r)
+            .attr('y', -r)
+            .attr('rx', 4)
+            .attr('fill', getNodeColor(d))
+        } else if (shape === 'diamond') {
+          el.append('polygon')
+            .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
+            .attr('fill', getNodeColor(d))
+        } else {
+          el.append('circle')
+            .attr('r', r)
+            .attr('fill', getNodeColor(d))
+        }
+      })
+
+      // Update existing node colors
+      nodeSelection.each(function(d) {
+        const el = d3.select(this)
+        const shape = getNodeShape(d)
+        if (shape === 'square') {
+          el.select('rect').attr('fill', getNodeColor(d))
+        } else if (shape === 'diamond') {
+          el.select('polygon').attr('fill', getNodeColor(d))
+        } else {
+          el.select('circle').attr('fill', getNodeColor(d))
+        }
+      })
+
+      // Update labels
+      const labelSelection = g.select('.labels')
+        .selectAll('.node-label')
+        .data(nodes.filter(d => d.nodeType === 'node' || d.nodeType === 'gate'), d => d.id)
+
+      labelSelection.exit().remove()
+
+      labelSelection.enter()
+        .append('text')
+        .attr('class', 'node-label')
+        .text(d => d.label)
+
+      labelSelection.text(d => d.label)
+
+      // Restart simulation
+      simulation.alpha(0.3).restart()
+    }
+
+    function dragStarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart()
+      d.fx = d.x
+      d.fy = d.y
+    }
+
+    function dragged(event, d) {
+      d.fx = event.x
+      d.fy = event.y
+    }
+
+    function dragEnded(event, d) {
+      if (!event.active) simulation.alphaTarget(0)
+      d.fx = null
+      d.fy = null
+    }
+
+    // Tooltip functions
+    const tooltip = document.getElementById('tooltip')
+
+    function showTooltip(event, d) {
+      let content = `<div class="tooltip-title">${d.label || d.id}</div>`
+
+      if (d.nodeType === 'node' || d.nodeType === 'gate') {
+        content += `<div class="tooltip-row"><span class="tooltip-label">Type:</span> ${d.nodeType}</div>`
+        if (d.advertiseAddr) {
+          content += `<div class="tooltip-row"><span class="tooltip-label">Address:</span> ${d.advertiseAddr}</div>`
+        }
+      } else {
+        content += `<div class="tooltip-row"><span class="tooltip-label">Type:</span> ${d.type || 'Object'}</div>`
+        if (d.shardId !== undefined) {
+          content += `<div class="tooltip-row"><span class="tooltip-label">Shard:</span> ${d.shardId}</div>`
+        }
+        if (d.goverseNodeId) {
+          content += `<div class="tooltip-row"><span class="tooltip-label">Node:</span> ${d.goverseNodeId}</div>`
+        }
+      }
+
+      tooltip.innerHTML = content
+      tooltip.classList.add('visible')
+    }
+
+    function moveTooltip(event) {
+      tooltip.style.left = (event.pageX + 15) + 'px'
+      tooltip.style.top = (event.pageY + 15) + 'px'
+    }
+
+    function hideTooltip() {
+      tooltip.classList.remove('visible')
+    }
+
+    // Update sidebar node list
+    function updateNodeList() {
       const nodeList = document.getElementById('node-list')
       nodeList.innerHTML = ''
 
-      goverseNodes.forEach(goverseNode => {
+      graphData.goverse_nodes.forEach(node => {
         const li = document.createElement('li')
         li.className = 'node-item'
+        const typeClass = node.type || 'node'
         li.innerHTML = `
-          <div class="node-id">${goverseNode.id}</div>
+          <div class="node-id">
+            ${node.id}
+            <span class="node-type ${typeClass}">${typeClass}</span>
+          </div>
           <div class="node-details">
-            ${goverseNode.label ? `Label: ${goverseNode.label}<br>` : ''}
-            Position: (${Math.round(goverseNode.x || 0)}, ${Math.round(goverseNode.y || 0)})<br>
-            ${goverseNode.color ? `Color: ${goverseNode.color}` : ''}
+            ${node.advertise_addr ? `Address: ${node.advertise_addr}<br>` : ''}
+            ${node.label && node.label !== node.id ? `Label: ${node.label}` : ''}
           </div>
         `
 
-        // Add click handler to focus on node in graph
         li.addEventListener('click', () => {
-          if (graph.hasNode(goverseNode.id)) {
-            const nodePosition = graph.getNodeAttributes(goverseNode.id)
-            sigmaInstance.getCamera().animate(
-              { x: nodePosition.x, y: nodePosition.y, ratio: 0.5 },
-              { duration: 1000 }
-            )
-          }
+          focusOnNode(node.id)
         })
 
         nodeList.appendChild(li)
       })
     }
 
-    async function refresh() {
-      const res = await fetch('/graph', { cache: 'no-cache' })
-      const data = await res.json()
-      console.log("Graph data:", data)
+    function focusOnNode(nodeId) {
+      const node = simulation.nodes().find(n => n.id === nodeId)
+      if (node) {
+        const container = document.getElementById('graph-container')
+        const width = container.clientWidth
+        const height = container.clientHeight
 
-      // Update the sidebar node list
-      updateGoverseNodeList(data.goverse_nodes)
-
-      const seen = new Set()
-      data.goverse_objects.forEach(obj => {
-        seen.add(obj.id)
-        // Remove or ignore the 'type' property to use default node type
-        const nodeData = {
-          ...obj,
-          x: obj.x || Math.random() * 800, // Ensure x coordinate exists
-          y: obj.y || Math.random() * 600, // Ensure y coordinate exists
-          size: obj.size || 10,             // Sigma.js requires size property
-          color: obj.color || '#ff0000'     // Ensure color exists
-        }
-        delete nodeData.type
-        if (!graph.hasNode(obj.id)) graph.addNode(obj.id, nodeData)
-        else graph.mergeNodeAttributes(obj.id, nodeData)
-      })
-      graph.forEachNode(id => { if (!seen.has(id)) graph.dropNode(id) })
-
-
-      // Debug: Log graph state and refresh the renderer
-      console.log(`Graph has ${graph.order} nodes and ${graph.size} edges`)
-      sigmaInstance.refresh()
+        svg.transition().duration(750).call(
+          zoom.transform,
+          d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(1.5)
+            .translate(-node.x, -node.y)
+        )
+      }
     }
 
+    // Shard distribution view
+    function updateShardView() {
+      const container = document.getElementById('shard-container')
+
+      // Calculate stats
+      const objects = graphData.goverse_objects
+      const nodes = graphData.goverse_nodes.filter(n => n.type === 'node' || !n.type)
+      const gates = graphData.goverse_nodes.filter(n => n.type === 'gate')
+
+      // Group objects by shard
+      const shardMap = new Map()
+      objects.forEach(obj => {
+        const shardId = obj.shard_id || 0
+        if (!shardMap.has(shardId)) {
+          shardMap.set(shardId, [])
+        }
+        shardMap.get(shardId).push(obj)
+      })
+
+      // Group objects by type
+      const typeMap = new Map()
+      objects.forEach(obj => {
+        const type = obj.type || 'Unknown'
+        if (!typeMap.has(type)) {
+          typeMap.set(type, [])
+        }
+        typeMap.get(type).push(obj)
+      })
+
+      // Group objects by node
+      const nodeObjMap = new Map()
+      objects.forEach(obj => {
+        const nodeId = obj.goverse_node_id || 'Unknown'
+        if (!nodeObjMap.has(nodeId)) {
+          nodeObjMap.set(nodeId, [])
+        }
+        nodeObjMap.get(nodeId).push(obj)
+      })
+
+      // Build HTML
+      let html = `
+        <div class="shard-stats">
+          <div class="stat-card">
+            <div class="stat-value">${nodes.length}</div>
+            <div class="stat-label">Nodes</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${gates.length}</div>
+            <div class="stat-label">Gates</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${objects.length}</div>
+            <div class="stat-label">Objects</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${shardMap.size}</div>
+            <div class="stat-label">Active Shards</div>
+          </div>
+        </div>
+      `
+
+      // Objects by type chart
+      if (typeMap.size > 0) {
+        html += `
+          <div class="shard-chart">
+            <h4>Objects by Type</h4>
+            <div class="legend">
+              ${Array.from(typeMap.entries()).map(([type, objs]) => `
+                <div class="legend-item">
+                  <div class="legend-color" style="background: ${typeColors[type] || typeColors.default}"></div>
+                  <span>${type}: ${objs.length}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="shard-bar-container">
+              ${Array.from(typeMap.entries()).map(([type, objs]) => `
+                <div class="shard-bar" 
+                     style="background: ${typeColors[type] || typeColors.default}; width: ${Math.max(30, objs.length * 3)}px"
+                     title="${type}: ${objs.length} objects">
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `
+      }
+
+      // Objects by node chart
+      if (nodeObjMap.size > 0) {
+        html += `
+          <div class="shard-chart">
+            <h4>Objects by Node</h4>
+            <div class="legend">
+              ${Array.from(nodeObjMap.entries()).map(([nodeId]) => `
+                <div class="legend-item">
+                  <div class="legend-color" style="background: ${typeColors.node}"></div>
+                  <span>${nodeId}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="shard-bar-container">
+              ${Array.from(nodeObjMap.entries()).map(([nodeId, objs]) => `
+                <div class="shard-bar" 
+                     style="background: ${typeColors.node}; width: ${Math.max(30, objs.length * 3)}px"
+                     title="${nodeId}: ${objs.length} objects">
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `
+      }
+
+      // Shard distribution chart
+      if (shardMap.size > 0) {
+        const sortedShards = Array.from(shardMap.entries()).sort((a, b) => a[0] - b[0])
+        const maxObjects = Math.max(...sortedShards.map(([_, objs]) => objs.length))
+
+        html += `
+          <div class="shard-chart">
+            <h4>Shard Distribution</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 2px;">
+              ${sortedShards.map(([shardId, objs]) => {
+                const height = Math.max(8, (objs.length / maxObjects) * 40)
+                const color = typeColors.node
+                return `
+                  <div class="shard-bar" 
+                       style="background: ${color}; height: ${height}px; width: 12px; align-self: flex-end;"
+                       title="Shard ${shardId}: ${objs.length} objects">
+                  </div>
+                `
+              }).join('')}
+            </div>
+            <div style="margin-top: 8px; font-size: 12px; color: #666;">
+              Shards: ${sortedShards[0]?.[0] || 0} - ${sortedShards[sortedShards.length - 1]?.[0] || 0}
+            </div>
+          </div>
+        `
+      }
+
+      container.innerHTML = html
+    }
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
+
+        tab.classList.add('active')
+        const viewId = tab.dataset.view + '-view'
+        document.getElementById(viewId).classList.add('active')
+
+        if (tab.dataset.view === 'shard') {
+          updateShardView()
+        }
+      })
+    })
+
+    // Fetch and refresh data
+    async function refresh() {
+      try {
+        const res = await fetch('/graph', { cache: 'no-cache' })
+        graphData = await res.json()
+        console.log('Graph data:', graphData)
+
+        updateNodeList()
+        updateGraph()
+
+        // Update shard view if visible
+        if (document.getElementById('shard-view').classList.contains('active')) {
+          updateShardView()
+        }
+      } catch (err) {
+        console.error('Failed to fetch graph data:', err)
+      }
+    }
+
+    // Initialize
+    initGraph()
     refresh()
     setInterval(refresh, 1000)
   </script>
