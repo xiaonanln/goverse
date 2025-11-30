@@ -10,8 +10,10 @@ It lets you build systems around **stateful entities with identity and methods**
 - [Installation](#installation)
 - [Core Concepts](#core-concepts)
 - [Project Structure](#project-structure)
-- [Client Architecture](#client-architecture)
+- [Gate Architecture](#gate-architecture)
 - [Quick Start Tutorial](#quick-start-tutorial)
+- [HTTP API](#http-api)
+- [Object Access Control](#object-access-control)
 - [Chat Application Example](#chat-application-example)
 - [Cluster Configuration](#cluster-configuration)
 - [Object Persistence](#object-persistence)
@@ -44,7 +46,7 @@ go get github.com/xiaonanln/goverse
 - The runtime manages all lifecycle transitions
 
 ### Sharding & Placement
-- Fixed 8192-shard model provides consistent hashing
+- Configurable shard count (default 8192) for flexible scaling
 - Automatic shard-to-node mapping managed via etcd
 - Objects placed on nodes based on their shard assignment
 - Automatic rebalancing when nodes join or leave
@@ -59,17 +61,22 @@ go get github.com/xiaonanln/goverse
 ## Project Structure
 
 - `cmd/inspector/` – Inspector web server for cluster visualization
-- `cmd/gate/` – Gate server binary for client connections
+- `cmd/gate/` – Gate server binary for client connections (gRPC + HTTP)
 - `server/` – Node server implementation with context-based shutdown
 - `node/` – Core node logic and object management
 - `object/` – Object base types and helpers (BaseObject)
+- `object_access/` – Object access control validation
 - `gate/` – Gate implementation for handling client connections
-- `client/` – Client protocol definitions (deprecated BaseClient for backwards compatibility)
+- `goverseapi/` – High-level API for applications
+- `client/` – Client protocol definitions
 - `cluster/` – Cluster singleton management, leadership election, and automatic shard mapping
-- `cluster/sharding/` – Shard-to-node mapping with 8192 fixed shards
+- `cluster/sharding/` – Shard-to-node mapping with configurable shard count
 - `cluster/etcdmanager/` – etcd connection management and node registry
+- `config/` – YAML configuration parsing and access rules
 - `util/postgres/` – PostgreSQL persistence utilities and JSONB storage
-- `samples/chat/` – Sample distributed chat application with multiple chat rooms
+- `samples/counter/` – Simple counter service demonstrating basic operations
+- `samples/tictactoe/` – Web-based game with HTTP Gate API
+- `samples/chat/` – Distributed chat with real-time push messaging and web client
 - `examples/persistence/` – Example of using PostgreSQL persistence
 - `examples/minquorum/` – Example demonstrating cluster quorum configuration
 - `proto/` – GoVerse protocol definitions
@@ -152,6 +159,25 @@ resp, _ := client.CallObject(ctx, &gate_pb.CallObjectRequest{
 
 This design cleanly separates client connectivity from object management, with distributed objects serving as the core abstraction.
 
+### HTTP API
+
+The gate also provides an HTTP/JSON API for clients that prefer REST-style access:
+
+```bash
+# Call an object method via HTTP
+curl -X POST http://localhost:8080/api/v1/objects/call/Counter/my-counter/Add \
+  -H "Content-Type: application/json" \
+  -d '{"request":"<base64-encoded-protobuf>"}'
+```
+
+Start the gate with HTTP enabled:
+
+```bash
+go run ./cmd/gate/ -http-listen=:8080
+```
+
+See [HTTP_GATE.md](design/HTTP_GATE.md) for full HTTP API documentation.
+
 ---
 
 ## Quick Start Tutorial
@@ -231,6 +257,56 @@ if err != nil {
 value := resp.(int)
 fmt.Printf("Counter value: %d\n", value)
 ```
+
+---
+
+## Object Access Control
+
+GoVerse supports config-based access control to restrict which clients and nodes can access specific object types and methods.
+
+### Configuration
+
+Add `object_access_rules` to your YAML config:
+
+```yaml
+# config.yaml
+object_access_rules:
+  # Allow clients to call specific ChatRoom methods
+  - type: ChatRoom
+    id: /[a-zA-Z0-9_-]{1,50}/
+    method: /(Join|Leave|SendMessage|GetMessages)/
+    access: ALLOW
+  
+  # Internal methods only accessible by other objects
+  - type: ChatRoom
+    access: INTERNAL
+
+  # Counter: clients can increment/decrement/get
+  - type: Counter
+    method: /(Increment|Decrement|Get)/
+    access: ALLOW
+
+  # Default: deny everything else
+  - type: /.*/
+    access: REJECT
+```
+
+### Access Levels
+
+| Level | Client (via Gate) | Node (object-to-object) |
+|-------|-------------------|-------------------------|
+| `REJECT` | ✗ Denied | ✗ Denied |
+| `INTERNAL` | ✗ Denied | ✓ Allowed |
+| `EXTERNAL` | ✓ Allowed | ✗ Denied |
+| `ALLOW` | ✓ Allowed | ✓ Allowed |
+
+### Pattern Matching
+
+- **Literal strings**: Exact match (e.g., `ChatRoom`)
+- **Regex patterns**: Use `/pattern/` syntax (auto-anchored, e.g., `/[a-zA-Z0-9_-]+/`)
+- **Optional fields**: Omit `id` or `method` to match all
+
+See [OBJECT_ACCESS_CONTROL.md](design/OBJECT_ACCESS_CONTROL.md) for full documentation.
 
 ---
 
@@ -643,14 +719,19 @@ This script is used in CI/CD but can also be run locally for testing.
 
 ## Additional Resources
 
+- [GoVerse API Reference](GOVERSEAPI.md): Complete API documentation for the goverseapi package
+- [HTTP Gate API](design/HTTP_GATE.md): REST/HTTP endpoints for client access
+- [Object Access Control](design/OBJECT_ACCESS_CONTROL.md): Security rules and access patterns
 - [Push Messaging](PUSH_MESSAGING.md): Real-time server-to-client message delivery
+- [Configuration](CONFIGURATION.md): YAML config file format and options
 - [Prometheus Integration](PROMETHEUS_INTEGRATION.md): Metrics for monitoring and observability
 - [PostgreSQL Setup](POSTGRES_SETUP.md): Guide for setting up object persistence with PostgreSQL
 - [Persistence Example](../examples/persistence/): Complete example of using PostgreSQL persistence
-- [Inspector UI](../inspector/web/index.html): Visualize cluster state and objects
-- [Chat Sample](../samples/chat/): Example distributed chat with multiple rooms and real-time messaging
-- [Client Service](../client/): Client connection management and RPC routing
-- [API Reference](../proto/): Protocol buffer definitions
+- [Inspector UI](../cmd/inspector/): Visualize cluster state and objects
+- [Counter Sample](../samples/counter/): Simple counter service demonstrating basic operations
+- [Tic Tac Toe Sample](../samples/tictactoe/): Web-based game with HTTP Gate API
+- [Chat Sample](../samples/chat/): Distributed chat with real-time messaging and web client
+- [Proto Reference](../proto/): Protocol buffer definitions
 - [Testing Guide](TESTING.md): Comprehensive testing documentation
 
 ---
