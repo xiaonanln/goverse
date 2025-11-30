@@ -257,8 +257,8 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 	// A request that passes gate validation might be denied here if the access
 	// level is EXTERNAL (client-only). This ensures consistent enforcement.
 	if server.accessValidator != nil {
-		if err := server.accessValidator.CheckNodeAccess(req.GetId(), req.GetMethod()); err != nil {
-			server.logger.Warnf("Access denied for node call: object=%s, method=%s: %v", req.GetId(), req.GetMethod(), err)
+		if err := server.accessValidator.CheckNodeAccess(req.GetType(), req.GetId(), req.GetMethod()); err != nil {
+			server.logger.Warnf("Access denied for node call: type=%s, id=%s, method=%s: %v", req.GetType(), req.GetId(), req.GetMethod(), err)
 			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
 		}
 	}

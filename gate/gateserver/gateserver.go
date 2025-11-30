@@ -273,8 +273,8 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 
 	// Check client access if access validator is configured
 	if s.accessValidator != nil {
-		if err := s.accessValidator.CheckClientAccess(req.Id, req.Method); err != nil {
-			s.logger.Warnf("Access denied for client call: object=%s, method=%s: %v", req.Id, req.Method, err)
+		if err := s.accessValidator.CheckClientAccess(req.Type, req.Id, req.Method); err != nil {
+			s.logger.Warnf("Access denied for client call: type=%s, id=%s, method=%s: %v", req.Type, req.Id, req.Method, err)
 			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
 		}
 	}
