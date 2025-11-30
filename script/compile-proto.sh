@@ -5,7 +5,7 @@ set -euo pipefail
 PROTO_FILES=(
     "proto/goverse.proto"
     "client/proto/gate.proto"
-    "inspector/proto/inspector.proto"
+    "cmd/inspector/proto/inspector.proto"
 )
 
 # Common protoc options for Go
@@ -27,7 +27,7 @@ echo "Generating Python proto files..."
 if command -v python3 &> /dev/null; then
     # Ensure proto directories are Python packages
     touch proto/__init__.py
-    touch inspector/proto/__init__.py
+    touch cmd/inspector/proto/__init__.py
     touch client/proto/__init__.py
     
     # Generate Python proto files from goverse.proto
@@ -44,14 +44,14 @@ if command -v python3 &> /dev/null; then
         fi
     fi
     
-    # Generate Python proto files from inspector/proto/inspector.proto
-    if [[ -f "inspector/proto/inspector.proto" ]]; then
+    # Generate Python proto files from cmd/inspector/proto/inspector.proto
+    if [[ -f "cmd/inspector/proto/inspector.proto" ]]; then
         if python3 -m grpc_tools.protoc \
             -I. \
             --python_out=. \
             --grpc_python_out=. \
-            inspector/proto/inspector.proto 2>&1; then
-            echo "  ✅ Python proto files generated for inspector/proto/inspector.proto"
+            cmd/inspector/proto/inspector.proto 2>&1; then
+            echo "  ✅ Python proto files generated for cmd/inspector/proto/inspector.proto"
         else
             echo "  Note: Failed to generate Python proto files for inspector.proto"
         fi

@@ -8,7 +8,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
-	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

@@ -11,7 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspectserver"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
-	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -336,7 +336,7 @@ func TestInspectorService_UnregisterNode(t *testing.T) {
 
 func TestCreateHTTPHandler(t *testing.T) {
 	pg := graph.NewGoverseGraph()
-	handler := inspectserver.CreateHTTPHandler(pg, "inspector/web")
+	handler := inspectserver.CreateHTTPHandler(pg, "cmd/inspector/web")
 
 	if handler == nil {
 		t.Fatal("CreateHTTPHandler() should not return nil")

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
-	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 )
 
 // TestNewGoverseGraph tests the constructor

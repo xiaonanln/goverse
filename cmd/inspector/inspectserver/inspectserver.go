@@ -15,7 +15,7 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
-	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 )
 
 type GoverseNode = models.GoverseNode

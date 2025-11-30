@@ -10,7 +10,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
-	inspector_pb "github.com/xiaonanln/goverse/inspector/proto"
+	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

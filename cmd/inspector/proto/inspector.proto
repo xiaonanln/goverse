@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package inspector;
 
-option go_package = "github.com/xiaonanln/goverse/inspector/proto/inspector_pb";
+option go_package = "github.com/xiaonanln/goverse/cmd/inspector/proto/inspector_pb";
 
 message Empty {}
 

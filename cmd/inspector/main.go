@@ -55,7 +55,7 @@ func main() {
 	server := inspectserver.New(pg, inspectserver.Config{
 		GRPCAddr:  *grpcAddr,
 		HTTPAddr:  *httpAddr,
-		StaticDir: "inspector/web",
+		StaticDir: "cmd/inspector/web",
 	})
 
 	// Start gRPC server
