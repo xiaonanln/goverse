@@ -211,3 +211,49 @@ func (v *AccessValidator) findAccess(objectType, objectID, method string) Access
 	// Default: deny
 	return AccessReject
 }
+
+// CanClientCreate checks if a client (via Gate) can create an object of the given type/ID.
+// Creation is allowed if the client can call ANY method on the object.
+// Returns nil if allowed, error if denied.
+func (v *AccessValidator) CanClientCreate(objectType, objectID string) error {
+	if v.canAccessAnyMethod(objectType, objectID, true) {
+		return nil
+	}
+	return fmt.Errorf("access denied: client cannot call any method on %s/%s", objectType, objectID)
+}
+
+// CanNodeCreate checks if a node (object-to-object) can create an object of the given type/ID.
+// Creation is allowed if the node can call ANY method on the object.
+// Returns nil if allowed, error if denied.
+func (v *AccessValidator) CanNodeCreate(objectType, objectID string) error {
+	if v.canAccessAnyMethod(objectType, objectID, false) {
+		return nil
+	}
+	return fmt.Errorf("access denied: node cannot call any method on %s/%s", objectType, objectID)
+}
+
+// canAccessAnyMethod checks if there exists any method that the caller can access.
+// isClient=true checks for client access (ALLOW/EXTERNAL), false checks for node access (ALLOW/INTERNAL).
+func (v *AccessValidator) canAccessAnyMethod(objectType, objectID string, isClient bool) bool {
+	for _, rule := range v.rules {
+		// Check if this rule matches the object type and ID
+		if !rule.typeMatcher.Match(objectType) || !rule.idMatcher.Match(objectID) {
+			continue
+		}
+
+		// This rule matches the type and ID. Check if it allows access.
+		if isClient {
+			if rule.access == AccessAllow || rule.access == AccessExternal {
+				return true
+			}
+		} else {
+			if rule.access == AccessAllow || rule.access == AccessInternal {
+				return true
+			}
+		}
+
+		// If this rule explicitly rejects, we still need to check other rules
+		// that might allow access to different methods
+	}
+	return false
+}

@@ -307,6 +307,16 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 		return nil, err
 	}
 
+	// Check node access if access validator is configured.
+	// Creation is allowed if the node can call any method on this object.
+	// Defense in depth: Both gates and nodes validate access.
+	if server.accessValidator != nil {
+		if err := server.accessValidator.CanNodeCreate(req.GetType(), req.GetId()); err != nil {
+			server.logger.Warnf("Access denied for node create: type=%s, id=%s: %v", req.GetType(), req.GetId(), err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
+
 	id, err := server.Node.CreateObject(ctx, req.GetType(), req.GetId())
 	if err != nil {
 		server.logger.Errorf("CreateObject failed: %v", err)

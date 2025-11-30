@@ -300,6 +300,15 @@ func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObject
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCreateTimeout)
 	defer cancel()
 
+	// Check client access if access validator is configured.
+	// Creation is allowed if the client can call any method on this object.
+	if s.accessValidator != nil {
+		if err := s.accessValidator.CanClientCreate(req.Type, req.Id); err != nil {
+			s.logger.Warnf("Access denied for client create: type=%s, id=%s: %v", req.Type, req.Id, err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
+
 	// Call the cluster to create the object
 	objID, err := s.cluster.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {

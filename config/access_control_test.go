@@ -651,6 +651,140 @@ func TestAccessLevel_String(t *testing.T) {
 	}
 }
 
+func TestAccessValidator_CanClientCreate(t *testing.T) {
+	rules := []AccessRule{
+		// ChatRoomMgr singleton: clients can list rooms (ALLOW = both client and node)
+		{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Method: "ListChatRooms", Access: "ALLOW"},
+		// ChatRoomMgr: other methods internal only (nodes can access, clients cannot)
+		{Type: "ChatRoomMgr", Method: "/.*/", Access: "INTERNAL"},
+		// ChatRoom: clients can interact with these methods (ALLOW)
+		{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]+/", Method: "/(Join|Leave|SendMessage)/", Access: "ALLOW"},
+		// ChatRoom: other methods internal only
+		{Type: "ChatRoom", Method: "/.*/", Access: "INTERNAL"},
+		// Counter: external only method (clients can access)
+		{Type: "Counter", Method: "ExternalOnly", Access: "EXTERNAL"},
+		// InternalScheduler: all methods internal only
+		{Type: "InternalScheduler", Method: "/.*/", Access: "INTERNAL"},
+		// Default: deny everything else
+		{Type: "/.*/", Access: "REJECT"},
+	}
+
+	v, err := NewAccessValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		objectType string
+		objectID   string
+		allowed    bool
+	}{
+		// ChatRoomMgr: has ALLOW method ListChatRooms - can create
+		{name: "ChatRoomMgr with ALLOW method can be created", objectType: "ChatRoomMgr", objectID: "ChatRoomMgr0", allowed: true},
+		// ChatRoom: has ALLOW methods (Join, Leave, SendMessage) - can create
+		{name: "ChatRoom with ALLOW methods can be created", objectType: "ChatRoom", objectID: "General", allowed: true},
+		{name: "ChatRoom with valid ID can be created", objectType: "ChatRoom", objectID: "test-room-123", allowed: true},
+		// Counter: has EXTERNAL method - can create
+		{name: "Counter with EXTERNAL method can be created", objectType: "Counter", objectID: "counter-1", allowed: true},
+		// InternalScheduler: only has INTERNAL methods - clients cannot create
+		{name: "InternalScheduler with only INTERNAL methods cannot be created by client", objectType: "InternalScheduler", objectID: "sched-1", allowed: false},
+		// Unknown type: matches default REJECT - cannot create
+		{name: "Unknown type cannot be created", objectType: "UnknownType", objectID: "any", allowed: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.CanClientCreate(tt.objectType, tt.objectID)
+			if tt.allowed && err != nil {
+				t.Errorf("expected creation allowed, got error: %v", err)
+			}
+			if !tt.allowed && err == nil {
+				t.Errorf("expected creation denied, got allowed")
+			}
+		})
+	}
+}
+
+func TestAccessValidator_CanNodeCreate(t *testing.T) {
+	rules := []AccessRule{
+		// ChatRoomMgr: internal access for all methods
+		{Type: "ChatRoomMgr", Method: "/.*/", Access: "INTERNAL"},
+		// ChatRoom: all methods allowed for internal
+		{Type: "ChatRoom", Method: "/.*/", Access: "INTERNAL"},
+		// Counter: external only method - nodes cannot access this
+		{Type: "Counter", Method: "ExternalOnly", Access: "EXTERNAL"},
+		// Counter: other methods allowed for both (ALLOW includes node access)
+		{Type: "Counter", Method: "/.*/", Access: "ALLOW"},
+		// ExternalOnlyService: all methods external only
+		{Type: "ExternalOnlyService", Method: "/.*/", Access: "EXTERNAL"},
+		// Default: reject
+		{Type: "/.*/", Access: "REJECT"},
+	}
+
+	v, err := NewAccessValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		objectType string
+		objectID   string
+		allowed    bool
+	}{
+		// ChatRoomMgr: INTERNAL access - nodes can create
+		{name: "ChatRoomMgr with INTERNAL access can be created by node", objectType: "ChatRoomMgr", objectID: "ChatRoomMgr0", allowed: true},
+		// ChatRoom: INTERNAL access - nodes can create
+		{name: "ChatRoom with INTERNAL access can be created by node", objectType: "ChatRoom", objectID: "test", allowed: true},
+		// Counter: has ALLOW method (catch-all) - nodes can create
+		{name: "Counter with ALLOW method can be created by node", objectType: "Counter", objectID: "counter-1", allowed: true},
+		// ExternalOnlyService: only EXTERNAL methods - nodes cannot create
+		{name: "ExternalOnlyService with only EXTERNAL methods cannot be created by node", objectType: "ExternalOnlyService", objectID: "service-1", allowed: false},
+		// Unknown type: matches default REJECT - cannot create
+		{name: "Unknown type cannot be created by node", objectType: "UnknownType", objectID: "any", allowed: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.CanNodeCreate(tt.objectType, tt.objectID)
+			if tt.allowed && err != nil {
+				t.Errorf("expected creation allowed, got error: %v", err)
+			}
+			if !tt.allowed && err == nil {
+				t.Errorf("expected creation denied, got allowed")
+			}
+		})
+	}
+}
+
+func TestAccessValidator_CreateAccess_MixedRules(t *testing.T) {
+	// Test complex scenario with mixed access levels
+	rules := []AccessRule{
+		// Specific method ALLOW
+		{Type: "MixedObject", Method: "PublicMethod", Access: "ALLOW"},
+		// Catch-all INTERNAL for other methods
+		{Type: "MixedObject", Method: "/.*/", Access: "INTERNAL"},
+		// Default deny
+		{Type: "/.*/", Access: "REJECT"},
+	}
+
+	v, err := NewAccessValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	// Client can create because PublicMethod is ALLOW
+	if err := v.CanClientCreate("MixedObject", "obj-1"); err != nil {
+		t.Errorf("client should be able to create MixedObject (has ALLOW method): %v", err)
+	}
+
+	// Node can create because both PublicMethod (ALLOW) and catch-all (INTERNAL) allow node access
+	if err := v.CanNodeCreate("MixedObject", "obj-1"); err != nil {
+		t.Errorf("node should be able to create MixedObject: %v", err)
+	}
+}
+
 func containsString(s, substr string) bool {
 	return strings.Contains(s, substr)
 }

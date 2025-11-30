@@ -206,6 +206,16 @@ func (s *GateServer) handleCreateObject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Check client access if access validator is configured.
+	// Creation is allowed if the client can call any method on this object.
+	if s.accessValidator != nil {
+		if err := s.accessValidator.CanClientCreate(objType, objID); err != nil {
+			s.logger.Warnf("Access denied for HTTP create: type=%s, id=%s: %v", objType, objID, err)
+			s.writeError(w, http.StatusForbidden, "ACCESS_DENIED", err.Error())
+			return
+		}
+	}
+
 	// Create context
 	ctx := r.Context()
 
