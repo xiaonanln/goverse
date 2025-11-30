@@ -9,11 +9,14 @@ import (
 
 	gate_pb "github.com/xiaonanln/goverse/client/proto"
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -29,19 +32,22 @@ type GateServerConfig struct {
 	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
 	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
 	DefaultCreateTimeout time.Duration // Optional: default timeout for CreateObject operations (default: 30s)
+
+	AccessValidator *config.AccessValidator // Optional: access validator for client access control
 }
 
 // GateServer handles gRPC requests and delegates to the gate
 type GateServer struct {
 	gate_pb.UnimplementedGateServiceServer
-	config     *GateServerConfig
-	ctx        context.Context
-	cancel     context.CancelFunc
-	logger     *logger.Logger
-	grpcServer *grpc.Server
-	httpServer *http.Server
-	gate       *gate.Gate
-	cluster    *cluster.Cluster
+	config          *GateServerConfig
+	ctx             context.Context
+	cancel          context.CancelFunc
+	logger          *logger.Logger
+	grpcServer      *grpc.Server
+	httpServer      *http.Server
+	gate            *gate.Gate
+	cluster         *cluster.Cluster
+	accessValidator *config.AccessValidator
 }
 
 // NewGateServer creates a new gate server instance
@@ -77,12 +83,13 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 	}
 
 	server := &GateServer{
-		config:  config,
-		ctx:     ctx,
-		cancel:  cancel,
-		logger:  logger.NewLogger("GateServer"),
-		gate:    gw,
-		cluster: c,
+		config:          config,
+		ctx:             ctx,
+		cancel:          cancel,
+		logger:          logger.NewLogger("GateServer"),
+		gate:            gw,
+		cluster:         c,
+		accessValidator: config.AccessValidator,
 	}
 
 	return server, nil
@@ -263,6 +270,14 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 	// Apply default timeout if context has no deadline
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCallTimeout)
 	defer cancel()
+
+	// Check client access if access validator is configured
+	if s.accessValidator != nil {
+		if err := s.accessValidator.CheckClientAccess(req.Id, req.Method); err != nil {
+			s.logger.Warnf("Access denied for client call: object=%s, method=%s: %v", req.Id, req.Method, err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
 
 	// Inject client_id into the context so it can be passed to the node
 	if req.ClientId != "" {
