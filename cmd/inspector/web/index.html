@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Inspector Graph</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- D3.js v7.8.5 - downloaded from https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js -->
   <script src="d3.min.js"></script>
   <style>
     html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; overflow: hidden; }
@@ -226,6 +227,16 @@
       height: 16px;
       border-radius: 3px;
     }
+    .shard-distribution-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+    .shard-range-label {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+    }
     .zoom-controls {
       position: absolute;
       bottom: 20px;
@@ -280,6 +291,11 @@
   <div class="tooltip" id="tooltip"></div>
 
   <script>
+    // Node type constants
+    const NODE_TYPE_NODE = 'node'
+    const NODE_TYPE_GATE = 'gate'
+    const NODE_TYPE_OBJECT = 'object'
+
     // Type colors for nodes and objects
     const typeColors = {
       node: '#4CAF50',
@@ -362,20 +378,20 @@
     }
 
     function getNodeRadius(d) {
-      if (d.nodeType === 'node') return 25
-      if (d.nodeType === 'gate') return 22
+      if (d.nodeType === NODE_TYPE_NODE) return 25
+      if (d.nodeType === NODE_TYPE_GATE) return 22
       return d.size ? Math.max(8, Math.min(20, d.size / 2)) : 12
     }
 
     function getNodeColor(d) {
-      if (d.nodeType === 'node') return typeColors.node
-      if (d.nodeType === 'gate') return typeColors.gate
+      if (d.nodeType === NODE_TYPE_NODE) return typeColors.node
+      if (d.nodeType === NODE_TYPE_GATE) return typeColors.gate
       return d.color || typeColors[d.type] || typeColors.default
     }
 
     function getNodeShape(d) {
-      if (d.nodeType === 'node') return 'square'
-      if (d.nodeType === 'gate') return 'diamond'
+      if (d.nodeType === NODE_TYPE_NODE) return 'square'
+      if (d.nodeType === NODE_TYPE_GATE) return 'diamond'
       return 'circle'
     }
 
@@ -408,7 +424,7 @@
         const node = {
           id: n.id,
           label: n.label || n.id,
-          nodeType: n.type || 'node',
+          nodeType: n.type || NODE_TYPE_NODE,
           advertiseAddr: n.advertise_addr,
           color: n.color
         }
@@ -421,7 +437,7 @@
         const node = {
           id: obj.id,
           label: obj.label || obj.id,
-          nodeType: 'object',
+          nodeType: NODE_TYPE_OBJECT,
           type: obj.type,
           shardId: obj.shard_id,
           goverseNodeId: obj.goverse_node_id,
@@ -515,7 +531,7 @@
       // Update labels
       const labelSelection = g.select('.labels')
         .selectAll('.node-label')
-        .data(nodes.filter(d => d.nodeType === 'node' || d.nodeType === 'gate'), d => d.id)
+        .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
 
       labelSelection.exit().remove()
 
@@ -553,7 +569,7 @@
     function showTooltip(event, d) {
       let content = `<div class="tooltip-title">${d.label || d.id}</div>`
 
-      if (d.nodeType === 'node' || d.nodeType === 'gate') {
+      if (d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE) {
         content += `<div class="tooltip-row"><span class="tooltip-label">Type:</span> ${d.nodeType}</div>`
         if (d.advertiseAddr) {
           content += `<div class="tooltip-row"><span class="tooltip-label">Address:</span> ${d.advertiseAddr}</div>`
@@ -745,7 +761,7 @@
         html += `
           <div class="shard-chart">
             <h4>Shard Distribution</h4>
-            <div style="display: flex; flex-wrap: wrap; gap: 2px;">
+            <div class="shard-distribution-container">
               ${sortedShards.map(([shardId, objs]) => {
                 const height = Math.max(8, (objs.length / maxObjects) * 40)
                 const color = typeColors.node
@@ -757,7 +773,7 @@
                 `
               }).join('')}
             </div>
-            <div style="margin-top: 8px; font-size: 12px; color: #666;">
+            <div class="shard-range-label">
               Shards: ${sortedShards[0]?.[0] || 0} - ${sortedShards[sortedShards.length - 1]?.[0] || 0}
             </div>
           </div>
@@ -798,7 +814,7 @@
           updateShardView()
         }
       } catch (err) {
-        console.error('Failed to fetch graph data:', err)
+        console.error('Failed to fetch graph data from /graph:', err.message || err)
       }
     }
 
