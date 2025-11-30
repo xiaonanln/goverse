@@ -654,3 +654,552 @@ func TestAccessLevel_String(t *testing.T) {
 func containsString(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+// Tests for LifecycleValidator
+
+func TestNewLifecycleValidator(t *testing.T) {
+	tests := []struct {
+		name    string
+		rules   []LifecycleRule
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "empty rules",
+			rules:   []LifecycleRule{},
+			wantErr: false,
+		},
+		{
+			name: "valid CREATE rule",
+			rules: []LifecycleRule{
+				{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]+/", Lifecycle: "CREATE", Access: "ALLOW"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid DELETE rule",
+			rules: []LifecycleRule{
+				{Type: "ChatRoom", Lifecycle: "DELETE", Access: "INTERNAL"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid ALL rule",
+			rules: []LifecycleRule{
+				{Type: "InternalScheduler", Lifecycle: "ALL", Access: "INTERNAL"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing type",
+			rules: []LifecycleRule{
+				{ID: "SomeID", Lifecycle: "CREATE", Access: "ALLOW"},
+			},
+			wantErr: true,
+			errMsg:  "missing type",
+		},
+		{
+			name: "missing lifecycle",
+			rules: []LifecycleRule{
+				{Type: "Object", Access: "ALLOW"},
+			},
+			wantErr: true,
+			errMsg:  "missing lifecycle",
+		},
+		{
+			name: "invalid lifecycle",
+			rules: []LifecycleRule{
+				{Type: "Object", Lifecycle: "INVALID", Access: "ALLOW"},
+			},
+			wantErr: true,
+			errMsg:  "invalid lifecycle",
+		},
+		{
+			name: "missing access",
+			rules: []LifecycleRule{
+				{Type: "Object", Lifecycle: "CREATE"},
+			},
+			wantErr: true,
+			errMsg:  "missing access",
+		},
+		{
+			name: "invalid access level",
+			rules: []LifecycleRule{
+				{Type: "Object", Lifecycle: "CREATE", Access: "INVALID"},
+			},
+			wantErr: true,
+			errMsg:  "invalid access level",
+		},
+		{
+			name: "invalid type regex pattern",
+			rules: []LifecycleRule{
+				{Type: "/[invalid/", Lifecycle: "CREATE", Access: "ALLOW"},
+			},
+			wantErr: true,
+			errMsg:  "invalid type pattern",
+		},
+		{
+			name: "invalid id regex pattern",
+			rules: []LifecycleRule{
+				{Type: "Object", ID: "/[invalid/", Lifecycle: "CREATE", Access: "ALLOW"},
+			},
+			wantErr: true,
+			errMsg:  "invalid id pattern",
+		},
+		{
+			name: "case insensitive lifecycle and access",
+			rules: []LifecycleRule{
+				{Type: "Obj1", Lifecycle: "create", Access: "allow"},
+				{Type: "Obj2", Lifecycle: "Delete", Access: "Internal"},
+				{Type: "Obj3", Lifecycle: "ALL", Access: "EXTERNAL"},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := NewLifecycleValidator(tt.rules)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error but got nil")
+				}
+				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(tt.rules) > 0 && v == nil {
+					t.Fatalf("expected non-nil validator for non-empty rules")
+				}
+			}
+		})
+	}
+}
+
+func TestLifecycleValidator_CheckClientCreate(t *testing.T) {
+	rules := []LifecycleRule{
+		// ChatRoom: clients can create with valid IDs
+		{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]{1,50}/", Lifecycle: "CREATE", Access: "ALLOW"},
+		// ChatRoom: reject other IDs (empty, too long, invalid chars)
+		{Type: "ChatRoom", Lifecycle: "CREATE", Access: "REJECT"},
+		// InternalScheduler: only nodes can create
+		{Type: "InternalScheduler", Lifecycle: "CREATE", Access: "INTERNAL"},
+		// TempSession: only clients can create (via EXTERNAL)
+		{Type: "TempSession", Lifecycle: "CREATE", Access: "EXTERNAL"},
+		// Singleton: cannot be created dynamically
+		{Type: "ConfigManager", Lifecycle: "ALL", Access: "REJECT"},
+	}
+
+	v, err := NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		objectType string
+		objectID   string
+		allowed    bool
+	}{
+		// ChatRoom tests
+		{name: "ChatRoom valid ID allowed", objectType: "ChatRoom", objectID: "General", allowed: true},
+		{name: "ChatRoom invalid ID denied (empty)", objectType: "ChatRoom", objectID: "", allowed: false},
+		// InternalScheduler tests
+		{name: "InternalScheduler denied for clients", objectType: "InternalScheduler", objectID: "sched-1", allowed: false},
+		// TempSession tests
+		{name: "TempSession allowed for clients", objectType: "TempSession", objectID: "temp-123", allowed: true},
+		// ConfigManager tests
+		{name: "ConfigManager creation rejected", objectType: "ConfigManager", objectID: "ConfigManager0", allowed: false},
+		// Unknown type (default: ALLOW for CREATE)
+		{name: "Unknown type allowed by default", objectType: "UnknownType", objectID: "any", allowed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.CheckClientCreate(tt.objectType, tt.objectID)
+			if tt.allowed && err != nil {
+				t.Errorf("expected allowed, got error: %v", err)
+			}
+			if !tt.allowed && err == nil {
+				t.Errorf("expected denied, got allowed")
+			}
+		})
+	}
+}
+
+func TestLifecycleValidator_CheckNodeCreate(t *testing.T) {
+	rules := []LifecycleRule{
+		// ChatRoom: clients can create (ALLOW works for both)
+		{Type: "ChatRoom", Lifecycle: "CREATE", Access: "ALLOW"},
+		// InternalScheduler: only nodes can create
+		{Type: "InternalScheduler", Lifecycle: "CREATE", Access: "INTERNAL"},
+		// TempSession: only clients can create
+		{Type: "TempSession", Lifecycle: "CREATE", Access: "EXTERNAL"},
+		// Singleton: cannot be created dynamically
+		{Type: "ConfigManager", Lifecycle: "ALL", Access: "REJECT"},
+	}
+
+	v, err := NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		objectType string
+		objectID   string
+		allowed    bool
+	}{
+		// ChatRoom tests
+		{name: "ChatRoom allowed for nodes", objectType: "ChatRoom", objectID: "General", allowed: true},
+		// InternalScheduler tests
+		{name: "InternalScheduler allowed for nodes", objectType: "InternalScheduler", objectID: "sched-1", allowed: true},
+		// TempSession tests (EXTERNAL - node cannot create)
+		{name: "TempSession denied for nodes", objectType: "TempSession", objectID: "temp-123", allowed: false},
+		// ConfigManager tests
+		{name: "ConfigManager creation rejected", objectType: "ConfigManager", objectID: "ConfigManager0", allowed: false},
+		// Unknown type (default: ALLOW for CREATE)
+		{name: "Unknown type allowed by default", objectType: "UnknownType", objectID: "any", allowed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.CheckNodeCreate(tt.objectType, tt.objectID)
+			if tt.allowed && err != nil {
+				t.Errorf("expected allowed, got error: %v", err)
+			}
+			if !tt.allowed && err == nil {
+				t.Errorf("expected denied, got allowed")
+			}
+		})
+	}
+}
+
+func TestLifecycleValidator_CheckClientDelete(t *testing.T) {
+	rules := []LifecycleRule{
+		// ChatRoom: only nodes can delete
+		{Type: "ChatRoom", Lifecycle: "DELETE", Access: "INTERNAL"},
+		// TempSession: clients can delete
+		{Type: "TempSession", Lifecycle: "DELETE", Access: "ALLOW"},
+		// Singleton: cannot be deleted
+		{Type: "ConfigManager", Lifecycle: "ALL", Access: "REJECT"},
+	}
+
+	v, err := NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		objectType string
+		objectID   string
+		allowed    bool
+	}{
+		// ChatRoom tests
+		{name: "ChatRoom delete denied for clients", objectType: "ChatRoom", objectID: "General", allowed: false},
+		// TempSession tests
+		{name: "TempSession delete allowed for clients", objectType: "TempSession", objectID: "temp-123", allowed: true},
+		// ConfigManager tests
+		{name: "ConfigManager deletion rejected", objectType: "ConfigManager", objectID: "ConfigManager0", allowed: false},
+		// Unknown type (default: INTERNAL for DELETE - clients denied)
+		{name: "Unknown type denied by default", objectType: "UnknownType", objectID: "any", allowed: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.CheckClientDelete(tt.objectType, tt.objectID)
+			if tt.allowed && err != nil {
+				t.Errorf("expected allowed, got error: %v", err)
+			}
+			if !tt.allowed && err == nil {
+				t.Errorf("expected denied, got allowed")
+			}
+		})
+	}
+}
+
+func TestLifecycleValidator_CheckNodeDelete(t *testing.T) {
+	rules := []LifecycleRule{
+		// ChatRoom: only nodes can delete
+		{Type: "ChatRoom", Lifecycle: "DELETE", Access: "INTERNAL"},
+		// TempSession: clients can delete (ALLOW works for both)
+		{Type: "TempSession", Lifecycle: "DELETE", Access: "ALLOW"},
+		// ExternalOnlyDelete: only clients can delete
+		{Type: "ExternalOnlyDelete", Lifecycle: "DELETE", Access: "EXTERNAL"},
+		// Singleton: cannot be deleted
+		{Type: "ConfigManager", Lifecycle: "ALL", Access: "REJECT"},
+	}
+
+	v, err := NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		objectType string
+		objectID   string
+		allowed    bool
+	}{
+		// ChatRoom tests
+		{name: "ChatRoom delete allowed for nodes", objectType: "ChatRoom", objectID: "General", allowed: true},
+		// TempSession tests
+		{name: "TempSession delete allowed for nodes", objectType: "TempSession", objectID: "temp-123", allowed: true},
+		// ExternalOnlyDelete tests (EXTERNAL - nodes cannot delete)
+		{name: "ExternalOnlyDelete denied for nodes", objectType: "ExternalOnlyDelete", objectID: "ext-1", allowed: false},
+		// ConfigManager tests
+		{name: "ConfigManager deletion rejected", objectType: "ConfigManager", objectID: "ConfigManager0", allowed: false},
+		// Unknown type (default: INTERNAL for DELETE - nodes allowed)
+		{name: "Unknown type allowed by default", objectType: "UnknownType", objectID: "any", allowed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.CheckNodeDelete(tt.objectType, tt.objectID)
+			if tt.allowed && err != nil {
+				t.Errorf("expected allowed, got error: %v", err)
+			}
+			if !tt.allowed && err == nil {
+				t.Errorf("expected denied, got allowed")
+			}
+		})
+	}
+}
+
+func TestLifecycleValidator_AllMatchesBothOperations(t *testing.T) {
+	rules := []LifecycleRule{
+		// InternalScheduler: only nodes can create AND delete (using ALL)
+		{Type: "InternalScheduler", Lifecycle: "ALL", Access: "INTERNAL"},
+	}
+
+	v, err := NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	// CREATE checks
+	if err := v.CheckClientCreate("InternalScheduler", "sched-1"); err == nil {
+		t.Error("expected client CREATE to be denied for InternalScheduler")
+	}
+	if err := v.CheckNodeCreate("InternalScheduler", "sched-1"); err != nil {
+		t.Errorf("expected node CREATE to be allowed for InternalScheduler: %v", err)
+	}
+
+	// DELETE checks
+	if err := v.CheckClientDelete("InternalScheduler", "sched-1"); err == nil {
+		t.Error("expected client DELETE to be denied for InternalScheduler")
+	}
+	if err := v.CheckNodeDelete("InternalScheduler", "sched-1"); err != nil {
+		t.Errorf("expected node DELETE to be allowed for InternalScheduler: %v", err)
+	}
+}
+
+func TestLifecycleValidator_FirstMatchWins(t *testing.T) {
+	rules := []LifecycleRule{
+		// Specific ID first
+		{Type: "ChatRoom", ID: "VIP-room", Lifecycle: "CREATE", Access: "INTERNAL"},
+		// General rule second
+		{Type: "ChatRoom", Lifecycle: "CREATE", Access: "ALLOW"},
+	}
+
+	v, err := NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	// VIP-room should be denied for clients (INTERNAL)
+	if err := v.CheckClientCreate("ChatRoom", "VIP-room"); err == nil {
+		t.Error("expected VIP-room to be denied for clients")
+	}
+
+	// Other rooms should be allowed (ALLOW)
+	if err := v.CheckClientCreate("ChatRoom", "General"); err != nil {
+		t.Errorf("expected General room to be allowed: %v", err)
+	}
+}
+
+func TestLifecycleValidator_DefaultBehavior(t *testing.T) {
+	// Empty rules = use defaults
+	v, err := NewLifecycleValidator([]LifecycleRule{})
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	// CREATE default: ALLOW (both clients and nodes)
+	if err := v.CheckClientCreate("AnyType", "any-id"); err != nil {
+		t.Errorf("expected CREATE to be allowed for clients by default: %v", err)
+	}
+	if err := v.CheckNodeCreate("AnyType", "any-id"); err != nil {
+		t.Errorf("expected CREATE to be allowed for nodes by default: %v", err)
+	}
+
+	// DELETE default: INTERNAL (only nodes)
+	if err := v.CheckClientDelete("AnyType", "any-id"); err == nil {
+		t.Error("expected DELETE to be denied for clients by default")
+	}
+	if err := v.CheckNodeDelete("AnyType", "any-id"); err != nil {
+		t.Errorf("expected DELETE to be allowed for nodes by default: %v", err)
+	}
+}
+
+func TestParseLifecycleOperation(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected LifecycleOperation
+		wantErr  bool
+	}{
+		{"CREATE", LifecycleCreate, false},
+		{"DELETE", LifecycleDelete, false},
+		{"ALL", LifecycleAll, false},
+		// Case insensitive
+		{"create", LifecycleCreate, false},
+		{"delete", LifecycleDelete, false},
+		{"all", LifecycleAll, false},
+		{"Create", LifecycleCreate, false},
+		// Invalid
+		{"INVALID", LifecycleCreate, true},
+		{"", LifecycleCreate, true},
+		{"UPDATE", LifecycleCreate, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseLifecycleOperation(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, but got nil", tt.input)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if got != tt.expected {
+					t.Errorf("ParseLifecycleOperation(%q) = %v, want %v", tt.input, got, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+func TestLifecycleOperation_String(t *testing.T) {
+	tests := []struct {
+		op       LifecycleOperation
+		expected string
+	}{
+		{LifecycleCreate, "CREATE"},
+		{LifecycleDelete, "DELETE"},
+		{LifecycleAll, "ALL"},
+		{LifecycleOperation(99), "UNKNOWN"}, // Invalid enum value
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			if got := tt.op.String(); got != tt.expected {
+				t.Errorf("LifecycleOperation(%d).String() = %q, want %q", tt.op, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLoadConfigWithLifecycleRules(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+
+object_lifecycle_rules:
+  - type: ChatRoom
+    id: /[a-zA-Z0-9_-]+/
+    lifecycle: CREATE
+    access: ALLOW
+
+  - type: ChatRoom
+    lifecycle: DELETE
+    access: INTERNAL
+
+  - type: InternalScheduler
+    lifecycle: ALL
+    access: INTERNAL
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Verify lifecycle rules were loaded
+	if len(cfg.LifecycleRules) != 3 {
+		t.Fatalf("expected 3 lifecycle rules, got %d", len(cfg.LifecycleRules))
+	}
+
+	// Verify first rule
+	if cfg.LifecycleRules[0].Type != "ChatRoom" {
+		t.Errorf("expected first rule type ChatRoom, got %s", cfg.LifecycleRules[0].Type)
+	}
+	if cfg.LifecycleRules[0].Lifecycle != "CREATE" {
+		t.Errorf("expected first rule lifecycle CREATE, got %s", cfg.LifecycleRules[0].Lifecycle)
+	}
+	if cfg.LifecycleRules[0].Access != "ALLOW" {
+		t.Errorf("expected first rule access ALLOW, got %s", cfg.LifecycleRules[0].Access)
+	}
+
+	// Create lifecycle validator
+	v, err := cfg.NewLifecycleValidator()
+	if err != nil {
+		t.Fatalf("failed to create lifecycle validator: %v", err)
+	}
+	if v == nil {
+		t.Fatalf("expected non-nil lifecycle validator")
+	}
+
+	// Verify lifecycle control works
+	if err := v.CheckClientCreate("ChatRoom", "General"); err != nil {
+		t.Errorf("ChatRoom/General CREATE should be allowed for clients: %v", err)
+	}
+	if err := v.CheckClientDelete("ChatRoom", "General"); err == nil {
+		t.Error("ChatRoom/General DELETE should be denied for clients (INTERNAL)")
+	}
+	if err := v.CheckNodeDelete("ChatRoom", "General"); err != nil {
+		t.Errorf("ChatRoom/General DELETE should be allowed for nodes: %v", err)
+	}
+	if err := v.CheckClientCreate("InternalScheduler", "sched-1"); err == nil {
+		t.Error("InternalScheduler CREATE should be denied for clients")
+	}
+	if err := v.CheckNodeCreate("InternalScheduler", "sched-1"); err != nil {
+		t.Errorf("InternalScheduler CREATE should be allowed for nodes: %v", err)
+	}
+}
+
+func TestConfigNewLifecycleValidator_EmptyRules(t *testing.T) {
+	cfg := &Config{
+		LifecycleRules: nil,
+	}
+
+	v, err := cfg.NewLifecycleValidator()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v != nil {
+		t.Error("expected nil validator for empty rules")
+	}
+}

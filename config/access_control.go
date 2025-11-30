@@ -211,3 +211,182 @@ func (v *AccessValidator) findAccess(objectType, objectID, method string) Access
 	// Default: deny
 	return AccessReject
 }
+
+// LifecycleOperation represents a lifecycle operation type
+type LifecycleOperation int
+
+// Lifecycle operation enum values
+const (
+	LifecycleCreate LifecycleOperation = iota // CREATE operation
+	LifecycleDelete                           // DELETE operation
+	LifecycleAll                              // Both CREATE and DELETE
+)
+
+// String returns the string representation of a LifecycleOperation
+func (op LifecycleOperation) String() string {
+	switch op {
+	case LifecycleCreate:
+		return "CREATE"
+	case LifecycleDelete:
+		return "DELETE"
+	case LifecycleAll:
+		return "ALL"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// ParseLifecycleOperation parses a string to a LifecycleOperation enum value
+func ParseLifecycleOperation(s string) (LifecycleOperation, error) {
+	switch strings.ToUpper(s) {
+	case "CREATE":
+		return LifecycleCreate, nil
+	case "DELETE":
+		return LifecycleDelete, nil
+	case "ALL":
+		return LifecycleAll, nil
+	default:
+		return LifecycleCreate, fmt.Errorf("invalid lifecycle operation: %q", s)
+	}
+}
+
+// LifecycleRule defines a single lifecycle control rule
+type LifecycleRule struct {
+	Type      string `yaml:"type"`      // Required: object type pattern (literal or /regexp/)
+	ID        string `yaml:"id"`        // Optional: object ID pattern (omit to match all)
+	Lifecycle string `yaml:"lifecycle"` // Required: CREATE, DELETE, or ALL
+	Access    string `yaml:"access"`    // Required: REJECT, INTERNAL, EXTERNAL, or ALLOW
+}
+
+// CompiledLifecycleRule is a pre-compiled lifecycle control rule for runtime use
+type CompiledLifecycleRule struct {
+	typeMatcher PatternMatcher
+	idMatcher   PatternMatcher
+	lifecycle   LifecycleOperation
+	access      AccessLevel
+}
+
+// LifecycleValidator validates lifecycle operations (CREATE/DELETE) on objects
+type LifecycleValidator struct {
+	rules []*CompiledLifecycleRule
+}
+
+// NewLifecycleValidator creates a new LifecycleValidator from a list of LifecycleRules.
+// Returns an error if any rule has an invalid pattern, lifecycle, or access level.
+func NewLifecycleValidator(rules []LifecycleRule) (*LifecycleValidator, error) {
+	v := &LifecycleValidator{
+		rules: make([]*CompiledLifecycleRule, 0, len(rules)),
+	}
+
+	for i, rule := range rules {
+		compiled := &CompiledLifecycleRule{}
+		var err error
+
+		// Type is required
+		if rule.Type == "" {
+			return nil, fmt.Errorf("missing type in lifecycle rule %d", i)
+		}
+		compiled.typeMatcher, err = parsePattern(rule.Type)
+		if err != nil {
+			return nil, fmt.Errorf("invalid type pattern in lifecycle rule %d: %w", i, err)
+		}
+
+		// ID is optional (empty = match all)
+		compiled.idMatcher, err = parsePatternOrMatchAll(rule.ID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid id pattern in lifecycle rule %d: %w", i, err)
+		}
+
+		// Lifecycle is required
+		if rule.Lifecycle == "" {
+			return nil, fmt.Errorf("missing lifecycle in rule %d", i)
+		}
+		compiled.lifecycle, err = ParseLifecycleOperation(rule.Lifecycle)
+		if err != nil {
+			return nil, fmt.Errorf("invalid lifecycle in rule %d: %w", i, err)
+		}
+
+		// Access is required
+		if rule.Access == "" {
+			return nil, fmt.Errorf("missing access in lifecycle rule %d", i)
+		}
+		compiled.access, err = ParseAccessLevel(rule.Access)
+		if err != nil {
+			return nil, fmt.Errorf("invalid access level in lifecycle rule %d: %w", i, err)
+		}
+
+		v.rules = append(v.rules, compiled)
+	}
+
+	return v, nil
+}
+
+// CheckClientCreate checks if a client (via Gate) can CREATE the object.
+// Returns nil if allowed, error if denied.
+// Default if no rule matches: ALLOW (objects can be created by anyone)
+func (v *LifecycleValidator) CheckClientCreate(objectType, objectID string) error {
+	access := v.findAccess(objectType, objectID, LifecycleCreate)
+
+	if access == AccessAllow || access == AccessExternal {
+		return nil
+	}
+	return fmt.Errorf("create denied for %s/%s", objectType, objectID)
+}
+
+// CheckNodeCreate checks if a node (object-to-object) can CREATE the object.
+// Returns nil if allowed, error if denied.
+// Default if no rule matches: ALLOW (objects can be created by anyone)
+func (v *LifecycleValidator) CheckNodeCreate(objectType, objectID string) error {
+	access := v.findAccess(objectType, objectID, LifecycleCreate)
+
+	if access == AccessAllow || access == AccessInternal {
+		return nil
+	}
+	return fmt.Errorf("create denied for %s/%s", objectType, objectID)
+}
+
+// CheckClientDelete checks if a client (via Gate) can DELETE the object.
+// Returns nil if allowed, error if denied.
+// Default if no rule matches: INTERNAL (only nodes can delete objects)
+func (v *LifecycleValidator) CheckClientDelete(objectType, objectID string) error {
+	access := v.findAccess(objectType, objectID, LifecycleDelete)
+
+	if access == AccessAllow || access == AccessExternal {
+		return nil
+	}
+	return fmt.Errorf("delete denied for %s/%s", objectType, objectID)
+}
+
+// CheckNodeDelete checks if a node (object-to-object) can DELETE the object.
+// Returns nil if allowed, error if denied.
+// Default if no rule matches: INTERNAL (only nodes can delete objects)
+func (v *LifecycleValidator) CheckNodeDelete(objectType, objectID string) error {
+	access := v.findAccess(objectType, objectID, LifecycleDelete)
+
+	if access == AccessAllow || access == AccessInternal {
+		return nil
+	}
+	return fmt.Errorf("delete denied for %s/%s", objectType, objectID)
+}
+
+// findAccess evaluates rules top-to-bottom and returns the access level.
+// Returns default access if no rule matches:
+//   - CREATE: ALLOW (objects can be created by anyone)
+//   - DELETE: INTERNAL (only nodes can delete objects)
+func (v *LifecycleValidator) findAccess(objectType, objectID string, operation LifecycleOperation) AccessLevel {
+	for _, rule := range v.rules {
+		// Check if lifecycle matches (rule.lifecycle matches the operation or is ALL)
+		lifecycleMatches := rule.lifecycle == operation || rule.lifecycle == LifecycleAll
+
+		if lifecycleMatches &&
+			rule.typeMatcher.Match(objectType) &&
+			rule.idMatcher.Match(objectID) {
+			return rule.access
+		}
+	}
+	// Default based on operation
+	if operation == LifecycleCreate {
+		return AccessAllow // CREATE: allow by default
+	}
+	return AccessInternal // DELETE: internal only by default
+}

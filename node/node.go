@@ -11,6 +11,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/keylock"
@@ -65,8 +66,9 @@ type Node struct {
 	persistenceCtx        context.Context
 	persistenceCancel     context.CancelFunc
 	persistenceDone       chan struct{}
-	stopped               atomic.Bool  // Atomic flag to indicate node is stopping/stopped
-	stopMu                sync.RWMutex // RWMutex to coordinate Stop with in-flight operations
+	stopped               atomic.Bool                // Atomic flag to indicate node is stopping/stopped
+	stopMu                sync.RWMutex               // RWMutex to coordinate Stop with in-flight operations
+	lifecycleValidator    *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
 }
 
 // NewNode creates a new Node instance
@@ -161,6 +163,12 @@ func (node *Node) GetShardID(objectID string) int {
 // This must be called during initialization before the node is used concurrently
 func (node *Node) SetShardLock(sl *shardlock.ShardLock) {
 	node.shardLock = sl
+}
+
+// SetLifecycleValidator sets the lifecycle validator for this node
+// This must be called during initialization before the node is used concurrently
+func (node *Node) SetLifecycleValidator(lv *config.LifecycleValidator) {
+	node.lifecycleValidator = lv
 }
 
 // RegisterObjectType registers a new object type with the node
@@ -380,6 +388,15 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 		return fmt.Errorf("object with id %s already exists but with different type: expected %s, got %s", id, typ, existingObj.Type())
 	}
 
+	// Check lifecycle rules for CREATE if lifecycle validator is configured
+	// Note: This applies to both explicit CreateObject and CallObject auto-creation
+	if node.lifecycleValidator != nil {
+		if err := node.lifecycleValidator.CheckNodeCreate(typ, id); err != nil {
+			node.logger.Warnf("Create denied by lifecycle rules: type=%s, id=%s: %v", typ, id, err)
+			return fmt.Errorf("create denied for %s/%s", typ, id)
+		}
+	}
+
 	node.objectTypesMu.RLock()
 	objectType, ok := node.objectTypes[typ]
 	node.objectTypesMu.RUnlock()
@@ -471,7 +488,7 @@ func (node *Node) destroyObject(id string) {
 // This is a public method that properly handles both memory cleanup and persistence deletion.
 // This operation is idempotent - if the object doesn't exist, no error is returned.
 // If the node is stopped, this operation succeeds since all objects are already cleared.
-// Returns error only if persistence deletion fails.
+// Returns error only if persistence deletion fails or lifecycle rules deny the deletion.
 func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
@@ -498,6 +515,15 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		// Object doesn't exist - deletion is idempotent, this is not an error
 		node.logger.Infof("Object %s does not exist, nothing to delete", id)
 		return nil
+	}
+
+	// Check lifecycle rules for DELETE if lifecycle validator is configured
+	// Note: We only check here because we now know the object type
+	if node.lifecycleValidator != nil {
+		if err := node.lifecycleValidator.CheckNodeDelete(obj.Type(), id); err != nil {
+			node.logger.Warnf("Delete denied by lifecycle rules: type=%s, id=%s: %v", obj.Type(), id, err)
+			return fmt.Errorf("delete denied for %s/%s", obj.Type(), id)
+		}
 	}
 
 	// If persistence provider is configured, delete from persistence while holding the lock
