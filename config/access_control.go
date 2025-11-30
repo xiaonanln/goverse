@@ -234,6 +234,15 @@ func (v *AccessValidator) CanNodeCreate(objectType, objectID string) error {
 
 // canAccessAnyMethod checks if there exists any method that the caller can access.
 // isClient=true checks for client access (ALLOW/EXTERNAL), false checks for node access (ALLOW/INTERNAL).
+//
+// The method pattern is intentionally not checked here. If a rule matches the type and ID
+// with an access level that allows the caller, then at least one method (the ones matching
+// that rule's method pattern) must be callable by the caller. For example:
+//   - Rule {Type: "ChatRoom", Method: "Join", Access: "ALLOW"} means clients can call "Join"
+//   - Rule {Type: "ChatRoom", Method: "/.*/", Access: "INTERNAL"} means nodes can call any method
+//
+// We iterate through all rules (not stopping at first match) because different rules may
+// grant access to different methods, and we need to find if ANY rule allows access.
 func (v *AccessValidator) canAccessAnyMethod(objectType, objectID string, isClient bool) bool {
 	for _, rule := range v.rules {
 		// Check if this rule matches the object type and ID
@@ -242,6 +251,8 @@ func (v *AccessValidator) canAccessAnyMethod(objectType, objectID string, isClie
 		}
 
 		// This rule matches the type and ID. Check if it allows access.
+		// The method pattern defines which methods have this access level.
+		// If the access level matches caller type, at least one method is accessible.
 		if isClient {
 			if rule.access == AccessAllow || rule.access == AccessExternal {
 				return true
@@ -252,8 +263,8 @@ func (v *AccessValidator) canAccessAnyMethod(objectType, objectID string, isClie
 			}
 		}
 
-		// If this rule explicitly rejects, we still need to check other rules
-		// that might allow access to different methods
+		// If this rule explicitly rejects or doesn't match caller type, continue
+		// checking other rules that might allow access to different methods
 	}
 	return false
 }
