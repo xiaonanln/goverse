@@ -442,18 +442,6 @@ function createSendMessageRequest(userName, message) {
     return wrapInAny('chat.ChatRoom_SendChatMessageRequest', reqBytes);
 }
 
-// Create ChatRoom_GetRecentMessagesRequest
-function createGetRecentMessagesRequest(afterTimestamp) {
-    // ChatRoom_GetRecentMessagesRequest: after_timestamp (int64, field 1)
-    // Encode int64 as varint
-    const varintBytes = encodeVarint(afterTimestamp);
-    const reqBytes = new Uint8Array([
-        0x08, // field 1, wire type 0 (varint)
-        ...varintBytes
-    ]);
-    return wrapInAny('chat.ChatRoom_GetRecentMessagesRequest', reqBytes);
-}
-
 // Encode a protobuf field with proper varint length encoding
 function encodeField(fieldNumber, wireType, data) {
     const tag = (fieldNumber << 3) | wireType;
@@ -543,35 +531,6 @@ function parseJoinResponse(responseBase64) {
     }
     
     return { roomName, recentMessages };
-}
-
-// Parse ChatRoom_GetRecentMessagesResponse
-function parseGetRecentMessagesResponse(responseBase64) {
-    const bytes = base64Decode(responseBase64);
-    const any = parseAny(bytes);
-    
-    // ChatRoom_GetRecentMessagesResponse: messages (repeated ChatMessage, field 1)
-    const messages = [];
-    let offset = 0;
-    
-    while (offset < any.value.length) {
-        const fieldWire = any.value[offset++];
-        const fieldNumber = fieldWire >> 3;
-        const wireType = fieldWire & 0x07;
-        
-        if (fieldNumber === 1 && wireType === 2) {
-            const lenResult = decodeVarint(any.value, offset);
-            const len = lenResult.value;
-            offset = lenResult.offset;
-            const msgBytes = any.value.slice(offset, offset + len);
-            messages.push(parseChatMessage(msgBytes));
-            offset += len;
-        } else {
-            offset = skipField(any.value, offset, wireType);
-        }
-    }
-    
-    return messages;
 }
 
 // Parse ChatMessage

@@ -72,10 +72,10 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 │   (CLI)         │ <───────────────── │   (:49000)      │ <──────────── │  (ChatRooms)    │
 └─────────────────┘   Push Messages     └─────────────────┘               └─────────────────┘
 
-┌─────────────────┐     HTTP + Polling  ┌─────────────────┐     gRPC      ┌─────────────────┐
+┌─────────────────┐     HTTP + SSE      ┌─────────────────┐     gRPC      ┌─────────────────┐
 │   Web Client    │ ─────────────────>  │   Gate HTTP     │ ────────────> │  Goverse Node   │
 │   (Browser)     │ <───────────────── │   (:8080)       │ <──────────── │  (ChatRooms)    │
-└─────────────────┘                     └─────────────────┘               └─────────────────┘
+└─────────────────┘   Push Messages     └─────────────────┘               └─────────────────┘
 ```
 
 ### Components
@@ -83,7 +83,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 - **ChatRoomMgr**: Singleton object that manages and creates chat rooms on startup
 - **ChatRoom**: Virtual actor for each chat room, stores messages and connected users
 - **CLI Client**: Command-line client that connects via Gate gRPC for interactive chatting
-- **Web Client**: Browser-based client that uses HTTP Gate API with polling for messages
+- **Web Client**: Browser-based client that uses HTTP Gate API with SSE for real-time push messages
 
 ## CLI Client Commands
 
@@ -103,7 +103,7 @@ The web client provides a browser-based interface:
 - **Room Selection**: Click on a room to join
 - **Username**: Enter your name before joining a room
 - **Send Messages**: Type and send messages in real-time
-- **Receive Messages**: Messages from other users are fetched via polling
+- **Receive Messages**: Messages are pushed from the server via Server-Sent Events (SSE)
 - **Leave Room**: Click the back button to return to room list
 
 ### API Override
