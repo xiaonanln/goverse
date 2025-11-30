@@ -564,7 +564,344 @@ object_access_rules:
 
 **Warning**: Only use in development. All types and methods are allowed.
 
-## 7. Security Considerations
+## 7. Object Lifecycle Rules
+
+### 7.1 Problem Statement
+
+The `object_access_rules` section controls **method access** - which clients and nodes can call specific methods on objects. However, lifecycle operations (CREATE and DELETE) are fundamentally different:
+
+- **CREATE**: Triggered implicitly when calling an object that doesn't exist (auto-creation) or explicitly via `CreateObject` calls
+- **DELETE**: Explicitly requested to remove an object from the system
+
+These operations need **separate control** because:
+
+1. **Different security model**: Creating objects may be permissive (clients can create game sessions), while deleting should be restrictive (only internal cleanup processes)
+2. **Inheritance issues**: Method rules shouldn't automatically grant lifecycle permissions - a client allowed to call `Join()` shouldn't automatically be able to delete the object
+3. **Resource protection**: Explicit lifecycle rules prevent accidental or malicious object creation/deletion
+4. **Audit clarity**: Separate rules make it clear which entities can affect object existence
+
+### 7.2 Configuration Format
+
+Add `object_lifecycle_rules` section alongside `object_access_rules`:
+
+```yaml
+# Object lifecycle rules (CREATE/DELETE operations)
+# Evaluated top-to-bottom, first match wins
+# Each rule: type (required), id (optional), lifecycle (required), access (required)
+# Pattern matching: same as object_access_rules (literal or /regexp/)
+# Access levels: REJECT, INTERNAL, EXTERNAL, ALLOW
+#
+# Default behavior (if no rule matches):
+#   - CREATE: ALLOW (objects can be created by anyone)
+#   - DELETE: INTERNAL (only nodes can delete objects)
+object_lifecycle_rules:
+  # ChatRoom: clients can create rooms with valid IDs
+  - type: ChatRoom
+    id: /[a-zA-Z0-9_-]{1,50}/
+    lifecycle: CREATE
+    access: ALLOW
+
+  # ChatRoom: only nodes can delete rooms (cleanup processes)
+  - type: ChatRoom
+    lifecycle: DELETE
+    access: INTERNAL
+
+  # InternalScheduler: only nodes can create/delete
+  - type: InternalScheduler
+    lifecycle: CREATE
+    access: INTERNAL
+  - type: InternalScheduler
+    lifecycle: DELETE
+    access: INTERNAL
+
+  # Singleton objects: reject creation (pre-created only)
+  - type: ConfigManager
+    id: ConfigManager0
+    lifecycle: CREATE
+    access: REJECT
+  - type: ConfigManager
+    id: ConfigManager0
+    lifecycle: DELETE
+    access: REJECT
+
+  # Temporary objects: clients can create and delete
+  - type: TempSession
+    id: /session-[a-zA-Z0-9]+/
+    lifecycle: CREATE
+    access: ALLOW
+  - type: TempSession
+    id: /session-[a-zA-Z0-9]+/
+    lifecycle: DELETE
+    access: ALLOW
+```
+
+### 7.3 Rule Format
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `type` | Yes | Object type. Literal string for exact match, or `/regexp/` for regex. |
+| `id` | No | Object ID pattern. Omit to match all IDs. Literal or `/regexp/`. |
+| `lifecycle` | Yes | Lifecycle operation: `CREATE` or `DELETE` |
+| `access` | Yes | Access level: `REJECT`, `INTERNAL`, `EXTERNAL`, or `ALLOW` |
+
+**Lifecycle operations:**
+
+| Operation | Description | Trigger |
+|-----------|-------------|---------|
+| `CREATE` | Object instantiation | `CallObject` to non-existent object (auto-creation) or explicit `CreateObject` |
+| `DELETE` | Object removal | Explicit `DeleteObject` call |
+
+### 7.4 Access Level Semantics
+
+Access levels work the same as method rules:
+
+| Level | Client (via Gate) | Node (object-to-object) |
+|-------|-------------------|-------------------------|
+| `REJECT` | ✗ Denied | ✗ Denied |
+| `INTERNAL` | ✗ Denied | ✓ Allowed |
+| `EXTERNAL` | ✓ Allowed | ✗ Denied |
+| `ALLOW` | ✓ Allowed | ✓ Allowed |
+
+### 7.5 Default Behavior
+
+**If no lifecycle rule matches:**
+
+| Operation | Default Access | Rationale |
+|-----------|---------------|-----------|
+| `CREATE` | `ALLOW` | Permissive for backward compatibility; objects can be created freely |
+| `DELETE` | `INTERNAL` | Restrictive for safety; only nodes can delete objects |
+
+This default ensures:
+- Existing deployments continue to work without lifecycle rules
+- Object deletion is protected by default (requires explicit rules to allow client deletion)
+- Gradual adoption is possible
+
+### 7.6 Evaluation Order
+
+1. Rules are evaluated **top-to-bottom**
+2. **First matching rule wins** (type, id, AND lifecycle must all match)
+3. If no rule matches, **default behavior applies** (CREATE=ALLOW, DELETE=INTERNAL)
+4. Order matters - put specific rules before general ones
+
+### 7.7 Examples
+
+#### Allow client CREATE, deny client DELETE (common pattern)
+
+```yaml
+object_lifecycle_rules:
+  # GameSession: clients can create new sessions
+  - type: GameSession
+    id: /game-[a-zA-Z0-9]+/
+    lifecycle: CREATE
+    access: ALLOW
+
+  # GameSession: only internal cleanup can delete
+  - type: GameSession
+    lifecycle: DELETE
+    access: INTERNAL
+```
+
+#### Internal-only objects
+
+```yaml
+object_lifecycle_rules:
+  # Scheduler: only nodes can create and delete
+  - type: InternalScheduler
+    lifecycle: CREATE
+    access: INTERNAL
+  - type: InternalScheduler
+    lifecycle: DELETE
+    access: INTERNAL
+```
+
+#### Singleton objects (pre-created, no dynamic creation/deletion)
+
+```yaml
+object_lifecycle_rules:
+  # ConfigManager singleton: cannot be created or deleted dynamically
+  - type: ConfigManager
+    lifecycle: CREATE
+    access: REJECT
+  - type: ConfigManager
+    lifecycle: DELETE
+    access: REJECT
+```
+
+#### Temporary objects (clients can fully manage)
+
+```yaml
+object_lifecycle_rules:
+  # TempSession: clients can create and delete their sessions
+  - type: TempSession
+    id: /temp-[a-zA-Z0-9]+/
+    lifecycle: CREATE
+    access: ALLOW
+  - type: TempSession
+    id: /temp-[a-zA-Z0-9]+/
+    lifecycle: DELETE
+    access: ALLOW
+```
+
+#### Block all creation except whitelisted types
+
+```yaml
+object_lifecycle_rules:
+  # Allow specific types
+  - type: ChatRoom
+    lifecycle: CREATE
+    access: ALLOW
+  - type: Counter
+    lifecycle: CREATE
+    access: ALLOW
+
+  # Block all other creation
+  - type: /.*/
+    lifecycle: CREATE
+    access: REJECT
+```
+
+### 7.8 Enforcement Flow
+
+#### Gate-side (CREATE via auto-creation)
+
+```
+┌─────────┐    CallObject("ChatRoom-General", "Join", ...)
+│  Client │ ────────────────────────────────────────────────►
+└─────────┘         (object doesn't exist → auto-create)
+                              │
+                              ▼
+                    ┌─────────────────────┐
+                    │        Gate         │
+                    │                     │
+                    │ 1. Check method     │
+                    │    access rules     │
+                    │                     │
+                    │ 2. If object will   │
+                    │    be created:      │
+                    │    Check lifecycle  │
+                    │    CREATE rules     │
+                    └──────────┬──────────┘
+                               │
+       ┌───────────────┬───────┴───────┬───────────────┐
+       │               │               │               │
+       ▼               ▼               ▼               ▼
+    REJECT         INTERNAL        EXTERNAL         ALLOW
+       │               │               │               │
+       ▼               ▼               ▼               ▼
+  Return error    Return error   Forward to Node  Forward to Node
+```
+
+#### Gate-side (explicit DELETE)
+
+```
+┌─────────┐    DeleteObject("ChatRoom-General")
+│  Client │ ──────────────────────────────────────►
+└─────────┘
+                              │
+                              ▼
+                    ┌─────────────────────┐
+                    │        Gate         │
+                    │                     │
+                    │ Check lifecycle     │
+                    │ DELETE rules        │
+                    └──────────┬──────────┘
+                               │
+       ┌───────────────┬───────┴───────┬───────────────┐
+       │               │               │               │
+       ▼               ▼               ▼               ▼
+    REJECT         INTERNAL        EXTERNAL         ALLOW
+       │               │               │               │
+       ▼               ▼               ▼               ▼
+  Return error    Return error   Forward to Node  Forward to Node
+```
+
+#### Node-side (object-to-object CREATE/DELETE)
+
+```
+┌─────────┐    CreateObject/DeleteObject (object-to-object)
+│  Node   │ ─────────────►  ┌─────────────────┐
+│ (obj A) │                 │      Node       │
+└─────────┘                 │    (target)     │
+                            │                 │
+                            │ Check lifecycle │
+                            │ rules for       │
+                            │ CREATE/DELETE   │
+                            │                 │
+                            │ ALLOW or        │
+                            │ INTERNAL:       │
+                            │   Proceed       │
+                            │                 │
+                            │ REJECT or       │
+                            │ EXTERNAL:       │
+                            │   Return error  │
+                            └─────────────────┘
+```
+
+### 7.9 Integration with Method Rules
+
+Lifecycle rules and method rules are **evaluated independently**:
+
+1. **Method call to existing object**: Only method rules apply
+2. **Method call triggering auto-creation**: Both lifecycle (CREATE) and method rules apply
+3. **Explicit CreateObject**: Only lifecycle (CREATE) rules apply
+4. **Explicit DeleteObject**: Only lifecycle (DELETE) rules apply
+
+Example: A client calling `ChatRoom.Join()` on a new room:
+1. Check CREATE lifecycle rule → client access requires ALLOW or EXTERNAL
+2. Check method access rule for `Join` → client access requires ALLOW or EXTERNAL
+3. Both checks must individually pass for the client request to succeed
+
+### 7.10 Migration Path
+
+#### For existing deployments (no lifecycle rules)
+
+Without `object_lifecycle_rules`, the default behavior applies:
+- CREATE: ALLOW (any entity can create objects)
+- DELETE: INTERNAL (only nodes can delete objects)
+
+This provides backward compatibility - existing applications continue to work.
+
+#### Gradual adoption steps
+
+1. **Phase 1**: Deploy without lifecycle rules (default behavior)
+2. **Phase 2**: Add lifecycle rules for sensitive object types (internal-only)
+3. **Phase 3**: Add explicit CREATE rules for client-facing types
+4. **Phase 4**: Add explicit DELETE rules where needed
+5. **Phase 5**: Optionally add catch-all rules to enforce explicit configuration
+
+```yaml
+# Phase 5: Explicit configuration for all types
+object_lifecycle_rules:
+  # Specific rules first...
+  - type: ChatRoom
+    lifecycle: CREATE
+    access: ALLOW
+  # ...
+
+  # Catch-all: use defaults explicitly
+  - type: /.*/
+    lifecycle: CREATE
+    access: ALLOW      # Same as default
+  - type: /.*/
+    lifecycle: DELETE
+    access: INTERNAL   # Same as default
+```
+
+### 7.11 Backward Compatibility
+
+| Scenario | Behavior |
+|----------|----------|
+| No `object_lifecycle_rules` section | Defaults apply: CREATE=ALLOW, DELETE=INTERNAL |
+| Empty `object_lifecycle_rules` list | Defaults apply: CREATE=ALLOW, DELETE=INTERNAL |
+| Partial rules (some types only) | Specified types use rules, others use defaults |
+| Full rules with catch-all | All operations governed by explicit rules |
+
+This ensures:
+- Zero disruption for existing deployments
+- Opt-in security hardening
+- Clear path to full lifecycle control
+
+## 8. Security Considerations
 
 1. **Default deny**: End the rule list with `type: /.*/`, `access: REJECT`
 2. **Specific rules first**: Put narrow rules before broad ones (first match wins)
@@ -573,8 +910,9 @@ object_access_rules:
 5. **Restrictive ID patterns**: Be specific with ID patterns (include length limits)
 6. **Rule ordering**: Review rule order carefully - a broad early rule can override later specific rules
 7. **Audit regularly**: Review access rules for overly permissive config
+8. **Lifecycle protection**: Use explicit lifecycle rules for sensitive object types to control creation/deletion separately from method access
 
-## 8. Migration Path
+## 9. Migration Path
 
 1. **Phase 1**: Add config parsing, no enforcement (logging only)
 2. **Phase 2**: Enforce on gates (client access)
@@ -587,7 +925,7 @@ For existing deployments:
 - Remove the catch-all ALLOW rule and add `access: REJECT` at the end
 - Test thoroughly at each step
 
-## 9. Future Enhancements
+## 10. Future Enhancements
 
 - **Rate limiting**: Limit requests per client/type/method
 - **Dynamic reload**: Update rules without restart
@@ -595,7 +933,7 @@ For existing deployments:
 - **Per-client rules**: Different access based on client identity
 - **Argument validation**: Validate method arguments
 
-## 10. Summary
+## 11. Summary
 
 Config-based object access control provides:
 
@@ -607,4 +945,6 @@ Config-based object access control provides:
 - **Client access control**: Gate enforces `ALLOW` or `EXTERNAL` for client requests
 - **Node access control**: Nodes enforce `ALLOW` or `INTERNAL` for object-to-object calls
 - **Gate filtering**: Reject invalid requests before they reach nodes
-- **Secure by default**: No matching rule = deny
+- **Secure by default**: No matching rule = deny (for method rules)
+- **Lifecycle control**: Separate `object_lifecycle_rules` for CREATE/DELETE operations
+- **Lifecycle defaults**: CREATE=ALLOW, DELETE=INTERNAL (for backward compatibility)
