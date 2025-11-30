@@ -355,7 +355,7 @@ Equivalent to:
 | `/[a-zA-Z0-9_-]+/` | Alphanumeric with underscore/dash | `user-123`, `room_abc` |
 | `/[a-zA-Z0-9_-]{1,50}/` | Same, limited to 1-50 chars | Valid IDs with length check |
 | `/user-[0-9]+/` | Prefix with numeric suffix | `user-123`, `user-9999` |
-| `/(Get\|Set\|Delete)/` | Specific methods | `Get`, `Set`, or `Delete` |
+| `/(Get|Set|Delete)/` | Specific methods | `Get`, `Set`, or `Delete` |
 
 ---
 
