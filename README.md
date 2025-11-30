@@ -165,7 +165,7 @@ High-level objectives for future development:
 ### Gate & Client Features
 - **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility (see [HTTP_GATE.md](docs/design/HTTP_GATE.md))
 - **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
-- **Gate object call filtering** - Whitelist/blacklist patterns for security and API governance
+- ~~**Gate object call filtering** - Whitelist/blacklist patterns for security and API governance~~ ✅ Done (see [OBJECT_ACCESS_CONTROL.md](docs/design/OBJECT_ACCESS_CONTROL.md))
 - **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
 - **Client reconnection & backoff** - Automatic retry logic with exponential backoff
 
