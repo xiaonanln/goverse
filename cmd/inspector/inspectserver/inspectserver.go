@@ -87,7 +87,8 @@ func (s *InspectorServer) OnGraphEvent(event graph.GraphEvent) {
 		case client.eventChan <- event:
 		case <-client.done:
 		default:
-			// Channel full, skip this event for this client
+			// Channel full, log and skip this event for this client
+			log.Printf("Event dropped for SSE client %s: channel full", client.id)
 		}
 	}
 }
