@@ -43,7 +43,11 @@ func (m *regexpMatcher) Match(s string) bool {
 }
 
 // parsePattern returns a matcher for literal strings or /regexp/ patterns.
-// Regexp patterns are auto-anchored to match the full string.
+// Regexp patterns are auto-anchored to match the full string (^ and $ are added).
+// Note: The pattern inside /.../ should NOT already contain ^ or $ anchors,
+// as they will be added automatically. For example:
+//   - "/ChatRoom-.*/" will match "ChatRoom-123" but not "PrefixChatRoom-123"
+//   - "ChatRoomMgr0" (literal) will match exactly "ChatRoomMgr0"
 func parsePattern(pattern string) (PatternMatcher, error) {
 	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") && len(pattern) > 1 {
 		// Regexp pattern: /.../ - auto-anchor to match full string
@@ -114,10 +118,10 @@ func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
 func (v *AccessValidator) CheckClientAccess(objectID, method string) error {
 	access := v.findAccess(objectID, method)
 
-	if access != AccessAllow && access != AccessExternal {
-		return fmt.Errorf("access denied for object %q method %q", objectID, method)
+	if access == AccessAllow || access == AccessExternal {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("access denied for object %q method %q", objectID, method)
 }
 
 // CheckNodeAccess checks if a node (object-to-object) can access the object/method.
@@ -126,10 +130,10 @@ func (v *AccessValidator) CheckClientAccess(objectID, method string) error {
 func (v *AccessValidator) CheckNodeAccess(objectID, method string) error {
 	access := v.findAccess(objectID, method)
 
-	if access == AccessReject || access == AccessExternal {
-		return fmt.Errorf("access denied for object %q method %q", objectID, method)
+	if access == AccessAllow || access == AccessInternal {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("access denied for object %q method %q", objectID, method)
 }
 
 // findAccess evaluates rules top-to-bottom and returns the access level.
