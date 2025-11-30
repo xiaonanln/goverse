@@ -818,10 +818,292 @@
       }
     }
 
+    // SSE connection state
+    let eventSource = null
+    let reconnectTimeout = null
+
+    // Connect to SSE for push updates
+    function connectSSE() {
+      if (eventSource) {
+        eventSource.close()
+      }
+
+      console.log('Connecting to SSE...')
+      eventSource = new EventSource('/events/stream')
+
+      eventSource.addEventListener('initial', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE initial state received:', data)
+        graphData = {
+          goverse_nodes: data.goverse_nodes || [],
+          goverse_objects: data.goverse_objects || []
+        }
+        updateNodeList()
+        updateGraph()
+        if (document.getElementById('shard-view').classList.contains('active')) {
+          updateShardView()
+        }
+      })
+
+      eventSource.addEventListener('node_added', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE node_added:', data)
+        if (data.node) {
+          // Check if node already exists
+          const existingIdx = graphData.goverse_nodes.findIndex(n => n.id === data.node.id)
+          if (existingIdx >= 0) {
+            graphData.goverse_nodes[existingIdx] = data.node
+          } else {
+            graphData.goverse_nodes.push(data.node)
+          }
+          updateNodeList()
+          updateGraphIncremental()
+        }
+      })
+
+      eventSource.addEventListener('node_updated', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE node_updated:', data)
+        if (data.node) {
+          const idx = graphData.goverse_nodes.findIndex(n => n.id === data.node.id)
+          if (idx >= 0) {
+            graphData.goverse_nodes[idx] = data.node
+          }
+          updateNodeList()
+          // No need to restart simulation for updates
+        }
+      })
+
+      eventSource.addEventListener('node_removed', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE node_removed:', data)
+        if (data.node_id) {
+          graphData.goverse_nodes = graphData.goverse_nodes.filter(n => n.id !== data.node_id)
+          updateNodeList()
+          updateGraphIncremental()
+        }
+      })
+
+      eventSource.addEventListener('object_added', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE object_added:', data)
+        if (data.object) {
+          // Check if object already exists
+          const existingIdx = graphData.goverse_objects.findIndex(o => o.id === data.object.id)
+          if (existingIdx >= 0) {
+            graphData.goverse_objects[existingIdx] = data.object
+          } else {
+            graphData.goverse_objects.push(data.object)
+          }
+          updateGraphIncremental()
+          if (document.getElementById('shard-view').classList.contains('active')) {
+            updateShardView()
+          }
+        }
+      })
+
+      eventSource.addEventListener('object_updated', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE object_updated:', data)
+        if (data.object) {
+          const idx = graphData.goverse_objects.findIndex(o => o.id === data.object.id)
+          if (idx >= 0) {
+            graphData.goverse_objects[idx] = data.object
+          }
+          // No need to restart simulation for updates
+        }
+      })
+
+      eventSource.addEventListener('object_removed', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE object_removed:', data)
+        if (data.object_id) {
+          graphData.goverse_objects = graphData.goverse_objects.filter(o => o.id !== data.object_id)
+          updateGraphIncremental()
+          if (document.getElementById('shard-view').classList.contains('active')) {
+            updateShardView()
+          }
+        }
+      })
+
+      eventSource.addEventListener('heartbeat', (event) => {
+        console.log('SSE heartbeat received')
+      })
+
+      eventSource.onerror = (error) => {
+        console.error('SSE error:', error)
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.log('SSE connection closed, reconnecting in 3 seconds...')
+          if (reconnectTimeout) clearTimeout(reconnectTimeout)
+          reconnectTimeout = setTimeout(connectSSE, 3000)
+        }
+      }
+
+      eventSource.onopen = () => {
+        console.log('SSE connection established')
+      }
+    }
+
+    // Incremental graph update - preserves node positions
+    function updateGraphIncremental() {
+      // Get current nodes from simulation to preserve positions
+      const currentNodes = simulation.nodes()
+      const positionMap = new Map()
+      currentNodes.forEach(n => {
+        positionMap.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy, fx: n.fx, fy: n.fy })
+      })
+
+      // Build nodes array: cluster nodes/gates + objects
+      const nodes = []
+      const links = []
+      const nodeMap = new Map()
+
+      // Add cluster nodes (nodes and gates)
+      graphData.goverse_nodes.forEach(n => {
+        const existingPos = positionMap.get(n.id)
+        const node = {
+          id: n.id,
+          label: n.label || n.id,
+          nodeType: n.type || NODE_TYPE_NODE,
+          advertiseAddr: n.advertise_addr,
+          color: n.color,
+          // Preserve position if exists
+          x: existingPos ? existingPos.x : undefined,
+          y: existingPos ? existingPos.y : undefined,
+          vx: existingPos ? existingPos.vx : undefined,
+          vy: existingPos ? existingPos.vy : undefined,
+          fx: existingPos ? existingPos.fx : undefined,
+          fy: existingPos ? existingPos.fy : undefined
+        }
+        nodes.push(node)
+        nodeMap.set(n.id, node)
+      })
+
+      // Add objects
+      graphData.goverse_objects.forEach(obj => {
+        const existingPos = positionMap.get(obj.id)
+        const node = {
+          id: obj.id,
+          label: obj.label || obj.id,
+          nodeType: NODE_TYPE_OBJECT,
+          type: obj.type,
+          shardId: obj.shard_id,
+          goverseNodeId: obj.goverse_node_id,
+          color: obj.color,
+          size: obj.size,
+          // Preserve position if exists
+          x: existingPos ? existingPos.x : undefined,
+          y: existingPos ? existingPos.y : undefined,
+          vx: existingPos ? existingPos.vx : undefined,
+          vy: existingPos ? existingPos.vy : undefined,
+          fx: existingPos ? existingPos.fx : undefined,
+          fy: existingPos ? existingPos.fy : undefined
+        }
+        nodes.push(node)
+        nodeMap.set(obj.id, node)
+
+        // Create link from object to its node
+        if (obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
+          links.push({
+            source: obj.id,
+            target: obj.goverse_node_id
+          })
+        }
+      })
+
+      // Update simulation with low alpha to minimize movement
+      simulation.nodes(nodes)
+      simulation.force('link').links(links)
+
+      // Update links
+      const linkSelection = g.select('.links')
+        .selectAll('.graph-link')
+        .data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+
+      linkSelection.exit().remove()
+
+      linkSelection.enter()
+        .append('line')
+        .attr('class', 'graph-link')
+        .attr('stroke-width', 1.5)
+
+      // Update nodes
+      const nodeSelection = g.select('.nodes')
+        .selectAll('.graph-node')
+        .data(nodes, d => d.id)
+
+      nodeSelection.exit().remove()
+
+      const nodeEnter = nodeSelection.enter()
+        .append('g')
+        .attr('class', 'graph-node')
+        .call(d3.drag()
+          .on('start', dragStarted)
+          .on('drag', dragged)
+          .on('end', dragEnded))
+        .on('mouseover', showTooltip)
+        .on('mousemove', moveTooltip)
+        .on('mouseout', hideTooltip)
+
+      // Add shapes based on node type
+      nodeEnter.each(function(d) {
+        const el = d3.select(this)
+        const r = getNodeRadius(d)
+        const shape = getNodeShape(d)
+
+        if (shape === 'square') {
+          el.append('rect')
+            .attr('width', r * 2)
+            .attr('height', r * 2)
+            .attr('x', -r)
+            .attr('y', -r)
+            .attr('rx', 4)
+            .attr('fill', getNodeColor(d))
+        } else if (shape === 'diamond') {
+          el.append('polygon')
+            .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
+            .attr('fill', getNodeColor(d))
+        } else {
+          el.append('circle')
+            .attr('r', r)
+            .attr('fill', getNodeColor(d))
+        }
+      })
+
+      // Update existing node colors
+      nodeSelection.each(function(d) {
+        const el = d3.select(this)
+        const shape = getNodeShape(d)
+        if (shape === 'square') {
+          el.select('rect').attr('fill', getNodeColor(d))
+        } else if (shape === 'diamond') {
+          el.select('polygon').attr('fill', getNodeColor(d))
+        } else {
+          el.select('circle').attr('fill', getNodeColor(d))
+        }
+      })
+
+      // Update labels
+      const labelSelection = g.select('.labels')
+        .selectAll('.node-label')
+        .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
+
+      labelSelection.exit().remove()
+
+      labelSelection.enter()
+        .append('text')
+        .attr('class', 'node-label')
+        .text(d => d.label)
+
+      labelSelection.text(d => d.label)
+
+      // Use very low alpha to minimize disruption
+      simulation.alpha(0.1).restart()
+    }
+
     // Initialize
     initGraph()
-    refresh()
-    setInterval(refresh, 1000)
+    connectSSE()
   </script>
 </body>
 </html>

@@ -672,3 +672,225 @@ func TestIsNodeRegistered(t *testing.T) {
 		t.Fatal("IsNodeRegistered() should return false after node removal")
 	}
 }
+
+// MockObserver is a mock observer for testing
+type MockObserver struct {
+	mu     sync.Mutex
+	events []GraphEvent
+}
+
+func (m *MockObserver) OnGraphEvent(event GraphEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, event)
+}
+
+func (m *MockObserver) GetEvents() []GraphEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]GraphEvent, len(m.events))
+	copy(result, m.events)
+	return result
+}
+
+func (m *MockObserver) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = nil
+}
+
+// TestObserverPattern tests the observer pattern for graph events
+func TestObserverPattern(t *testing.T) {
+	pg := NewGoverseGraph()
+	observer := &MockObserver{}
+
+	pg.AddObserver(observer)
+
+	// Test node added event
+	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
+	pg.AddOrUpdateNode(node)
+
+	events := observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventNodeAdded {
+		t.Fatalf("Expected EventNodeAdded, got %s", events[0].Type)
+	}
+	if events[0].Node == nil || events[0].Node.ID != "node1" {
+		t.Fatal("Expected node data in event")
+	}
+
+	observer.Clear()
+
+	// Test node updated event
+	node.Label = "Updated Node 1"
+	pg.AddOrUpdateNode(node)
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventNodeUpdated {
+		t.Fatalf("Expected EventNodeUpdated, got %s", events[0].Type)
+	}
+
+	observer.Clear()
+
+	// Test object added event
+	obj := models.GoverseObject{ID: "obj1", Label: "Object 1"}
+	pg.AddOrUpdateObject(obj)
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventObjectAdded {
+		t.Fatalf("Expected EventObjectAdded, got %s", events[0].Type)
+	}
+
+	observer.Clear()
+
+	// Test object updated event
+	obj.Label = "Updated Object 1"
+	pg.AddOrUpdateObject(obj)
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventObjectUpdated {
+		t.Fatalf("Expected EventObjectUpdated, got %s", events[0].Type)
+	}
+
+	observer.Clear()
+
+	// Test object removed event
+	pg.RemoveObject("obj1")
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventObjectRemoved {
+		t.Fatalf("Expected EventObjectRemoved, got %s", events[0].Type)
+	}
+	if events[0].ObjectID != "obj1" {
+		t.Fatalf("Expected ObjectID 'obj1', got '%s'", events[0].ObjectID)
+	}
+
+	observer.Clear()
+
+	// Test node removed event
+	pg.RemoveNode("node1")
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventNodeRemoved {
+		t.Fatalf("Expected EventNodeRemoved, got %s", events[0].Type)
+	}
+	if events[0].NodeID != "node1" {
+		t.Fatalf("Expected NodeID 'node1', got '%s'", events[0].NodeID)
+	}
+}
+
+// TestRemoveObserver tests removing an observer
+func TestRemoveObserver(t *testing.T) {
+	pg := NewGoverseGraph()
+	observer := &MockObserver{}
+
+	pg.AddObserver(observer)
+
+	// Add a node, should trigger event
+	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
+	pg.AddOrUpdateNode(node)
+
+	events := observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event before removing observer, got %d", len(events))
+	}
+
+	observer.Clear()
+
+	// Remove observer
+	pg.RemoveObserver(observer)
+
+	// Add another node, should not trigger event for removed observer
+	node2 := models.GoverseNode{ID: "node2", Label: "Node 2"}
+	pg.AddOrUpdateNode(node2)
+
+	events = observer.GetEvents()
+	if len(events) != 0 {
+		t.Fatalf("Expected 0 events after removing observer, got %d", len(events))
+	}
+}
+
+// TestMultipleObservers tests multiple observers receiving events
+func TestMultipleObservers(t *testing.T) {
+	pg := NewGoverseGraph()
+	observer1 := &MockObserver{}
+	observer2 := &MockObserver{}
+
+	pg.AddObserver(observer1)
+	pg.AddObserver(observer2)
+
+	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
+	pg.AddOrUpdateNode(node)
+
+	events1 := observer1.GetEvents()
+	events2 := observer2.GetEvents()
+
+	if len(events1) != 1 {
+		t.Fatalf("Observer 1: Expected 1 event, got %d", len(events1))
+	}
+	if len(events2) != 1 {
+		t.Fatalf("Observer 2: Expected 1 event, got %d", len(events2))
+	}
+}
+
+// TestRemoveNodeCascadeEvents tests that removing a node triggers events for removed objects
+func TestRemoveNodeCascadeEvents(t *testing.T) {
+	pg := NewGoverseGraph()
+	observer := &MockObserver{}
+	pg.AddObserver(observer)
+
+	// Add a node and objects
+	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
+	pg.AddOrUpdateNode(node)
+
+	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
+	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node1"}
+	pg.AddOrUpdateObject(obj1)
+	pg.AddOrUpdateObject(obj2)
+
+	observer.Clear()
+
+	// Remove the node
+	pg.RemoveNode("node1")
+
+	events := observer.GetEvents()
+	// Should have 2 object_removed events + 1 node_removed event
+	if len(events) != 3 {
+		t.Fatalf("Expected 3 events (2 object_removed + 1 node_removed), got %d", len(events))
+	}
+
+	objectRemovedCount := 0
+	nodeRemovedCount := 0
+	for _, e := range events {
+		if e.Type == EventObjectRemoved {
+			objectRemovedCount++
+		}
+		if e.Type == EventNodeRemoved {
+			nodeRemovedCount++
+		}
+	}
+
+	if objectRemovedCount != 2 {
+		t.Fatalf("Expected 2 EventObjectRemoved events, got %d", objectRemovedCount)
+	}
+	if nodeRemovedCount != 1 {
+		t.Fatalf("Expected 1 EventNodeRemoved event, got %d", nodeRemovedCount)
+	}
+}

@@ -7,16 +7,73 @@ import (
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 )
 
+// EventType represents the type of graph change event
+type EventType string
+
+const (
+	EventNodeAdded     EventType = "node_added"
+	EventNodeUpdated   EventType = "node_updated"
+	EventNodeRemoved   EventType = "node_removed"
+	EventObjectAdded   EventType = "object_added"
+	EventObjectUpdated EventType = "object_updated"
+	EventObjectRemoved EventType = "object_removed"
+)
+
+// GraphEvent represents a change event in the graph
+type GraphEvent struct {
+	Type     EventType             `json:"type"`
+	Node     *models.GoverseNode   `json:"node,omitempty"`
+	Object   *models.GoverseObject `json:"object,omitempty"`
+	ObjectID string                `json:"object_id,omitempty"`
+	NodeID   string                `json:"node_id,omitempty"`
+}
+
+// Observer is an interface for receiving graph change events
+type Observer interface {
+	OnGraphEvent(event GraphEvent)
+}
+
 type GoverseGraph struct {
-	mu      sync.RWMutex
-	objects map[string]models.GoverseObject
-	nodes   map[string]models.GoverseNode
+	mu        sync.RWMutex
+	objects   map[string]models.GoverseObject
+	nodes     map[string]models.GoverseNode
+	observers map[Observer]struct{}
 }
 
 func NewGoverseGraph() *GoverseGraph {
 	return &GoverseGraph{
-		objects: make(map[string]models.GoverseObject),
-		nodes:   make(map[string]models.GoverseNode),
+		objects:   make(map[string]models.GoverseObject),
+		nodes:     make(map[string]models.GoverseNode),
+		observers: make(map[Observer]struct{}),
+	}
+}
+
+// AddObserver registers an observer to receive graph change events
+func (pg *GoverseGraph) AddObserver(observer Observer) {
+	pg.mu.Lock()
+	defer pg.mu.Unlock()
+	pg.observers[observer] = struct{}{}
+}
+
+// RemoveObserver unregisters an observer
+func (pg *GoverseGraph) RemoveObserver(observer Observer) {
+	pg.mu.Lock()
+	defer pg.mu.Unlock()
+	delete(pg.observers, observer)
+}
+
+// notifyObservers sends an event to all registered observers
+// Must be called without holding the lock
+func (pg *GoverseGraph) notifyObservers(event GraphEvent) {
+	pg.mu.RLock()
+	observers := make([]Observer, 0, len(pg.observers))
+	for obs := range pg.observers {
+		observers = append(observers, obs)
+	}
+	pg.mu.RUnlock()
+
+	for _, obs := range observers {
+		obs.OnGraphEvent(event)
 	}
 }
 
@@ -47,16 +104,35 @@ func (pg *GoverseGraph) GetObjects() []models.GoverseObject {
 // AddOrUpdateObject adds or replaces an object.
 func (pg *GoverseGraph) AddOrUpdateObject(obj models.GoverseObject) {
 	pg.mu.Lock()
-	defer pg.mu.Unlock()
-
+	_, exists := pg.objects[obj.ID]
 	pg.objects[obj.ID] = obj
+	pg.mu.Unlock()
+
+	eventType := EventObjectAdded
+	if exists {
+		eventType = EventObjectUpdated
+	}
+	pg.notifyObservers(GraphEvent{
+		Type:   eventType,
+		Object: &obj,
+	})
 }
 
 // AddOrUpdateNode registers or updates a node.
 func (pg *GoverseGraph) AddOrUpdateNode(node models.GoverseNode) {
 	pg.mu.Lock()
-	defer pg.mu.Unlock()
+	_, exists := pg.nodes[node.ID]
 	pg.nodes[node.ID] = node
+	pg.mu.Unlock()
+
+	eventType := EventNodeAdded
+	if exists {
+		eventType = EventNodeUpdated
+	}
+	pg.notifyObservers(GraphEvent{
+		Type: eventType,
+		Node: &node,
+	})
 }
 
 // IsNodeRegistered checks if a node with the given address is registered.
@@ -70,27 +146,51 @@ func (pg *GoverseGraph) IsNodeRegistered(nodeAddress string) bool {
 // RemoveObject removes a specific object by ID.
 func (pg *GoverseGraph) RemoveObject(objectID string) {
 	pg.mu.Lock()
-	defer pg.mu.Unlock()
+	_, exists := pg.objects[objectID]
 	delete(pg.objects, objectID)
+	pg.mu.Unlock()
+
+	if exists {
+		pg.notifyObservers(GraphEvent{
+			Type:     EventObjectRemoved,
+			ObjectID: objectID,
+		})
+	}
 }
 
 func (pg *GoverseGraph) RemoveNode(goverseNodeID string) {
 	pg.mu.Lock()
-	defer pg.mu.Unlock()
+	_, nodeExists := pg.nodes[goverseNodeID]
 	delete(pg.nodes, goverseNodeID)
-	// Also remove all objects associated with this node
+	// Collect objects to remove
+	removedObjects := make([]string, 0)
 	for id, obj := range pg.objects {
 		if obj.GoverseNodeID == goverseNodeID {
 			delete(pg.objects, id)
+			removedObjects = append(removedObjects, id)
 		}
+	}
+	pg.mu.Unlock()
+
+	// Notify about removed objects
+	for _, objID := range removedObjects {
+		pg.notifyObservers(GraphEvent{
+			Type:     EventObjectRemoved,
+			ObjectID: objID,
+		})
+	}
+
+	// Notify about removed node
+	if nodeExists {
+		pg.notifyObservers(GraphEvent{
+			Type:   EventNodeRemoved,
+			NodeID: goverseNodeID,
+		})
 	}
 }
 
 // RemoveStaleObjects removes objects associated with the given node ID that are not in the current object ID set.
 func (pg *GoverseGraph) RemoveStaleObjects(goverseNodeID string, currentObjs []*inspector_pb.Object) {
-	pg.mu.Lock()
-	defer pg.mu.Unlock()
-
 	currentIDs := make(map[string]struct{})
 	for _, o := range currentObjs {
 		if o != nil && o.Id != "" {
@@ -98,11 +198,23 @@ func (pg *GoverseGraph) RemoveStaleObjects(goverseNodeID string, currentObjs []*
 		}
 	}
 
+	pg.mu.Lock()
+	removedObjects := make([]string, 0)
 	for id, obj := range pg.objects {
 		if obj.GoverseNodeID == goverseNodeID {
 			if _, ok := currentIDs[id]; !ok {
 				delete(pg.objects, id)
+				removedObjects = append(removedObjects, id)
 			}
 		}
+	}
+	pg.mu.Unlock()
+
+	// Notify about removed objects
+	for _, objID := range removedObjects {
+		pg.notifyObservers(GraphEvent{
+			Type:     EventObjectRemoved,
+			ObjectID: objID,
+		})
 	}
 }

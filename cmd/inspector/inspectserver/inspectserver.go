@@ -3,10 +3,12 @@ package inspectserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -21,6 +23,16 @@ import (
 type GoverseNode = models.GoverseNode
 type GoverseObject = models.GoverseObject
 
+// sseHeartbeatInterval is the interval between SSE heartbeat events
+const sseHeartbeatInterval = 30 * time.Second
+
+// SSEClient represents a connected SSE client
+type SSEClient struct {
+	id        string
+	eventChan chan graph.GraphEvent
+	done      chan struct{}
+}
+
 // InspectorServer hosts the gRPC and HTTP servers for the inspector
 type InspectorServer struct {
 	pg           *graph.GoverseGraph
@@ -30,6 +42,11 @@ type InspectorServer struct {
 	httpAddr     string
 	staticDir    string
 	shutdownChan chan struct{}
+
+	// SSE clients management
+	sseClientsMu sync.RWMutex
+	sseClients   map[string]*SSEClient
+	clientIDSeq  int64
 }
 
 // Config holds the configuration for InspectorServer
@@ -41,12 +58,37 @@ type Config struct {
 
 // New creates a new InspectorServer
 func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
-	return &InspectorServer{
+	s := &InspectorServer{
 		pg:           pg,
 		grpcAddr:     cfg.GRPCAddr,
 		httpAddr:     cfg.HTTPAddr,
 		staticDir:    cfg.StaticDir,
 		shutdownChan: make(chan struct{}),
+		sseClients:   make(map[string]*SSEClient),
+	}
+
+	// Register as observer to receive graph events
+	pg.AddObserver(s)
+
+	return s
+}
+
+// OnGraphEvent implements the graph.Observer interface
+func (s *InspectorServer) OnGraphEvent(event graph.GraphEvent) {
+	s.sseClientsMu.RLock()
+	clients := make([]*SSEClient, 0, len(s.sseClients))
+	for _, c := range s.sseClients {
+		clients = append(clients, c)
+	}
+	s.sseClientsMu.RUnlock()
+
+	for _, client := range clients {
+		select {
+		case client.eventChan <- event:
+		case <-client.done:
+		default:
+			// Channel full, skip this event for this client
+		}
 	}
 }
 
@@ -69,7 +111,114 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 		_ = json.NewEncoder(w).Encode(out)
 	})
 
+	// SSE endpoint for push-based updates
+	mux.HandleFunc("/events/stream", s.handleEventsStream)
+
 	return mux
+}
+
+// handleEventsStream handles GET /events/stream for Server-Sent Events (SSE)
+func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed for SSE", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Verify the response writer supports flushing (required for SSE)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported by server", http.StatusInternalServerError)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Create client
+	s.sseClientsMu.Lock()
+	s.clientIDSeq++
+	clientID := fmt.Sprintf("client-%d", s.clientIDSeq)
+	client := &SSEClient{
+		id:        clientID,
+		eventChan: make(chan graph.GraphEvent, 100),
+		done:      make(chan struct{}),
+	}
+	s.sseClients[clientID] = client
+	s.sseClientsMu.Unlock()
+
+	log.Printf("SSE client connected: %s", clientID)
+
+	// Cleanup on disconnect
+	defer func() {
+		close(client.done)
+		s.sseClientsMu.Lock()
+		delete(s.sseClients, clientID)
+		s.sseClientsMu.Unlock()
+		log.Printf("SSE client disconnected: %s", clientID)
+	}()
+
+	// Send initial full state
+	nodes := s.pg.GetNodes()
+	objects := s.pg.GetObjects()
+	initialData := struct {
+		Type           string          `json:"type"`
+		GoverseNodes   []GoverseNode   `json:"goverse_nodes"`
+		GoverseObjects []GoverseObject `json:"goverse_objects"`
+	}{
+		Type:           "initial",
+		GoverseNodes:   nodes,
+		GoverseObjects: objects,
+	}
+	if err := s.writeSSEEvent(w, flusher, "initial", initialData); err != nil {
+		log.Printf("Failed to send initial state to SSE client %s: %v", clientID, err)
+		return
+	}
+
+	// Create heartbeat ticker
+	heartbeatTicker := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeatTicker.Stop()
+
+	// Stream events to the client
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.shutdownChan:
+			return
+		case <-heartbeatTicker.C:
+			// Send heartbeat to keep connection alive
+			if err := s.writeSSEEvent(w, flusher, "heartbeat", struct{}{}); err != nil {
+				log.Printf("Failed to send heartbeat to SSE client %s: %v", clientID, err)
+				return
+			}
+		case event := <-client.eventChan:
+			if err := s.writeSSEEvent(w, flusher, string(event.Type), event); err != nil {
+				log.Printf("Failed to send event to SSE client %s: %v", clientID, err)
+				return
+			}
+		}
+	}
+}
+
+// writeSSEEvent writes a Server-Sent Event to the response writer
+func (s *InspectorServer) writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, eventType string, data interface{}) error {
+	// Marshal data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event data: %w", err)
+	}
+
+	// Write SSE format: event: <type>\ndata: <json>\n\n
+	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, jsonData); err != nil {
+		return fmt.Errorf("failed to write SSE event: %w", err)
+	}
+
+	flusher.Flush()
+	return nil
 }
 
 // ServeHTTP starts the HTTP server in a goroutine and returns immediately
