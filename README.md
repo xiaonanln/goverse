@@ -122,14 +122,16 @@ go get github.com/xiaonanln/goverse
 
 Full documentation:
 - [Getting Started](docs/GET_STARTED.md) - Complete guide to building with GoVerse
+- [GoVerse API](docs/GOVERSEAPI.md) - API reference for the goverseapi package
 - [Object Model & Architecture](docs/GET_STARTED.md#core-concepts) - Understanding virtual actors
-- [Cluster Configuration](docs/GET_STARTED.md#cluster-configuration) - Quorum & stability settings
-- [Object Persistence](docs/GET_STARTED.md#object-persistence) - PostgreSQL integration
+- [Cluster Configuration](docs/CONFIGURATION.md) - YAML config and cluster settings
+- [Object Persistence](docs/PERSISTENCE_IMPLEMENTATION.md) - PostgreSQL integration
 - [Push Messaging](docs/PUSH_MESSAGING.md) - Real-time server-to-client delivery
+- [HTTP Gate API](docs/design/HTTP_GATE.md) - REST/HTTP endpoints for clients
+- [Object Access Control](docs/design/OBJECT_ACCESS_CONTROL.md) - Access rules and security
 - [Prometheus Metrics](docs/PROMETHEUS_INTEGRATION.md) - Monitoring & observability
 - [Inspector UI](cmd/inspector/) - Cluster visualization
-- [Chat Sample](samples/chat/) - Complete distributed chat example
-- [API Reference](proto/) - Protocol buffer definitions
+- [Proto Reference](proto/) - Protocol buffer definitions
 
 ---
 
@@ -164,7 +166,7 @@ High-level objectives for future development:
 - **RPC timeout configuration** - Configurable timeouts for CallObject/CreateObject with proper propagation across node boundaries (see [TIMEOUT_DESIGN.md](docs/TIMEOUT_DESIGN.md))
 
 ### Gate & Client Features
-- **Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility (see [HTTP_GATE.md](docs/design/HTTP_GATE.md))
+- ~~**Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility~~ ✅ Done (see [HTTP_GATE.md](docs/design/HTTP_GATE.md))
 - **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
 - ~~**Gate object call filtering** - Whitelist/blacklist patterns for security and API governance~~ ✅ Done (see [OBJECT_ACCESS_CONTROL.md](docs/design/OBJECT_ACCESS_CONTROL.md))
 - **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
@@ -176,7 +178,7 @@ High-level objectives for future development:
 
 ### Observability & Operations
 - **Enhanced metrics & alerting** - More granular Prometheus metrics, SLO tracking
-- **Chaos engineering tools** - Inject failures for resilience testing
+- **Inspector UI enhancements** - Real-time object visualization, shard distribution graphs, and cluster health dashboard
 
 ---
 
