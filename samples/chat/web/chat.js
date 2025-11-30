@@ -31,9 +31,12 @@ function getApiBase() {
 let userName = '';
 let currentRoom = null;
 let lastMsgTimestamp = 0;
-let pollIntervalId = null;
 let isLoading = false;
 let displayedMessages = new Set(); // Track displayed messages to avoid duplicates
+
+// SSE (Server-Sent Events) state
+let eventSource = null;
+let clientID = null;
 
 // Room icons mapping
 const roomIcons = {
@@ -67,8 +70,107 @@ function initChat() {
         }
     });
     
+    // Connect to SSE for push messages
+    connectSSE();
+    
     // Load chat rooms
     loadChatRooms();
+}
+
+// ==================== SSE (Server-Sent Events) ====================
+
+// Connect to SSE endpoint for push messages
+function connectSSE() {
+    // Construct SSE URL based on API_BASE
+    const sseUrl = API_BASE.replace(/\/api\/v1$/, '/api/v1/events/stream');
+    console.log('Connecting to SSE:', sseUrl);
+    
+    eventSource = new EventSource(sseUrl);
+    
+    eventSource.addEventListener('register', (event) => {
+        const data = JSON.parse(event.data);
+        clientID = data.clientId;
+        console.log('SSE registered with clientId:', clientID);
+    });
+    
+    eventSource.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        handlePushMessage(data);
+    });
+    
+    eventSource.addEventListener('heartbeat', (event) => {
+        console.log('SSE heartbeat received');
+    });
+    
+    eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        // Attempt to reconnect after a delay
+        if (eventSource.readyState === EventSource.CLOSED) {
+            console.log('SSE connection closed, reconnecting in 3 seconds...');
+            setTimeout(connectSSE, 3000);
+        }
+    };
+}
+
+// Handle pushed message from SSE
+function handlePushMessage(msgEvent) {
+    console.log('Received push message:', msgEvent);
+    
+    // Check if the message type is a new message notification
+    if (!msgEvent.type || !msgEvent.type.includes('Client_NewMessageNotification')) {
+        console.log('Ignoring non-chat message:', msgEvent.type);
+        return;
+    }
+    
+    // Only process messages if we're in a chat room
+    if (!currentRoom) {
+        console.log('Ignoring message, not in a chat room');
+        return;
+    }
+    
+    // Decode the payload (base64-encoded protobuf Any)
+    try {
+        const payloadBytes = base64Decode(msgEvent.payload);
+        const any = parseAny(payloadBytes);
+        
+        // Parse Client_NewMessageNotification: message (ChatMessage, field 1)
+        let offset = 0;
+        while (offset < any.value.length) {
+            const fieldWire = any.value[offset++];
+            const fieldNumber = fieldWire >> 3;
+            const wireType = fieldWire & 0x07;
+            
+            if (fieldNumber === 1 && wireType === 2) {
+                const lenResult = decodeVarint(any.value, offset);
+                const len = lenResult.value;
+                offset = lenResult.offset;
+                const msgBytes = any.value.slice(offset, offset + len);
+                const chatMsg = parseChatMessage(msgBytes);
+                
+                // Display the message
+                if (displayMessage(chatMsg)) {
+                    if (chatMsg.timestamp > lastMsgTimestamp) {
+                        lastMsgTimestamp = chatMsg.timestamp;
+                    }
+                }
+                offset += len;
+            } else {
+                offset = skipField(any.value, offset, wireType);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to parse push message:', error);
+    }
+}
+
+// Disconnect SSE
+function disconnectSSE() {
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        clientID = null;
+        console.log('SSE disconnected');
+    }
 }
 
 // Load available chat rooms
@@ -120,11 +222,18 @@ async function joinChatroom(roomName) {
         return;
     }
     
+    if (!clientID) {
+        setStatus('Connecting to server, please wait...', 'error');
+        // Try to reconnect SSE
+        connectSSE();
+        return;
+    }
+    
     setLoading(true);
     setStatus('Joining ' + roomName + '...');
     
     try {
-        const request = createJoinRequest(userName);
+        const request = createJoinRequest(userName, clientID);
         const response = await callObject('ChatRoom', 'ChatRoom-' + roomName, 'Join', request);
         const joinData = parseJoinResponse(response);
         
@@ -151,8 +260,7 @@ async function joinChatroom(roomName) {
             });
         }
         
-        // Start polling for new messages
-        startPolling();
+        // Messages will be received via SSE push - no polling needed
         
         setStatus('');
         
@@ -168,7 +276,6 @@ async function joinChatroom(roomName) {
 
 // Leave the current chatroom
 function leaveChatroom() {
-    stopPolling();
     currentRoom = null;
     lastMsgTimestamp = 0;
     displayedMessages.clear(); // Clear displayed messages when leaving
@@ -265,52 +372,24 @@ function displayMessage(msg) {
     return true;
 }
 
-// Poll for new messages
-async function pollMessages() {
-    if (!currentRoom || isLoading) return;
-    
-    try {
-        const request = createGetRecentMessagesRequest(lastMsgTimestamp);
-        const response = await callObject('ChatRoom', 'ChatRoom-' + currentRoom, 'GetRecentMessages', request);
-        const messages = parseGetRecentMessagesResponse(response);
-        
-        messages.forEach(msg => {
-            // displayMessage handles deduplication internally
-            displayMessage(msg);
-            if (msg.timestamp > lastMsgTimestamp) {
-                lastMsgTimestamp = msg.timestamp;
-            }
-        });
-    } catch (error) {
-        console.log('Poll error:', error);
-    }
-}
-
-// Start polling for messages
-function startPolling() {
-    stopPolling();
-    pollIntervalId = setInterval(pollMessages, 1000); // Poll every second
-}
-
-// Stop polling
-function stopPolling() {
-    if (pollIntervalId) {
-        clearInterval(pollIntervalId);
-        pollIntervalId = null;
-    }
-}
-
 // ==================== API Communication ====================
 
 // Call an object method via HTTP Gate
 async function callObject(objectType, objectID, method, requestBytes) {
     const url = `${API_BASE}/objects/call/${objectType}/${objectID}/${method}`;
     
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    // Include client ID if available (for push message routing)
+    if (clientID) {
+        headers['X-Client-ID'] = clientID;
+    }
+    
     const response = await fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: headers,
         body: JSON.stringify({
             request: requestBytes
         })
@@ -335,11 +414,20 @@ function createListChatRoomsRequest() {
 }
 
 // Create ChatRoom_JoinRequest
-function createJoinRequest(userName) {
+function createJoinRequest(userName, clientId) {
     // ChatRoom_JoinRequest: user_name (string, field 1), client_id (string, field 2)
     const userNameBytes = new TextEncoder().encode(userName);
-    // We don't need client_id for HTTP polling
-    const reqBytes = encodeField(1, 2, userNameBytes);
+    const field1 = encodeField(1, 2, userNameBytes);
+    
+    // Include client_id for SSE push notifications
+    let reqBytes;
+    if (clientId) {
+        const clientIdBytes = new TextEncoder().encode(clientId);
+        const field2 = encodeField(2, 2, clientIdBytes);
+        reqBytes = new Uint8Array([...field1, ...field2]);
+    } else {
+        reqBytes = field1;
+    }
     return wrapInAny('chat.ChatRoom_JoinRequest', reqBytes);
 }
 
