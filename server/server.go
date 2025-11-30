@@ -33,12 +33,13 @@ type ServerConfig struct {
 	AdvertiseAddress          string
 	MetricsListenAddress      string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
 	EtcdAddress               string
-	EtcdPrefix                string                  // Optional: etcd key prefix for this cluster (default: "/goverse")
-	MinQuorum                 int                     // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
-	NodeStabilityDuration     time.Duration           // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
-	ShardMappingCheckInterval time.Duration           // Optional: how often to check if shard mapping needs updating (default: 5s)
-	NumShards                 int                     // Optional: number of shards in the cluster (default: 8192)
-	AccessValidator           *config.AccessValidator // Optional: access validator for node access control
+	EtcdPrefix                string                     // Optional: etcd key prefix for this cluster (default: "/goverse")
+	MinQuorum                 int                        // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
+	NodeStabilityDuration     time.Duration              // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
+	ShardMappingCheckInterval time.Duration              // Optional: how often to check if shard mapping needs updating (default: 5s)
+	NumShards                 int                        // Optional: number of shards in the cluster (default: 8192)
+	AccessValidator           *config.AccessValidator    // Optional: access validator for node access control
+	LifecycleValidator        *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
 }
 
 type Server struct {
@@ -64,7 +65,12 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		numShards = 8192
 	}
 
-	node := node.NewNode(config.AdvertiseAddress, numShards)
+	n := node.NewNode(config.AdvertiseAddress, numShards)
+
+	// Set lifecycle validator on the node if configured
+	if config.LifecycleValidator != nil {
+		n.SetLifecycleValidator(config.LifecycleValidator)
+	}
 
 	// Create cluster configuration from server config
 	clusterCfg := cluster.DefaultConfig()
@@ -86,7 +92,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 
 	// Initialize cluster with etcd connection
-	c, err := cluster.NewClusterWithNode(clusterCfg, node)
+	c, err := cluster.NewClusterWithNode(clusterCfg, n)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)
@@ -96,7 +102,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 
 	server := &Server{
 		config:          config,
-		Node:            node,
+		Node:            n,
 		ctx:             ctx,
 		cancel:          cancel,
 		logger:          logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),

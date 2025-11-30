@@ -33,21 +33,23 @@ type GateServerConfig struct {
 	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
 	DefaultCreateTimeout time.Duration // Optional: default timeout for CreateObject operations (default: 30s)
 
-	AccessValidator *config.AccessValidator // Optional: access validator for client access control
+	AccessValidator    *config.AccessValidator    // Optional: access validator for client access control
+	LifecycleValidator *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
 }
 
 // GateServer handles gRPC requests and delegates to the gate
 type GateServer struct {
 	gate_pb.UnimplementedGateServiceServer
-	config          *GateServerConfig
-	ctx             context.Context
-	cancel          context.CancelFunc
-	logger          *logger.Logger
-	grpcServer      *grpc.Server
-	httpServer      *http.Server
-	gate            *gate.Gate
-	cluster         *cluster.Cluster
-	accessValidator *config.AccessValidator
+	config             *GateServerConfig
+	ctx                context.Context
+	cancel             context.CancelFunc
+	logger             *logger.Logger
+	grpcServer         *grpc.Server
+	httpServer         *http.Server
+	gate               *gate.Gate
+	cluster            *cluster.Cluster
+	accessValidator    *config.AccessValidator
+	lifecycleValidator *config.LifecycleValidator
 }
 
 // NewGateServer creates a new gate server instance
@@ -83,13 +85,14 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 	}
 
 	server := &GateServer{
-		config:          config,
-		ctx:             ctx,
-		cancel:          cancel,
-		logger:          logger.NewLogger("GateServer"),
-		gate:            gw,
-		cluster:         c,
-		accessValidator: config.AccessValidator,
+		config:             config,
+		ctx:                ctx,
+		cancel:             cancel,
+		logger:             logger.NewLogger("GateServer"),
+		gate:               gw,
+		cluster:            c,
+		accessValidator:    config.AccessValidator,
+		lifecycleValidator: config.LifecycleValidator,
 	}
 
 	return server, nil
@@ -299,6 +302,14 @@ func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObject
 	// Apply default timeout if context has no deadline
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCreateTimeout)
 	defer cancel()
+
+	// Check lifecycle rules for CREATE if lifecycle validator is configured
+	if s.lifecycleValidator != nil {
+		if err := s.lifecycleValidator.CheckClientCreate(req.Type, req.Id); err != nil {
+			s.logger.Warnf("Create denied for client: type=%s, id=%s: %v", req.Type, req.Id, err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
 
 	// Call the cluster to create the object
 	objID, err := s.cluster.CreateObject(ctx, req.Type, req.Id)

@@ -48,12 +48,13 @@ type GateConfig struct {
 
 // Config is the root configuration structure
 type Config struct {
-	Version     int            `yaml:"version"`
-	Cluster     ClusterConfig  `yaml:"cluster"`
-	Postgres    PostgresConfig `yaml:"postgres"`
-	Nodes       []NodeConfig   `yaml:"nodes"`
-	Gates       []GateConfig   `yaml:"gates"`
-	AccessRules []AccessRule   `yaml:"object_access_rules"` // Object access control rules
+	Version        int             `yaml:"version"`
+	Cluster        ClusterConfig   `yaml:"cluster"`
+	Postgres       PostgresConfig  `yaml:"postgres"`
+	Nodes          []NodeConfig    `yaml:"nodes"`
+	Gates          []GateConfig    `yaml:"gates"`
+	AccessRules    []AccessRule    `yaml:"object_access_rules"`    // Object access control rules
+	LifecycleRules []LifecycleRule `yaml:"object_lifecycle_rules"` // Object lifecycle control rules
 }
 
 // LoadConfig loads configuration from a YAML file
@@ -185,4 +186,14 @@ func (c *Config) NewAccessValidator() (*AccessValidator, error) {
 		return nil, nil
 	}
 	return NewAccessValidator(c.AccessRules)
+}
+
+// NewLifecycleValidator creates a LifecycleValidator from the config's lifecycle rules.
+// Returns nil if no lifecycle rules are configured.
+// Returns an error if any rule has an invalid pattern, lifecycle, or access level.
+func (c *Config) NewLifecycleValidator() (*LifecycleValidator, error) {
+	if len(c.LifecycleRules) == 0 {
+		return nil, nil
+	}
+	return NewLifecycleValidator(c.LifecycleRules)
 }
