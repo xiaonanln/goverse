@@ -6,13 +6,48 @@ import (
 	"strings"
 )
 
-// Access level constants
+// AccessLevel represents the access level for an object access rule
+type AccessLevel int
+
+// Access level enum values
 const (
-	AccessReject   = "REJECT"
-	AccessInternal = "INTERNAL"
-	AccessExternal = "EXTERNAL"
-	AccessAllow    = "ALLOW"
+	AccessReject   AccessLevel = iota // Deny all access (clients and nodes)
+	AccessInternal                    // Allow only node-to-node calls, deny clients
+	AccessExternal                    // Allow only client calls via gate, deny nodes
+	AccessAllow                       // Allow both clients and nodes
 )
+
+// String returns the string representation of an AccessLevel
+func (a AccessLevel) String() string {
+	switch a {
+	case AccessReject:
+		return "REJECT"
+	case AccessInternal:
+		return "INTERNAL"
+	case AccessExternal:
+		return "EXTERNAL"
+	case AccessAllow:
+		return "ALLOW"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// ParseAccessLevel parses a string to an AccessLevel enum value
+func ParseAccessLevel(s string) (AccessLevel, error) {
+	switch strings.ToUpper(s) {
+	case "REJECT":
+		return AccessReject, nil
+	case "INTERNAL":
+		return AccessInternal, nil
+	case "EXTERNAL":
+		return AccessExternal, nil
+	case "ALLOW":
+		return AccessAllow, nil
+	default:
+		return AccessReject, fmt.Errorf("invalid access level: %q", s)
+	}
+}
 
 // AccessRule defines a single access control rule
 type AccessRule struct {
@@ -84,7 +119,7 @@ type CompiledRule struct {
 	typeMatcher   PatternMatcher
 	idMatcher     PatternMatcher
 	methodMatcher PatternMatcher
-	access        string
+	access        AccessLevel
 }
 
 // AccessValidator validates access to objects and methods
@@ -100,7 +135,7 @@ func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
 	}
 
 	for i, rule := range rules {
-		compiled := &CompiledRule{access: rule.Access}
+		compiled := &CompiledRule{}
 		var err error
 
 		// Type is required
@@ -124,14 +159,13 @@ func NewAccessValidator(rules []AccessRule) (*AccessValidator, error) {
 			return nil, fmt.Errorf("invalid method pattern in rule %d: %w", i, err)
 		}
 
-		// Validate access level
-		switch rule.Access {
-		case AccessReject, AccessInternal, AccessExternal, AccessAllow:
-			// OK
-		case "":
+		// Parse access level to enum
+		if rule.Access == "" {
 			return nil, fmt.Errorf("missing access in rule %d", i)
-		default:
-			return nil, fmt.Errorf("invalid access level in rule %d: %q", i, rule.Access)
+		}
+		compiled.access, err = ParseAccessLevel(rule.Access)
+		if err != nil {
+			return nil, fmt.Errorf("invalid access level in rule %d: %w", i, err)
 		}
 
 		v.rules = append(v.rules, compiled)
@@ -166,7 +200,7 @@ func (v *AccessValidator) CheckNodeAccess(objectType, objectID, method string) e
 
 // findAccess evaluates rules top-to-bottom and returns the access level.
 // Returns REJECT if no rule matches (default deny).
-func (v *AccessValidator) findAccess(objectType, objectID, method string) string {
+func (v *AccessValidator) findAccess(objectType, objectID, method string) AccessLevel {
 	for _, rule := range v.rules {
 		if rule.typeMatcher.Match(objectType) &&
 			rule.idMatcher.Match(objectID) &&

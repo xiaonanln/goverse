@@ -22,32 +22,32 @@ func TestNewAccessValidator(t *testing.T) {
 		{
 			name: "valid literal patterns",
 			rules: []AccessRule{
-				{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Method: "ListChatRooms", Access: AccessAllow},
-				{Type: "ConfigManager", ID: "ConfigManager0", Method: "GetConfig", Access: AccessInternal},
+				{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Method: "ListChatRooms", Access: "ALLOW"},
+				{Type: "ConfigManager", ID: "ConfigManager0", Method: "GetConfig", Access: "INTERNAL"},
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid regex patterns",
 			rules: []AccessRule{
-				{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]+/", Method: "/(Join|Leave|SendMessage)/", Access: AccessAllow},
-				{Type: "/.*Scheduler.*/", Method: "/.*/", Access: AccessInternal},
+				{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]+/", Method: "/(Join|Leave|SendMessage)/", Access: "ALLOW"},
+				{Type: "/.*Scheduler.*/", Method: "/.*/", Access: "INTERNAL"},
 			},
 			wantErr: false,
 		},
 		{
 			name: "optional id and method fields",
 			rules: []AccessRule{
-				{Type: "InternalScheduler", Access: AccessInternal},                           // ID and Method omitted
-				{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Access: AccessInternal},             // Method omitted
-				{Type: "Counter", Method: "/(Increment|Decrement|Get)/", Access: AccessAllow}, // ID omitted
+				{Type: "InternalScheduler", Access: "INTERNAL"},                           // ID and Method omitted
+				{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Access: "INTERNAL"},             // Method omitted
+				{Type: "Counter", Method: "/(Increment|Decrement|Get)/", Access: "ALLOW"}, // ID omitted
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing type",
 			rules: []AccessRule{
-				{ID: "SomeID", Method: "Method", Access: AccessAllow},
+				{ID: "SomeID", Method: "Method", Access: "ALLOW"},
 			},
 			wantErr: true,
 			errMsg:  "missing type",
@@ -55,7 +55,7 @@ func TestNewAccessValidator(t *testing.T) {
 		{
 			name: "invalid type regex pattern",
 			rules: []AccessRule{
-				{Type: "/ChatRoom-[invalid/", Method: "Method", Access: AccessAllow},
+				{Type: "/ChatRoom-[invalid/", Method: "Method", Access: "ALLOW"},
 			},
 			wantErr: true,
 			errMsg:  "invalid type pattern",
@@ -63,7 +63,7 @@ func TestNewAccessValidator(t *testing.T) {
 		{
 			name: "invalid id regex pattern",
 			rules: []AccessRule{
-				{Type: "ChatRoom", ID: "/[invalid/", Method: "Method", Access: AccessAllow},
+				{Type: "ChatRoom", ID: "/[invalid/", Method: "Method", Access: "ALLOW"},
 			},
 			wantErr: true,
 			errMsg:  "invalid id pattern",
@@ -71,7 +71,7 @@ func TestNewAccessValidator(t *testing.T) {
 		{
 			name: "invalid method regex pattern",
 			rules: []AccessRule{
-				{Type: "Object", Method: "/(invalid[/", Access: AccessAllow},
+				{Type: "Object", Method: "/(invalid[/", Access: "ALLOW"},
 			},
 			wantErr: true,
 			errMsg:  "invalid method pattern",
@@ -95,10 +95,20 @@ func TestNewAccessValidator(t *testing.T) {
 		{
 			name: "all valid access levels",
 			rules: []AccessRule{
-				{Type: "Obj1", Method: "M1", Access: AccessReject},
-				{Type: "Obj2", Method: "M2", Access: AccessInternal},
-				{Type: "Obj3", Method: "M3", Access: AccessExternal},
-				{Type: "Obj4", Method: "M4", Access: AccessAllow},
+				{Type: "Obj1", Method: "M1", Access: "REJECT"},
+				{Type: "Obj2", Method: "M2", Access: "INTERNAL"},
+				{Type: "Obj3", Method: "M3", Access: "EXTERNAL"},
+				{Type: "Obj4", Method: "M4", Access: "ALLOW"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "case insensitive access level",
+			rules: []AccessRule{
+				{Type: "Obj1", Method: "M1", Access: "reject"},
+				{Type: "Obj2", Method: "M2", Access: "Internal"},
+				{Type: "Obj3", Method: "M3", Access: "EXTERNAL"},
+				{Type: "Obj4", Method: "M4", Access: "allow"},
 			},
 			wantErr: false,
 		},
@@ -129,17 +139,17 @@ func TestNewAccessValidator(t *testing.T) {
 func TestAccessValidator_CheckClientAccess(t *testing.T) {
 	rules := []AccessRule{
 		// ChatRoomMgr singleton: clients can list rooms
-		{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Method: "ListChatRooms", Access: AccessAllow},
+		{Type: "ChatRoomMgr", ID: "ChatRoomMgr0", Method: "ListChatRooms", Access: "ALLOW"},
 		// ChatRoomMgr: other methods internal only
-		{Type: "ChatRoomMgr", Method: "/.*/", Access: AccessInternal},
+		{Type: "ChatRoomMgr", Method: "/.*/", Access: "INTERNAL"},
 		// ChatRoom: clients can interact with these methods
-		{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]+/", Method: "/(Join|Leave|SendMessage)/", Access: AccessAllow},
+		{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]+/", Method: "/(Join|Leave|SendMessage)/", Access: "ALLOW"},
 		// ChatRoom: other methods internal only
-		{Type: "ChatRoom", Method: "/.*/", Access: AccessInternal},
+		{Type: "ChatRoom", Method: "/.*/", Access: "INTERNAL"},
 		// Counter: external only method
-		{Type: "Counter", Method: "ExternalOnly", Access: AccessExternal},
+		{Type: "Counter", Method: "ExternalOnly", Access: "EXTERNAL"},
 		// Default: deny everything else
-		{Type: "/.*/", Access: AccessReject},
+		{Type: "/.*/", Access: "REJECT"},
 	}
 
 	v, err := NewAccessValidator(rules)
@@ -189,13 +199,13 @@ func TestAccessValidator_CheckClientAccess(t *testing.T) {
 func TestAccessValidator_CheckNodeAccess(t *testing.T) {
 	rules := []AccessRule{
 		// ChatRoom: all methods allowed for internal
-		{Type: "ChatRoom", Method: "/.*/", Access: AccessInternal},
+		{Type: "ChatRoom", Method: "/.*/", Access: "INTERNAL"},
 		// Counter: external only method
-		{Type: "Counter", Method: "ExternalOnly", Access: AccessExternal},
+		{Type: "Counter", Method: "ExternalOnly", Access: "EXTERNAL"},
 		// Counter: other methods allowed
-		{Type: "Counter", Method: "/.*/", Access: AccessAllow},
+		{Type: "Counter", Method: "/.*/", Access: "ALLOW"},
 		// Default: reject
-		{Type: "/.*/", Access: AccessReject},
+		{Type: "/.*/", Access: "REJECT"},
 	}
 
 	v, err := NewAccessValidator(rules)
@@ -238,9 +248,9 @@ func TestAccessValidator_CheckNodeAccess(t *testing.T) {
 func TestAccessValidator_FirstMatchWins(t *testing.T) {
 	// Test that rules are evaluated top-to-bottom and first match wins
 	rules := []AccessRule{
-		{Type: "ChatRoom", Method: "SpecificMethod", Access: AccessAllow}, // Specific method first
-		{Type: "ChatRoom", Method: "/.*/", Access: AccessInternal},        // Catch-all second
-		{Type: "/.*/", Access: AccessReject},                              // Default deny last
+		{Type: "ChatRoom", Method: "SpecificMethod", Access: "ALLOW"}, // Specific method first
+		{Type: "ChatRoom", Method: "/.*/", Access: "INTERNAL"},        // Catch-all second
+		{Type: "/.*/", Access: "REJECT"},                              // Default deny last
 	}
 
 	v, err := NewAccessValidator(rules)
@@ -267,7 +277,7 @@ func TestAccessValidator_FirstMatchWins(t *testing.T) {
 func TestAccessValidator_DefaultDeny(t *testing.T) {
 	// Test that no matching rule results in REJECT
 	rules := []AccessRule{
-		{Type: "SpecificType", ID: "SpecificID", Method: "SpecificMethod", Access: AccessAllow},
+		{Type: "SpecificType", ID: "SpecificID", Method: "SpecificMethod", Access: "ALLOW"},
 	}
 
 	v, err := NewAccessValidator(rules)
@@ -288,11 +298,11 @@ func TestAccessValidator_OptionalFields(t *testing.T) {
 	// Test that omitted ID and Method fields match all
 	rules := []AccessRule{
 		// Internal scheduler: only type specified - matches all IDs and methods
-		{Type: "InternalScheduler", Access: AccessInternal},
+		{Type: "InternalScheduler", Access: "INTERNAL"},
 		// Counter: only type and method specified - matches all IDs
-		{Type: "Counter", Method: "/(Increment|Decrement)/", Access: AccessAllow},
+		{Type: "Counter", Method: "/(Increment|Decrement)/", Access: "ALLOW"},
 		// Default deny
-		{Type: "/.*/", Access: AccessReject},
+		{Type: "/.*/", Access: "REJECT"},
 	}
 
 	v, err := NewAccessValidator(rules)
@@ -328,11 +338,11 @@ func TestAccessValidator_IDPatternMatching(t *testing.T) {
 	// Test ID pattern matching specifically
 	rules := []AccessRule{
 		// ChatRoom with specific ID pattern
-		{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]{1,50}/", Method: "Join", Access: AccessAllow},
+		{Type: "ChatRoom", ID: "/[a-zA-Z0-9_-]{1,50}/", Method: "Join", Access: "ALLOW"},
 		// UserSession with specific user ID pattern
-		{Type: "UserSession", ID: "/user-[0-9]+/", Access: AccessAllow},
+		{Type: "UserSession", ID: "/user-[0-9]+/", Access: "ALLOW"},
 		// Default deny
-		{Type: "/.*/", Access: AccessReject},
+		{Type: "/.*/", Access: "REJECT"},
 	}
 
 	v, err := NewAccessValidator(rules)
@@ -536,7 +546,7 @@ object_access_rules:
 	if cfg.AccessRules[0].Method != "ListChatRooms" {
 		t.Errorf("expected first rule method ListChatRooms, got %s", cfg.AccessRules[0].Method)
 	}
-	if cfg.AccessRules[0].Access != AccessAllow {
+	if cfg.AccessRules[0].Access != "ALLOW" {
 		t.Errorf("expected first rule access ALLOW, got %s", cfg.AccessRules[0].Access)
 	}
 
@@ -575,6 +585,69 @@ func TestConfigNewAccessValidator_EmptyRules(t *testing.T) {
 	}
 	if v != nil {
 		t.Error("expected nil validator for empty rules")
+	}
+}
+
+func TestParseAccessLevel(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected AccessLevel
+		wantErr  bool
+	}{
+		{"REJECT", AccessReject, false},
+		{"INTERNAL", AccessInternal, false},
+		{"EXTERNAL", AccessExternal, false},
+		{"ALLOW", AccessAllow, false},
+		// Case insensitive
+		{"reject", AccessReject, false},
+		{"internal", AccessInternal, false},
+		{"external", AccessExternal, false},
+		{"allow", AccessAllow, false},
+		{"Reject", AccessReject, false},
+		{"Internal", AccessInternal, false},
+		// Invalid
+		{"INVALID", AccessReject, true},
+		{"", AccessReject, true},
+		{"PERMITTED", AccessReject, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseAccessLevel(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, but got nil", tt.input)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if got != tt.expected {
+					t.Errorf("ParseAccessLevel(%q) = %v, want %v", tt.input, got, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+func TestAccessLevel_String(t *testing.T) {
+	tests := []struct {
+		level    AccessLevel
+		expected string
+	}{
+		{AccessReject, "REJECT"},
+		{AccessInternal, "INTERNAL"},
+		{AccessExternal, "EXTERNAL"},
+		{AccessAllow, "ALLOW"},
+		{AccessLevel(99), "UNKNOWN"}, // Invalid enum value
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			if got := tt.level.String(); got != tt.expected {
+				t.Errorf("AccessLevel(%d).String() = %q, want %q", tt.level, got, tt.expected)
+			}
+		})
 	}
 }
 
