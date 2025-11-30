@@ -606,32 +606,21 @@ object_lifecycle_rules:
     lifecycle: DELETE
     access: INTERNAL
 
-  # InternalScheduler: only nodes can create/delete
+  # InternalScheduler: only nodes can create/delete (using ALL)
   - type: InternalScheduler
-    lifecycle: CREATE
-    access: INTERNAL
-  - type: InternalScheduler
-    lifecycle: DELETE
+    lifecycle: ALL
     access: INTERNAL
 
-  # Singleton objects: reject creation (pre-created only)
+  # Singleton objects: reject creation and deletion (using ALL)
   - type: ConfigManager
     id: ConfigManager0
-    lifecycle: CREATE
-    access: REJECT
-  - type: ConfigManager
-    id: ConfigManager0
-    lifecycle: DELETE
+    lifecycle: ALL
     access: REJECT
 
-  # Temporary objects: clients can create and delete
+  # Temporary objects: clients can create and delete (using ALL)
   - type: TempSession
     id: /session-[a-zA-Z0-9]+/
-    lifecycle: CREATE
-    access: ALLOW
-  - type: TempSession
-    id: /session-[a-zA-Z0-9]+/
-    lifecycle: DELETE
+    lifecycle: ALL
     access: ALLOW
 ```
 
@@ -641,7 +630,7 @@ object_lifecycle_rules:
 |-------|----------|-------------|
 | `type` | Yes | Object type. Literal string for exact match, or `/regexp/` for regex. |
 | `id` | No | Object ID pattern. Omit to match all IDs. Literal or `/regexp/`. |
-| `lifecycle` | Yes | Lifecycle operation: `CREATE` or `DELETE` |
+| `lifecycle` | Yes | Lifecycle operation: `CREATE`, `DELETE`, or `ALL` |
 | `access` | Yes | Access level: `REJECT`, `INTERNAL`, `EXTERNAL`, or `ALLOW` |
 
 **Lifecycle operations:**
@@ -650,6 +639,7 @@ object_lifecycle_rules:
 |-----------|-------------|---------|
 | `CREATE` | Object instantiation | `CallObject` to non-existent object (auto-creation) or explicit `CreateObject` |
 | `DELETE` | Object removal | Explicit `DeleteObject` call |
+| `ALL` | Both CREATE and DELETE | Applies to both object creation and deletion |
 
 ### 7.4 Access Level Semantics
 
@@ -705,12 +695,9 @@ object_lifecycle_rules:
 
 ```yaml
 object_lifecycle_rules:
-  # Scheduler: only nodes can create and delete
+  # Scheduler: only nodes can create and delete (using ALL)
   - type: InternalScheduler
-    lifecycle: CREATE
-    access: INTERNAL
-  - type: InternalScheduler
-    lifecycle: DELETE
+    lifecycle: ALL
     access: INTERNAL
 ```
 
@@ -718,12 +705,9 @@ object_lifecycle_rules:
 
 ```yaml
 object_lifecycle_rules:
-  # ConfigManager singleton: cannot be created or deleted dynamically
+  # ConfigManager singleton: cannot be created or deleted dynamically (using ALL)
   - type: ConfigManager
-    lifecycle: CREATE
-    access: REJECT
-  - type: ConfigManager
-    lifecycle: DELETE
+    lifecycle: ALL
     access: REJECT
 ```
 
@@ -731,14 +715,10 @@ object_lifecycle_rules:
 
 ```yaml
 object_lifecycle_rules:
-  # TempSession: clients can create and delete their sessions
+  # TempSession: clients can create and delete their sessions (using ALL)
   - type: TempSession
     id: /temp-[a-zA-Z0-9]+/
-    lifecycle: CREATE
-    access: ALLOW
-  - type: TempSession
-    id: /temp-[a-zA-Z0-9]+/
-    lifecycle: DELETE
+    lifecycle: ALL
     access: ALLOW
 ```
 
