@@ -100,12 +100,15 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 	mux.Handle("/", http.FileServer(http.Dir(s.staticDir)))
 	mux.HandleFunc("/graph", func(w http.ResponseWriter, r *http.Request) {
 		nodes := s.pg.GetNodes()
+		gates := s.pg.GetGates()
 		objects := s.pg.GetObjects()
 		out := struct {
-			GoverseNodes   []GoverseNode   `json:"goverse_nodes"`
-			GoverseObjects []GoverseObject `json:"goverse_objects"`
+			GoverseNodes   []GoverseNode        `json:"goverse_nodes"`
+			GoverseGates   []models.GoverseGate `json:"goverse_gates"`
+			GoverseObjects []GoverseObject      `json:"goverse_objects"`
 		}{
 			GoverseNodes:   nodes,
+			GoverseGates:   gates,
 			GoverseObjects: objects,
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -296,12 +299,15 @@ func CreateHTTPHandler(pg *graph.GoverseGraph, staticDir string) http.Handler {
 	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
 	mux.HandleFunc("/graph", func(w http.ResponseWriter, r *http.Request) {
 		nodes := pg.GetNodes()
+		gates := pg.GetGates()
 		objects := pg.GetObjects()
 		out := struct {
-			GoverseNodes   []GoverseNode   `json:"goverse_nodes"`
-			GoverseObjects []GoverseObject `json:"goverse_objects"`
+			GoverseNodes   []GoverseNode        `json:"goverse_nodes"`
+			GoverseGates   []models.GoverseGate `json:"goverse_gates"`
+			GoverseObjects []GoverseObject      `json:"goverse_objects"`
 		}{
 			GoverseNodes:   nodes,
+			GoverseGates:   gates,
 			GoverseObjects: objects,
 		}
 		w.Header().Set("Content-Type", "application/json")
