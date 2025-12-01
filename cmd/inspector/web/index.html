@@ -678,6 +678,11 @@
         .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
         .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
 
+      // Update existing links
+      linkSelection
+        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+
       // Update nodes
       const nodeSelection = g.select('.nodes')
         .selectAll('.graph-node')
@@ -1485,13 +1490,13 @@
       const links = []
       const nodeMap = new Map()
 
-      // Add cluster nodes (nodes and gates)
+      // Add cluster nodes
       graphData.goverse_nodes.forEach(n => {
         const existingPos = positionMap.get(n.id)
         const node = {
           id: n.id,
           label: n.label || n.id,
-          nodeType: n.type || NODE_TYPE_NODE,
+          nodeType: NODE_TYPE_NODE,
           advertiseAddr: n.advertise_addr,
           color: n.color,
           // Preserve position if exists
@@ -1504,6 +1509,27 @@
         }
         nodes.push(node)
         nodeMap.set(n.id, node)
+      })
+
+      // Add gates
+      graphData.goverse_gates.forEach(g => {
+        const existingPos = positionMap.get(g.id)
+        const node = {
+          id: g.id,
+          label: g.label || g.id,
+          nodeType: NODE_TYPE_GATE,
+          advertiseAddr: g.advertise_addr,
+          color: g.color,
+          // Preserve position if exists
+          x: existingPos ? existingPos.x : undefined,
+          y: existingPos ? existingPos.y : undefined,
+          vx: existingPos ? existingPos.vx : undefined,
+          vy: existingPos ? existingPos.vy : undefined,
+          fx: existingPos ? existingPos.fx : undefined,
+          fy: existingPos ? existingPos.fy : undefined
+        }
+        nodes.push(node)
+        nodeMap.set(g.id, node)
       })
 
       // Add objects
@@ -1533,7 +1559,36 @@
         if (obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
           links.push({
             source: obj.id,
-            target: obj.goverse_node_id
+            target: obj.goverse_node_id,
+            type: 'object-node'
+          })
+        }
+      })
+
+      // Add node-to-node links with weaker force
+      const addrToNodeId = new Map()
+      graphData.goverse_nodes.forEach(n => {
+        if (n.advertise_addr) {
+          addrToNodeId.set(n.advertise_addr, n.id)
+        }
+      })
+
+      const processedLinks = new Set()
+      graphData.goverse_nodes.forEach(n => {
+        if (n.connected_nodes && Array.isArray(n.connected_nodes)) {
+          n.connected_nodes.forEach(targetAddr => {
+            const targetId = addrToNodeId.get(targetAddr) || targetAddr
+            if (nodeMap.has(n.id) && nodeMap.has(targetId)) {
+              const linkKey = [n.id, targetId].sort().join('-')
+              if (!processedLinks.has(linkKey)) {
+                links.push({
+                  source: n.id,
+                  target: targetId,
+                  type: 'node-node'
+                })
+                processedLinks.add(linkKey)
+              }
+            }
           })
         }
       })
@@ -1552,7 +1607,13 @@
       linkSelection.enter()
         .append('line')
         .attr('class', 'graph-link')
-        .attr('stroke-width', 1.5)
+        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+
+      // Update existing links
+      linkSelection
+        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
 
       // Update nodes
       const nodeSelection = g.select('.nodes')
