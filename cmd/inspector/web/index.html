@@ -980,6 +980,7 @@
       // Build nodes array: only cluster nodes and gates (no objects)
       const nodes = []
       const nodeMap = new Map()
+      const addrToNodeId = new Map() // Map advertise_addr to node id for link resolution
 
       graphData.goverse_nodes.forEach(n => {
         const node = {
@@ -993,6 +994,9 @@
         }
         nodes.push(node)
         nodeMap.set(n.id, node)
+        if (n.advertise_addr) {
+          addrToNodeId.set(n.advertise_addr, n.id)
+        }
       })
 
       graphData.goverse_gates.forEach(g => {
@@ -1015,7 +1019,9 @@
       const links = []
       graphData.goverse_nodes.forEach(n => {
         const connectedNodes = n.connected_nodes || []
-        connectedNodes.forEach(targetId => {
+        connectedNodes.forEach(targetAddr => {
+          // Resolve target address to node id
+          const targetId = addrToNodeId.get(targetAddr) || targetAddr
           // Only create link if target node exists
           if (nodeMap.has(targetId)) {
             // Create a unique key for this link (sorted to avoid A-B and B-A duplicates)
