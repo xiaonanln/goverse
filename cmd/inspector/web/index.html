@@ -344,6 +344,11 @@
     const SIMULATION_ALPHA_INCREMENTAL = 0.1 // Alpha for incremental updates (lower = less disruption)
     const SSE_RECONNECT_DELAY = 3000       // SSE reconnect delay in milliseconds
 
+    // Shard grid display constants
+    const SHARD_GRID_MIN_CELL_SIZE = 4     // Minimum cell size in pixels
+    const SHARD_GRID_MAX_CELL_SIZE = 24    // Maximum cell size in pixels
+    const SHARD_GRID_TARGET_WIDTH = 600    // Target grid width in pixels
+
     // Type colors for nodes and objects
     const typeColors = {
       node: '#4CAF50',
@@ -956,9 +961,10 @@
       // Calculate N such that N*N >= numShards
       const gridSize = Math.ceil(Math.sqrt(numShards))
       // Find max object count across all shards (or 1 if no objects to avoid division by zero)
-      const maxObjects = Math.max(1, ...Array.from(shardMap.values()).map(objs => objs.length))
+      const shardCounts = Array.from(shardMap.values()).map(objs => objs.length)
+      const maxObjects = shardCounts.length > 0 ? Math.max(1, ...shardCounts) : 1
       // Calculate cell size based on grid size (larger grid = smaller cells)
-      const cellSize = Math.max(4, Math.min(24, Math.floor(600 / gridSize)))
+      const cellSize = Math.max(SHARD_GRID_MIN_CELL_SIZE, Math.min(SHARD_GRID_MAX_CELL_SIZE, Math.floor(SHARD_GRID_TARGET_WIDTH / gridSize)))
       
       html += `
         <div class="shard-chart">
