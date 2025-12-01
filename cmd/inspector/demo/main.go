@@ -135,13 +135,20 @@ func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, nu
 		gateID := fmt.Sprintf("gate-%d", i+1)
 		addr := fmt.Sprintf("localhost:%d", 49000+i)
 
+		// Each gate is connected to all nodes
+		connectedNodes := make([]string, 0, numNodes)
+		for j := 0; j < numNodes; j++ {
+			connectedNodes = append(connectedNodes, nodeAddrs[j])
+		}
+
 		pg.AddOrUpdateGate(models.GoverseGate{
-			ID:            addr,
-			Label:         gateID,
-			Type:          "goverse_gate",
-			AdvertiseAddr: addr,
-			Color:         "#2196F3", // Blue for gates
-			RegisteredAt:  time.Now().Add(-time.Duration(rand.Intn(3600)) * time.Second),
+			ID:             addr,
+			Label:          gateID,
+			Type:           "goverse_gate",
+			AdvertiseAddr:  addr,
+			Color:          "#2196F3", // Blue for gates
+			RegisteredAt:   time.Now().Add(-time.Duration(rand.Intn(3600)) * time.Second),
+			ConnectedNodes: connectedNodes,
 		})
 	}
 
