@@ -216,3 +216,16 @@ func (nc *NodeConnections) NumConnections() int {
 	defer nc.connectionsMu.RUnlock()
 	return len(nc.connections)
 }
+
+// GetConnectedNodeAddresses returns a list of all connected node addresses
+func (nc *NodeConnections) GetConnectedNodeAddresses() []string {
+	nc.connectionsMu.RLock()
+	defer nc.connectionsMu.RUnlock()
+
+	result := make([]string, 0, len(nc.connections))
+	for addr := range nc.connections {
+		result = append(result, addr)
+	}
+
+	return result
+}

@@ -477,6 +477,9 @@
       // Main group for zoom/pan
       nodesG = nodesSvg.append('g')
 
+      // Links group (must be before nodes so links appear behind)
+      nodesG.append('g').attr('class', 'nodes-only-links')
+
       // Nodes group
       nodesG.append('g').attr('class', 'nodes-only-nodes')
 
@@ -488,6 +491,7 @@
         .force('charge', d3.forceManyBody().strength(-400))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(50))
+        .force('link', d3.forceLink().id(d => d.id).distance(150).strength(0.5))
         .on('tick', nodesViewTicked)
 
       // Zoom controls for nodes view
@@ -503,6 +507,13 @@
     }
 
     function nodesViewTicked() {
+      // Update link positions
+      nodesG.select('.nodes-only-links').selectAll('.nodes-link')
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y)
+
       // Update node positions
       nodesG.select('.nodes-only-nodes').selectAll('.graph-node')
         .attr('transform', d => `translate(${d.x}, ${d.y})`)
@@ -968,6 +979,7 @@
 
       // Build nodes array: only cluster nodes and gates (no objects)
       const nodes = []
+      const nodeMap = new Map()
 
       graphData.goverse_nodes.forEach(n => {
         const node = {
@@ -976,9 +988,11 @@
           nodeType: NODE_TYPE_NODE,
           advertiseAddr: n.advertise_addr,
           color: n.color,
-          objectCount: n.object_count || 0
+          objectCount: n.object_count || 0,
+          connectedNodes: n.connected_nodes || []
         }
         nodes.push(node)
+        nodeMap.set(n.id, node)
       })
 
       graphData.goverse_gates.forEach(g => {
@@ -988,13 +1002,52 @@
           nodeType: NODE_TYPE_GATE,
           advertiseAddr: g.advertise_addr,
           color: g.color,
-          objectCount: 0
+          objectCount: 0,
+          connectedNodes: []
         }
         nodes.push(node)
+        nodeMap.set(g.id, node)
       })
 
-      // Update simulation
+      // Build links array from connected_nodes
+      // Use a Set to avoid duplicate links (A->B and B->A should only create one link)
+      const linkSet = new Set()
+      const links = []
+      graphData.goverse_nodes.forEach(n => {
+        const connectedNodes = n.connected_nodes || []
+        connectedNodes.forEach(targetId => {
+          // Only create link if target node exists
+          if (nodeMap.has(targetId)) {
+            // Create a unique key for this link (sorted to avoid A-B and B-A duplicates)
+            const linkKey = [n.id, targetId].sort().join('|')
+            if (!linkSet.has(linkKey)) {
+              linkSet.add(linkKey)
+              links.push({
+                source: n.id,
+                target: targetId
+              })
+            }
+          }
+        })
+      })
+
+      // Update simulation with nodes and links
       nodesSimulation.nodes(nodes)
+      nodesSimulation.force('link').links(links)
+
+      // Update links
+      const linkSelection = nodesG.select('.nodes-only-links')
+        .selectAll('.nodes-link')
+        .data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+
+      linkSelection.exit().remove()
+
+      linkSelection.enter()
+        .append('line')
+        .attr('class', 'nodes-link')
+        .attr('stroke', '#666')
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.6)
 
       // Update nodes
       const nodeSelection = nodesG.select('.nodes-only-nodes')
@@ -1092,6 +1145,9 @@
         content += `<div class="tooltip-row"><span class="tooltip-label">Address:</span> ${d.advertiseAddr}</div>`
       }
       content += `<div class="tooltip-row"><span class="tooltip-label">Objects:</span> ${d.objectCount}</div>`
+      if (d.connectedNodes && d.connectedNodes.length > 0) {
+        content += `<div class="tooltip-row"><span class="tooltip-label">Connected to:</span> ${d.connectedNodes.length} nodes</div>`
+      }
 
       tooltip.innerHTML = content
       tooltip.classList.add('visible')

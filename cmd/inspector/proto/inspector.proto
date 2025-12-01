@@ -20,6 +20,7 @@ message AddOrUpdateObjectRequest {
 message RegisterNodeRequest {
   string advertise_address = 1;  // e.g. "localhost:47000"
   repeated Object objects = 2;
+  repeated string connected_nodes = 3; // List of other node addresses this node is connected to
 }
 
 message RegisterNodeResponse {

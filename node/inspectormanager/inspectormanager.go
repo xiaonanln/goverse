@@ -32,15 +32,20 @@ const (
 	ModeGate
 )
 
+// ConnectedNodesProvider is a function type that returns the list of connected node addresses.
+// This is used by InspectorManager to get the current list of connected nodes when registering with the inspector.
+type ConnectedNodesProvider func() []string
+
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 // It can operate in node mode or gate mode, using the appropriate registration RPCs.
 type InspectorManager struct {
-	address             string // advertise address (node or gate)
-	mode                Mode   // operating mode (node or gate)
-	inspectorAddress    string
-	healthCheckInterval time.Duration
-	logger              *logger.Logger
+	address                string // advertise address (node or gate)
+	mode                   Mode   // operating mode (node or gate)
+	inspectorAddress       string
+	healthCheckInterval    time.Duration
+	logger                 *logger.Logger
+	connectedNodesProvider ConnectedNodesProvider // optional provider for connected nodes (node mode only)
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -82,6 +87,13 @@ func NewGateInspectorManager(gateAddress string) *InspectorManager {
 // This must be called before Start() to take effect.
 func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 	im.healthCheckInterval = interval
+}
+
+// SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// This is used when registering with the inspector to report which nodes this node is connected to.
+// Must be called before Start() to take effect.
+func (im *InspectorManager) SetConnectedNodesProvider(provider ConnectedNodesProvider) {
+	im.connectedNodesProvider = provider
 }
 
 // Start initializes the connection to the Inspector and starts background management.
@@ -240,9 +252,16 @@ func (im *InspectorManager) registerLocked() error {
 			objects = append(objects, obj)
 		}
 
+		// Get connected nodes if provider is set
+		var connectedNodes []string
+		if im.connectedNodesProvider != nil {
+			connectedNodes = im.connectedNodesProvider()
+		}
+
 		registerReq := &inspector_pb.RegisterNodeRequest{
 			AdvertiseAddress: im.address,
 			Objects:          objects,
+			ConnectedNodes:   connectedNodes,
 		}
 
 		_, err := im.client.RegisterNode(ctx, registerReq)
@@ -250,7 +269,7 @@ func (im *InspectorManager) registerLocked() error {
 			return err
 		}
 
-		im.logger.Infof("Successfully registered node %s with inspector (%d objects)", im.address, len(objects))
+		im.logger.Infof("Successfully registered node %s with inspector (%d objects, %d connected nodes)", im.address, len(objects), len(connectedNodes))
 
 	case ModeGate:
 		registerReq := &inspector_pb.RegisterGateRequest{

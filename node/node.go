@@ -171,6 +171,13 @@ func (node *Node) SetLifecycleValidator(lv *config.LifecycleValidator) {
 	node.lifecycleValidator = lv
 }
 
+// SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// This is used by the InspectorManager to report connected nodes to the inspector.
+// Must be called during initialization before the node is used concurrently.
+func (node *Node) SetConnectedNodesProvider(provider inspectormanager.ConnectedNodesProvider) {
+	node.inspectorManager.SetConnectedNodesProvider(provider)
+}
+
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)

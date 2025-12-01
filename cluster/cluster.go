@@ -148,6 +148,10 @@ func (c *Cluster) init(cfg Config) error {
 	// Note: Gates don't need ShardLock as they don't host objects
 	if c.isNode() {
 		c.node.SetShardLock(c.shardLock)
+		// Set the connected nodes provider so the node's InspectorManager can report connected nodes
+		c.node.SetConnectedNodesProvider(func() []string {
+			return c.nodeConnections.GetConnectedNodeAddresses()
+		})
 	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
