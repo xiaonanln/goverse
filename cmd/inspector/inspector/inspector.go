@@ -17,6 +17,7 @@ import (
 
 type GoverseNode = models.GoverseNode
 type GoverseObject = models.GoverseObject
+type GoverseGate = models.GoverseGate
 
 // Inspector implements the inspector gRPC service and manages inspector logic
 type Inspector struct {
@@ -145,5 +146,41 @@ func (i *Inspector) UnregisterNode(ctx context.Context, req *inspector_pb.Unregi
 
 	i.pg.RemoveNode(addr)
 	log.Printf("Node unregistered: advertise_addr=%s", addr)
+	return &inspector_pb.Empty{}, nil
+}
+
+// RegisterGate handles gate registration requests
+func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.RegisterGateRequest) (*inspector_pb.RegisterGateResponse, error) {
+	addr := req.GetAdvertiseAddress()
+	if addr == "" {
+		log.Println("RegisterGate called with empty advertise address")
+		return nil, errors.New("advertise address cannot be empty")
+	}
+
+	x, y := randPos()
+	gate := GoverseGate{
+		ID:            addr,
+		Label:         fmt.Sprintf("Gate %s", addr),
+		X:             x,
+		Y:             y,
+		Width:         120,
+		Height:        80,
+		Color:         "#2196F3",
+		Type:          "goverse_gate",
+		AdvertiseAddr: addr,
+		RegisteredAt:  time.Now(),
+	}
+	i.pg.AddOrUpdateGate(gate)
+
+	log.Printf("Gate registered: advertise_addr=%s", addr)
+	return &inspector_pb.RegisterGateResponse{}, nil
+}
+
+// UnregisterGate handles gate unregistration requests
+func (i *Inspector) UnregisterGate(ctx context.Context, req *inspector_pb.UnregisterGateRequest) (*inspector_pb.Empty, error) {
+	addr := req.GetAdvertiseAddress()
+
+	i.pg.RemoveGate(addr)
+	log.Printf("Gate unregistered: advertise_addr=%s", addr)
 	return &inspector_pb.Empty{}, nil
 }

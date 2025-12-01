@@ -14,6 +14,9 @@ const (
 	EventNodeAdded     EventType = "node_added"
 	EventNodeUpdated   EventType = "node_updated"
 	EventNodeRemoved   EventType = "node_removed"
+	EventGateAdded     EventType = "gate_added"
+	EventGateUpdated   EventType = "gate_updated"
+	EventGateRemoved   EventType = "gate_removed"
 	EventObjectAdded   EventType = "object_added"
 	EventObjectUpdated EventType = "object_updated"
 	EventObjectRemoved EventType = "object_removed"
@@ -23,9 +26,11 @@ const (
 type GraphEvent struct {
 	Type     EventType             `json:"type"`
 	Node     *models.GoverseNode   `json:"node,omitempty"`
+	Gate     *models.GoverseGate   `json:"gate,omitempty"`
 	Object   *models.GoverseObject `json:"object,omitempty"`
 	ObjectID string                `json:"object_id,omitempty"`
 	NodeID   string                `json:"node_id,omitempty"`
+	GateID   string                `json:"gate_id,omitempty"`
 }
 
 // Observer is an interface for receiving graph change events
@@ -37,6 +42,7 @@ type GoverseGraph struct {
 	mu        sync.RWMutex
 	objects   map[string]models.GoverseObject
 	nodes     map[string]models.GoverseNode
+	gates     map[string]models.GoverseGate
 	observers map[Observer]struct{}
 }
 
@@ -44,6 +50,7 @@ func NewGoverseGraph() *GoverseGraph {
 	return &GoverseGraph{
 		objects:   make(map[string]models.GoverseObject),
 		nodes:     make(map[string]models.GoverseNode),
+		gates:     make(map[string]models.GoverseGate),
 		observers: make(map[Observer]struct{}),
 	}
 }
@@ -223,6 +230,59 @@ func (pg *GoverseGraph) RemoveStaleObjects(goverseNodeID string, currentObjs []*
 		pg.notifyObservers(GraphEvent{
 			Type:     EventObjectRemoved,
 			ObjectID: objID,
+		})
+	}
+}
+
+// GetGates returns a copy of all registered gates.
+func (pg *GoverseGraph) GetGates() []models.GoverseGate {
+	pg.mu.RLock()
+	defer pg.mu.RUnlock()
+
+	gates := make([]models.GoverseGate, 0, len(pg.gates))
+	for _, g := range pg.gates {
+		gates = append(gates, g)
+	}
+	return gates
+}
+
+// AddOrUpdateGate registers or updates a gate.
+func (pg *GoverseGraph) AddOrUpdateGate(gate models.GoverseGate) {
+	pg.mu.Lock()
+	_, exists := pg.gates[gate.ID]
+	pg.gates[gate.ID] = gate
+	pg.mu.Unlock()
+
+	eventType := EventGateAdded
+	if exists {
+		eventType = EventGateUpdated
+	}
+	pg.notifyObservers(GraphEvent{
+		Type: eventType,
+		Gate: &gate,
+	})
+}
+
+// IsGateRegistered checks if a gate with the given address is registered.
+func (pg *GoverseGraph) IsGateRegistered(gateAddress string) bool {
+	pg.mu.RLock()
+	defer pg.mu.RUnlock()
+	_, exists := pg.gates[gateAddress]
+	return exists
+}
+
+// RemoveGate removes a gate by ID.
+func (pg *GoverseGraph) RemoveGate(gateID string) {
+	pg.mu.Lock()
+	_, gateExists := pg.gates[gateID]
+	delete(pg.gates, gateID)
+	pg.mu.Unlock()
+
+	// Notify about removed gate
+	if gateExists {
+		pg.notifyObservers(GraphEvent{
+			Type:   EventGateRemoved,
+			GateID: gateID,
 		})
 	}
 }
