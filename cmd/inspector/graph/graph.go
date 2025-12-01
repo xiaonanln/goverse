@@ -77,14 +77,22 @@ func (pg *GoverseGraph) notifyObservers(event GraphEvent) {
 	}
 }
 
-// GetNodes returns a copy of all registered nodes.
+// GetNodes returns a copy of all registered nodes with their object counts.
 func (pg *GoverseGraph) GetNodes() []models.GoverseNode {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
 
+	// Count objects per node
+	objectCounts := make(map[string]int)
+	for _, obj := range pg.objects {
+		objectCounts[obj.GoverseNodeID]++
+	}
+
 	nodes := make([]models.GoverseNode, 0, len(pg.nodes))
 	for _, n := range pg.nodes {
-		nodes = append(nodes, n)
+		nodeCopy := n
+		nodeCopy.ObjectCount = objectCounts[n.ID]
+		nodes = append(nodes, nodeCopy)
 	}
 	return nodes
 }

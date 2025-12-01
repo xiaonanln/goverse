@@ -105,14 +105,27 @@
     .view.active {
       display: block;
     }
-    #graph-container {
+    #graph-container, #nodes-graph-container {
       width: 100%;
       height: 100%;
       background: #fafafa;
     }
-    #graph-container svg {
+    #graph-container svg, #nodes-graph-container svg {
       width: 100%;
       height: 100%;
+    }
+    .nodes-zoom-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+    }
+    .object-count-badge {
+      font-size: 11px;
+      fill: white;
+      font-weight: bold;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: central;
     }
     .tooltip {
       position: absolute;
@@ -271,6 +284,7 @@
     <div class="main-content">
       <div class="tabs">
         <button class="tab active" data-view="graph">Graph View</button>
+        <button class="tab" data-view="nodes">Nodes View</button>
         <button class="tab" data-view="shard">Shard Distribution</button>
       </div>
       <div class="view-container">
@@ -280,6 +294,14 @@
             <button class="zoom-btn" id="zoom-in">+</button>
             <button class="zoom-btn" id="zoom-out">−</button>
             <button class="zoom-btn" id="zoom-reset">⟲</button>
+          </div>
+        </div>
+        <div id="nodes-view" class="view">
+          <div id="nodes-graph-container"></div>
+          <div class="zoom-controls nodes-zoom-controls">
+            <button class="zoom-btn" id="nodes-zoom-in">+</button>
+            <button class="zoom-btn" id="nodes-zoom-out">−</button>
+            <button class="zoom-btn" id="nodes-zoom-reset">⟲</button>
           </div>
         </div>
         <div id="shard-view" class="view">
@@ -320,6 +342,13 @@
     let svg = null
     let g = null
     let zoom = null
+
+    // Nodes view state
+    let nodesSimulation = null
+    let nodesSvg = null
+    let nodesG = null
+    let nodesZoom = null
+    let nodesViewInitialized = false
 
     // Helper function to upsert a node in the goverse_nodes array
     function upsertNode(node) {
@@ -388,6 +417,16 @@
         svg.attr('width', newWidth).attr('height', newHeight)
         simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2))
         simulation.alpha(0.3).restart()
+
+        // Also resize nodes view if initialized
+        if (nodesViewInitialized && nodesSvg) {
+          const nodesContainer = document.getElementById('nodes-graph-container')
+          const nodesWidth = nodesContainer.clientWidth
+          const nodesHeight = nodesContainer.clientHeight
+          nodesSvg.attr('width', nodesWidth).attr('height', nodesHeight)
+          nodesSimulation.force('center', d3.forceCenter(nodesWidth / 2, nodesHeight / 2))
+          nodesSimulation.alpha(0.3).restart()
+        }
       })
 
       // Zoom controls
@@ -400,6 +439,68 @@
       document.getElementById('zoom-reset').addEventListener('click', () => {
         svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity)
       })
+    }
+
+    // Initialize Nodes-only view
+    function initNodesView() {
+      if (nodesViewInitialized) return
+      nodesViewInitialized = true
+
+      const container = document.getElementById('nodes-graph-container')
+      const width = container.clientWidth || 800
+      const height = container.clientHeight || 600
+
+      nodesSvg = d3.select('#nodes-graph-container')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+
+      // Add zoom behavior
+      nodesZoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+          nodesG.attr('transform', event.transform)
+        })
+
+      nodesSvg.call(nodesZoom)
+
+      // Main group for zoom/pan
+      nodesG = nodesSvg.append('g')
+
+      // Nodes group
+      nodesG.append('g').attr('class', 'nodes-only-nodes')
+
+      // Labels group
+      nodesG.append('g').attr('class', 'nodes-only-labels')
+
+      // Initialize force simulation for nodes only
+      nodesSimulation = d3.forceSimulation()
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(50))
+        .on('tick', nodesViewTicked)
+
+      // Zoom controls for nodes view
+      document.getElementById('nodes-zoom-in').addEventListener('click', () => {
+        nodesSvg.transition().duration(300).call(nodesZoom.scaleBy, 1.3)
+      })
+      document.getElementById('nodes-zoom-out').addEventListener('click', () => {
+        nodesSvg.transition().duration(300).call(nodesZoom.scaleBy, 0.7)
+      })
+      document.getElementById('nodes-zoom-reset').addEventListener('click', () => {
+        nodesSvg.transition().duration(300).call(nodesZoom.transform, d3.zoomIdentity)
+      })
+    }
+
+    function nodesViewTicked() {
+      // Update node positions
+      nodesG.select('.nodes-only-nodes').selectAll('.graph-node')
+        .attr('transform', d => `translate(${d.x}, ${d.y})`)
+
+      // Update label positions
+      nodesG.select('.nodes-only-labels').selectAll('.node-label')
+        .attr('x', d => d.x)
+        .attr('y', d => d.y + 50)
     }
 
     function getNodeRadius(d) {
@@ -808,6 +909,131 @@
       container.innerHTML = html
     }
 
+    // Update nodes-only view
+    function updateNodesView() {
+      if (!nodesViewInitialized) {
+        initNodesView()
+      }
+
+      // Build nodes array: only cluster nodes and gates (no objects)
+      const nodes = []
+
+      graphData.goverse_nodes.forEach(n => {
+        const node = {
+          id: n.id,
+          label: n.label || n.id,
+          nodeType: n.type || NODE_TYPE_NODE,
+          advertiseAddr: n.advertise_addr,
+          color: n.color,
+          objectCount: n.object_count || 0
+        }
+        nodes.push(node)
+      })
+
+      // Update simulation
+      nodesSimulation.nodes(nodes)
+
+      // Update nodes
+      const nodeSelection = nodesG.select('.nodes-only-nodes')
+        .selectAll('.graph-node')
+        .data(nodes, d => d.id)
+
+      nodeSelection.exit().remove()
+
+      const nodeEnter = nodeSelection.enter()
+        .append('g')
+        .attr('class', 'graph-node')
+        .call(d3.drag()
+          .on('start', nodesViewDragStarted)
+          .on('drag', nodesViewDragged)
+          .on('end', nodesViewDragEnded))
+        .on('mouseover', showNodesViewTooltip)
+        .on('mousemove', moveTooltip)
+        .on('mouseout', hideTooltip)
+
+      // Add shapes based on node type - larger for nodes view
+      nodeEnter.each(function(d) {
+        const el = d3.select(this)
+        const r = 40 // Larger radius for nodes-only view
+        const shape = getNodeShape(d)
+
+        if (shape === 'square') {
+          el.append('rect')
+            .attr('width', r * 2)
+            .attr('height', r * 2)
+            .attr('x', -r)
+            .attr('y', -r)
+            .attr('rx', 6)
+            .attr('fill', getNodeColor(d))
+        } else if (shape === 'diamond') {
+          el.append('polygon')
+            .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
+            .attr('fill', getNodeColor(d))
+        }
+
+        // Add object count badge inside the node
+        el.append('text')
+          .attr('class', 'object-count-badge')
+          .attr('y', 0)
+          .text(d.objectCount)
+      })
+
+      // Update existing nodes
+      nodeSelection.each(function(d) {
+        const el = d3.select(this)
+        el.select('.object-count-badge').text(d.objectCount)
+      })
+
+      // Merge enter and update selections
+      const allNodes = nodeEnter.merge(nodeSelection)
+
+      // Update labels
+      const labelSelection = nodesG.select('.nodes-only-labels')
+        .selectAll('.node-label')
+        .data(nodes, d => d.id)
+
+      labelSelection.exit().remove()
+
+      labelSelection.enter()
+        .append('text')
+        .attr('class', 'node-label')
+        .text(d => d.label)
+
+      labelSelection.text(d => d.label)
+
+      // Restart simulation
+      nodesSimulation.alpha(SIMULATION_ALPHA_FULL).restart()
+    }
+
+    function nodesViewDragStarted(event, d) {
+      if (!event.active) nodesSimulation.alphaTarget(SIMULATION_ALPHA_FULL).restart()
+      d.fx = d.x
+      d.fy = d.y
+    }
+
+    function nodesViewDragged(event, d) {
+      d.fx = event.x
+      d.fy = event.y
+    }
+
+    function nodesViewDragEnded(event, d) {
+      if (!event.active) nodesSimulation.alphaTarget(0)
+      d.fx = null
+      d.fy = null
+    }
+
+    function showNodesViewTooltip(event, d) {
+      let content = `<div class="tooltip-title">${d.label || d.id}</div>`
+      content += `<div class="tooltip-row"><span class="tooltip-label">Type:</span> ${d.nodeType}</div>`
+      if (d.advertiseAddr) {
+        content += `<div class="tooltip-row"><span class="tooltip-label">Address:</span> ${d.advertiseAddr}</div>`
+      }
+      content += `<div class="tooltip-row"><span class="tooltip-label">Objects:</span> ${d.objectCount}</div>`
+
+      tooltip.innerHTML = content
+      tooltip.classList.add('visible')
+    }
+
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -820,6 +1046,8 @@
 
         if (tab.dataset.view === 'shard') {
           updateShardView()
+        } else if (tab.dataset.view === 'nodes') {
+          updateNodesView()
         }
       })
     })
@@ -837,6 +1065,10 @@
         // Update shard view if visible
         if (document.getElementById('shard-view').classList.contains('active')) {
           updateShardView()
+        }
+        // Update nodes view if visible
+        if (document.getElementById('nodes-view').classList.contains('active')) {
+          updateNodesView()
         }
       } catch (err) {
         console.error('Failed to fetch graph data from /graph:', err.message || err)
@@ -868,6 +1100,9 @@
         if (document.getElementById('shard-view').classList.contains('active')) {
           updateShardView()
         }
+        if (document.getElementById('nodes-view').classList.contains('active')) {
+          updateNodesView()
+        }
       })
 
       eventSource.addEventListener('node_added', (event) => {
@@ -877,6 +1112,9 @@
           upsertNode(data.node)
           updateNodeList()
           updateGraphIncremental()
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
+          }
         }
       })
 
@@ -886,7 +1124,9 @@
         if (data.node) {
           upsertNode(data.node)
           updateNodeList()
-          // No need to restart simulation for updates
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
+          }
         }
       })
 
@@ -897,6 +1137,9 @@
           graphData.goverse_nodes = graphData.goverse_nodes.filter(n => n.id !== data.node_id)
           updateNodeList()
           updateGraphIncremental()
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
+          }
         }
       })
 
@@ -908,6 +1151,9 @@
           updateGraphIncremental()
           if (document.getElementById('shard-view').classList.contains('active')) {
             updateShardView()
+          }
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
           }
         }
       })
@@ -929,6 +1175,9 @@
           updateGraphIncremental()
           if (document.getElementById('shard-view').classList.contains('active')) {
             updateShardView()
+          }
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
           }
         }
       })
