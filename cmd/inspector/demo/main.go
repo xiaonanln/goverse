@@ -246,31 +246,69 @@ func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNode
 		case <-connectionTicker.C:
 			// Simulate connection changes (node temporarily disconnects/reconnects)
 			nodes := pg.GetNodes()
-			if len(nodes) > 0 {
+			if len(nodes) > 1 {
+				// Build address-to-node map for quick lookup
+				addrToNode := make(map[string]*models.GoverseNode)
+				for i := range nodes {
+					addrToNode[nodes[i].AdvertiseAddr] = &nodes[i]
+				}
+
 				// Pick a random node
-				node := nodes[rand.Intn(len(nodes))]
+				nodeIdx := rand.Intn(len(nodes))
+				node := &nodes[nodeIdx]
 
 				// Randomly either remove some connections or restore full mesh
 				if rand.Float32() < 0.5 && len(node.ConnectedNodes) > 1 {
-					// Remove some connections
-					numToKeep := 1 + rand.Intn(len(node.ConnectedNodes))
-					newConnections := make([]string, numToKeep)
-					copy(newConnections, node.ConnectedNodes)
+					// Remove some connections symmetrically
+					numToRemove := 1 + rand.Intn(len(node.ConnectedNodes)-1)
+					connectionsToRemove := make(map[string]bool)
 
-					node.ConnectedNodes = newConnections
-					pg.AddOrUpdateNode(node)
-					log.Printf("[Demo] Node %s connections reduced to %d", node.ID, len(newConnections))
-				} else {
-					// Restore full mesh
-					connectedNodes := make([]string, 0, len(nodeAddrs)-1)
-					for _, addr := range nodeAddrs {
-						if addr != node.AdvertiseAddr {
-							connectedNodes = append(connectedNodes, addr)
+					// Select which connections to remove
+					for i := 0; i < numToRemove; i++ {
+						targetAddr := node.ConnectedNodes[rand.Intn(len(node.ConnectedNodes))]
+						connectionsToRemove[targetAddr] = true
+					}
+
+					// Remove connections from the selected node
+					newConnections := make([]string, 0)
+					for _, addr := range node.ConnectedNodes {
+						if !connectionsToRemove[addr] {
+							newConnections = append(newConnections, addr)
 						}
 					}
-					node.ConnectedNodes = connectedNodes
-					pg.AddOrUpdateNode(node)
-					log.Printf("[Demo] Node %s connections restored to full mesh (%d)", node.ID, len(connectedNodes))
+					node.ConnectedNodes = newConnections
+					pg.AddOrUpdateNode(*node)
+
+					// Remove reverse connections from the other nodes
+					for targetAddr := range connectionsToRemove {
+						if targetNode, ok := addrToNode[targetAddr]; ok {
+							// Remove node's address from target's connections
+							filteredConnections := make([]string, 0)
+							for _, addr := range targetNode.ConnectedNodes {
+								if addr != node.AdvertiseAddr {
+									filteredConnections = append(filteredConnections, addr)
+								}
+							}
+							targetNode.ConnectedNodes = filteredConnections
+							pg.AddOrUpdateNode(*targetNode)
+						}
+					}
+
+					log.Printf("[Demo] Node %s connections reduced to %d (removed from both ends)", node.ID, len(newConnections))
+				} else {
+					// Restore full mesh for all nodes
+					for i := range nodes {
+						n := &nodes[i]
+						connectedNodes := make([]string, 0, len(nodeAddrs)-1)
+						for _, addr := range nodeAddrs {
+							if addr != n.AdvertiseAddr {
+								connectedNodes = append(connectedNodes, addr)
+							}
+						}
+						n.ConnectedNodes = connectedNodes
+						pg.AddOrUpdateNode(*n)
+					}
+					log.Printf("[Demo] All nodes connections restored to full mesh")
 				}
 			}
 		}
