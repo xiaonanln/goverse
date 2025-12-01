@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xiaonanln/goverse/gate/inspectormanager"
+	"github.com/xiaonanln/goverse/node/inspectormanager"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
@@ -35,7 +35,7 @@ type Gate struct {
 	clientsMu        sync.RWMutex            // Protects clients map
 	nodeRegs         map[string]*nodeReg     // tracks node registrations by node address
 	nodeRegMu        sync.RWMutex            // Protects nodeRegs map
-	inspectorManager *inspectormanager.GateInspectorManager
+	inspectorManager *inspectormanager.InspectorManager
 }
 
 // NewGate creates a new gate instance

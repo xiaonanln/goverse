@@ -22,10 +22,22 @@ const (
 	DefaultConnectionTimeout = 30 * time.Second
 )
 
+// Mode represents the type of component using the InspectorManager
+type Mode int
+
+const (
+	// ModeNode indicates the InspectorManager is used by a node
+	ModeNode Mode = iota
+	// ModeGate indicates the InspectorManager is used by a gate
+	ModeGate
+)
+
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
+// It can operate in node mode or gate mode, using the appropriate registration RPCs.
 type InspectorManager struct {
-	nodeAddress         string
+	address             string // advertise address (node or gate)
+	mode                Mode   // operating mode (node or gate)
 	inspectorAddress    string
 	healthCheckInterval time.Duration
 	logger              *logger.Logger
@@ -34,20 +46,33 @@ type InspectorManager struct {
 	client    inspector_pb.InspectorServiceClient
 	conn      *grpc.ClientConn
 	connected bool
-	objects   map[string]*inspector_pb.Object // Track objects for re-registration on reconnect
+	objects   map[string]*inspector_pb.Object // Track objects for re-registration on reconnect (node mode only)
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
 
-// NewInspectorManager creates a new InspectorManager instance.
+// NewInspectorManager creates a new InspectorManager instance for a node.
 func NewInspectorManager(nodeAddress string) *InspectorManager {
 	return &InspectorManager{
-		nodeAddress:         nodeAddress,
+		address:             nodeAddress,
+		mode:                ModeNode,
 		inspectorAddress:    defaultInspectorAddress,
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("InspectorManager"),
+		objects:             make(map[string]*inspector_pb.Object),
+	}
+}
+
+// NewGateInspectorManager creates a new InspectorManager instance for a gate.
+func NewGateInspectorManager(gateAddress string) *InspectorManager {
+	return &InspectorManager{
+		address:             gateAddress,
+		mode:                ModeGate,
+		inspectorAddress:    defaultInspectorAddress,
+		healthCheckInterval: defaultHealthCheckInterval,
+		logger:              logger.NewLogger("GateInspectorManager"),
 		objects:             make(map[string]*inspector_pb.Object),
 	}
 }
@@ -96,7 +121,7 @@ func (im *InspectorManager) Stop() error {
 	defer im.mu.Unlock()
 
 	if im.connected && im.client != nil {
-		if err := im.unregisterNodeLocked(); err != nil {
+		if err := im.unregisterLocked(); err != nil {
 			im.logger.Warnf("Failed to unregister from inspector: %v", err)
 		}
 	}
@@ -180,64 +205,96 @@ func (im *InspectorManager) connectLocked() error {
 
 	im.logger.Infof("Connected to inspector service at %s", im.inspectorAddress)
 
-	// Register the node with all current objects
-	if err := im.registerNodeLocked(); err != nil {
-		im.logger.Warnf("Failed to register node with inspector: %v", err)
+	// Register based on mode
+	if err := im.registerLocked(); err != nil {
+		im.logger.Warnf("Failed to register with inspector: %v", err)
 		// Don't fail the connection, just log the warning
 	}
 
 	return nil
 }
 
-// registerNodeLocked registers this node with the Inspector.
+// registerLocked registers this component with the Inspector based on mode.
 // Must be called with im.mu held.
-func (im *InspectorManager) registerNodeLocked() error {
+func (im *InspectorManager) registerLocked() error {
 	if im.client == nil {
 		return nil
-	}
-
-	objects := make([]*inspector_pb.Object, 0, len(im.objects))
-	for _, obj := range im.objects {
-		objects = append(objects, obj)
-	}
-
-	registerReq := &inspector_pb.RegisterNodeRequest{
-		AdvertiseAddress: im.nodeAddress,
-		Objects:          objects,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := im.client.RegisterNode(ctx, registerReq)
-	if err != nil {
-		return err
+	switch im.mode {
+	case ModeNode:
+		objects := make([]*inspector_pb.Object, 0, len(im.objects))
+		for _, obj := range im.objects {
+			objects = append(objects, obj)
+		}
+
+		registerReq := &inspector_pb.RegisterNodeRequest{
+			AdvertiseAddress: im.address,
+			Objects:          objects,
+		}
+
+		_, err := im.client.RegisterNode(ctx, registerReq)
+		if err != nil {
+			return err
+		}
+
+		im.logger.Infof("Successfully registered node %s with inspector (%d objects)", im.address, len(objects))
+
+	case ModeGate:
+		registerReq := &inspector_pb.RegisterGateRequest{
+			AdvertiseAddress: im.address,
+		}
+
+		_, err := im.client.RegisterGate(ctx, registerReq)
+		if err != nil {
+			return err
+		}
+
+		im.logger.Infof("Successfully registered gate %s with inspector", im.address)
 	}
 
-	im.logger.Infof("Successfully registered node %s with inspector (%d objects)", im.nodeAddress, len(objects))
 	return nil
 }
 
-// unregisterNodeLocked unregisters this node from the Inspector.
+// unregisterLocked unregisters this component from the Inspector based on mode.
 // Must be called with im.mu held.
-func (im *InspectorManager) unregisterNodeLocked() error {
+func (im *InspectorManager) unregisterLocked() error {
 	if im.client == nil {
 		return nil
-	}
-
-	unregisterReq := &inspector_pb.UnregisterNodeRequest{
-		AdvertiseAddress: im.nodeAddress,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := im.client.UnregisterNode(ctx, unregisterReq)
-	if err != nil {
-		return err
+	switch im.mode {
+	case ModeNode:
+		unregisterReq := &inspector_pb.UnregisterNodeRequest{
+			AdvertiseAddress: im.address,
+		}
+
+		_, err := im.client.UnregisterNode(ctx, unregisterReq)
+		if err != nil {
+			return err
+		}
+
+		im.logger.Infof("Successfully unregistered node %s from inspector", im.address)
+
+	case ModeGate:
+		unregisterReq := &inspector_pb.UnregisterGateRequest{
+			AdvertiseAddress: im.address,
+		}
+
+		_, err := im.client.UnregisterGate(ctx, unregisterReq)
+		if err != nil {
+			return err
+		}
+
+		im.logger.Infof("Successfully unregistered gate %s from inspector", im.address)
 	}
 
-	im.logger.Infof("Successfully unregistered node %s from inspector", im.nodeAddress)
 	return nil
 }
 
@@ -254,7 +311,7 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 			Class:   objectType,
 			ShardId: int32(shardID),
 		},
-		NodeAddress: im.nodeAddress,
+		NodeAddress: im.address,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -278,7 +335,7 @@ func (im *InspectorManager) removeObjectLocked(objectID string) {
 
 	req := &inspector_pb.RemoveObjectRequest{
 		ObjectId:    objectID,
-		NodeAddress: im.nodeAddress,
+		NodeAddress: im.address,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
