@@ -337,7 +337,7 @@
     }
 
     // State
-    let graphData = { goverse_nodes: [], goverse_objects: [] }
+    let graphData = { goverse_nodes: [], goverse_gates: [], goverse_objects: [] }
     let simulation = null
     let svg = null
     let g = null
@@ -357,6 +357,16 @@
         graphData.goverse_nodes[existingIdx] = node
       } else {
         graphData.goverse_nodes.push(node)
+      }
+    }
+
+    // Helper function to upsert a gate in the goverse_gates array
+    function upsertGate(gate) {
+      const existingIdx = graphData.goverse_gates.findIndex(g => g.id === gate.id)
+      if (existingIdx >= 0) {
+        graphData.goverse_gates[existingIdx] = gate
+      } else {
+        graphData.goverse_gates.push(gate)
       }
     }
 
@@ -545,17 +555,30 @@
       const links = []
       const nodeMap = new Map()
 
-      // Add cluster nodes (nodes and gates)
+      // Add cluster nodes
       graphData.goverse_nodes.forEach(n => {
         const node = {
           id: n.id,
           label: n.label || n.id,
-          nodeType: n.type || NODE_TYPE_NODE,
+          nodeType: NODE_TYPE_NODE,
           advertiseAddr: n.advertise_addr,
           color: n.color
         }
         nodes.push(node)
         nodeMap.set(n.id, node)
+      })
+
+      // Add gates
+      graphData.goverse_gates.forEach(g => {
+        const node = {
+          id: g.id,
+          label: g.label || g.id,
+          nodeType: NODE_TYPE_GATE,
+          advertiseAddr: g.advertise_addr,
+          color: g.color
+        }
+        nodes.push(node)
+        nodeMap.set(g.id, node)
       })
 
       // Add objects
@@ -728,10 +751,11 @@
       const nodeList = document.getElementById('node-list')
       nodeList.innerHTML = ''
 
+      // Add nodes
       graphData.goverse_nodes.forEach(node => {
         const li = document.createElement('li')
         li.className = 'node-item'
-        const typeClass = node.type || 'node'
+        const typeClass = 'node'
         li.innerHTML = `
           <div class="node-id">
             ${node.id}
@@ -745,6 +769,29 @@
 
         li.addEventListener('click', () => {
           focusOnNode(node.id)
+        })
+
+        nodeList.appendChild(li)
+      })
+
+      // Add gates
+      graphData.goverse_gates.forEach(gate => {
+        const li = document.createElement('li')
+        li.className = 'node-item'
+        const typeClass = 'gate'
+        li.innerHTML = `
+          <div class="node-id">
+            ${gate.id}
+            <span class="node-type ${typeClass}">${typeClass}</span>
+          </div>
+          <div class="node-details">
+            ${gate.advertise_addr ? `Address: ${gate.advertise_addr}<br>` : ''}
+            ${gate.label && gate.label !== gate.id ? `Label: ${gate.label}` : ''}
+          </div>
+        `
+
+        li.addEventListener('click', () => {
+          focusOnNode(gate.id)
         })
 
         nodeList.appendChild(li)
@@ -774,8 +821,8 @@
 
       // Calculate stats
       const objects = graphData.goverse_objects
-      const nodes = graphData.goverse_nodes.filter(n => n.type === 'node' || !n.type)
-      const gates = graphData.goverse_nodes.filter(n => n.type === 'gate')
+      const nodes = graphData.goverse_nodes
+      const gates = graphData.goverse_gates
 
       // Group objects by shard
       const shardMap = new Map()
@@ -926,10 +973,22 @@
         const node = {
           id: n.id,
           label: n.label || n.id,
-          nodeType: n.type || NODE_TYPE_NODE,
+          nodeType: NODE_TYPE_NODE,
           advertiseAddr: n.advertise_addr,
           color: n.color,
           objectCount: n.object_count || 0
+        }
+        nodes.push(node)
+      })
+
+      graphData.goverse_gates.forEach(g => {
+        const node = {
+          id: g.id,
+          label: g.label || g.id,
+          nodeType: NODE_TYPE_GATE,
+          advertiseAddr: g.advertise_addr,
+          color: g.color,
+          objectCount: 0
         }
         nodes.push(node)
       })
@@ -1060,7 +1119,12 @@
     async function refresh() {
       try {
         const res = await fetch('/graph', { cache: 'no-cache' })
-        graphData = await res.json()
+        const data = await res.json()
+        graphData = {
+          goverse_nodes: data.goverse_nodes || [],
+          goverse_gates: data.goverse_gates || [],
+          goverse_objects: data.goverse_objects || []
+        }
         console.log('Graph data:', graphData)
 
         updateNodeList()
@@ -1097,6 +1161,7 @@
         console.log('SSE initial state received:', data)
         graphData = {
           goverse_nodes: data.goverse_nodes || [],
+          goverse_gates: data.goverse_gates || [],
           goverse_objects: data.goverse_objects || []
         }
         updateNodeList()
@@ -1139,6 +1204,45 @@
         console.log('SSE node_removed:', data)
         if (data.node_id) {
           graphData.goverse_nodes = graphData.goverse_nodes.filter(n => n.id !== data.node_id)
+          updateNodeList()
+          updateGraphIncremental()
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
+          }
+        }
+      })
+
+      eventSource.addEventListener('gate_added', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE gate_added:', data)
+        if (data.gate) {
+          upsertGate(data.gate)
+          updateNodeList()
+          updateGraphIncremental()
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
+          }
+        }
+      })
+
+      eventSource.addEventListener('gate_updated', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE gate_updated:', data)
+        if (data.gate) {
+          upsertGate(data.gate)
+          updateNodeList()
+          updateGraphIncremental()
+          if (document.getElementById('nodes-view').classList.contains('active')) {
+            updateNodesView()
+          }
+        }
+      })
+
+      eventSource.addEventListener('gate_removed', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('SSE gate_removed:', data)
+        if (data.gate_id) {
+          graphData.goverse_gates = graphData.goverse_gates.filter(g => g.id !== data.gate_id)
           updateNodeList()
           updateGraphIncremental()
           if (document.getElementById('nodes-view').classList.contains('active')) {

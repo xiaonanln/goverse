@@ -166,14 +166,17 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 
 	// Send initial full state
 	nodes := s.pg.GetNodes()
+	gates := s.pg.GetGates()
 	objects := s.pg.GetObjects()
 	initialData := struct {
-		Type           string          `json:"type"`
-		GoverseNodes   []GoverseNode   `json:"goverse_nodes"`
-		GoverseObjects []GoverseObject `json:"goverse_objects"`
+		Type           string               `json:"type"`
+		GoverseNodes   []GoverseNode        `json:"goverse_nodes"`
+		GoverseGates   []models.GoverseGate `json:"goverse_gates"`
+		GoverseObjects []GoverseObject      `json:"goverse_objects"`
 	}{
 		Type:           "initial",
 		GoverseNodes:   nodes,
+		GoverseGates:   gates,
 		GoverseObjects: objects,
 	}
 	if err := s.writeSSEEvent(w, flusher, "initial", initialData); err != nil {
