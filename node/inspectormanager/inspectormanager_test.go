@@ -16,8 +16,39 @@ func TestInspectorManager_NewInspectorManager(t *testing.T) {
 		t.Fatal("NewInspectorManager returned nil")
 	}
 
-	if mgr.nodeAddress != nodeAddr {
-		t.Fatalf("Expected nodeAddress %s, got %s", nodeAddr, mgr.nodeAddress)
+	if mgr.address != nodeAddr {
+		t.Fatalf("Expected address %s, got %s", nodeAddr, mgr.address)
+	}
+
+	if mgr.mode != ModeNode {
+		t.Fatalf("Expected mode ModeNode, got %d", mgr.mode)
+	}
+
+	if mgr.objects == nil {
+		t.Fatal("Objects map should be initialized")
+	}
+
+	if mgr.logger == nil {
+		t.Fatal("Logger should be initialized")
+	}
+}
+
+func TestInspectorManager_NewGateInspectorManager(t *testing.T) {
+	t.Parallel()
+
+	gateAddr := "localhost:49000"
+	mgr := NewGateInspectorManager(gateAddr)
+
+	if mgr == nil {
+		t.Fatal("NewGateInspectorManager returned nil")
+	}
+
+	if mgr.address != gateAddr {
+		t.Fatalf("Expected address %s, got %s", gateAddr, mgr.address)
+	}
+
+	if mgr.mode != ModeGate {
+		t.Fatalf("Expected mode ModeGate, got %d", mgr.mode)
 	}
 
 	if mgr.objects == nil {
