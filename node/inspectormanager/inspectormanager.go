@@ -45,7 +45,7 @@ type InspectorManager struct {
 	inspectorAddress       string
 	healthCheckInterval    time.Duration
 	logger                 *logger.Logger
-	connectedNodesProvider ConnectedNodesProvider // optional provider for connected nodes (node mode only)
+	connectedNodesProvider ConnectedNodesProvider // optional provider for connected nodes (used in both node and gate modes)
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient

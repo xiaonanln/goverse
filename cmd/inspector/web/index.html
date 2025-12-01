@@ -1153,7 +1153,7 @@
           // Only create link if target node exists
           if (nodeMap.has(targetId)) {
             // Create a unique key for this link (sorted to avoid A-B and B-A duplicates)
-            const linkKey = [n.id, targetId].sort().join('|')
+            const linkKey = [n.id, targetId].sort().join('-')
             if (!linkSet.has(linkKey)) {
               linkSet.add(linkKey)
               links.push({
@@ -1175,7 +1175,7 @@
           // Only create link if target node exists
           if (nodeMap.has(targetId)) {
             // Create a unique key for this link (sorted to avoid duplicates)
-            const linkKey = [g.id, targetId].sort().join('|')
+            const linkKey = [g.id, targetId].sort().join('-')
             if (!linkSet.has(linkKey)) {
               linkSet.add(linkKey)
               links.push({
