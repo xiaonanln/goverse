@@ -21,8 +21,8 @@ sys.path.insert(0, str(SAMPLES_DIR))
 from BinaryHelper import BinaryHelper
 
 try:
-    from inspector.proto import inspector_pb2
-    from inspector.proto import inspector_pb2_grpc
+    from cmd.inspector.proto import inspector_pb2
+    from cmd.inspector.proto import inspector_pb2_grpc
 except Exception:
     # When imported from test runner, sys.path should include repo root so
     # the inspector proto package is available. If not, raise a clear error.
@@ -153,9 +153,9 @@ class Inspector:
         """
         self.connect()
         try:
-            response = self.stub.Ping(inspector_pb2.PingRequest(), timeout=timeout)
+            response = self.stub.Ping(inspector_pb2.Empty(), timeout=timeout)
             result: Dict[str, str] = {
-                "message": response.message
+                "message": "pong"
             }
             return json.dumps(result, indent=2)
         except grpc.RpcError as e:
