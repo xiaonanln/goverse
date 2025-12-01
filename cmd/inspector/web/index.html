@@ -120,7 +120,7 @@
       right: 20px;
     }
     .object-count-badge {
-      font-size: 11px;
+      font-size: 14px;
       fill: white;
       font-weight: bold;
       pointer-events: none;
@@ -168,7 +168,7 @@
       stroke-opacity: 0.6;
     }
     .node-label {
-      font-size: 10px;
+      font-size: 14px;
       fill: #333;
       pointer-events: none;
       text-anchor: middle;
@@ -485,7 +485,7 @@
 
       // Initialize force simulation for nodes only
       nodesSimulation = d3.forceSimulation()
-        .force('charge', d3.forceManyBody().strength(-400))
+        .force('charge', d3.forceManyBody().strength(-150))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(50))
         .on('tick', nodesViewTicked)
