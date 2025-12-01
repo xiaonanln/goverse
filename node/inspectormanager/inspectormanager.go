@@ -46,6 +46,7 @@ type InspectorManager struct {
 	client    inspector_pb.InspectorServiceClient
 	conn      *grpc.ClientConn
 	connected bool
+	started   bool                            // Track if Start() has been called
 	objects   map[string]*inspector_pb.Object // Track objects for re-registration on reconnect (node mode only)
 
 	ctx    context.Context
@@ -86,7 +87,13 @@ func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 // Start initializes the connection to the Inspector and starts background management.
 func (im *InspectorManager) Start(ctx context.Context) error {
 	im.mu.Lock()
-	defer im.mu.Unlock()
+
+	// Make Start() idempotent - if already started, return immediately
+	if im.started {
+		im.mu.Unlock()
+		return nil
+	}
+	im.started = true
 
 	// Create a cancellable context for the manager
 	im.ctx, im.cancel = context.WithCancel(ctx)
@@ -96,14 +103,15 @@ func (im *InspectorManager) Start(ctx context.Context) error {
 		im.logger.Warnf("Failed initial connection to inspector: %v (will retry in background)", err)
 	}
 
+	im.mu.Unlock()
+
 	// Start background goroutine for health checks and reconnection
+	// Started after releasing lock to allow the goroutine to acquire it
 	im.wg.Add(1)
 	go im.managementLoop()
 
 	return nil
-}
-
-// Stop gracefully shuts down the InspectorManager and unregisters from Inspector.
+} // Stop gracefully shuts down the InspectorManager and unregisters from Inspector.
 func (im *InspectorManager) Stop() error {
 	im.mu.Lock()
 
@@ -134,6 +142,7 @@ func (im *InspectorManager) Stop() error {
 
 	im.connected = false
 	im.client = nil
+	im.started = false // Reset so Start() can be called again
 
 	return nil
 }
@@ -357,9 +366,14 @@ func (im *InspectorManager) managementLoop() {
 	ticker := time.NewTicker(im.healthCheckInterval)
 	defer ticker.Stop()
 
+	// Get context with proper synchronization
+	im.mu.RLock()
+	ctx := im.ctx
+	im.mu.RUnlock()
+
 	for {
 		select {
-		case <-im.ctx.Done():
+		case <-ctx.Done():
 			// Shutdown signal received
 			return
 
