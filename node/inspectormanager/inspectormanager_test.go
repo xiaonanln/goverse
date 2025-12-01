@@ -51,8 +51,9 @@ func TestInspectorManager_NewGateInspectorManager(t *testing.T) {
 		t.Fatalf("Expected mode ModeGate, got %d", mgr.mode)
 	}
 
-	if mgr.objects == nil {
-		t.Fatal("Objects map should be initialized")
+	// Gates don't use objects, so the map should be nil
+	if mgr.objects != nil {
+		t.Fatal("Objects map should not be initialized for gates")
 	}
 
 	if mgr.logger == nil {

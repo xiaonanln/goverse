@@ -66,6 +66,7 @@ func NewInspectorManager(nodeAddress string) *InspectorManager {
 }
 
 // NewGateInspectorManager creates a new InspectorManager instance for a gate.
+// Gates don't track objects, so the objects map is not initialized.
 func NewGateInspectorManager(gateAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             gateAddress,
@@ -73,7 +74,6 @@ func NewGateInspectorManager(gateAddress string) *InspectorManager {
 		inspectorAddress:    defaultInspectorAddress,
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("GateInspectorManager"),
-		objects:             make(map[string]*inspector_pb.Object),
 	}
 }
 
