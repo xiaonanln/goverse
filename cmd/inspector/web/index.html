@@ -250,6 +250,19 @@
       font-size: 12px;
       color: #666;
     }
+    .pie-chart-container {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .pie-chart-svg {
+      flex-shrink: 0;
+    }
+    .pie-chart-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     .zoom-controls {
       position: absolute;
       bottom: 20px;
@@ -322,6 +335,9 @@
     const SIMULATION_ALPHA_FULL = 0.3      // Alpha for full graph updates
     const SIMULATION_ALPHA_INCREMENTAL = 0.1 // Alpha for incremental updates (lower = less disruption)
     const SSE_RECONNECT_DELAY = 3000       // SSE reconnect delay in milliseconds
+
+    // Pie chart dimensions
+    const PIE_CHART_SIZE = 200
 
     // Type colors for nodes and objects
     const typeColors = {
@@ -854,6 +870,11 @@
         nodeObjMap.get(nodeId).push(obj)
       })
 
+      // Sort type entries alphabetically by type name (used for both legend and pie chart)
+      const sortedTypes = typeMap.size > 0 
+        ? Array.from(typeMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+        : []
+
       // Build HTML
       let html = `
         <div class="shard-stats">
@@ -876,28 +897,21 @@
         </div>
       `
 
-      // Objects by type chart
-      if (typeMap.size > 0) {
-        // Sort type entries alphabetically by type name
-        const sortedTypes = Array.from(typeMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+      // Objects by type chart - using pie chart
+      if (sortedTypes.length > 0) {
         html += `
           <div class="shard-chart">
             <h4>Objects by Type</h4>
-            <div class="legend">
-              ${sortedTypes.map(([type, objs]) => `
-                <div class="legend-item">
-                  <div class="legend-color" style="background: ${typeColors[type] || typeColors.default}"></div>
-                  <span>${type}: ${objs.length}</span>
-                </div>
-              `).join('')}
-            </div>
-            <div class="shard-bar-container">
-              ${sortedTypes.map(([type, objs]) => `
-                <div class="shard-bar" 
-                     style="background: ${typeColors[type] || typeColors.default}; width: ${Math.max(30, objs.length * 3)}px"
-                     title="${type}: ${objs.length} objects">
-                </div>
-              `).join('')}
+            <div class="pie-chart-container">
+              <svg id="objects-by-type-pie" class="pie-chart-svg" width="${PIE_CHART_SIZE}" height="${PIE_CHART_SIZE}"></svg>
+              <div class="pie-chart-legend">
+                ${sortedTypes.map(([type, objs]) => `
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: ${typeColors[type] || typeColors.default}"></div>
+                    <span>${type}: ${objs.length}</span>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
         `
@@ -958,6 +972,63 @@
       }
 
       container.innerHTML = html
+
+      // Render pie chart for Objects by Type using D3.js
+      if (sortedTypes.length > 0) {
+        const pieData = sortedTypes.map(([type, objs]) => ({
+          type: type,
+          count: objs.length,
+          color: typeColors[type] || typeColors.default
+        }))
+
+        const radius = PIE_CHART_SIZE / 2
+
+        const pieSvg = d3.select('#objects-by-type-pie')
+        pieSvg.selectAll('*').remove()
+
+        const pieG = pieSvg
+          .append('g')
+          .attr('transform', `translate(${PIE_CHART_SIZE / 2}, ${PIE_CHART_SIZE / 2})`)
+
+        // Use .sort(null) to preserve alphabetical order from sortedTypes (matching legend order)
+        const pie = d3.pie()
+          .value(d => d.count)
+          .sort(null)
+
+        const arc = d3.arc()
+          .innerRadius(0)
+          .outerRadius(radius - 10)
+
+        const arcs = pieG.selectAll('.arc')
+          .data(pie(pieData))
+          .enter()
+          .append('g')
+          .attr('class', 'arc')
+
+        arcs.append('path')
+          .attr('d', arc)
+          .attr('fill', d => d.data.color)
+          .attr('stroke', 'white')
+          .attr('stroke-width', 2)
+          .style('cursor', 'pointer')
+          .on('mouseover', function(event, d) {
+            d3.select(this).attr('opacity', 0.8)
+            const content = `<div class="tooltip-title">${d.data.type}</div>
+              <div class="tooltip-row"><span class="tooltip-label">Count:</span> ${d.data.count}</div>`
+            tooltip.innerHTML = content
+            tooltip.classList.add('visible')
+            tooltip.style.left = (event.pageX + 15) + 'px'
+            tooltip.style.top = (event.pageY + 15) + 'px'
+          })
+          .on('mousemove', function(event) {
+            tooltip.style.left = (event.pageX + 15) + 'px'
+            tooltip.style.top = (event.pageY + 15) + 'px'
+          })
+          .on('mouseout', function() {
+            d3.select(this).attr('opacity', 1)
+            tooltip.classList.remove('visible')
+          })
+      }
     }
 
     // Update nodes-only view
