@@ -37,6 +37,156 @@ function hideTooltip() {
   tooltip.classList.remove('visible')
 }
 
+// Show details panel with comprehensive information
+function showDetailsPanel(d) {
+  const panel = document.getElementById('details-panel')
+  const title = document.getElementById('details-title')
+  const content = document.getElementById('details-content')
+
+  // Set title
+  title.textContent = d.label || d.id
+
+  // Build content based on node type
+  let html = ''
+
+  // Basic information section
+  html += '<div class="detail-section">'
+  html += '<h4>Basic Information</h4>'
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">ID:</div>`
+  html += `<div class="detail-value">${d.id}</div>`
+  html += `</div>`
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Type:</div>`
+  html += `<div class="detail-value"><span class="detail-badge ${d.nodeType}">${d.nodeType}</span></div>`
+  html += `</div>`
+  if (d.label && d.label !== d.id) {
+    html += `<div class="detail-row">`
+    html += `<div class="detail-label">Label:</div>`
+    html += `<div class="detail-value">${d.label}</div>`
+    html += `</div>`
+  }
+  html += '</div>'
+
+  // Type-specific information
+  if (d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE) {
+    // Network information
+    if (d.advertiseAddr) {
+      html += '<div class="detail-section">'
+      html += '<h4>Network</h4>'
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Address:</div>`
+      html += `<div class="detail-value">${d.advertiseAddr}</div>`
+      html += `</div>`
+      html += '</div>'
+    }
+
+    // Object count for nodes
+    if (d.nodeType === NODE_TYPE_NODE) {
+      html += '<div class="detail-section">'
+      html += '<h4>Objects</h4>'
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Total Count:</div>`
+      html += `<div class="detail-value">${d.objectCount || 0}</div>`
+      html += `</div>`
+      
+      // Show object breakdown by type
+      const nodeObjects = graphData.goverse_objects.filter(obj => obj.goverse_node_id === d.id)
+      if (nodeObjects.length > 0) {
+        const typeCount = {}
+        nodeObjects.forEach(obj => {
+          const type = obj.type || 'Unknown'
+          typeCount[type] = (typeCount[type] || 0) + 1
+        })
+        html += `<div class="detail-row">`
+        html += `<div class="detail-label">By Type:</div>`
+        html += `<div class="detail-value">`
+        Object.entries(typeCount).sort((a, b) => a[0].localeCompare(b[0])).forEach(([type, count]) => {
+          html += `<div style="margin: 2px 0;">${type}: <strong>${count}</strong></div>`
+        })
+        html += `</div>`
+        html += `</div>`
+      }
+      html += '</div>'
+    }
+
+    // Connections
+    if (d.connectedNodes && d.connectedNodes.length > 0) {
+      html += '<div class="detail-section">'
+      html += '<h4>Connections</h4>'
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Connected to:</div>`
+      html += `<div class="detail-value"><span class="detail-badge connected">${d.connectedNodes.length} nodes</span></div>`
+      html += `</div>`
+      html += `<ul class="detail-list">`
+      d.connectedNodes.forEach(addr => {
+        // Try to find the node/gate by address
+        const connectedNode = graphData.goverse_nodes.find(n => n.advertise_addr === addr)
+        const connectedGate = graphData.goverse_gates.find(g => g.advertise_addr === addr)
+        const displayName = connectedNode?.label || connectedGate?.label || addr
+        html += `<li>${displayName}</li>`
+      })
+      html += `</ul>`
+      html += '</div>'
+    } else {
+      html += '<div class="detail-section">'
+      html += '<h4>Connections</h4>'
+      html += `<div class="detail-empty">No connections</div>`
+      html += '</div>'
+    }
+  } else if (d.nodeType === NODE_TYPE_OBJECT) {
+    // Object-specific information
+    html += '<div class="detail-section">'
+    html += '<h4>Object Details</h4>'
+    if (d.type) {
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Object Type:</div>`
+      html += `<div class="detail-value">${d.type}</div>`
+      html += `</div>`
+    }
+    if (d.shardId !== undefined) {
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Shard ID:</div>`
+      html += `<div class="detail-value">${d.shardId}</div>`
+      html += `</div>`
+    }
+    if (d.goverseNodeId) {
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Hosted on:</div>`
+      const hostNode = graphData.goverse_nodes.find(n => n.id === d.goverseNodeId)
+      const hostLabel = hostNode?.label || d.goverseNodeId
+      html += `<div class="detail-value">${hostLabel}</div>`
+      html += `</div>`
+    }
+    if (d.size) {
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Size:</div>`
+      html += `<div class="detail-value">${d.size}</div>`
+      html += `</div>`
+    }
+    html += '</div>'
+  }
+
+  content.innerHTML = html
+  panel.classList.add('visible')
+}
+
+// Close details panel
+document.getElementById('details-close').addEventListener('click', () => {
+  document.getElementById('details-panel').classList.remove('visible')
+})
+
+// Close details panel when clicking outside
+document.addEventListener('click', (event) => {
+  const panel = document.getElementById('details-panel')
+  if (panel.classList.contains('visible') && !panel.contains(event.target)) {
+    // Check if click is on a graph node (which will trigger showDetailsPanel)
+    if (!event.target.closest('.graph-node') && !event.target.closest('.node-item')) {
+      panel.classList.remove('visible')
+    }
+  }
+})
+
 // Show tooltip for nodes view (includes object count and connections)
 function showNodesViewTooltip(event, d) {
   let content = `<div class="tooltip-title">${d.label || d.id}</div>`

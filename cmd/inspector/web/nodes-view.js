@@ -273,6 +273,10 @@ function updateNodesView() {
     .on('mouseover', showNodesViewTooltip)
     .on('mousemove', moveTooltip)
     .on('mouseout', hideTooltip)
+    .on('click', (event, d) => {
+      event.stopPropagation()
+      showDetailsPanel(d)
+    })
 
   // Add shapes based on node type - larger for nodes view
   nodeEnter.each(function(d) {

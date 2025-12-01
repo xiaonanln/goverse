@@ -292,6 +292,10 @@ function updateGraph() {
     .on('mouseover', showTooltip)
     .on('mousemove', moveTooltip)
     .on('mouseout', hideTooltip)
+    .on('click', (event, d) => {
+      event.stopPropagation()
+      showDetailsPanel(d)
+    })
 
   // Add shapes based on node type
   nodeEnter.each(function(d) {
@@ -541,6 +545,17 @@ function updateGraphIncremental() {
     .on('mouseover', showTooltip)
     .on('mousemove', moveTooltip)
     .on('mouseout', hideTooltip)
+    .on('click', (event, d) => {
+      event.stopPropagation()
+      showDetailsPanel(d)
+    })
+
+  // Update click handlers on existing nodes
+  nodeSelection
+    .on('click', (event, d) => {
+      event.stopPropagation()
+      showDetailsPanel(d)
+    })
 
   // Add shapes based on node type
   nodeEnter.each(function(d) {
