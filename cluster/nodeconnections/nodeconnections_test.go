@@ -2,6 +2,7 @@ package nodeconnections
 
 import (
 	"context"
+	"sort"
 	"testing"
 )
 
@@ -135,4 +136,36 @@ func TestNodeConnections_SetNodes(t *testing.T) {
 	// The method should handle the node list without error
 	// We can't verify actual connections without running servers
 	// But we can verify it doesn't panic or error
+}
+
+func TestNodeConnections_GetConnectedNodeAddresses(t *testing.T) {
+	nc := New()
+
+	// Initially should return empty slice
+	addrs := nc.GetConnectedNodeAddresses()
+	if addrs == nil {
+		t.Fatal("GetConnectedNodeAddresses should not return nil")
+	}
+	if len(addrs) != 0 {
+		t.Fatalf("Expected 0 addresses initially, got %d", len(addrs))
+	}
+
+	// Manually add some connections to test (normally done via SetNodes with running servers)
+	// We'll test by directly manipulating the connections map
+	nc.connectionsMu.Lock()
+	nc.connections["localhost:50001"] = &NodeConnection{address: "localhost:50001"}
+	nc.connections["localhost:50002"] = &NodeConnection{address: "localhost:50002"}
+	nc.connectionsMu.Unlock()
+
+	// Get connected addresses
+	addrs = nc.GetConnectedNodeAddresses()
+	if len(addrs) != 2 {
+		t.Fatalf("Expected 2 addresses, got %d", len(addrs))
+	}
+
+	// Sort for deterministic comparison
+	sort.Strings(addrs)
+	if addrs[0] != "localhost:50001" || addrs[1] != "localhost:50002" {
+		t.Fatalf("Unexpected addresses: %v", addrs)
+	}
 }

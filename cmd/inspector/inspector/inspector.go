@@ -96,16 +96,17 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 
 	x, y := randPos()
 	node := GoverseNode{
-		ID:            addr,
-		Label:         fmt.Sprintf("Node %s", addr),
-		X:             x,
-		Y:             y,
-		Width:         120,
-		Height:        80,
-		Color:         "#4CAF50",
-		Type:          "goverse_node",
-		AdvertiseAddr: addr,
-		RegisteredAt:  time.Now(),
+		ID:             addr,
+		Label:          fmt.Sprintf("Node %s", addr),
+		X:              x,
+		Y:              y,
+		Width:          120,
+		Height:         80,
+		Color:          "#4CAF50",
+		Type:           "goverse_node",
+		AdvertiseAddr:  addr,
+		RegisteredAt:   time.Now(),
+		ConnectedNodes: req.GetConnectedNodes(),
 	}
 	i.pg.AddOrUpdateNode(node)
 
@@ -136,7 +137,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		i.pg.AddOrUpdateObject(obj)
 	}
 
-	log.Printf("Node registered: advertise_addr=%s", addr)
+	log.Printf("Node registered: advertise_addr=%s, connected_nodes=%v", addr, req.GetConnectedNodes())
 	return &inspector_pb.RegisterNodeResponse{}, nil
 }
 
