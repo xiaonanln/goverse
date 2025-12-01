@@ -47,14 +47,9 @@ message UnregisterGateRequest {
   string advertise_address = 1;  // e.g. "localhost:49000"
 }
 
-message UpdateGateConnectedNodesRequest {
-  string advertise_address = 1;  // e.g. "localhost:49000"
-  repeated string connected_nodes = 2; // Updated list of connected node addresses
-}
-
 message UpdateConnectedNodesRequest {
-  string advertise_address = 1;  // e.g. "localhost:47000"
-  repeated string connected_nodes = 2; // Updated list of connected node addresses
+  string advertise_address = 1;  // e.g. "localhost:47000" or "localhost:49000"
+  repeated string connected_nodes = 2; // Updated list of connected node/gate addresses
 }
 
 service InspectorService {
@@ -65,6 +60,5 @@ service InspectorService {
   rpc UpdateConnectedNodes(UpdateConnectedNodesRequest) returns (Empty);
   rpc RegisterGate(RegisterGateRequest) returns (RegisterGateResponse);
   rpc UnregisterGate(UnregisterGateRequest) returns (Empty);
-  rpc UpdateGateConnectedNodes(UpdateGateConnectedNodesRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);
 }

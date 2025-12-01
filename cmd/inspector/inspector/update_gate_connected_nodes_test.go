@@ -9,7 +9,7 @@ import (
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
 )
 
-func TestUpdateGateConnectedNodes(t *testing.T) {
+func TestUpdateConnectedNodes_ForGate(t *testing.T) {
 	pg := graph.NewGoverseGraph()
 	inspector := New(pg)
 
@@ -35,15 +35,15 @@ func TestUpdateGateConnectedNodes(t *testing.T) {
 		t.Fatalf("Expected 2 connected nodes, got %d", len(gate.ConnectedNodes))
 	}
 
-	// Update connected nodes
-	updateReq := &inspector_pb.UpdateGateConnectedNodesRequest{
+	// Update connected nodes using the same RPC as nodes
+	updateReq := &inspector_pb.UpdateConnectedNodesRequest{
 		AdvertiseAddress: "localhost:49000",
 		ConnectedNodes:   []string{"localhost:47001", "localhost:47002", "localhost:47003"},
 	}
 
-	_, err = inspector.UpdateGateConnectedNodes(context.Background(), updateReq)
+	_, err = inspector.UpdateConnectedNodes(context.Background(), updateReq)
 	if err != nil {
-		t.Fatalf("UpdateGateConnectedNodes failed: %v", err)
+		t.Fatalf("UpdateConnectedNodes failed: %v", err)
 	}
 
 	// Verify updated connected nodes
@@ -70,35 +70,20 @@ func TestUpdateGateConnectedNodes(t *testing.T) {
 	}
 }
 
-func TestUpdateGateConnectedNodes_EmptyAddress(t *testing.T) {
-	pg := graph.NewGoverseGraph()
-	inspector := New(pg)
-
-	updateReq := &inspector_pb.UpdateGateConnectedNodesRequest{
-		AdvertiseAddress: "",
-		ConnectedNodes:   []string{"localhost:47001"},
-	}
-
-	_, err := inspector.UpdateGateConnectedNodes(context.Background(), updateReq)
-	if err == nil {
-		t.Fatal("Expected error for empty address, got nil")
-	}
-}
-
-func TestUpdateGateConnectedNodes_NonexistentGate(t *testing.T) {
+func TestUpdateConnectedNodes_ForGate_NonexistentGate(t *testing.T) {
 	pg := graph.NewGoverseGraph()
 	inspector := New(pg)
 
 	// Try to update a gate that doesn't exist
-	updateReq := &inspector_pb.UpdateGateConnectedNodesRequest{
+	updateReq := &inspector_pb.UpdateConnectedNodesRequest{
 		AdvertiseAddress: "localhost:49000",
 		ConnectedNodes:   []string{"localhost:47001"},
 	}
 
 	// Should not error, just be a no-op
-	_, err := inspector.UpdateGateConnectedNodes(context.Background(), updateReq)
+	_, err := inspector.UpdateConnectedNodes(context.Background(), updateReq)
 	if err != nil {
-		t.Fatalf("UpdateGateConnectedNodes failed: %v", err)
+		t.Fatalf("UpdateConnectedNodes failed: %v", err)
 	}
 
 	// Gate should not have been created
@@ -108,7 +93,7 @@ func TestUpdateGateConnectedNodes_NonexistentGate(t *testing.T) {
 	}
 }
 
-func TestUpdateGateConnectedNodes_EventNotification(t *testing.T) {
+func TestUpdateConnectedNodes_ForGate_EventNotification(t *testing.T) {
 	pg := graph.NewGoverseGraph()
 	inspector := New(pg)
 
@@ -126,15 +111,15 @@ func TestUpdateGateConnectedNodes_EventNotification(t *testing.T) {
 	initialGates := pg.GetGates()
 	initialGate := initialGates[0]
 
-	// Update connected nodes
-	updateReq := &inspector_pb.UpdateGateConnectedNodesRequest{
+	// Update connected nodes using the same RPC as nodes
+	updateReq := &inspector_pb.UpdateConnectedNodesRequest{
 		AdvertiseAddress: "localhost:49000",
 		ConnectedNodes:   []string{"localhost:47001", "localhost:47002"},
 	}
 
-	_, err = inspector.UpdateGateConnectedNodes(context.Background(), updateReq)
+	_, err = inspector.UpdateConnectedNodes(context.Background(), updateReq)
 	if err != nil {
-		t.Fatalf("UpdateGateConnectedNodes failed: %v", err)
+		t.Fatalf("UpdateConnectedNodes failed: %v", err)
 	}
 
 	// Give it a moment for async operations
@@ -158,7 +143,7 @@ func TestUpdateGateConnectedNodes_EventNotification(t *testing.T) {
 	}
 }
 
-func TestUpdateGateConnectedNodes_EmptyList(t *testing.T) {
+func TestUpdateConnectedNodes_ForGate_EmptyList(t *testing.T) {
 	pg := graph.NewGoverseGraph()
 	inspector := New(pg)
 
@@ -173,15 +158,15 @@ func TestUpdateGateConnectedNodes_EmptyList(t *testing.T) {
 		t.Fatalf("RegisterGate failed: %v", err)
 	}
 
-	// Update to empty connection list
-	updateReq := &inspector_pb.UpdateGateConnectedNodesRequest{
+	// Update to empty connection list using the same RPC as nodes
+	updateReq := &inspector_pb.UpdateConnectedNodesRequest{
 		AdvertiseAddress: "localhost:49000",
 		ConnectedNodes:   []string{},
 	}
 
-	_, err = inspector.UpdateGateConnectedNodes(context.Background(), updateReq)
+	_, err = inspector.UpdateConnectedNodes(context.Background(), updateReq)
 	if err != nil {
-		t.Fatalf("UpdateGateConnectedNodes failed: %v", err)
+		t.Fatalf("UpdateConnectedNodes failed: %v", err)
 	}
 
 	// Verify connections cleared
