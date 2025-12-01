@@ -45,7 +45,7 @@ type InspectorManager struct {
 	inspectorAddress       string
 	healthCheckInterval    time.Duration
 	logger                 *logger.Logger
-	connectedNodesProvider ConnectedNodesProvider // optional provider for connected nodes (node mode only)
+	connectedNodesProvider ConnectedNodesProvider // optional provider for connected nodes (works for both node and gate modes)
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -90,7 +90,8 @@ func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 }
 
 // SetConnectedNodesProvider sets the provider function for getting connected node addresses.
-// This is used when registering with the inspector to report which nodes this node is connected to.
+// This is used when registering with the inspector to report which nodes this component is connected to.
+// Works for both node mode (node-to-node connections) and gate mode (gate-to-node connections).
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetConnectedNodesProvider(provider ConnectedNodesProvider) {
 	im.connectedNodesProvider = provider
@@ -272,8 +273,15 @@ func (im *InspectorManager) registerLocked() error {
 		im.logger.Infof("Successfully registered node %s with inspector (%d objects, %d connected nodes)", im.address, len(objects), len(connectedNodes))
 
 	case ModeGate:
+		// Get connected nodes if provider is set
+		var connectedNodes []string
+		if im.connectedNodesProvider != nil {
+			connectedNodes = im.connectedNodesProvider()
+		}
+
 		registerReq := &inspector_pb.RegisterGateRequest{
 			AdvertiseAddress: im.address,
+			ConnectedNodes:   connectedNodes,
 		}
 
 		_, err := im.client.RegisterGate(ctx, registerReq)
@@ -281,7 +289,7 @@ func (im *InspectorManager) registerLocked() error {
 			return err
 		}
 
-		im.logger.Infof("Successfully registered gate %s with inspector", im.address)
+		im.logger.Infof("Successfully registered gate %s with inspector (%d connected nodes)", im.address, len(connectedNodes))
 	}
 
 	return nil
@@ -354,13 +362,13 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 	im.logger.Infof("Registered object %s with inspector", objectID)
 }
 
-// UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
-// This is called when the node's connections change.
+// UpdateConnectedNodes sends an UpdateConnectedNodes or UpdateGateConnectedNodes RPC to the Inspector.
+// This is called when the component's connections change.
 func (im *InspectorManager) UpdateConnectedNodes() {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
-	if im.client == nil || im.mode != ModeNode {
+	if im.client == nil {
 		return
 	}
 
@@ -370,21 +378,38 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 		connectedNodes = im.connectedNodesProvider()
 	}
 
-	req := &inspector_pb.UpdateConnectedNodesRequest{
-		AdvertiseAddress: im.address,
-		ConnectedNodes:   connectedNodes,
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := im.client.UpdateConnectedNodes(ctx, req)
-	if err != nil {
-		im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
-		return
-	}
+	switch im.mode {
+	case ModeNode:
+		req := &inspector_pb.UpdateConnectedNodesRequest{
+			AdvertiseAddress: im.address,
+			ConnectedNodes:   connectedNodes,
+		}
 
-	im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
+		_, err := im.client.UpdateConnectedNodes(ctx, req)
+		if err != nil {
+			im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
+			return
+		}
+
+		im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
+
+	case ModeGate:
+		req := &inspector_pb.UpdateGateConnectedNodesRequest{
+			AdvertiseAddress: im.address,
+			ConnectedNodes:   connectedNodes,
+		}
+
+		_, err := im.client.UpdateGateConnectedNodes(ctx, req)
+		if err != nil {
+			im.logger.Warnf("Failed to update gate connected nodes with inspector: %v", err)
+			return
+		}
+
+		im.logger.Debugf("Updated gate connected nodes with inspector (%d nodes)", len(connectedNodes))
+	}
 }
 
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.

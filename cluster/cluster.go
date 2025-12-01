@@ -154,6 +154,13 @@ func (c *Cluster) init(cfg Config) error {
 		})
 	}
 
+	// Set the connected nodes provider for gates so the gate's InspectorManager can report connected nodes
+	if c.isGate() {
+		c.gate.SetConnectedNodesProvider(func() []string {
+			return c.nodeConnections.GetConnectedNodeAddresses()
+		})
+	}
+
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
 	if err != nil {
 		return err
@@ -1277,9 +1284,12 @@ func (c *Cluster) updateNodeConnections() {
 
 	c.nodeConnections.SetNodes(otherNodes)
 
-	// Notify inspector that connected nodes have changed (only for nodes, not gates)
+	// Notify inspector that connected nodes have changed
 	if c.isNode() {
 		c.node.NotifyConnectedNodesChanged()
+	}
+	if c.isGate() {
+		c.gate.NotifyConnectedNodesChanged()
 	}
 }
 

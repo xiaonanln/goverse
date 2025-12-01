@@ -433,7 +433,7 @@
         .force('charge', d3.forceManyBody().strength(-200))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5))
-        .force('link', d3.forceLink().id(d => d.id).distance(d => d.type === 'node-node' ? 150 : 100))
+        .force('link', d3.forceLink().id(d => d.id).distance(d => (d.type === 'node-node' || d.type === 'gate-node') ? 150 : 100))
         .on('tick', ticked)
 
       // Handle window resize
@@ -602,7 +602,8 @@
           label: g.label || g.id,
           nodeType: NODE_TYPE_GATE,
           advertiseAddr: g.advertise_addr,
-          color: g.color
+          color: g.color,
+          connectedNodes: g.connected_nodes || []
         }
         nodes.push(node)
         nodeMap.set(g.id, node)
@@ -680,6 +681,23 @@
         }
       }
 
+      // Add gate-to-node links
+      // Gates connect to nodes (gate's connectedNodes is a list of node addresses)
+      graphData.goverse_gates.forEach(gate => {
+        const gateConnectedNodes = gate.connected_nodes || []
+        gateConnectedNodes.forEach(nodeAddr => {
+          const nodeId = addrToNodeId.get(nodeAddr)
+          if (nodeId && nodeMap.has(nodeId)) {
+            links.push({
+              source: gate.id,
+              target: nodeId,
+              type: 'gate-node',
+              color: '#2196F3' // Blue for gate-to-node connections
+            })
+          }
+        })
+      })
+
       // Update simulation
       simulation.nodes(nodes)
       simulation.force('link').links(links)
@@ -698,8 +716,8 @@
       // Merge and update all links
       linkEnter.merge(linkSelection)
         .attr('stroke', d => d.color || '#999')
-        .attr('stroke-width', d => d.type === 'node-node' ? 2 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.6 : 1)
+        .attr('stroke-width', d => (d.type === 'node-node' || d.type === 'gate-node') ? 2 : 1.5)
+        .attr('stroke-opacity', d => (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1)
 
       // Update nodes
       const nodeSelection = g.select('.nodes')
@@ -1147,7 +1165,7 @@
           advertiseAddr: g.advertise_addr,
           color: g.color,
           objectCount: 0,
-          connectedNodes: [],
+          connectedNodes: g.connected_nodes || [],
           // Preserve position if exists
           x: existingPos ? existingPos.x : undefined,
           y: existingPos ? existingPos.y : undefined,
@@ -1201,6 +1219,24 @@
           })
         }
       }
+
+      // Add gate-to-node links
+      // Gates connect to nodes (gate's connectedNodes is a list of node addresses)
+      const gateList = Array.from(nodeMap.values()).filter(n => n.nodeType === NODE_TYPE_GATE)
+      gateList.forEach(gate => {
+        gate.connectedNodes.forEach(nodeAddr => {
+          const nodeId = addrToNodeId.get(nodeAddr)
+          if (nodeId && nodeMap.has(nodeId)) {
+            links.push({
+              source: gate.id,
+              target: nodeId,
+              color: '#2196F3', // Blue for gate-to-node connections
+              width: 2,
+              connectionType: 'gate-node'
+            })
+          }
+        })
+      })
 
       // Update simulation with nodes and links
       nodesSimulation.nodes(nodes)
@@ -1581,6 +1617,7 @@
           nodeType: NODE_TYPE_GATE,
           advertiseAddr: g.advertise_addr,
           color: g.color,
+          connectedNodes: g.connected_nodes || [],
           // Preserve position if exists
           x: existingPos ? existingPos.x : undefined,
           y: existingPos ? existingPos.y : undefined,
@@ -1673,6 +1710,23 @@
         }
       }
 
+      // Add gate-to-node links
+      // Gates connect to nodes (gate's connectedNodes is a list of node addresses)
+      graphData.goverse_gates.forEach(gate => {
+        const gateConnectedNodes = gate.connected_nodes || []
+        gateConnectedNodes.forEach(nodeAddr => {
+          const nodeId = addrToNodeId.get(nodeAddr)
+          if (nodeId && nodeMap.has(nodeId)) {
+            links.push({
+              source: gate.id,
+              target: nodeId,
+              type: 'gate-node',
+              color: '#2196F3' // Blue for gate-to-node connections
+            })
+          }
+        })
+      })
+
       // Update simulation with low alpha to minimize movement
       simulation.nodes(nodes)
       simulation.force('link').links(links)
@@ -1691,8 +1745,8 @@
       // Merge and update all links
       linkEnter.merge(linkSelection)
         .attr('stroke', d => d.color || '#999')
-        .attr('stroke-width', d => d.type === 'node-node' ? 2 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.6 : 1)
+        .attr('stroke-width', d => (d.type === 'node-node' || d.type === 'gate-node') ? 2 : 1.5)
+        .attr('stroke-opacity', d => (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1)
 
       // Update nodes
       const nodeSelection = g.select('.nodes')

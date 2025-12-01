@@ -14,12 +14,13 @@ type GoverseNode struct {
 }
 
 type GoverseGate struct {
-	ID            string    `json:"id"`
-	Label         string    `json:"label"`
-	Color         string    `json:"color"`
-	Type          string    `json:"type"`
-	AdvertiseAddr string    `json:"advertise_addr"`
-	RegisteredAt  time.Time `json:"registered_at"`
+	ID             string    `json:"id"`
+	Label          string    `json:"label"`
+	Color          string    `json:"color"`
+	Type           string    `json:"type"`
+	AdvertiseAddr  string    `json:"advertise_addr"`
+	RegisteredAt   time.Time `json:"registered_at"`
+	ConnectedNodes []string  `json:"connected_nodes"` // List of node addresses this gate is connected to
 }
 
 type GoverseObject struct {
