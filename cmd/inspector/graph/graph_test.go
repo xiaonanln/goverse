@@ -25,12 +25,20 @@ func TestNewGoverseGraph(t *testing.T) {
 		t.Fatal("nodes map should be initialized")
 	}
 
+	if pg.gates == nil {
+		t.Fatal("gates map should be initialized")
+	}
+
 	if len(pg.objects) != 0 {
 		t.Fatalf("objects map should be empty, got %d items", len(pg.objects))
 	}
 
 	if len(pg.nodes) != 0 {
 		t.Fatalf("nodes map should be empty, got %d items", len(pg.nodes))
+	}
+
+	if len(pg.gates) != 0 {
+		t.Fatalf("gates map should be empty, got %d items", len(pg.gates))
 	}
 }
 
@@ -892,5 +900,225 @@ func TestRemoveNodeCascadeEvents(t *testing.T) {
 	}
 	if nodeRemovedCount != 1 {
 		t.Fatalf("Expected 1 EventNodeRemoved event, got %d", nodeRemovedCount)
+	}
+}
+
+// TestGetGates tests retrieving all gates
+func TestGetGates(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Test with empty graph
+	gates := pg.GetGates()
+	if gates == nil {
+		t.Fatal("GetGates() should return non-nil slice")
+	}
+	if len(gates) != 0 {
+		t.Fatalf("GetGates() should return empty slice for empty graph, got %d items", len(gates))
+	}
+
+	// Add a gate
+	gate := models.GoverseGate{
+		ID:            "localhost:49000",
+		Label:         "Gate 1",
+		AdvertiseAddr: "localhost:49000",
+	}
+	pg.AddOrUpdateGate(gate)
+
+	gates = pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	if gates[0].ID != "localhost:49000" {
+		t.Fatalf("Expected gate ID 'localhost:49000', got '%s'", gates[0].ID)
+	}
+}
+
+// TestAddOrUpdateGate tests adding and updating gates
+func TestAddOrUpdateGate(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	gate := models.GoverseGate{
+		ID:    "localhost:49000",
+		Label: "Gate 1",
+	}
+	pg.AddOrUpdateGate(gate)
+
+	gates := pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	// Update the gate
+	gate.Label = "Updated Gate 1"
+	pg.AddOrUpdateGate(gate)
+
+	gates = pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate after update, got %d", len(gates))
+	}
+
+	if gates[0].Label != "Updated Gate 1" {
+		t.Fatalf("Expected updated label, got '%s'", gates[0].Label)
+	}
+}
+
+// TestRemoveGate tests removing a gate
+func TestRemoveGate(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	gate := models.GoverseGate{ID: "localhost:49000", Label: "Gate 1"}
+	pg.AddOrUpdateGate(gate)
+
+	pg.RemoveGate("localhost:49000")
+
+	gates := pg.GetGates()
+	if len(gates) != 0 {
+		t.Fatalf("Expected 0 gates after removal, got %d", len(gates))
+	}
+}
+
+// TestRemoveGate_NonExistent tests removing a non-existent gate
+func TestRemoveGate_NonExistent(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Should not panic when removing non-existent gate
+	pg.RemoveGate("non-existent-gate")
+
+	gates := pg.GetGates()
+	if len(gates) != 0 {
+		t.Fatalf("Expected 0 gates, got %d", len(gates))
+	}
+}
+
+// TestIsGateRegistered tests checking if a gate is registered
+func TestIsGateRegistered(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Test with empty graph
+	if pg.IsGateRegistered("localhost:49000") {
+		t.Fatal("IsGateRegistered() should return false for non-existent gate in empty graph")
+	}
+
+	// Add a gate
+	gate := models.GoverseGate{
+		ID:            "localhost:49000",
+		Label:         "Gate 1",
+		AdvertiseAddr: "localhost:49000",
+	}
+	pg.AddOrUpdateGate(gate)
+
+	// Test existing gate
+	if !pg.IsGateRegistered("localhost:49000") {
+		t.Fatal("IsGateRegistered() should return true for registered gate")
+	}
+
+	// Test non-existent gate
+	if pg.IsGateRegistered("localhost:49001") {
+		t.Fatal("IsGateRegistered() should return false for non-registered gate")
+	}
+
+	// Remove the gate
+	pg.RemoveGate("localhost:49000")
+
+	// Test after removal
+	if pg.IsGateRegistered("localhost:49000") {
+		t.Fatal("IsGateRegistered() should return false after gate removal")
+	}
+}
+
+// TestGateObserverEvents tests observer events for gate operations
+func TestGateObserverEvents(t *testing.T) {
+	pg := NewGoverseGraph()
+	observer := &MockObserver{}
+
+	pg.AddObserver(observer)
+
+	// Test gate added event
+	gate := models.GoverseGate{ID: "gate1", Label: "Gate 1"}
+	pg.AddOrUpdateGate(gate)
+
+	events := observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventGateAdded {
+		t.Fatalf("Expected EventGateAdded, got %s", events[0].Type)
+	}
+	if events[0].Gate == nil || events[0].Gate.ID != "gate1" {
+		t.Fatal("Expected gate data in event")
+	}
+
+	observer.Clear()
+
+	// Test gate updated event
+	gate.Label = "Updated Gate 1"
+	pg.AddOrUpdateGate(gate)
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventGateUpdated {
+		t.Fatalf("Expected EventGateUpdated, got %s", events[0].Type)
+	}
+
+	observer.Clear()
+
+	// Test gate removed event
+	pg.RemoveGate("gate1")
+
+	events = observer.GetEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != EventGateRemoved {
+		t.Fatalf("Expected EventGateRemoved, got %s", events[0].Type)
+	}
+	if events[0].GateID != "gate1" {
+		t.Fatalf("Expected GateID 'gate1', got '%s'", events[0].GateID)
+	}
+}
+
+// TestMultipleGatesGraph tests adding multiple gates to graph
+func TestMultipleGatesGraph(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Add multiple gates
+	gate1 := models.GoverseGate{ID: "localhost:49000", Label: "Gate 1"}
+	gate2 := models.GoverseGate{ID: "localhost:49001", Label: "Gate 2"}
+	gate3 := models.GoverseGate{ID: "localhost:49002", Label: "Gate 3"}
+
+	pg.AddOrUpdateGate(gate1)
+	pg.AddOrUpdateGate(gate2)
+	pg.AddOrUpdateGate(gate3)
+
+	gates := pg.GetGates()
+	if len(gates) != 3 {
+		t.Fatalf("Expected 3 gates, got %d", len(gates))
+	}
+
+	// Remove one gate
+	pg.RemoveGate("localhost:49001")
+
+	gates = pg.GetGates()
+	if len(gates) != 2 {
+		t.Fatalf("Expected 2 gates after removal, got %d", len(gates))
+	}
+
+	// Verify correct gates remain
+	gateIDs := make(map[string]bool)
+	for _, g := range gates {
+		gateIDs[g.ID] = true
+	}
+
+	if !gateIDs["localhost:49000"] {
+		t.Fatal("Gate localhost:49000 should still exist")
+	}
+	if gateIDs["localhost:49001"] {
+		t.Fatal("Gate localhost:49001 should have been removed")
+	}
+	if !gateIDs["localhost:49002"] {
+		t.Fatal("Gate localhost:49002 should still exist")
 	}
 }

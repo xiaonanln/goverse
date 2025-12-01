@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/xiaonanln/goverse/gate/inspectormanager"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
@@ -34,6 +35,7 @@ type Gate struct {
 	clientsMu        sync.RWMutex            // Protects clients map
 	nodeRegs         map[string]*nodeReg     // tracks node registrations by node address
 	nodeRegMu        sync.RWMutex            // Protects nodeRegs map
+	inspectorManager *inspectormanager.GateInspectorManager
 }
 
 // NewGate creates a new gate instance
@@ -48,6 +50,7 @@ func NewGate(config *GateConfig) (*Gate, error) {
 		logger:           logger.NewLogger("Gate"),
 		clients:          make(map[string]*ClientProxy),
 		nodeRegs:         make(map[string]*nodeReg),
+		inspectorManager: inspectormanager.NewGateInspectorManager(config.AdvertiseAddress),
 	}
 
 	return gate, nil
@@ -77,6 +80,11 @@ func validateGateConfig(config *GateConfig) error {
 func (g *Gate) Start(ctx context.Context) error {
 	g.logger.Infof("Starting gate")
 
+	// Start the inspector manager
+	if err := g.inspectorManager.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start inspector manager: %w", err)
+	}
+
 	g.logger.Infof("Gate started")
 	return nil
 }
@@ -87,6 +95,11 @@ func (g *Gate) Stop() error {
 
 	g.cleanupClientProxies()
 	g.cancelAllNodeRegistrations()
+
+	// Stop the inspector manager and unregister from inspector
+	if err := g.inspectorManager.Stop(); err != nil {
+		g.logger.Errorf("Error stopping inspector manager: %v", err)
+	}
 
 	g.logger.Infof("Gate stopped")
 	return nil

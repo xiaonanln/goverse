@@ -177,3 +177,159 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 		t.Fatal("obj3 should still exist")
 	}
 }
+
+// TestRegisterGate tests gate registration with inspector
+func TestRegisterGate(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+	req := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+	}
+
+	_, err := insp.RegisterGate(ctx, req)
+	if err != nil {
+		t.Fatalf("RegisterGate failed: %v", err)
+	}
+
+	// Verify gate was registered
+	gates := pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	if gates[0].ID != "localhost:49000" {
+		t.Fatalf("Expected gate ID 'localhost:49000', got '%s'", gates[0].ID)
+	}
+
+	if gates[0].Type != "goverse_gate" {
+		t.Fatalf("Expected gate type 'goverse_gate', got '%s'", gates[0].Type)
+	}
+}
+
+// TestRegisterGate_EmptyAddress tests registering gate with empty address
+func TestRegisterGate_EmptyAddress(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+	req := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "",
+	}
+
+	_, err := insp.RegisterGate(ctx, req)
+	if err == nil {
+		t.Fatal("RegisterGate should fail with empty address")
+	}
+}
+
+// TestUnregisterGate tests gate unregistration
+func TestUnregisterGate(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+
+	// First register the gate
+	regReq := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+	}
+	_, err := insp.RegisterGate(ctx, regReq)
+	if err != nil {
+		t.Fatalf("RegisterGate failed: %v", err)
+	}
+
+	// Verify gate was registered
+	gates := pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	// Now unregister the gate
+	unregReq := &inspector_pb.UnregisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+	}
+	_, err = insp.UnregisterGate(ctx, unregReq)
+	if err != nil {
+		t.Fatalf("UnregisterGate failed: %v", err)
+	}
+
+	// Verify gate was removed
+	gates = pg.GetGates()
+	if len(gates) != 0 {
+		t.Fatalf("Expected 0 gates after unregister, got %d", len(gates))
+	}
+}
+
+// TestUnregisterGate_NonExistent tests unregistering non-existent gate
+func TestUnregisterGate_NonExistent(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+	req := &inspector_pb.UnregisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+	}
+
+	// Should not fail even if gate doesn't exist
+	_, err := insp.UnregisterGate(ctx, req)
+	if err != nil {
+		t.Fatalf("UnregisterGate should succeed even for non-existent gate: %v", err)
+	}
+}
+
+// TestMultipleGates tests registering multiple gates
+func TestMultipleGates(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+
+	// Register multiple gates
+	for _, addr := range []string{"localhost:49000", "localhost:49001", "localhost:49002"} {
+		req := &inspector_pb.RegisterGateRequest{
+			AdvertiseAddress: addr,
+		}
+		_, err := insp.RegisterGate(ctx, req)
+		if err != nil {
+			t.Fatalf("RegisterGate failed for %s: %v", addr, err)
+		}
+	}
+
+	// Verify all gates were registered
+	gates := pg.GetGates()
+	if len(gates) != 3 {
+		t.Fatalf("Expected 3 gates, got %d", len(gates))
+	}
+
+	// Unregister one gate
+	unregReq := &inspector_pb.UnregisterGateRequest{
+		AdvertiseAddress: "localhost:49001",
+	}
+	_, err := insp.UnregisterGate(ctx, unregReq)
+	if err != nil {
+		t.Fatalf("UnregisterGate failed: %v", err)
+	}
+
+	// Verify only 2 gates remain
+	gates = pg.GetGates()
+	if len(gates) != 2 {
+		t.Fatalf("Expected 2 gates after unregister, got %d", len(gates))
+	}
+
+	// Verify the correct gates remain
+	gateIDs := make(map[string]bool)
+	for _, gate := range gates {
+		gateIDs[gate.ID] = true
+	}
+	if !gateIDs["localhost:49000"] {
+		t.Fatal("Gate localhost:49000 should still exist")
+	}
+	if gateIDs["localhost:49001"] {
+		t.Fatal("Gate localhost:49001 should have been removed")
+	}
+	if !gateIDs["localhost:49002"] {
+		t.Fatal("Gate localhost:49002 should still exist")
+	}
+}
