@@ -160,20 +160,21 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 
 	x, y := randPos()
 	gate := GoverseGate{
-		ID:            addr,
-		Label:         fmt.Sprintf("Gate %s", addr),
-		X:             x,
-		Y:             y,
-		Width:         120,
-		Height:        80,
-		Color:         "#2196F3",
-		Type:          "goverse_gate",
-		AdvertiseAddr: addr,
-		RegisteredAt:  time.Now(),
+		ID:             addr,
+		Label:          fmt.Sprintf("Gate %s", addr),
+		X:              x,
+		Y:              y,
+		Width:          120,
+		Height:         80,
+		Color:          "#2196F3",
+		Type:           "goverse_gate",
+		AdvertiseAddr:  addr,
+		RegisteredAt:   time.Now(),
+		ConnectedNodes: req.GetConnectedNodes(),
 	}
 	i.pg.AddOrUpdateGate(gate)
 
-	log.Printf("Gate registered: advertise_addr=%s", addr)
+	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v", addr, req.GetConnectedNodes())
 	return &inspector_pb.RegisterGateResponse{}, nil
 }
 

@@ -179,6 +179,13 @@ func (g *Gate) GetAdvertiseAddress() string {
 	return g.advertiseAddress
 }
 
+// SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// This is used when registering with the inspector to report which nodes this gate is connected to.
+// Must be called before Start() to take effect.
+func (g *Gate) SetConnectedNodesProvider(provider inspectormanager.ConnectedNodesProvider) {
+	g.inspectorManager.SetConnectedNodesProvider(provider)
+}
+
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
 // and cleans up registrations for nodes that are no longer in the provided connections
 func (g *Gate) RegisterWithNodes(ctx context.Context, nodeConnections map[string]goverse_pb.GoverseClient) {

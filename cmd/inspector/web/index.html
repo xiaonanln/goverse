@@ -661,6 +661,26 @@
         }
       })
 
+      // Add gate-to-node links
+      graphData.goverse_gates.forEach(g => {
+        if (g.connected_nodes && Array.isArray(g.connected_nodes)) {
+          g.connected_nodes.forEach(targetAddr => {
+            const targetId = addrToNodeId.get(targetAddr) || targetAddr
+            if (nodeMap.has(g.id) && nodeMap.has(targetId)) {
+              const linkKey = [g.id, targetId].sort().join('-')
+              if (!processedLinks.has(linkKey)) {
+                links.push({
+                  source: g.id,
+                  target: targetId,
+                  type: 'gate-node'
+                })
+                processedLinks.add(linkKey)
+              }
+            }
+          })
+        }
+      })
+
       // Update simulation
       simulation.nodes(nodes)
       simulation.force('link').links(links)
@@ -675,13 +695,15 @@
       linkSelection.enter()
         .append('line')
         .attr('class', 'graph-link')
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+        .attr('stroke-width', d => d.type === 'node-node' || d.type === 'gate-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' || d.type === 'gate-node' ? 0.3 : 1)
+        .attr('stroke', d => d.type === 'gate-node' ? '#2196F3' : '#999')
 
       // Update existing links
       linkSelection
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+        .attr('stroke-width', d => d.type === 'node-node' || d.type === 'gate-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' || d.type === 'gate-node' ? 0.3 : 1)
+        .attr('stroke', d => d.type === 'gate-node' ? '#2196F3' : '#999')
 
       // Update nodes
       const nodeSelection = g.select('.nodes')
@@ -1113,7 +1135,7 @@
           advertiseAddr: g.advertise_addr,
           color: g.color,
           objectCount: 0,
-          connectedNodes: []
+          connectedNodes: g.connected_nodes || []
         }
         nodes.push(node)
         nodeMap.set(g.id, node)
@@ -1136,7 +1158,30 @@
               linkSet.add(linkKey)
               links.push({
                 source: n.id,
-                target: targetId
+                target: targetId,
+                type: 'node-node'
+              })
+            }
+          }
+        })
+      })
+
+      // Add gate-to-node links
+      graphData.goverse_gates.forEach(g => {
+        const connectedNodes = g.connected_nodes || []
+        connectedNodes.forEach(targetAddr => {
+          // Resolve target address to node id
+          const targetId = addrToNodeId.get(targetAddr) || targetAddr
+          // Only create link if target node exists
+          if (nodeMap.has(targetId)) {
+            // Create a unique key for this link (sorted to avoid duplicates)
+            const linkKey = [g.id, targetId].sort().join('|')
+            if (!linkSet.has(linkKey)) {
+              linkSet.add(linkKey)
+              links.push({
+                source: g.id,
+                target: targetId,
+                type: 'gate-node'
               })
             }
           }
@@ -1157,7 +1202,7 @@
       linkSelection.enter()
         .append('line')
         .attr('class', 'nodes-link')
-        .attr('stroke', '#666')
+        .attr('stroke', d => d.type === 'gate-node' ? '#2196F3' : '#666')
         .attr('stroke-width', 2)
         .attr('stroke-opacity', 0.6)
 
@@ -1593,6 +1638,26 @@
         }
       })
 
+      // Add gate-to-node links
+      graphData.goverse_gates.forEach(g => {
+        if (g.connected_nodes && Array.isArray(g.connected_nodes)) {
+          g.connected_nodes.forEach(targetAddr => {
+            const targetId = addrToNodeId.get(targetAddr) || targetAddr
+            if (nodeMap.has(g.id) && nodeMap.has(targetId)) {
+              const linkKey = [g.id, targetId].sort().join('-')
+              if (!processedLinks.has(linkKey)) {
+                links.push({
+                  source: g.id,
+                  target: targetId,
+                  type: 'gate-node'
+                })
+                processedLinks.add(linkKey)
+              }
+            }
+          })
+        }
+      })
+
       // Update simulation with low alpha to minimize movement
       simulation.nodes(nodes)
       simulation.force('link').links(links)
@@ -1607,13 +1672,15 @@
       linkSelection.enter()
         .append('line')
         .attr('class', 'graph-link')
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+        .attr('stroke-width', d => d.type === 'node-node' || d.type === 'gate-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' || d.type === 'gate-node' ? 0.3 : 1)
+        .attr('stroke', d => d.type === 'gate-node' ? '#2196F3' : '#999')
 
       // Update existing links
       linkSelection
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+        .attr('stroke-width', d => d.type === 'node-node' || d.type === 'gate-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' || d.type === 'gate-node' ? 0.3 : 1)
+        .attr('stroke', d => d.type === 'gate-node' ? '#2196F3' : '#999')
 
       // Update nodes
       const nodeSelection = g.select('.nodes')

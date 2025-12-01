@@ -445,3 +445,108 @@ func TestRegisterNode_UpdateConnectedNodes(t *testing.T) {
 		t.Fatalf("Expected connected node 'localhost:47003', got '%s'", nodes[0].ConnectedNodes[0])
 	}
 }
+
+// TestRegisterGate_WithConnectedNodes tests registering gate with connected nodes
+func TestRegisterGate_WithConnectedNodes(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+	req := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+		ConnectedNodes:   []string{"localhost:47000", "localhost:47001"},
+	}
+
+	_, err := insp.RegisterGate(ctx, req)
+	if err != nil {
+		t.Fatalf("RegisterGate failed: %v", err)
+	}
+
+	// Verify gate was registered with connected nodes
+	gates := pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	if len(gates[0].ConnectedNodes) != 2 {
+		t.Fatalf("Expected 2 connected nodes, got %d", len(gates[0].ConnectedNodes))
+	}
+
+	if gates[0].ConnectedNodes[0] != "localhost:47000" {
+		t.Fatalf("Expected first connected node 'localhost:47000', got '%s'", gates[0].ConnectedNodes[0])
+	}
+	if gates[0].ConnectedNodes[1] != "localhost:47001" {
+		t.Fatalf("Expected second connected node 'localhost:47001', got '%s'", gates[0].ConnectedNodes[1])
+	}
+}
+
+// TestRegisterGate_EmptyConnectedNodes tests registering gate with empty connected nodes
+func TestRegisterGate_EmptyConnectedNodes(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+	req := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+		ConnectedNodes:   nil,
+	}
+
+	_, err := insp.RegisterGate(ctx, req)
+	if err != nil {
+		t.Fatalf("RegisterGate failed: %v", err)
+	}
+
+	// Verify gate was registered with no connected nodes
+	gates := pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	if gates[0].ConnectedNodes != nil && len(gates[0].ConnectedNodes) != 0 {
+		t.Fatalf("Expected 0 connected nodes, got %d", len(gates[0].ConnectedNodes))
+	}
+}
+
+// TestRegisterGate_UpdateConnectedNodes tests updating gate connected nodes
+func TestRegisterGate_UpdateConnectedNodes(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+	insp := New(pg)
+
+	ctx := context.Background()
+
+	// First registration with two connected nodes
+	req := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+		ConnectedNodes:   []string{"localhost:47000", "localhost:47001"},
+	}
+
+	_, err := insp.RegisterGate(ctx, req)
+	if err != nil {
+		t.Fatalf("RegisterGate failed: %v", err)
+	}
+
+	// Update with different connected nodes
+	req2 := &inspector_pb.RegisterGateRequest{
+		AdvertiseAddress: "localhost:49000",
+		ConnectedNodes:   []string{"localhost:47002"},
+	}
+
+	_, err = insp.RegisterGate(ctx, req2)
+	if err != nil {
+		t.Fatalf("RegisterGate failed: %v", err)
+	}
+
+	// Verify gate has updated connected nodes
+	gates := pg.GetGates()
+	if len(gates) != 1 {
+		t.Fatalf("Expected 1 gate, got %d", len(gates))
+	}
+
+	if len(gates[0].ConnectedNodes) != 1 {
+		t.Fatalf("Expected 1 connected node, got %d", len(gates[0].ConnectedNodes))
+	}
+
+	if gates[0].ConnectedNodes[0] != "localhost:47002" {
+		t.Fatalf("Expected connected node 'localhost:47002', got '%s'", gates[0].ConnectedNodes[0])
+	}
+}
