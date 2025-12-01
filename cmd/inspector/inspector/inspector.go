@@ -185,3 +185,23 @@ func (i *Inspector) UnregisterGate(ctx context.Context, req *inspector_pb.Unregi
 	log.Printf("Gate unregistered: advertise_addr=%s", addr)
 	return &inspector_pb.Empty{}, nil
 }
+
+// UpdateConnectedNodes handles connected nodes update requests
+func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.UpdateConnectedNodesRequest) (*inspector_pb.Empty, error) {
+	addr := req.GetAdvertiseAddress()
+	if addr == "" {
+		log.Println("UpdateConnectedNodes called with empty advertise address")
+		return nil, errors.New("advertise address cannot be empty")
+	}
+
+	connectedNodes := req.GetConnectedNodes()
+	if connectedNodes == nil {
+		connectedNodes = []string{}
+	}
+
+	// Update the node's connected_nodes field
+	i.pg.UpdateNodeConnectedNodes(addr, connectedNodes)
+
+	log.Printf("Node connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
+	return &inspector_pb.Empty{}, nil
+}

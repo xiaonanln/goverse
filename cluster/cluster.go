@@ -1276,6 +1276,11 @@ func (c *Cluster) updateNodeConnections() {
 	}
 
 	c.nodeConnections.SetNodes(otherNodes)
+
+	// Notify inspector that connected nodes have changed (only for nodes, not gates)
+	if c.isNode() {
+		c.node.NotifyConnectedNodesChanged()
+	}
 }
 
 // GetNodeConnections returns the node connections manager

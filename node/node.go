@@ -178,6 +178,12 @@ func (node *Node) SetConnectedNodesProvider(provider inspectormanager.ConnectedN
 	node.inspectorManager.SetConnectedNodesProvider(provider)
 }
 
+// NotifyConnectedNodesChanged notifies the inspector that the node's connections have changed.
+// This should be called whenever nodes are connected or disconnected.
+func (node *Node) NotifyConnectedNodesChanged() {
+	node.inspectorManager.UpdateConnectedNodes()
+}
+
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)

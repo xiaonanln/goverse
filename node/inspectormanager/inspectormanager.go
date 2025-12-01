@@ -354,6 +354,39 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 	im.logger.Infof("Registered object %s with inspector", objectID)
 }
 
+// UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
+// This is called when the node's connections change.
+func (im *InspectorManager) UpdateConnectedNodes() {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	if im.client == nil || im.mode != ModeNode {
+		return
+	}
+
+	// Get current connected nodes
+	var connectedNodes []string
+	if im.connectedNodesProvider != nil {
+		connectedNodes = im.connectedNodesProvider()
+	}
+
+	req := &inspector_pb.UpdateConnectedNodesRequest{
+		AdvertiseAddress: im.address,
+		ConnectedNodes:   connectedNodes,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := im.client.UpdateConnectedNodes(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
+		return
+	}
+
+	im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
+}
+
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.
 // Must be called with im.mu held.
 func (im *InspectorManager) removeObjectLocked(objectID string) {

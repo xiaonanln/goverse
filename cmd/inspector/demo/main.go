@@ -184,8 +184,12 @@ func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, nu
 }
 
 func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNodes, numShards int) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	objectTicker := time.NewTicker(5 * time.Second)
+	defer objectTicker.Stop()
+
+	// Separate ticker for connection changes (less frequent)
+	connectionTicker := time.NewTicker(15 * time.Second)
+	defer connectionTicker.Stop()
 
 	objectTypes := []string{"Counter", "ChatRoom", "Player", "GameSession", "Inventory", "Leaderboard"}
 	typeColors := map[string]string{
@@ -199,11 +203,17 @@ func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNode
 
 	objectCounter := 100
 
+	// Generate node addresses for connection simulation
+	nodeAddrs := make([]string, numNodes)
+	for i := 0; i < numNodes; i++ {
+		nodeAddrs[i] = fmt.Sprintf("localhost:%d", 47000+i)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-objectTicker.C:
 			// Randomly add or remove objects
 			if rand.Float32() < 0.7 {
 				// Add a new object
@@ -231,6 +241,36 @@ func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNode
 					obj := objects[rand.Intn(len(objects))]
 					pg.RemoveObject(obj.ID)
 					log.Printf("[Demo] Removed object: %s", obj.ID)
+				}
+			}
+		case <-connectionTicker.C:
+			// Simulate connection changes (node temporarily disconnects/reconnects)
+			nodes := pg.GetNodes()
+			if len(nodes) > 0 {
+				// Pick a random node
+				node := nodes[rand.Intn(len(nodes))]
+
+				// Randomly either remove some connections or restore full mesh
+				if rand.Float32() < 0.5 && len(node.ConnectedNodes) > 1 {
+					// Remove some connections
+					numToKeep := 1 + rand.Intn(len(node.ConnectedNodes))
+					newConnections := make([]string, numToKeep)
+					copy(newConnections, node.ConnectedNodes)
+
+					node.ConnectedNodes = newConnections
+					pg.AddOrUpdateNode(node)
+					log.Printf("[Demo] Node %s connections reduced to %d", node.ID, len(newConnections))
+				} else {
+					// Restore full mesh
+					connectedNodes := make([]string, 0, len(nodeAddrs)-1)
+					for _, addr := range nodeAddrs {
+						if addr != node.AdvertiseAddr {
+							connectedNodes = append(connectedNodes, addr)
+						}
+					}
+					node.ConnectedNodes = connectedNodes
+					pg.AddOrUpdateNode(node)
+					log.Printf("[Demo] Node %s connections restored to full mesh (%d)", node.ID, len(connectedNodes))
 				}
 			}
 		}
