@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
@@ -30,10 +29,6 @@ func New(pg *graph.GoverseGraph) *Inspector {
 	return &Inspector{pg: pg}
 }
 
-func randPos() (int, int) {
-	return rand.Intn(200), rand.Intn(200)
-}
-
 // Ping handles ping requests
 func (i *Inspector) Ping(ctx context.Context, req *inspector_pb.Empty) (*inspector_pb.Empty, error) {
 	return &inspector_pb.Empty{}, nil
@@ -52,12 +47,9 @@ func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.Add
 		return nil, status.Errorf(codes.NotFound, "node not registered")
 	}
 
-	x, y := randPos()
 	obj := GoverseObject{
 		ID:            o.Id,
 		Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
-		X:             x,
-		Y:             y,
 		Size:          10,
 		Color:         "#1f77b4",
 		Type:          "object",
@@ -94,14 +86,9 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
-	x, y := randPos()
 	node := GoverseNode{
 		ID:             addr,
 		Label:          fmt.Sprintf("Node %s", addr),
-		X:              x,
-		Y:              y,
-		Width:          120,
-		Height:         80,
 		Color:          "#4CAF50",
 		Type:           "goverse_node",
 		AdvertiseAddr:  addr,
@@ -122,12 +109,9 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		if o == nil || o.Id == "" {
 			continue
 		}
-		x, y := randPos()
 		obj := GoverseObject{
 			ID:            o.Id,
 			Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
-			X:             x,
-			Y:             y,
 			Size:          10,
 			Color:         "#1f77b4",
 			Type:          "object",
@@ -158,14 +142,9 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
-	x, y := randPos()
 	gate := GoverseGate{
 		ID:            addr,
 		Label:         fmt.Sprintf("Gate %s", addr),
-		X:             x,
-		Y:             y,
-		Width:         120,
-		Height:        80,
 		Color:         "#2196F3",
 		Type:          "goverse_gate",
 		AdvertiseAddr: addr,

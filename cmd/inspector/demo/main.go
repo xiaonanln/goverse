@@ -142,10 +142,6 @@ func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, nu
 			AdvertiseAddr: addr,
 			Color:         "#2196F3", // Blue for gates
 			RegisteredAt:  time.Now().Add(-time.Duration(rand.Intn(3600)) * time.Second),
-			X:             100 + i*150,
-			Y:             100,
-			Width:         120,
-			Height:        80,
 		})
 	}
 
