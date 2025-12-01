@@ -1142,29 +1142,47 @@
         nodeMap.set(g.id, node)
       })
 
-      // Build links array from connected_nodes
-      // Use a Set to avoid duplicate links (A->B and B->A should only create one link)
-      const linkSet = new Set()
+      // Build links between all node pairs with connection status
+      // Material Design colors: Red=#F44336, Green=#4CAF50, Blue=#2196F3
       const links = []
-      graphData.goverse_nodes.forEach(n => {
-        const connectedNodes = n.connected_nodes || []
-        connectedNodes.forEach(targetAddr => {
-          // Resolve target address to node id
-          const targetId = addrToNodeId.get(targetAddr) || targetAddr
-          // Only create link if target node exists
-          if (nodeMap.has(targetId)) {
-            // Create a unique key for this link (sorted to avoid A-B and B-A duplicates)
-            const linkKey = [n.id, targetId].sort().join('|')
-            if (!linkSet.has(linkKey)) {
-              linkSet.add(linkKey)
-              links.push({
-                source: n.id,
-                target: targetId
-              })
-            }
+      const nodeList = Array.from(nodeMap.values()).filter(n => n.nodeType === NODE_TYPE_NODE)
+      
+      // Create links for all node pairs
+      for (let i = 0; i < nodeList.length; i++) {
+        for (let j = i + 1; j < nodeList.length; j++) {
+          const nodeA = nodeList[i]
+          const nodeB = nodeList[j]
+          
+          // Check if A connects to B
+          const aConnectsToB = nodeA.connectedNodes.includes(nodeB.advertiseAddr)
+          // Check if B connects to A
+          const bConnectsToA = nodeB.connectedNodes.includes(nodeA.advertiseAddr)
+          
+          let linkColor, linkWidth
+          if (aConnectsToB && bConnectsToA) {
+            // Dual connection: green, 2px
+            linkColor = '#4CAF50'
+            linkWidth = 2
+          } else if (aConnectsToB || bConnectsToA) {
+            // Single direction: blue, 1px
+            linkColor = '#2196F3'
+            linkWidth = 1
+          } else {
+            // No connection: red, 1px
+            linkColor = '#F44336'
+            linkWidth = 1
           }
-        })
-      })
+          
+          links.push({
+            source: nodeA.id,
+            target: nodeB.id,
+            color: linkColor,
+            width: linkWidth,
+            connectionType: aConnectsToB && bConnectsToA ? 'dual' : 
+                           (aConnectsToB || bConnectsToA ? 'single' : 'none')
+          })
+        }
+      }
 
       // Update simulation with nodes and links
       nodesSimulation.nodes(nodes)
@@ -1177,11 +1195,13 @@
 
       linkSelection.exit().remove()
 
-      linkSelection.enter()
+      const linkEnter = linkSelection.enter()
         .append('line')
         .attr('class', 'nodes-link')
-        .attr('stroke', '#666')
-        .attr('stroke-width', 2)
+
+      linkEnter.merge(linkSelection)
+        .attr('stroke', d => d.color)
+        .attr('stroke-width', d => d.width)
         .attr('stroke-opacity', 0.6)
 
       // Update nodes
