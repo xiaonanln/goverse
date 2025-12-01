@@ -11,10 +11,10 @@ import (
 
 // TestNewGoverseGraph tests the constructor
 func TestNewGoverseGraph(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	if pg == nil {
-		t.Fatal("NewGoverseGraph() returned nil")
+		t.Fatal("NewGoverseGraph(0) returned nil")
 	}
 
 	if pg.objects == nil {
@@ -40,11 +40,22 @@ func TestNewGoverseGraph(t *testing.T) {
 	if len(pg.gates) != 0 {
 		t.Fatalf("gates map should be empty, got %d items", len(pg.gates))
 	}
+
+	// Test default numShards (when 0 is passed, default to 8192)
+	if pg.GetNumShards() != 8192 {
+		t.Fatalf("Expected default numShards 8192, got %d", pg.GetNumShards())
+	}
+
+	// Test with custom numShards
+	pg2 := NewGoverseGraph(64)
+	if pg2.GetNumShards() != 64 {
+		t.Fatalf("Expected numShards 64, got %d", pg2.GetNumShards())
+	}
 }
 
 // TestGetNodes tests retrieving all nodes
 func TestGetNodes(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Test with empty graph
 	nodes := pg.GetNodes()
@@ -83,7 +94,7 @@ func TestGetNodes(t *testing.T) {
 
 // TestGetObjects tests retrieving all objects
 func TestGetObjects(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Test with empty graph
 	objects := pg.GetObjects()
@@ -122,7 +133,7 @@ func TestGetObjects(t *testing.T) {
 
 // TestAddOrUpdateObject tests adding objects
 func TestAddOrUpdateObject(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj := models.GoverseObject{
 		ID:            "test-obj-1",
@@ -152,7 +163,7 @@ func TestAddOrUpdateObject(t *testing.T) {
 
 // TestAddOrUpdateObject_Duplicate tests that duplicate objects are replaced
 func TestAddOrUpdateObject_Duplicate(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj1 := models.GoverseObject{
 		ID:    "test-obj-1",
@@ -180,7 +191,7 @@ func TestAddOrUpdateObject_Duplicate(t *testing.T) {
 
 // TestAddOrUpdateNode tests adding and updating nodes
 func TestAddOrUpdateNode(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	node := models.GoverseNode{
 		ID:            "node1",
@@ -206,7 +217,7 @@ func TestAddOrUpdateNode(t *testing.T) {
 
 // TestAddOrUpdateNode_Update tests that existing nodes are updated
 func TestAddOrUpdateNode_Update(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	node1 := models.GoverseNode{
 		ID:            "node1",
@@ -240,7 +251,7 @@ func TestAddOrUpdateNode_Update(t *testing.T) {
 
 // TestRemoveObject tests removing a specific object
 func TestRemoveObject(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj := models.GoverseObject{ID: "obj1", Label: "Object 1", GoverseNodeID: "node1"}
 	pg.AddOrUpdateObject(obj)
@@ -263,7 +274,7 @@ func TestRemoveObject(t *testing.T) {
 
 // TestRemoveObject_NonExistent tests removing a non-existent object
 func TestRemoveObject_NonExistent(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Should not panic when removing non-existent object
 	pg.RemoveObject("non-existent-object")
@@ -276,7 +287,7 @@ func TestRemoveObject_NonExistent(t *testing.T) {
 
 // TestRemoveObject_MultipleObjects tests removing one object from many
 func TestRemoveObject_MultipleObjects(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj1 := models.GoverseObject{ID: "obj1", Label: "Object 1", GoverseNodeID: "node1"}
 	obj2 := models.GoverseObject{ID: "obj2", Label: "Object 2", GoverseNodeID: "node1"}
@@ -315,7 +326,7 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 
 // TestRemoveNode tests removing a node
 func TestRemoveNode(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
 	pg.AddOrUpdateNode(node)
@@ -330,7 +341,7 @@ func TestRemoveNode(t *testing.T) {
 
 // TestRemoveNode_NonExistent tests removing a non-existent node
 func TestRemoveNode_NonExistent(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Should not panic when removing non-existent node
 	pg.RemoveNode("non-existent-node")
@@ -343,7 +354,7 @@ func TestRemoveNode_NonExistent(t *testing.T) {
 
 // TestRemoveNode_CascadeObjects tests that removing a node also removes its objects
 func TestRemoveNode_CascadeObjects(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
 	pg.AddOrUpdateNode(node)
@@ -376,7 +387,7 @@ func TestRemoveNode_CascadeObjects(t *testing.T) {
 
 // TestRemoveStaleObjects tests removing stale objects
 func TestRemoveStaleObjects(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Add objects for node1
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
@@ -420,7 +431,7 @@ func TestRemoveStaleObjects(t *testing.T) {
 
 // TestRemoveStaleObjects_EmptyCurrentList tests removing all objects when current list is empty
 func TestRemoveStaleObjects_EmptyCurrentList(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
 	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node1"}
@@ -447,7 +458,7 @@ func TestRemoveStaleObjects_EmptyCurrentList(t *testing.T) {
 
 // TestRemoveStaleObjects_NilObjects tests handling nil objects in current list
 func TestRemoveStaleObjects_NilObjects(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
 	pg.AddOrUpdateObject(obj1)
@@ -474,7 +485,7 @@ func TestRemoveStaleObjects_NilObjects(t *testing.T) {
 
 // TestRemoveStaleObjects_NonExistentNode tests removing stale objects for non-existent node
 func TestRemoveStaleObjects_NonExistentNode(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
 	pg.AddOrUpdateObject(obj1)
@@ -494,7 +505,7 @@ func TestRemoveStaleObjects_NonExistentNode(t *testing.T) {
 
 // TestConcurrentAccess tests thread safety with concurrent operations
 func TestConcurrentAccess(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	const goroutines = 5
 	const operations = 10
@@ -558,7 +569,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 // TestConcurrentRemoveAndRead tests concurrent remove and read operations
 func TestConcurrentRemoveAndRead(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Add initial data
 	for i := 0; i < 10; i++ {
@@ -615,7 +626,7 @@ func TestConcurrentRemoveAndRead(t *testing.T) {
 
 // TestAddObject_MultipleNodes tests objects from different nodes
 func TestAddObject_MultipleNodes(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	obj1 := models.GoverseObject{ID: "obj1", GoverseNodeID: "node1"}
 	obj2 := models.GoverseObject{ID: "obj2", GoverseNodeID: "node2"}
@@ -647,7 +658,7 @@ func TestAddObject_MultipleNodes(t *testing.T) {
 
 // TestIsNodeRegistered tests checking if a node is registered
 func TestIsNodeRegistered(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Test with empty graph
 	if pg.IsNodeRegistered("node1") {
@@ -709,7 +720,7 @@ func (m *MockObserver) Clear() {
 
 // TestObserverPattern tests the observer pattern for graph events
 func TestObserverPattern(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 	observer := &MockObserver{}
 
 	pg.AddObserver(observer)
@@ -806,7 +817,7 @@ func TestObserverPattern(t *testing.T) {
 
 // TestRemoveObserver tests removing an observer
 func TestRemoveObserver(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 	observer := &MockObserver{}
 
 	pg.AddObserver(observer)
@@ -837,7 +848,7 @@ func TestRemoveObserver(t *testing.T) {
 
 // TestMultipleObservers tests multiple observers receiving events
 func TestMultipleObservers(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 	observer1 := &MockObserver{}
 	observer2 := &MockObserver{}
 
@@ -860,7 +871,7 @@ func TestMultipleObservers(t *testing.T) {
 
 // TestRemoveNodeCascadeEvents tests that removing a node triggers events for removed objects
 func TestRemoveNodeCascadeEvents(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 	observer := &MockObserver{}
 	pg.AddObserver(observer)
 
@@ -905,7 +916,7 @@ func TestRemoveNodeCascadeEvents(t *testing.T) {
 
 // TestGetGates tests retrieving all gates
 func TestGetGates(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Test with empty graph
 	gates := pg.GetGates()
@@ -936,7 +947,7 @@ func TestGetGates(t *testing.T) {
 
 // TestAddOrUpdateGate tests adding and updating gates
 func TestAddOrUpdateGate(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	gate := models.GoverseGate{
 		ID:    "localhost:49000",
@@ -965,7 +976,7 @@ func TestAddOrUpdateGate(t *testing.T) {
 
 // TestRemoveGate tests removing a gate
 func TestRemoveGate(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	gate := models.GoverseGate{ID: "localhost:49000", Label: "Gate 1"}
 	pg.AddOrUpdateGate(gate)
@@ -980,7 +991,7 @@ func TestRemoveGate(t *testing.T) {
 
 // TestRemoveGate_NonExistent tests removing a non-existent gate
 func TestRemoveGate_NonExistent(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Should not panic when removing non-existent gate
 	pg.RemoveGate("non-existent-gate")
@@ -993,7 +1004,7 @@ func TestRemoveGate_NonExistent(t *testing.T) {
 
 // TestIsGateRegistered tests checking if a gate is registered
 func TestIsGateRegistered(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Test with empty graph
 	if pg.IsGateRegistered("localhost:49000") {
@@ -1029,7 +1040,7 @@ func TestIsGateRegistered(t *testing.T) {
 
 // TestGateObserverEvents tests observer events for gate operations
 func TestGateObserverEvents(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 	observer := &MockObserver{}
 
 	pg.AddObserver(observer)
@@ -1082,7 +1093,7 @@ func TestGateObserverEvents(t *testing.T) {
 
 // TestMultipleGatesGraph tests adding multiple gates to graph
 func TestMultipleGatesGraph(t *testing.T) {
-	pg := NewGoverseGraph()
+	pg := NewGoverseGraph(0)
 
 	// Add multiple gates
 	gate1 := models.GoverseGate{ID: "localhost:49000", Label: "Gate 1"}

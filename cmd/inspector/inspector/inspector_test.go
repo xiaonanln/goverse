@@ -11,7 +11,7 @@ import (
 
 // TestRemoveObject tests the RemoveObject RPC handler
 func TestRemoveObject(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	// Register a node first
@@ -55,7 +55,7 @@ func TestRemoveObject(t *testing.T) {
 
 // TestRemoveObject_EmptyObjectID tests removing with empty object ID
 func TestRemoveObject_EmptyObjectID(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	// Register a node
@@ -80,7 +80,7 @@ func TestRemoveObject_EmptyObjectID(t *testing.T) {
 
 // TestRemoveObject_NodeNotRegistered tests removing object from unregistered node
 func TestRemoveObject_NodeNotRegistered(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	ctx := context.Background()
@@ -98,7 +98,7 @@ func TestRemoveObject_NodeNotRegistered(t *testing.T) {
 
 // TestRemoveObject_NonExistentObject tests removing non-existent object
 func TestRemoveObject_NonExistentObject(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	// Register a node
@@ -123,7 +123,7 @@ func TestRemoveObject_NonExistentObject(t *testing.T) {
 
 // TestRemoveObject_MultipleObjects tests removing one object from many
 func TestRemoveObject_MultipleObjects(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	// Register a node
@@ -180,7 +180,7 @@ func TestRemoveObject_MultipleObjects(t *testing.T) {
 
 // TestRegisterGate tests gate registration with inspector
 func TestRegisterGate(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	ctx := context.Background()
@@ -210,7 +210,7 @@ func TestRegisterGate(t *testing.T) {
 
 // TestRegisterGate_EmptyAddress tests registering gate with empty address
 func TestRegisterGate_EmptyAddress(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	ctx := context.Background()
@@ -226,7 +226,7 @@ func TestRegisterGate_EmptyAddress(t *testing.T) {
 
 // TestUnregisterGate tests gate unregistration
 func TestUnregisterGate(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	ctx := context.Background()
@@ -264,7 +264,7 @@ func TestUnregisterGate(t *testing.T) {
 
 // TestUnregisterGate_NonExistent tests unregistering non-existent gate
 func TestUnregisterGate_NonExistent(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	ctx := context.Background()
@@ -281,7 +281,7 @@ func TestUnregisterGate_NonExistent(t *testing.T) {
 
 // TestMultipleGates tests registering multiple gates
 func TestMultipleGates(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	insp := New(pg)
 
 	ctx := context.Background()

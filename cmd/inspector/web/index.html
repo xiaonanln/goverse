@@ -241,9 +241,30 @@
       border-radius: 3px;
     }
     .shard-distribution-container {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
       gap: 2px;
+      width: fit-content;
+    }
+    .shard-grid-cell {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      background: #f5f5f5;
+      border-radius: 2px;
+    }
+    .shard-grid-bar {
+      width: 100%;
+      border-radius: 2px;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    .shard-grid-bar:hover {
+      filter: brightness(1.2);
+    }
+    .shard-grid-cell.empty {
+      background: #eee;
     }
     .shard-range-label {
       margin-top: 8px;
@@ -337,7 +358,7 @@
     }
 
     // State
-    let graphData = { goverse_nodes: [], goverse_gates: [], goverse_objects: [] }
+    let graphData = { goverse_nodes: [], goverse_gates: [], goverse_objects: [], num_shards: 8192 }
     let simulation = null
     let svg = null
     let g = null
@@ -930,32 +951,40 @@
         `
       }
 
-      // Shard distribution chart
-      if (shardMap.size > 0) {
-        const sortedShards = Array.from(shardMap.entries()).sort((a, b) => a[0] - b[0])
-        const maxObjects = Math.max(...sortedShards.map(([_, objs]) => objs.length))
-
-        html += `
-          <div class="shard-chart">
-            <h4>Shard Distribution</h4>
-            <div class="shard-distribution-container">
-              ${sortedShards.map(([shardId, objs]) => {
-                const height = Math.max(8, (objs.length / maxObjects) * 40)
-                const color = typeColors.node
-                return `
-                  <div class="shard-bar" 
-                       style="background: ${color}; height: ${height}px; width: 12px; align-self: flex-end;"
-                       title="Shard ${shardId}: ${objs.length} objects">
+      // Shard distribution chart - NxN grid
+      const numShards = graphData.num_shards || 8192
+      // Calculate N such that N*N >= numShards
+      const gridSize = Math.ceil(Math.sqrt(numShards))
+      // Find max object count across all shards (or 1 if no objects to avoid division by zero)
+      const maxObjects = Math.max(1, ...Array.from(shardMap.values()).map(objs => objs.length))
+      // Calculate cell size based on grid size (larger grid = smaller cells)
+      const cellSize = Math.max(4, Math.min(24, Math.floor(600 / gridSize)))
+      
+      html += `
+        <div class="shard-chart">
+          <h4>Shard Distribution (${numShards} shards in ${gridSize}x${gridSize} grid)</h4>
+          <div class="shard-distribution-container" style="grid-template-columns: repeat(${gridSize}, ${cellSize}px); grid-template-rows: repeat(${gridSize}, ${cellSize}px);">
+            ${Array.from({ length: numShards }, (_, shardId) => {
+              const objs = shardMap.get(shardId) || []
+              const objCount = objs.length
+              // Bar height as percentage: tallest (max) = 100%, empty = 0%
+              const heightPct = maxObjects > 0 ? (objCount / maxObjects) * 100 : 0
+              const color = objCount > 0 ? typeColors.node : '#ddd'
+              return `
+                <div class="shard-grid-cell${objCount === 0 ? ' empty' : ''}" 
+                     title="Shard ${shardId}: ${objCount} objects">
+                  <div class="shard-grid-bar" 
+                       style="background: ${color}; height: ${heightPct}%;">
                   </div>
-                `
-              }).join('')}
-            </div>
-            <div class="shard-range-label">
-              Shards: ${sortedShards[0]?.[0] || 0} - ${sortedShards[sortedShards.length - 1]?.[0] || 0}
-            </div>
+                </div>
+              `
+            }).join('')}
           </div>
-        `
-      }
+          <div class="shard-range-label">
+            Total Shards: ${numShards} | Active Shards: ${shardMap.size} | Max objects in shard: ${maxObjects}
+          </div>
+        </div>
+      `
 
       container.innerHTML = html
     }
@@ -1123,7 +1152,8 @@
         graphData = {
           goverse_nodes: data.goverse_nodes || [],
           goverse_gates: data.goverse_gates || [],
-          goverse_objects: data.goverse_objects || []
+          goverse_objects: data.goverse_objects || [],
+          num_shards: data.num_shards || 8192
         }
         console.log('Graph data:', graphData)
 
@@ -1162,7 +1192,8 @@
         graphData = {
           goverse_nodes: data.goverse_nodes || [],
           goverse_gates: data.goverse_gates || [],
-          goverse_objects: data.goverse_objects || []
+          goverse_objects: data.goverse_objects || [],
+          num_shards: data.num_shards || 8192
         }
         updateNodeList()
         updateGraph()

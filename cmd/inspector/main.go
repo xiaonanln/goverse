@@ -16,9 +16,10 @@ func main() {
 	// Parse command-line flags
 	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address")
 	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
+	numShards := flag.Int("num-shards", 8192, "Number of shards in the cluster")
 	flag.Parse()
 
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(*numShards)
 
 	// Handle signals for graceful shutdown
 	sigChan := make(chan os.Signal, 1)

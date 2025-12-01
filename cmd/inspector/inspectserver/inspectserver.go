@@ -102,14 +102,17 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 		nodes := s.pg.GetNodes()
 		gates := s.pg.GetGates()
 		objects := s.pg.GetObjects()
+		numShards := s.pg.GetNumShards()
 		out := struct {
 			GoverseNodes   []GoverseNode        `json:"goverse_nodes"`
 			GoverseGates   []models.GoverseGate `json:"goverse_gates"`
 			GoverseObjects []GoverseObject      `json:"goverse_objects"`
+			NumShards      int                  `json:"num_shards"`
 		}{
 			GoverseNodes:   nodes,
 			GoverseGates:   gates,
 			GoverseObjects: objects,
+			NumShards:      numShards,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
@@ -168,16 +171,19 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 	nodes := s.pg.GetNodes()
 	gates := s.pg.GetGates()
 	objects := s.pg.GetObjects()
+	numShards := s.pg.GetNumShards()
 	initialData := struct {
 		Type           string               `json:"type"`
 		GoverseNodes   []GoverseNode        `json:"goverse_nodes"`
 		GoverseGates   []models.GoverseGate `json:"goverse_gates"`
 		GoverseObjects []GoverseObject      `json:"goverse_objects"`
+		NumShards      int                  `json:"num_shards"`
 	}{
 		Type:           "initial",
 		GoverseNodes:   nodes,
 		GoverseGates:   gates,
 		GoverseObjects: objects,
+		NumShards:      numShards,
 	}
 	if err := s.writeSSEEvent(w, flusher, "initial", initialData); err != nil {
 		log.Printf("Failed to send initial state to SSE client %s: %v", clientID, err)
@@ -304,14 +310,17 @@ func CreateHTTPHandler(pg *graph.GoverseGraph, staticDir string) http.Handler {
 		nodes := pg.GetNodes()
 		gates := pg.GetGates()
 		objects := pg.GetObjects()
+		numShards := pg.GetNumShards()
 		out := struct {
 			GoverseNodes   []GoverseNode        `json:"goverse_nodes"`
 			GoverseGates   []models.GoverseGate `json:"goverse_gates"`
 			GoverseObjects []GoverseObject      `json:"goverse_objects"`
+			NumShards      int                  `json:"num_shards"`
 		}{
 			GoverseNodes:   nodes,
 			GoverseGates:   gates,
 			GoverseObjects: objects,
+			NumShards:      numShards,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)

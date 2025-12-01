@@ -19,7 +19,7 @@ import (
 type GoverseNode = models.GoverseNode
 
 func TestInspectorService_Ping(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	svc := inspector.New(pg)
 
 	resp, err := svc.Ping(context.Background(), &inspector_pb.Empty{})
@@ -111,7 +111,7 @@ func TestInspectorService_AddOrUpdateObject(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pg := graph.NewGoverseGraph()
+			pg := graph.NewGoverseGraph(0)
 			svc := inspector.New(pg)
 
 			// Register node if needed
@@ -219,7 +219,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pg := graph.NewGoverseGraph()
+			pg := graph.NewGoverseGraph(0)
 			svc := inspector.New(pg)
 
 			resp, err := svc.RegisterNode(context.Background(), tt.req)
@@ -246,7 +246,7 @@ func TestInspectorService_RegisterNode(t *testing.T) {
 }
 
 func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	svc := inspector.New(pg)
 
 	// First registration with obj1 and obj2
@@ -288,7 +288,7 @@ func TestInspectorService_RegisterNode_RemoveStale(t *testing.T) {
 }
 
 func TestInspectorService_UnregisterNode(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	svc := inspector.New(pg)
 
 	// Register a node first
@@ -335,7 +335,7 @@ func TestInspectorService_UnregisterNode(t *testing.T) {
 }
 
 func TestCreateHTTPHandler(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	handler := inspectserver.CreateHTTPHandler(pg, "cmd/inspector/web")
 
 	if handler == nil {
@@ -418,7 +418,7 @@ func TestCreateHTTPHandler(t *testing.T) {
 
 func TestInspectorService_Integration(t *testing.T) {
 	// Integration test covering multiple operations
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	svc := inspector.New(pg)
 
 	// Test ping
@@ -498,7 +498,7 @@ func TestInspectorService_Integration(t *testing.T) {
 }
 
 func TestInspectorService_ShardIDPropagation(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	svc := inspector.New(pg)
 
 	// Register a node
@@ -540,7 +540,7 @@ func TestInspectorService_ShardIDPropagation(t *testing.T) {
 }
 
 func TestInspectorService_RegisterNode_WithShardIDs(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 	svc := inspector.New(pg)
 
 	// Register a node with objects that have shard IDs

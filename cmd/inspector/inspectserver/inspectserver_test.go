@@ -16,7 +16,7 @@ import (
 
 // TestSSEEndpoint_InitialState tests that the SSE endpoint sends initial state
 func TestSSEEndpoint_InitialState(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 
 	// Add some initial data
 	node := models.GoverseNode{ID: "node1", Label: "Node 1"}
@@ -115,7 +115,7 @@ func TestSSEEndpoint_InitialState(t *testing.T) {
 
 // TestSSEEndpoint_PushUpdates tests that the SSE endpoint pushes updates
 func TestSSEEndpoint_PushUpdates(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 
 	server := New(pg, Config{
 		GRPCAddr:  ":0",
@@ -171,7 +171,7 @@ func TestSSEEndpoint_PushUpdates(t *testing.T) {
 
 // TestSSEEndpoint_MethodNotAllowed tests that non-GET requests are rejected
 func TestSSEEndpoint_MethodNotAllowed(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 
 	server := New(pg, Config{
 		GRPCAddr:  ":0",
@@ -193,7 +193,7 @@ func TestSSEEndpoint_MethodNotAllowed(t *testing.T) {
 
 // TestSSEEndpoint_MultipleClients tests multiple SSE clients
 func TestSSEEndpoint_MultipleClients(t *testing.T) {
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(0)
 
 	server := New(pg, Config{
 		GRPCAddr:  ":0",

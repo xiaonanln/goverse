@@ -33,7 +33,7 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	pg := graph.NewGoverseGraph()
+	pg := graph.NewGoverseGraph(*numShards)
 
 	// Generate demo data
 	generateDemoData(pg, *numNodes, *numGates, *numObjects, *numShards)

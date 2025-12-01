@@ -44,15 +44,27 @@ type GoverseGraph struct {
 	nodes     map[string]models.GoverseNode
 	gates     map[string]models.GoverseGate
 	observers map[Observer]struct{}
+	numShards int
 }
 
-func NewGoverseGraph() *GoverseGraph {
+// NewGoverseGraph creates a new GoverseGraph with the specified number of shards.
+// If numShards is 0 or negative, defaults to 8192.
+func NewGoverseGraph(numShards int) *GoverseGraph {
+	if numShards <= 0 {
+		numShards = 8192
+	}
 	return &GoverseGraph{
 		objects:   make(map[string]models.GoverseObject),
 		nodes:     make(map[string]models.GoverseNode),
 		gates:     make(map[string]models.GoverseGate),
 		observers: make(map[Observer]struct{}),
+		numShards: numShards,
 	}
+}
+
+// GetNumShards returns the number of shards in the graph.
+func (pg *GoverseGraph) GetNumShards() int {
+	return pg.numShards
 }
 
 // AddObserver registers an observer to receive graph change events
