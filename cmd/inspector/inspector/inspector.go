@@ -166,7 +166,8 @@ func (i *Inspector) UnregisterGate(ctx context.Context, req *inspector_pb.Unregi
 	return &inspector_pb.Empty{}, nil
 }
 
-// UpdateConnectedNodes handles connected nodes update requests
+// UpdateConnectedNodes handles connected nodes update requests for both nodes and gates.
+// It uses the advertise address to determine whether the request is from a node or gate.
 func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.UpdateConnectedNodesRequest) (*inspector_pb.Empty, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
@@ -179,29 +180,18 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 		connectedNodes = []string{}
 	}
 
-	// Update the node's connected_nodes field
-	i.pg.UpdateNodeConnectedNodes(addr, connectedNodes)
-
-	log.Printf("Node connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
-	return &inspector_pb.Empty{}, nil
-}
-
-// UpdateGateConnectedNodes handles gate connected nodes update requests
-func (i *Inspector) UpdateGateConnectedNodes(ctx context.Context, req *inspector_pb.UpdateGateConnectedNodesRequest) (*inspector_pb.Empty, error) {
-	addr := req.GetAdvertiseAddress()
-	if addr == "" {
-		log.Println("UpdateGateConnectedNodes called with empty advertise address")
-		return nil, errors.New("advertise address cannot be empty")
+	// Check if this is a node or gate by looking up in the graph
+	// Try to update as node first, then as gate
+	if i.pg.IsNodeRegistered(addr) {
+		i.pg.UpdateNodeConnectedNodes(addr, connectedNodes)
+		log.Printf("Node connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
+	} else if i.pg.IsGateRegistered(addr) {
+		i.pg.UpdateGateConnectedNodes(addr, connectedNodes)
+		log.Printf("Gate connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
+	} else {
+		// Neither node nor gate is registered, log but don't error
+		log.Printf("UpdateConnectedNodes: no node or gate registered with address %s", addr)
 	}
 
-	connectedNodes := req.GetConnectedNodes()
-	if connectedNodes == nil {
-		connectedNodes = []string{}
-	}
-
-	// Update the gate's connected_nodes field
-	i.pg.UpdateGateConnectedNodes(addr, connectedNodes)
-
-	log.Printf("Gate connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
 	return &inspector_pb.Empty{}, nil
 }

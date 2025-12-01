@@ -362,8 +362,9 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 	im.logger.Infof("Registered object %s with inspector", objectID)
 }
 
-// UpdateConnectedNodes sends an UpdateConnectedNodes or UpdateGateConnectedNodes RPC to the Inspector.
+// UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
 // This is called when the component's connections change.
+// The same RPC is used for both nodes and gates - the inspector determines the type based on the address.
 func (im *InspectorManager) UpdateConnectedNodes() {
 	im.mu.Lock()
 	defer im.mu.Unlock()
@@ -381,35 +382,18 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	switch im.mode {
-	case ModeNode:
-		req := &inspector_pb.UpdateConnectedNodesRequest{
-			AdvertiseAddress: im.address,
-			ConnectedNodes:   connectedNodes,
-		}
-
-		_, err := im.client.UpdateConnectedNodes(ctx, req)
-		if err != nil {
-			im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
-			return
-		}
-
-		im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
-
-	case ModeGate:
-		req := &inspector_pb.UpdateGateConnectedNodesRequest{
-			AdvertiseAddress: im.address,
-			ConnectedNodes:   connectedNodes,
-		}
-
-		_, err := im.client.UpdateGateConnectedNodes(ctx, req)
-		if err != nil {
-			im.logger.Warnf("Failed to update gate connected nodes with inspector: %v", err)
-			return
-		}
-
-		im.logger.Debugf("Updated gate connected nodes with inspector (%d nodes)", len(connectedNodes))
+	req := &inspector_pb.UpdateConnectedNodesRequest{
+		AdvertiseAddress: im.address,
+		ConnectedNodes:   connectedNodes,
 	}
+
+	_, err := im.client.UpdateConnectedNodes(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
+		return
+	}
+
+	im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
 }
 
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.
