@@ -13,6 +13,7 @@ type GoverseNode struct {
 	Type          string    `json:"type"`
 	AdvertiseAddr string    `json:"advertise_addr"`
 	RegisteredAt  time.Time `json:"registered_at"`
+	ObjectCount   int       `json:"object_count"`
 }
 
 type GoverseObject struct {
