@@ -730,11 +730,13 @@
 
       // Objects by type chart
       if (typeMap.size > 0) {
+        // Sort type entries alphabetically by type name
+        const sortedTypes = Array.from(typeMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
         html += `
           <div class="shard-chart">
             <h4>Objects by Type</h4>
             <div class="legend">
-              ${Array.from(typeMap.entries()).map(([type, objs]) => `
+              ${sortedTypes.map(([type, objs]) => `
                 <div class="legend-item">
                   <div class="legend-color" style="background: ${typeColors[type] || typeColors.default}"></div>
                   <span>${type}: ${objs.length}</span>
@@ -742,7 +744,7 @@
               `).join('')}
             </div>
             <div class="shard-bar-container">
-              ${Array.from(typeMap.entries()).map(([type, objs]) => `
+              ${sortedTypes.map(([type, objs]) => `
                 <div class="shard-bar" 
                      style="background: ${typeColors[type] || typeColors.default}; width: ${Math.max(30, objs.length * 3)}px"
                      title="${type}: ${objs.length} objects">
@@ -755,11 +757,13 @@
 
       // Objects by node chart
       if (nodeObjMap.size > 0) {
+        // Sort node entries by node ID
+        const sortedNodes = Array.from(nodeObjMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
         html += `
           <div class="shard-chart">
             <h4>Objects by Node</h4>
             <div class="legend">
-              ${Array.from(nodeObjMap.entries()).map(([nodeId]) => `
+              ${sortedNodes.map(([nodeId]) => `
                 <div class="legend-item">
                   <div class="legend-color" style="background: ${typeColors.node}"></div>
                   <span>${nodeId}</span>
@@ -767,7 +771,7 @@
               `).join('')}
             </div>
             <div class="shard-bar-container">
-              ${Array.from(nodeObjMap.entries()).map(([nodeId, objs]) => `
+              ${sortedNodes.map(([nodeId, objs]) => `
                 <div class="shard-bar" 
                      style="background: ${typeColors.node}; width: ${Math.max(30, objs.length * 3)}px"
                      title="${nodeId}: ${objs.length} objects">
