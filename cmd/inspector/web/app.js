@@ -18,9 +18,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   })
 })
 
-// Extend window resize handler to include nodes view
-const originalResizeHandler = handleGraphResize
-window.removeEventListener('resize', originalResizeHandler)
+// Window resize handler for both graph and nodes views
 window.addEventListener('resize', () => {
   handleGraphResize()
   handleNodesViewResize()

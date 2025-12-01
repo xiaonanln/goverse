@@ -48,9 +48,6 @@ function initGraph() {
       .strength(d => d.type === 'gate-node' ? 0.1 : 1))
     .on('tick', ticked)
 
-  // Handle window resize
-  window.addEventListener('resize', handleGraphResize)
-
   // Zoom controls
   document.getElementById('zoom-in').addEventListener('click', () => {
     svg.transition().duration(300).call(zoom.scaleBy, 1.3)
