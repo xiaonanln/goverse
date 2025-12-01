@@ -371,9 +371,10 @@ func TestServerStartupWithEtcd(t *testing.T) {
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create server config with unique ports and etcd prefix
+	listenAddr := testutil.GetFreeAddress()
 	config := &ServerConfig{
-		ListenAddress:             "localhost:47100",
-		AdvertiseAddress:          "localhost:47100",
+		ListenAddress:             listenAddr,
+		AdvertiseAddress:          listenAddr,
 		EtcdAddress:               "localhost:2379",
 		EtcdPrefix:                etcdPrefix,
 		NodeStabilityDuration:     3 * time.Second,
