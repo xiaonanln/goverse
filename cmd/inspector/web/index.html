@@ -633,33 +633,52 @@
         }
       })
 
-      // Add node-to-node links with weaker force
+      // Add node-to-node links - all pairs with connection status
+      // Material Design colors: Red=#F44336, Green=#4CAF50, Blue=#2196F3
       const addrToNodeId = new Map()
+      const clusterNodes = []
       graphData.goverse_nodes.forEach(n => {
         if (n.advertise_addr) {
           addrToNodeId.set(n.advertise_addr, n.id)
         }
+        clusterNodes.push({
+          id: n.id,
+          advertiseAddr: n.advertise_addr,
+          connectedNodes: n.connected_nodes || []
+        })
       })
 
-      const processedLinks = new Set()
-      graphData.goverse_nodes.forEach(n => {
-        if (n.connected_nodes && Array.isArray(n.connected_nodes)) {
-          n.connected_nodes.forEach(targetAddr => {
-            const targetId = addrToNodeId.get(targetAddr) || targetAddr
-            if (nodeMap.has(n.id) && nodeMap.has(targetId)) {
-              const linkKey = [n.id, targetId].sort().join('-')
-              if (!processedLinks.has(linkKey)) {
-                links.push({
-                  source: n.id,
-                  target: targetId,
-                  type: 'node-node'
-                })
-                processedLinks.add(linkKey)
-              }
-            }
+      // Create links for all cluster node pairs
+      for (let i = 0; i < clusterNodes.length; i++) {
+        for (let j = i + 1; j < clusterNodes.length; j++) {
+          const nodeA = clusterNodes[i]
+          const nodeB = clusterNodes[j]
+          
+          // Check if A connects to B
+          const aConnectsToB = nodeA.connectedNodes.includes(nodeB.advertiseAddr)
+          // Check if B connects to A
+          const bConnectsToA = nodeB.connectedNodes.includes(nodeA.advertiseAddr)
+          
+          let linkColor
+          if (aConnectsToB && bConnectsToA) {
+            // Dual connection: green
+            linkColor = '#4CAF50'
+          } else if (aConnectsToB || bConnectsToA) {
+            // Single direction: blue
+            linkColor = '#2196F3'
+          } else {
+            // No connection: red
+            linkColor = '#F44336'
+          }
+          
+          links.push({
+            source: nodeA.id,
+            target: nodeB.id,
+            type: 'node-node',
+            color: linkColor
           })
         }
-      })
+      }
 
       // Update simulation
       simulation.nodes(nodes)
@@ -672,16 +691,15 @@
 
       linkSelection.exit().remove()
 
-      linkSelection.enter()
+      const linkEnter = linkSelection.enter()
         .append('line')
         .attr('class', 'graph-link')
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
 
-      // Update existing links
-      linkSelection
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+      // Merge and update all links
+      linkEnter.merge(linkSelection)
+        .attr('stroke', d => d.color || '#999')
+        .attr('stroke-width', d => d.type === 'node-node' ? 2 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.6 : 1)
 
       // Update nodes
       const nodeSelection = g.select('.nodes')
@@ -1608,33 +1626,52 @@
         }
       })
 
-      // Add node-to-node links with weaker force
+      // Add node-to-node links - all pairs with connection status
+      // Material Design colors: Red=#F44336, Green=#4CAF50, Blue=#2196F3
       const addrToNodeId = new Map()
+      const clusterNodes = []
       graphData.goverse_nodes.forEach(n => {
         if (n.advertise_addr) {
           addrToNodeId.set(n.advertise_addr, n.id)
         }
+        clusterNodes.push({
+          id: n.id,
+          advertiseAddr: n.advertise_addr,
+          connectedNodes: n.connected_nodes || []
+        })
       })
 
-      const processedLinks = new Set()
-      graphData.goverse_nodes.forEach(n => {
-        if (n.connected_nodes && Array.isArray(n.connected_nodes)) {
-          n.connected_nodes.forEach(targetAddr => {
-            const targetId = addrToNodeId.get(targetAddr) || targetAddr
-            if (nodeMap.has(n.id) && nodeMap.has(targetId)) {
-              const linkKey = [n.id, targetId].sort().join('-')
-              if (!processedLinks.has(linkKey)) {
-                links.push({
-                  source: n.id,
-                  target: targetId,
-                  type: 'node-node'
-                })
-                processedLinks.add(linkKey)
-              }
-            }
+      // Create links for all cluster node pairs
+      for (let i = 0; i < clusterNodes.length; i++) {
+        for (let j = i + 1; j < clusterNodes.length; j++) {
+          const nodeA = clusterNodes[i]
+          const nodeB = clusterNodes[j]
+          
+          // Check if A connects to B
+          const aConnectsToB = nodeA.connectedNodes.includes(nodeB.advertiseAddr)
+          // Check if B connects to A
+          const bConnectsToA = nodeB.connectedNodes.includes(nodeA.advertiseAddr)
+          
+          let linkColor
+          if (aConnectsToB && bConnectsToA) {
+            // Dual connection: green
+            linkColor = '#4CAF50'
+          } else if (aConnectsToB || bConnectsToA) {
+            // Single direction: blue
+            linkColor = '#2196F3'
+          } else {
+            // No connection: red
+            linkColor = '#F44336'
+          }
+          
+          links.push({
+            source: nodeA.id,
+            target: nodeB.id,
+            type: 'node-node',
+            color: linkColor
           })
         }
-      })
+      }
 
       // Update simulation with low alpha to minimize movement
       simulation.nodes(nodes)
@@ -1647,16 +1684,15 @@
 
       linkSelection.exit().remove()
 
-      linkSelection.enter()
+      const linkEnter = linkSelection.enter()
         .append('line')
         .attr('class', 'graph-link')
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
 
-      // Update existing links
-      linkSelection
-        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
-        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
+      // Merge and update all links
+      linkEnter.merge(linkSelection)
+        .attr('stroke', d => d.color || '#999')
+        .attr('stroke-width', d => d.type === 'node-node' ? 2 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.6 : 1)
 
       // Update nodes
       const nodeSelection = g.select('.nodes')
