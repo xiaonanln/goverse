@@ -433,7 +433,7 @@
         .force('charge', d3.forceManyBody().strength(-200))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5))
-        .force('link', d3.forceLink().id(d => d.id).distance(100))
+        .force('link', d3.forceLink().id(d => d.id).distance(d => d.type === 'node-node' ? 150 : 100))
         .on('tick', ticked)
 
       // Handle window resize
@@ -627,7 +627,36 @@
         if (obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
           links.push({
             source: obj.id,
-            target: obj.goverse_node_id
+            target: obj.goverse_node_id,
+            type: 'object-node'
+          })
+        }
+      })
+
+      // Add node-to-node links with weaker force
+      const addrToNodeId = new Map()
+      graphData.goverse_nodes.forEach(n => {
+        if (n.advertise_addr) {
+          addrToNodeId.set(n.advertise_addr, n.id)
+        }
+      })
+
+      const processedLinks = new Set()
+      graphData.goverse_nodes.forEach(n => {
+        if (n.connected_nodes && Array.isArray(n.connected_nodes)) {
+          n.connected_nodes.forEach(targetAddr => {
+            const targetId = addrToNodeId.get(targetAddr) || targetAddr
+            if (nodeMap.has(n.id) && nodeMap.has(targetId)) {
+              const linkKey = [n.id, targetId].sort().join('-')
+              if (!processedLinks.has(linkKey)) {
+                links.push({
+                  source: n.id,
+                  target: targetId,
+                  type: 'node-node'
+                })
+                processedLinks.add(linkKey)
+              }
+            }
           })
         }
       })
@@ -646,7 +675,8 @@
       linkSelection.enter()
         .append('line')
         .attr('class', 'graph-link')
-        .attr('stroke-width', 1.5)
+        .attr('stroke-width', d => d.type === 'node-node' ? 1 : 1.5)
+        .attr('stroke-opacity', d => d.type === 'node-node' ? 0.3 : 1)
 
       // Update nodes
       const nodeSelection = g.select('.nodes')
