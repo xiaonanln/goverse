@@ -305,3 +305,22 @@ func (pg *GoverseGraph) UpdateNodeConnectedNodes(nodeID string, connectedNodes [
 		Node: &node,
 	})
 }
+
+// UpdateGateConnectedNodes updates the connected_nodes field for a specific gate.
+func (pg *GoverseGraph) UpdateGateConnectedNodes(gateID string, connectedNodes []string) {
+	pg.mu.Lock()
+	gate, exists := pg.gates[gateID]
+	if !exists {
+		pg.mu.Unlock()
+		return
+	}
+
+	gate.ConnectedNodes = connectedNodes
+	pg.gates[gateID] = gate
+	pg.mu.Unlock()
+
+	pg.notifyObservers(GraphEvent{
+		Type: EventGateUpdated,
+		Gate: &gate,
+	})
+}

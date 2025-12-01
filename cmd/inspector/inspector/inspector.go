@@ -143,16 +143,17 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 	}
 
 	gate := GoverseGate{
-		ID:            addr,
-		Label:         fmt.Sprintf("Gate %s", addr),
-		Color:         "#2196F3",
-		Type:          "goverse_gate",
-		AdvertiseAddr: addr,
-		RegisteredAt:  time.Now(),
+		ID:             addr,
+		Label:          fmt.Sprintf("Gate %s", addr),
+		Color:          "#2196F3",
+		Type:           "goverse_gate",
+		AdvertiseAddr:  addr,
+		RegisteredAt:   time.Now(),
+		ConnectedNodes: req.GetConnectedNodes(),
 	}
 	i.pg.AddOrUpdateGate(gate)
 
-	log.Printf("Gate registered: advertise_addr=%s", addr)
+	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v", addr, req.GetConnectedNodes())
 	return &inspector_pb.RegisterGateResponse{}, nil
 }
 
@@ -182,5 +183,25 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 	i.pg.UpdateNodeConnectedNodes(addr, connectedNodes)
 
 	log.Printf("Node connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
+	return &inspector_pb.Empty{}, nil
+}
+
+// UpdateGateConnectedNodes handles gate connected nodes update requests
+func (i *Inspector) UpdateGateConnectedNodes(ctx context.Context, req *inspector_pb.UpdateGateConnectedNodesRequest) (*inspector_pb.Empty, error) {
+	addr := req.GetAdvertiseAddress()
+	if addr == "" {
+		log.Println("UpdateGateConnectedNodes called with empty advertise address")
+		return nil, errors.New("advertise address cannot be empty")
+	}
+
+	connectedNodes := req.GetConnectedNodes()
+	if connectedNodes == nil {
+		connectedNodes = []string{}
+	}
+
+	// Update the gate's connected_nodes field
+	i.pg.UpdateGateConnectedNodes(addr, connectedNodes)
+
+	log.Printf("Gate connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
 	return &inspector_pb.Empty{}, nil
 }
