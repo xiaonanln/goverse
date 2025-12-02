@@ -182,6 +182,11 @@ def main():
     print("=" * 60)
     print()
     
+    # Track all started processes for cleanup
+    inspector = None
+    chat_servers = []
+    gateway = None
+    
     try:
         # Add go bin to PATH
         go_bin_path = subprocess.run(['go', 'env', 'GOPATH'], 
@@ -203,7 +208,6 @@ def main():
             return 1
 
         # Start multiple chat servers using ChatServer class
-        chat_servers = []
         for i in range(num_servers):
             server = ChatServer(server_index=i)
             server.start()
@@ -309,6 +313,7 @@ def main():
         print("\nStopping gateway...")
         gateway_ok = True
         code = gateway.close()
+        gateway = None  # Mark as closed
         print(f"Gateway exited with code {code}")
         if code != 0:
             gateway_ok = False
@@ -321,11 +326,13 @@ def main():
             print(f"{server.name} exited with code {code}")
             if code != 0:
                 servers_ok = False
+        chat_servers = []  # Mark all as closed
 
         # Stop inspector and check exit code
         print("\nStopping inspector...")
         inspector_ok = True
         code = inspector.close()
+        inspector = None  # Mark as closed
         print(f"Inspector exited with code {code}")
         if code != 0:
             inspector_ok = False
@@ -353,6 +360,24 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
+    finally:
+        # Always clean up all processes, even on failure or exception
+        print("\nCleaning up processes...")
+        if gateway is not None:
+            try:
+                gateway.close()
+            except Exception:
+                pass
+        for server in reversed(chat_servers):
+            try:
+                server.close()
+            except Exception:
+                pass
+        if inspector is not None:
+            try:
+                inspector.close()
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':
