@@ -224,7 +224,8 @@ function buildGraphNodesAndLinks() {
           source: nodeA.id,
           target: nodeB.id,
           type: 'node-node',
-          color: linkColor
+          color: linkColor,
+          width: 2
         })
       }
     }
@@ -241,7 +242,8 @@ function buildGraphNodesAndLinks() {
           source: gate.id,
           target: nodeId,
           type: 'gate-node',
-          color: '#2196F3' // Blue for gate-to-node connections
+          color: '#2196F3', // Blue for gate-to-node connections
+          width: 2
         })
       }
     })
@@ -272,8 +274,8 @@ function updateGraph() {
   // Merge and update all links
   linkEnter.merge(linkSelection)
     .attr('stroke', d => d.color || '#999')
-    .attr('stroke-width', d => (d.type === 'node-node' || d.type === 'gate-node') ? 2 : 1.5)
-    .attr('stroke-opacity', d => (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1)
+    .attr('stroke-width', d => d.width || 1.5)
+    .attr('stroke-opacity', d => d.width ? 0.6 : 1)
 
   // Update nodes
   const nodeSelection = g.select('.nodes')
@@ -484,7 +486,8 @@ function updateGraphIncremental() {
           source: nodeA.id,
           target: nodeB.id,
           type: 'node-node',
-          color: linkColor
+          color: linkColor,
+          width: 2
         })
       }
     }
@@ -501,7 +504,8 @@ function updateGraphIncremental() {
           source: gate.id,
           target: nodeId,
           type: 'gate-node',
-          color: '#2196F3' // Blue for gate-to-node connections
+          color: '#2196F3', // Blue for gate-to-node connections
+          width: 2
         })
       }
     })
@@ -525,8 +529,8 @@ function updateGraphIncremental() {
   // Merge and update all links
   linkEnter.merge(linkSelection)
     .attr('stroke', d => d.color || '#999')
-    .attr('stroke-width', d => (d.type === 'node-node' || d.type === 'gate-node') ? 2 : 1.5)
-    .attr('stroke-opacity', d => (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1)
+    .attr('stroke-width', d => d.width || 1.5)
+    .attr('stroke-opacity', d => d.width ? 0.6 : 1)
 
   // Update nodes
   const nodeSelection = g.select('.nodes')
