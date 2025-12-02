@@ -80,7 +80,7 @@ func NewNode(advertiseAddress string, numShards int) *Node {
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
-		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress),
+		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress, ""),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
