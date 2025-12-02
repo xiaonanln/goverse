@@ -20,6 +20,7 @@ SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
 sys.path.insert(0, str(SAMPLES_DIR))
 
 from BinaryHelper import BinaryHelper
+from PortHelper import get_free_port
 
 try:
     from proto import goverse_pb2
@@ -40,8 +41,8 @@ class ChatServer:
     def __init__(self, server_index=0, listen_port=None, client_port=None, 
                  binary_path=None):
         self.server_index = server_index
-        self.listen_port = listen_port if listen_port is not None else 47000 + server_index
-        self.client_port = client_port if client_port is not None else 48000 + server_index
+        self.listen_port = listen_port if listen_port is not None else get_free_port()
+        self.client_port = client_port if client_port is not None else get_free_port()
         self.binary_path = binary_path if binary_path is not None else '/tmp/chat_server'
         self.process = None
         self.channel = None
