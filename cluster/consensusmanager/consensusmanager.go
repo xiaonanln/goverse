@@ -727,23 +727,27 @@ func (cm *ConsensusManager) GetShardMapping() *ShardMapping {
 }
 
 // GetCurrentNodeForObject returns the node that should handle the given object ID
-// If the object ID contains a "/" separator (e.g., "localhost:7001/object-123"),
-// the part before the first "/" is treated as a fixed node address and returned directly.
-// This allows objects to be pinned to specific nodes, similar to client IDs.
-// Otherwise, the object is assigned to a node based on consistent hashing.
+// Supports three formats:
+// 1. Fixed-shard format: "shard#<shardID>/<objectID>" - maps to specific shard via shard mapping
+// 2. Fixed-node format: "<nodeAddress>/<objectID>" - routes directly to specified node
+// 3. Regular format: any other ID - uses hash-based shard assignment
 func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, error) {
-	// Check if object ID specifies a fixed node address
-	// Format: nodeAddress/actualObjectID (e.g., "localhost:7001/object-123")
+	// Check if object ID contains a "/" separator
 	if strings.Contains(objectID, "/") {
 		parts := strings.SplitN(objectID, "/", 2)
 		if len(parts) >= 1 && parts[0] != "" {
-			// Fixed node address specified (first part before /)
-			nodeAddr := parts[0]
-			return nodeAddr, nil
+			// Check if it's a fixed-shard format (shard#<shardID>/...)
+			// Fixed-shard format should be processed through normal shard mapping
+			if !strings.HasPrefix(parts[0], "shard#") {
+				// Fixed node address format (e.g., "localhost:7001/object-123")
+				nodeAddr := parts[0]
+				return nodeAddr, nil
+			}
 		}
 	}
 
 	// Use the sharding logic to determine the node
+	// This handles both regular IDs and fixed-shard format (shard#<shardID>/...)
 	shardID := sharding.GetShardID(objectID, cm.numShards)
 
 	// Get shard mapping and check node existence under a single lock
