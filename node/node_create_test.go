@@ -37,7 +37,7 @@ func (obj *TestObject) OnCreated() {
 
 // TestCreateObject_RequiresID tests that CreateObject requires a non-empty ID
 func TestCreateObject_RequiresID(t *testing.T) {
-	node := NewNode("test-node:1234", testNumShards)
+	node := NewNode("test-node:1234", testNumShards, "")
 
 	// Register a test object type
 	node.RegisterObjectType((*TestObject)(nil))
@@ -78,7 +78,7 @@ func TestCreateObject_RequiresID(t *testing.T) {
 
 // TestCreateObject_DuplicateID tests that creating an object with the same ID and type returns the existing object
 func TestCreateObject_DuplicateID(t *testing.T) {
-	node := NewNode("test-node:1234", testNumShards)
+	node := NewNode("test-node:1234", testNumShards, "")
 
 	// Register a test object type
 	node.RegisterObjectType((*TestObject)(nil))
@@ -129,7 +129,7 @@ func (obj *TestObject2) OnCreated() {
 
 // TestCreateObject_DuplicateID_DifferentType tests that creating an object with same ID but different type fails
 func TestCreateObject_DuplicateID_DifferentType(t *testing.T) {
-	node := NewNode("test-node:1234", testNumShards)
+	node := NewNode("test-node:1234", testNumShards, "")
 
 	// Register both test object types
 	node.RegisterObjectType((*TestObject)(nil))
@@ -157,7 +157,7 @@ func TestCreateObject_DuplicateID_DifferentType(t *testing.T) {
 
 // TestCreateObject_UnknownType tests that creating an object with unknown type fails
 func TestCreateObject_UnknownType(t *testing.T) {
-	node := NewNode("test-node:1234", testNumShards)
+	node := NewNode("test-node:1234", testNumShards, "")
 
 	ctx := context.Background()
 
@@ -174,7 +174,7 @@ func TestCreateObject_UnknownType(t *testing.T) {
 
 // TestCreateObject_ConcurrentCalls tests that concurrent CreateObject calls are safe and idempotent
 func TestCreateObject_ConcurrentCalls(t *testing.T) {
-	node := NewNode("test-node:1234", testNumShards)
+	node := NewNode("test-node:1234", testNumShards, "")
 
 	// Register test object type
 	node.RegisterObjectType((*TestConcurrencyObject)(nil))
@@ -270,7 +270,7 @@ func TestCreateObject_ConcurrentCalls(t *testing.T) {
 } // TestCreateObject_ConcurrentDifferentObjects tests concurrent creation of different objects
 
 func TestCreateObject_ConcurrentDifferentObjects(t *testing.T) {
-	node := NewNode("test-node:1234", testNumShards)
+	node := NewNode("test-node:1234", testNumShards, "")
 
 	// Register test object type
 	node.RegisterObjectType((*TestConcurrencyObject)(nil))

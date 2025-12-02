@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	defaultInspectorAddress    = "localhost:8081"
 	defaultHealthCheckInterval = 5 * time.Second
 
 	// DefaultConnectionTimeout is the default timeout for gRPC connection establishment.
@@ -57,11 +56,12 @@ type InspectorManager struct {
 }
 
 // NewInspectorManager creates a new InspectorManager instance for a node.
-func NewInspectorManager(nodeAddress string) *InspectorManager {
+// If inspectorAddress is empty, the InspectorManager will be disabled and Start() will be a no-op.
+func NewInspectorManager(nodeAddress string, inspectorAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             nodeAddress,
 		mode:                ModeNode,
-		inspectorAddress:    defaultInspectorAddress,
+		inspectorAddress:    inspectorAddress,
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("InspectorManager"),
 		objects:             make(map[string]*inspector_pb.Object),
@@ -70,11 +70,12 @@ func NewInspectorManager(nodeAddress string) *InspectorManager {
 
 // NewGateInspectorManager creates a new InspectorManager instance for a gate.
 // Gates don't track objects, so the objects map is not initialized.
-func NewGateInspectorManager(gateAddress string) *InspectorManager {
+// If inspectorAddress is empty, the InspectorManager will be disabled and Start() will be a no-op.
+func NewGateInspectorManager(gateAddress string, inspectorAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             gateAddress,
 		mode:                ModeGate,
-		inspectorAddress:    defaultInspectorAddress,
+		inspectorAddress:    inspectorAddress,
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("GateInspectorManager"),
 	}
@@ -86,17 +87,30 @@ func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 	im.healthCheckInterval = interval
 }
 
-// SetClusterInfoProvider sets the consolidated cluster info provider.
-// This is the preferred way to provide cluster information to the InspectorManager.
-// The provider will be used to get connected nodes and registered gates.
+// IsEnabled returns true if the inspector manager has an inspector address configured.
+// When disabled, Start() is a no-op and all notification methods do nothing.
+func (im *InspectorManager) IsEnabled() bool {
+	return im.inspectorAddress != ""
+}
+
+// SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// This is used when registering with the inspector to report which nodes this component is connected to.
+// Works for both node mode (node-to-node connections) and gate mode (gate-to-node connections).
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
 	im.clusterInfoProvider = provider
 }
 
 // Start initializes the connection to the Inspector and starts background management.
+// If inspectorAddress is empty, this method is a no-op and returns nil immediately.
 func (im *InspectorManager) Start(ctx context.Context) error {
 	im.mu.Lock()
+
+	// If inspector address is not configured, do nothing
+	if im.inspectorAddress == "" {
+		im.mu.Unlock()
+		return nil
+	}
 
 	// Make Start() idempotent - if already started, return immediately
 	if im.started {

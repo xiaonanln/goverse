@@ -73,14 +73,15 @@ type Node struct {
 }
 
 // NewNode creates a new Node instance
-func NewNode(advertiseAddress string, numShards int) *Node {
+// inspectorAddress is optional - if empty, the inspector manager will be disabled
+func NewNode(advertiseAddress string, numShards int, inspectorAddress string) *Node {
 	node := &Node{
 		advertiseAddress:    advertiseAddress,
 		numShards:           numShards,
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
-		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress),
+		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress, inspectorAddress),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}

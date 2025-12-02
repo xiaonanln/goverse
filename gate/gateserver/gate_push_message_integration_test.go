@@ -20,7 +20,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 	t.Helper()
 
 	// Create a node
-	n := node.NewNode(nodeAddr, testutil.TestNumShards)
+	n := node.NewNode(nodeAddr, testutil.TestNumShards, "")
 
 	// Start the node
 	err := n.Start(ctx)

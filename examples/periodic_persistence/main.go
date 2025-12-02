@@ -95,8 +95,8 @@ func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID str
 func main() {
 	fmt.Println("=== Goverse Periodic Persistence Example ===")
 
-	// Create a node
-	n := node.NewNode("localhost:47000", sharding.NumShards)
+	// Create a node (empty inspector address means inspector is disabled)
+	n := node.NewNode("localhost:47000", sharding.NumShards, "")
 
 	// Create persistence provider
 	provider := NewMockPersistenceProvider()

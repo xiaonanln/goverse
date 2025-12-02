@@ -70,7 +70,7 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 	// We don't use mustNewCluster here because we need to explicitly stop and restart
 	// the node mid-test to simulate a node restart scenario
 	t.Logf("Creating first node cluster at %s", nodeAddr)
-	n1 := node.NewNode(nodeAddr, testutil.TestNumShards)
+	n1 := node.NewNode(nodeAddr, testutil.TestNumShards, "")
 	err = n1.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start first node: %v", err)
@@ -147,7 +147,7 @@ func TestGateReconnectsToNodeAfterRestart(t *testing.T) {
 
 	// Create and start a new node cluster with the SAME address (simulating restart)
 	t.Logf("Starting second node cluster at same address %s", nodeAddr)
-	n2 := node.NewNode(nodeAddr, testutil.TestNumShards)
+	n2 := node.NewNode(nodeAddr, testutil.TestNumShards, "")
 	err = n2.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start second node: %v", err)
