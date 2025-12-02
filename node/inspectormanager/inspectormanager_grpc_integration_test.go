@@ -66,7 +66,8 @@ func TestInspectorManager_ActualConnection(t *testing.T) {
 	nodeListener.Close()
 
 	// Create and start inspector manager
-	mgr := NewInspectorManager(nodeAddr, inspectorAddr)
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.SetInspectorAddress(inspectorAddr)
 	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
@@ -128,7 +129,8 @@ func TestInspectorManager_ObjectNotifications(t *testing.T) {
 	nodeListener.Close()
 
 	// Create and start inspector manager
-	mgr := NewInspectorManager(nodeAddr, inspectorAddr)
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.SetInspectorAddress(inspectorAddr)
 	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
@@ -214,7 +216,8 @@ func TestInspectorManager_NodeUnregistration(t *testing.T) {
 	nodeListener.Close()
 
 	// Create and start inspector manager
-	mgr := NewInspectorManager(nodeAddr, inspectorAddr)
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.SetInspectorAddress(inspectorAddr)
 	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
@@ -265,7 +268,8 @@ func TestInspectorManager_ReconnectionLogic(t *testing.T) {
 	nodeListener.Close()
 
 	// Create and start inspector manager
-	mgr := NewInspectorManager(nodeAddr, inspectorAddr)
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.SetInspectorAddress(inspectorAddr)
 	mgr.SetHealthCheckInterval(1 * time.Second)
 	ctx := context.Background()
 
@@ -393,7 +397,8 @@ func TestInspectorManager_ShardIDPropagation_Integration(t *testing.T) {
 	nodeListener.Close()
 
 	// Create and start inspector manager
-	mgr := NewInspectorManager(nodeAddr, inspectorAddr)
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.SetInspectorAddress(inspectorAddr)
 	ctx := context.Background()
 
 	err = mgr.Start(ctx)
@@ -496,11 +501,14 @@ func TestInspectorManager_MultipleNodesConnection(t *testing.T) {
 	nodeListener3.Close()
 
 	// Create multiple managers for different nodes
-	mgr1 := NewInspectorManager(nodeAddr1, inspectorAddr)
+	mgr1 := NewInspectorManager(nodeAddr1)
+	mgr1.SetInspectorAddress(inspectorAddr)
 	mgr1.SetHealthCheckInterval(1 * time.Second)
-	mgr2 := NewInspectorManager(nodeAddr2, inspectorAddr)
+	mgr2 := NewInspectorManager(nodeAddr2)
+	mgr2.SetInspectorAddress(inspectorAddr)
 	mgr2.SetHealthCheckInterval(1 * time.Second)
-	mgr3 := NewInspectorManager(nodeAddr3, inspectorAddr)
+	mgr3 := NewInspectorManager(nodeAddr3)
+	mgr3.SetInspectorAddress(inspectorAddr)
 	mgr3.SetHealthCheckInterval(1 * time.Second)
 
 	// Start all managers
@@ -585,7 +593,8 @@ func TestInspectorManager_ConnectFailureAndRetry(t *testing.T) {
 	nodeListener.Close()
 
 	// Create manager with inspector address pointing to unused port
-	mgr := NewInspectorManager(nodeAddr, inspectorAddr)
+	mgr := NewInspectorManager(nodeAddr)
+	mgr.SetInspectorAddress(inspectorAddr)
 	ctx := context.Background()
 
 	// Start should not return error even though connection fails

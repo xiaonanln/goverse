@@ -66,7 +66,12 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		numShards = 8192
 	}
 
-	n := node.NewNode(config.AdvertiseAddress, numShards, config.InspectorAddress)
+	n := node.NewNode(config.AdvertiseAddress, numShards)
+
+	// Set inspector address on the node if configured
+	if config.InspectorAddress != "" {
+		n.SetInspectorAddress(config.InspectorAddress)
+	}
 
 	// Set lifecycle validator on the node if configured
 	if config.LifecycleValidator != nil {

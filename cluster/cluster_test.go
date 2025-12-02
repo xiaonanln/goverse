@@ -15,7 +15,7 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 	t.Helper()
 
 	// Create a node
-	n := node.NewNode(nodeAddr, testutil.TestNumShards, "")
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
 
 	// Start the node
 	err := n.Start(ctx)
@@ -76,7 +76,7 @@ func TestSetThisNode(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a new cluster for testing
-	n := node.NewNode("test-address", testutil.TestNumShards, "")
+	n := node.NewNode("test-address", testutil.TestNumShards)
 	cluster := newClusterForTesting(n, "TestCluster")
 
 	if cluster.GetThisNode() != n {
@@ -90,7 +90,7 @@ func TestSetThisNode_Panic(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a new cluster for testing with n1
-	n1 := node.NewNode("test-address-1", testutil.TestNumShards, "")
+	n1 := node.NewNode("test-address-1", testutil.TestNumShards)
 	cluster := newClusterForTesting(n1, "TestCluster")
 
 	// Trying to set a different node should fail (thisNode already set during creation)
@@ -109,7 +109,7 @@ func TestNewCluster(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a new cluster instance (not the singleton) for testing
-	n := node.NewNode("localhost:50000", testutil.TestNumShards, "")
+	n := node.NewNode("localhost:50000", testutil.TestNumShards)
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running, but cluster and managers should be created
 	if err != nil {
@@ -131,7 +131,7 @@ func TestNewCluster_WithNode(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a new cluster for testing with node
-	n := node.NewNode("test-address", testutil.TestNumShards, "")
+	n := node.NewNode("test-address", testutil.TestNumShards)
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testutil.PrepareEtcdPrefix(t, "localhost:2379"))
 	// Connection may fail if etcd is not running
 	if err != nil {
@@ -161,7 +161,7 @@ func TestNewCluster_WithEtcdConfig(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create cluster with etcd and node
-	n := node.NewNode("test-address", testutil.TestNumShards, "")
+	n := node.NewNode("test-address", testutil.TestNumShards)
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running
 	if err != nil {
@@ -190,7 +190,7 @@ func TestGetLeaderNode_WithEtcdConfig(t *testing.T) {
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create a new cluster with etcd initialized
-	n := node.NewNode("localhost:50001", testutil.TestNumShards, "")
+	n := node.NewNode("localhost:50001", testutil.TestNumShards)
 	cluster, err := newClusterWithEtcdForTesting("TestCluster", n, "localhost:2379", testPrefix)
 	// Connection may fail if etcd is not running
 	if err != nil {
@@ -212,7 +212,7 @@ func TestClusterString(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Test String() with a basic cluster
-	n := node.NewNode("localhost:47000", testutil.TestNumShards, "")
+	n := node.NewNode("localhost:47000", testutil.TestNumShards)
 	cluster := newClusterForTesting(n, "TestCluster")
 
 	str := cluster.String()
@@ -260,7 +260,7 @@ func TestClusterString_WithQuorum(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := node.NewNode("localhost:47000", testutil.TestNumShards, "")
+			n := node.NewNode("localhost:47000", testutil.TestNumShards)
 			cluster := newClusterForTesting(n, "TestCluster")
 			cluster.minQuorum = tt.minQuorum
 
