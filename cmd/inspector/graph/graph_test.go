@@ -1122,3 +1122,79 @@ func TestMultipleGatesGraph(t *testing.T) {
 		t.Fatal("Gate localhost:49002 should still exist")
 	}
 }
+
+// TestUpdateNodeRegisteredGates tests updating a node's registered gates
+func TestUpdateNodeRegisteredGates(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Add a node with initial registered gates
+	node := models.GoverseNode{
+		ID:              "localhost:47000",
+		Label:           "Test Node",
+		RegisteredGates: []string{"localhost:49001"},
+	}
+	pg.AddOrUpdateNode(node)
+
+	// Verify initial registered gates
+	nodes := pg.GetNodes()
+	if len(nodes) != 1 {
+		t.Fatalf("Expected 1 node, got %d", len(nodes))
+	}
+	if len(nodes[0].RegisteredGates) != 1 {
+		t.Fatalf("Expected 1 registered gate, got %d", len(nodes[0].RegisteredGates))
+	}
+
+	// Update registered gates
+	pg.UpdateNodeRegisteredGates("localhost:47000", []string{"localhost:49001", "localhost:49002"})
+
+	// Verify updated registered gates
+	nodes = pg.GetNodes()
+	if len(nodes[0].RegisteredGates) != 2 {
+		t.Fatalf("Expected 2 registered gates after update, got %d", len(nodes[0].RegisteredGates))
+	}
+
+	// Verify specific gates
+	gateMap := make(map[string]bool)
+	for _, g := range nodes[0].RegisteredGates {
+		gateMap[g] = true
+	}
+	if !gateMap["localhost:49001"] || !gateMap["localhost:49002"] {
+		t.Fatal("Expected both gates to be present")
+	}
+}
+
+// TestUpdateNodeRegisteredGates_NonexistentNode tests updating gates for a non-existent node
+func TestUpdateNodeRegisteredGates_NonexistentNode(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Try to update a node that doesn't exist
+	pg.UpdateNodeRegisteredGates("localhost:47000", []string{"localhost:49001"})
+
+	// Node should not have been created
+	nodes := pg.GetNodes()
+	if len(nodes) != 0 {
+		t.Fatalf("Expected 0 nodes, got %d", len(nodes))
+	}
+}
+
+// TestUpdateNodeRegisteredGates_EmptyList tests setting registered gates to empty
+func TestUpdateNodeRegisteredGates_EmptyList(t *testing.T) {
+	pg := NewGoverseGraph()
+
+	// Add a node with registered gates
+	node := models.GoverseNode{
+		ID:              "localhost:47000",
+		Label:           "Test Node",
+		RegisteredGates: []string{"localhost:49001", "localhost:49002"},
+	}
+	pg.AddOrUpdateNode(node)
+
+	// Update to empty list
+	pg.UpdateNodeRegisteredGates("localhost:47000", []string{})
+
+	// Verify registered gates cleared
+	nodes := pg.GetNodes()
+	if len(nodes[0].RegisteredGates) != 0 {
+		t.Fatalf("Expected 0 registered gates, got %d", len(nodes[0].RegisteredGates))
+	}
+}

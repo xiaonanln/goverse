@@ -87,13 +87,14 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 	}
 
 	node := GoverseNode{
-		ID:             addr,
-		Label:          fmt.Sprintf("Node %s", addr),
-		Color:          "#4CAF50",
-		Type:           "goverse_node",
-		AdvertiseAddr:  addr,
-		RegisteredAt:   time.Now(),
-		ConnectedNodes: req.GetConnectedNodes(),
+		ID:              addr,
+		Label:           fmt.Sprintf("Node %s", addr),
+		Color:           "#4CAF50",
+		Type:            "goverse_node",
+		AdvertiseAddr:   addr,
+		RegisteredAt:    time.Now(),
+		ConnectedNodes:  req.GetConnectedNodes(),
+		RegisteredGates: req.GetRegisteredGates(),
 	}
 	i.pg.AddOrUpdateNode(node)
 
@@ -121,7 +122,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		i.pg.AddOrUpdateObject(obj)
 	}
 
-	log.Printf("Node registered: advertise_addr=%s, connected_nodes=%v", addr, req.GetConnectedNodes())
+	log.Printf("Node registered: advertise_addr=%s, connected_nodes=%v, registered_gates=%v", addr, req.GetConnectedNodes(), req.GetRegisteredGates())
 	return &inspector_pb.RegisterNodeResponse{}, nil
 }
 
@@ -191,6 +192,31 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 	} else {
 		// Neither node nor gate is registered, log but don't error
 		log.Printf("UpdateConnectedNodes: no node or gate registered with address %s", addr)
+	}
+
+	return &inspector_pb.Empty{}, nil
+}
+
+// UpdateRegisteredGates handles registered gates update requests from nodes.
+func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb.UpdateRegisteredGatesRequest) (*inspector_pb.Empty, error) {
+	addr := req.GetAdvertiseAddress()
+	if addr == "" {
+		log.Println("UpdateRegisteredGates called with empty advertise address")
+		return nil, errors.New("advertise address cannot be empty")
+	}
+
+	registeredGates := req.GetRegisteredGates()
+	if registeredGates == nil {
+		registeredGates = []string{}
+	}
+
+	// Only nodes can have registered gates
+	if i.pg.IsNodeRegistered(addr) {
+		i.pg.UpdateNodeRegisteredGates(addr, registeredGates)
+		log.Printf("Node registered_gates updated: advertise_addr=%s, registered_gates=%v", addr, registeredGates)
+	} else {
+		// Node is not registered, log but don't error
+		log.Printf("UpdateRegisteredGates: no node registered with address %s", addr)
 	}
 
 	return &inspector_pb.Empty{}, nil

@@ -36,16 +36,21 @@ const (
 // This is used by InspectorManager to get the current list of connected nodes when registering with the inspector.
 type ConnectedNodesProvider func() []string
 
+// RegisteredGatesProvider is a function type that returns the list of registered gate addresses.
+// This is used by InspectorManager (in node mode) to get the current list of gates registered to this node.
+type RegisteredGatesProvider func() []string
+
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 // It can operate in node mode or gate mode, using the appropriate registration RPCs.
 type InspectorManager struct {
-	address                string // advertise address (node or gate)
-	mode                   Mode   // operating mode (node or gate)
-	inspectorAddress       string
-	healthCheckInterval    time.Duration
-	logger                 *logger.Logger
-	connectedNodesProvider ConnectedNodesProvider // optional provider for connected nodes (works for both node and gate modes)
+	address                 string // advertise address (node or gate)
+	mode                    Mode   // operating mode (node or gate)
+	inspectorAddress        string
+	healthCheckInterval     time.Duration
+	logger                  *logger.Logger
+	connectedNodesProvider  ConnectedNodesProvider  // optional provider for connected nodes (works for both node and gate modes)
+	registeredGatesProvider RegisteredGatesProvider // optional provider for registered gates (node mode only)
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -95,6 +100,13 @@ func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetConnectedNodesProvider(provider ConnectedNodesProvider) {
 	im.connectedNodesProvider = provider
+}
+
+// SetRegisteredGatesProvider sets the provider function for getting registered gate addresses.
+// This is used when registering with the inspector to report which gates are registered to this node.
+// Only applicable in node mode. Must be called before Start() to take effect.
+func (im *InspectorManager) SetRegisteredGatesProvider(provider RegisteredGatesProvider) {
+	im.registeredGatesProvider = provider
 }
 
 // Start initializes the connection to the Inspector and starts background management.
@@ -259,10 +271,17 @@ func (im *InspectorManager) registerLocked() error {
 			connectedNodes = im.connectedNodesProvider()
 		}
 
+		// Get registered gates if provider is set
+		var registeredGates []string
+		if im.registeredGatesProvider != nil {
+			registeredGates = im.registeredGatesProvider()
+		}
+
 		registerReq := &inspector_pb.RegisterNodeRequest{
 			AdvertiseAddress: im.address,
 			Objects:          objects,
 			ConnectedNodes:   connectedNodes,
+			RegisteredGates:  registeredGates,
 		}
 
 		_, err := im.client.RegisterNode(ctx, registerReq)
@@ -270,7 +289,7 @@ func (im *InspectorManager) registerLocked() error {
 			return err
 		}
 
-		im.logger.Infof("Successfully registered node %s with inspector (%d objects, %d connected nodes)", im.address, len(objects), len(connectedNodes))
+		im.logger.Infof("Successfully registered node %s with inspector (%d objects, %d connected nodes, %d registered gates)", im.address, len(objects), len(connectedNodes), len(registeredGates))
 
 	case ModeGate:
 		// Get connected nodes if provider is set
@@ -394,6 +413,45 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 	}
 
 	im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
+}
+
+// UpdateRegisteredGates sends an UpdateRegisteredGates RPC to the Inspector.
+// This is called when the node's registered gates change.
+// This method is only applicable in node mode.
+func (im *InspectorManager) UpdateRegisteredGates() {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	if im.client == nil {
+		return
+	}
+
+	// Only nodes can have registered gates
+	if im.mode != ModeNode {
+		return
+	}
+
+	// Get current registered gates
+	var registeredGates []string
+	if im.registeredGatesProvider != nil {
+		registeredGates = im.registeredGatesProvider()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &inspector_pb.UpdateRegisteredGatesRequest{
+		AdvertiseAddress: im.address,
+		RegisteredGates:  registeredGates,
+	}
+
+	_, err := im.client.UpdateRegisteredGates(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to update registered gates with inspector: %v", err)
+		return
+	}
+
+	im.logger.Debugf("Updated registered gates with inspector (%d gates)", len(registeredGates))
 }
 
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.

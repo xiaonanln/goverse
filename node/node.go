@@ -184,6 +184,19 @@ func (node *Node) NotifyConnectedNodesChanged() {
 	node.inspectorManager.UpdateConnectedNodes()
 }
 
+// SetRegisteredGatesProvider sets the provider function for getting registered gate addresses.
+// This is used by the InspectorManager to report registered gates to the inspector.
+// Must be called during initialization before the node is used concurrently.
+func (node *Node) SetRegisteredGatesProvider(provider inspectormanager.RegisteredGatesProvider) {
+	node.inspectorManager.SetRegisteredGatesProvider(provider)
+}
+
+// NotifyRegisteredGatesChanged notifies the inspector that the node's registered gates have changed.
+// This should be called whenever gates are registered or unregistered.
+func (node *Node) NotifyRegisteredGatesChanged() {
+	node.inspectorManager.UpdateRegisteredGates()
+}
+
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)

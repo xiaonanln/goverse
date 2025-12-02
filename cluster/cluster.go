@@ -152,6 +152,10 @@ func (c *Cluster) init(cfg Config) error {
 		c.node.SetConnectedNodesProvider(func() []string {
 			return c.nodeConnections.GetConnectedNodeAddresses()
 		})
+		// Set the registered gates provider so the node's InspectorManager can report registered gates
+		c.node.SetRegisteredGatesProvider(func() []string {
+			return c.getRegisteredGateAddresses()
+		})
 	}
 
 	// Set the connected nodes provider for gates so the gate's InspectorManager can report connected nodes
@@ -771,6 +775,10 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 	// Set metric to current gate count
 	metrics.SetNodeConnectedGates(c.node.GetAdvertiseAddress(), len(c.gateChannels))
 	c.logger.Infof("Registered gate connection for %s", gateAddr)
+
+	// Notify inspector that registered gates have changed
+	c.node.NotifyRegisteredGatesChanged()
+
 	return ch, nil
 }
 
@@ -791,6 +799,9 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 			// Set metric to current gate count
 			metrics.SetNodeConnectedGates(c.node.GetAdvertiseAddress(), len(c.gateChannels))
 			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
+
+			// Notify inspector that registered gates have changed
+			c.node.NotifyRegisteredGatesChanged()
 		} else {
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
 		}
@@ -840,6 +851,23 @@ func (c *Cluster) IsGateConnected(gateAddr string) bool {
 
 	_, exists := c.gateChannels[gateAddr]
 	return exists
+}
+
+// getRegisteredGateAddresses returns the list of gate addresses registered to this node
+// This is used by the InspectorManager to report registered gates to the inspector.
+func (c *Cluster) getRegisteredGateAddresses() []string {
+	if !c.isNode() {
+		return nil
+	}
+
+	c.gateChannelsMu.RLock()
+	defer c.gateChannelsMu.RUnlock()
+
+	addresses := make([]string, 0, len(c.gateChannels))
+	for addr := range c.gateChannels {
+		addresses = append(addresses, addr)
+	}
+	return addresses
 }
 
 // PushMessageToClient sends a message to a client by its ID
