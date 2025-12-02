@@ -73,20 +73,26 @@ type Node struct {
 }
 
 // NewNode creates a new Node instance
-// inspectorAddress is optional - if empty, the inspector manager will be disabled
-func NewNode(advertiseAddress string, numShards int, inspectorAddress string) *Node {
+func NewNode(advertiseAddress string, numShards int) *Node {
 	node := &Node{
 		advertiseAddress:    advertiseAddress,
 		numShards:           numShards,
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
 		keyLock:             keylock.NewKeyLock(),
-		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress, inspectorAddress),
+		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
 	}
 
 	return node
+}
+
+// SetInspectorAddress sets the inspector service address.
+// This must be called before Start() to take effect.
+// If address is empty or not set, the inspector manager will be disabled.
+func (node *Node) SetInspectorAddress(address string) {
+	node.inspectorManager.SetInspectorAddress(address)
 }
 
 // Start starts the node and connects it to the inspector

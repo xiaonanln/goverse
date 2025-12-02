@@ -34,8 +34,8 @@ func TestReleaseShardOwnership_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two nodes
-	node1 := node.NewNode("localhost:52001", testutil.TestNumShards, "")
-	node2 := node.NewNode("localhost:52002", testutil.TestNumShards, "")
+	node1 := node.NewNode("localhost:52001", testutil.TestNumShards)
+	node2 := node.NewNode("localhost:52002", testutil.TestNumShards)
 
 	// Register test object type
 	node1.RegisterObjectType((*TestReleaseObject)(nil))

@@ -56,12 +56,12 @@ type InspectorManager struct {
 }
 
 // NewInspectorManager creates a new InspectorManager instance for a node.
-// If inspectorAddress is empty, the InspectorManager will be disabled and Start() will be a no-op.
-func NewInspectorManager(nodeAddress string, inspectorAddress string) *InspectorManager {
+// By default, the inspector is disabled. Call SetInspectorAddress before Start() to enable it.
+func NewInspectorManager(nodeAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             nodeAddress,
 		mode:                ModeNode,
-		inspectorAddress:    inspectorAddress,
+		inspectorAddress:    "", // disabled by default
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("InspectorManager"),
 		objects:             make(map[string]*inspector_pb.Object),
@@ -70,15 +70,22 @@ func NewInspectorManager(nodeAddress string, inspectorAddress string) *Inspector
 
 // NewGateInspectorManager creates a new InspectorManager instance for a gate.
 // Gates don't track objects, so the objects map is not initialized.
-// If inspectorAddress is empty, the InspectorManager will be disabled and Start() will be a no-op.
-func NewGateInspectorManager(gateAddress string, inspectorAddress string) *InspectorManager {
+// By default, the inspector is disabled. Call SetInspectorAddress before Start() to enable it.
+func NewGateInspectorManager(gateAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             gateAddress,
 		mode:                ModeGate,
-		inspectorAddress:    inspectorAddress,
+		inspectorAddress:    "", // disabled by default
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("GateInspectorManager"),
 	}
+}
+
+// SetInspectorAddress sets the inspector service address.
+// This must be called before Start() to take effect.
+// If address is empty, the inspector manager will be disabled.
+func (im *InspectorManager) SetInspectorAddress(address string) {
+	im.inspectorAddress = address
 }
 
 // SetHealthCheckInterval sets the health check interval for the InspectorManager.

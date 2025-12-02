@@ -10,7 +10,7 @@ func TestInspectorManager_NewInspectorManager(t *testing.T) {
 	t.Parallel()
 
 	nodeAddr := "localhost:47000"
-	mgr := NewInspectorManager(nodeAddr, "localhost:8081")
+	mgr := NewInspectorManager(nodeAddr)
 
 	if mgr == nil {
 		t.Fatal("NewInspectorManager returned nil")
@@ -31,13 +31,18 @@ func TestInspectorManager_NewInspectorManager(t *testing.T) {
 	if mgr.logger == nil {
 		t.Fatal("Logger should be initialized")
 	}
+
+	// By default, inspector should be disabled
+	if mgr.IsEnabled() {
+		t.Fatal("InspectorManager should be disabled by default")
+	}
 }
 
 func TestInspectorManager_NewGateInspectorManager(t *testing.T) {
 	t.Parallel()
 
 	gateAddr := "localhost:49000"
-	mgr := NewGateInspectorManager(gateAddr, "localhost:8081")
+	mgr := NewGateInspectorManager(gateAddr)
 
 	if mgr == nil {
 		t.Fatal("NewGateInspectorManager returned nil")
@@ -59,13 +64,18 @@ func TestInspectorManager_NewGateInspectorManager(t *testing.T) {
 	if mgr.logger == nil {
 		t.Fatal("Logger should be initialized")
 	}
+
+	// By default, inspector should be disabled
+	if mgr.IsEnabled() {
+		t.Fatal("InspectorManager should be disabled by default")
+	}
 }
 
 func TestInspectorManager_DisabledWhenEmptyAddress(t *testing.T) {
 	t.Parallel()
 
-	// Create manager with empty inspector address - should be disabled
-	mgr := NewInspectorManager("localhost:47000", "")
+	// Create manager without setting inspector address - should be disabled
+	mgr := NewInspectorManager("localhost:47000")
 	ctx := context.Background()
 
 	// IsEnabled should return false
@@ -106,8 +116,9 @@ func TestInspectorManager_DisabledWhenEmptyAddress(t *testing.T) {
 func TestInspectorManager_EnabledWhenAddressProvided(t *testing.T) {
 	t.Parallel()
 
-	// Create manager with inspector address
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	// Create manager and set inspector address
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	// IsEnabled should return true
 	if !mgr.IsEnabled() {
@@ -118,7 +129,8 @@ func TestInspectorManager_EnabledWhenAddressProvided(t *testing.T) {
 func TestInspectorManager_StartStop(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 	ctx := context.Background()
 
 	// Start should not fail even if inspector is not available
@@ -148,7 +160,8 @@ func TestInspectorManager_StartStop(t *testing.T) {
 func TestInspectorManager_NotifyObjectAdded(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	objectID := "test-object-1"
 	objectType := "TestObject"
@@ -177,7 +190,8 @@ func TestInspectorManager_NotifyObjectAdded(t *testing.T) {
 func TestInspectorManager_NotifyObjectRemoved(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	objectID := "test-object-1"
 	objectType := "TestObject"
@@ -210,7 +224,8 @@ func TestInspectorManager_NotifyObjectRemoved(t *testing.T) {
 func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	objects := []struct {
 		id  string
@@ -270,7 +285,8 @@ func TestInspectorManager_MultipleObjectsTracking(t *testing.T) {
 func TestInspectorManager_StartStopMultipleTimes(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 	ctx := context.Background()
 
 	// First start/stop cycle
@@ -287,7 +303,8 @@ func TestInspectorManager_StartStopMultipleTimes(t *testing.T) {
 	}
 
 	// Create a new manager for second cycle (as the old one is stopped)
-	mgr = NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr = NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	// Second start/stop cycle
 	err = mgr.Start(ctx)
@@ -306,7 +323,8 @@ func TestInspectorManager_StartStopMultipleTimes(t *testing.T) {
 func TestInspectorManager_ConcurrentNotifications(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	// Concurrently add objects
 	numObjects := 100
@@ -338,7 +356,8 @@ func TestInspectorManager_ConcurrentNotifications(t *testing.T) {
 func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	// Add objects before starting the manager
 	mgr.NotifyObjectAdded("obj-1", "Type1", 0)
@@ -380,7 +399,8 @@ func TestInspectorManager_NotifyBeforeStart(t *testing.T) {
 func TestInspectorManager_ShardIDComputation(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewInspectorManager("localhost:47000", "localhost:8081")
+	mgr := NewInspectorManager("localhost:47000")
+	mgr.SetInspectorAddress("localhost:8081")
 
 	// Add an object
 	objectID := "test-object-with-shard"

@@ -12,7 +12,7 @@ import (
 func TestClusterNodeAndGateSupport(t *testing.T) {
 	t.Parallel()
 	t.Run("node cluster", func(t *testing.T) {
-		n := node.NewNode("localhost:47000", testutil.TestNumShards, "")
+		n := node.NewNode("localhost:47000", testutil.TestNumShards)
 		c := newClusterForTesting(n, "TestNodeCluster")
 
 		// Test node cluster identification

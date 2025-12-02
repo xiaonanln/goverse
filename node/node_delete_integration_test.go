@@ -12,7 +12,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000", testNumShards, "")
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
@@ -79,7 +79,7 @@ func TestDeleteObject_Integration_NonPersistent(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000", testNumShards, "")
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestNonPersistentObject)(nil))
@@ -130,7 +130,7 @@ func TestDeleteObject_Integration_MixedObjects(t *testing.T) {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
 	// Create a node with persistence
-	node := NewNode("localhost:47000", testNumShards, "")
+	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
 	node.SetPersistenceProvider(provider)
 	node.RegisterObjectType((*TestPersistentObject)(nil))

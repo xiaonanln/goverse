@@ -96,7 +96,7 @@ func main() {
 	fmt.Println("=== Goverse Periodic Persistence Example ===")
 
 	// Create a node (empty inspector address means inspector is disabled)
-	n := node.NewNode("localhost:47000", sharding.NumShards, "")
+	n := node.NewNode("localhost:47000", sharding.NumShards)
 
 	// Create persistence provider
 	provider := NewMockPersistenceProvider()
