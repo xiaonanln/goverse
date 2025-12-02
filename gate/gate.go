@@ -186,13 +186,6 @@ func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) 
 	g.inspectorManager.SetClusterInfoProvider(provider)
 }
 
-// SetConnectedNodesProvider sets the provider function for getting connected node addresses.
-// Deprecated: Use SetClusterInfoProvider instead.
-// This is used by the InspectorManager to report connected nodes to the inspector.
-func (g *Gate) SetConnectedNodesProvider(provider inspectormanager.ConnectedNodesProvider) {
-	g.inspectorManager.SetConnectedNodesProvider(provider)
-}
-
 // NotifyConnectedNodesChanged notifies the inspector that the gate's connections have changed.
 // This should be called whenever nodes are connected or disconnected.
 func (g *Gate) NotifyConnectedNodesChanged() {
