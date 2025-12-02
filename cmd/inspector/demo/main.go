@@ -331,19 +331,19 @@ func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNode
 					// Remove some node connections from gate
 					numToRemove := 1 + rand.Intn(len(gate.ConnectedNodes)-1)
 					newConnections := make([]string, 0)
-					
+
 					// Keep some connections randomly
 					for _, addr := range gate.ConnectedNodes {
 						if rand.Float32() > float32(numToRemove)/float32(len(gate.ConnectedNodes)) {
 							newConnections = append(newConnections, addr)
 						}
 					}
-					
+
 					// Ensure at least one connection remains
 					if len(newConnections) == 0 && len(gate.ConnectedNodes) > 0 {
 						newConnections = []string{gate.ConnectedNodes[0]}
 					}
-					
+
 					gate.ConnectedNodes = newConnections
 					pg.AddOrUpdateGate(*gate)
 					log.Printf("[Demo] Gate %s connections reduced to %d nodes", gate.Label, len(newConnections))

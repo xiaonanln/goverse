@@ -3,14 +3,15 @@ package models
 import "time"
 
 type GoverseNode struct {
-	ID             string    `json:"id"`
-	Label          string    `json:"label"`
-	Color          string    `json:"color"`
-	Type           string    `json:"type"`
-	AdvertiseAddr  string    `json:"advertise_addr"`
-	RegisteredAt   time.Time `json:"registered_at"`
-	ObjectCount    int       `json:"object_count"`
-	ConnectedNodes []string  `json:"connected_nodes"` // List of other node addresses this node is connected to
+	ID              string    `json:"id"`
+	Label           string    `json:"label"`
+	Color           string    `json:"color"`
+	Type            string    `json:"type"`
+	AdvertiseAddr   string    `json:"advertise_addr"`
+	RegisteredAt    time.Time `json:"registered_at"`
+	ObjectCount     int       `json:"object_count"`
+	ConnectedNodes  []string  `json:"connected_nodes"`  // List of other node addresses this node is connected to
+	RegisteredGates []string  `json:"registered_gates"` // List of gate addresses registered to this node
 }
 
 type GoverseGate struct {

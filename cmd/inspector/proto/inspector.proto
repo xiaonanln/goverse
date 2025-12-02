@@ -21,6 +21,7 @@ message RegisterNodeRequest {
   string advertise_address = 1;  // e.g. "localhost:47000"
   repeated Object objects = 2;
   repeated string connected_nodes = 3; // List of other node addresses this node is connected to
+  repeated string registered_gates = 4; // List of gate addresses registered to this node
 }
 
 message RegisterNodeResponse {
@@ -52,12 +53,18 @@ message UpdateConnectedNodesRequest {
   repeated string connected_nodes = 2; // Updated list of connected node/gate addresses
 }
 
+message UpdateRegisteredGatesRequest {
+  string advertise_address = 1;  // Node address, e.g. "localhost:47000"
+  repeated string registered_gates = 2; // Updated list of gate addresses registered to this node
+}
+
 service InspectorService {
   rpc AddOrUpdateObject(AddOrUpdateObjectRequest) returns (Empty);
   rpc RemoveObject(RemoveObjectRequest) returns (Empty);
   rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
   rpc UnregisterNode(UnregisterNodeRequest) returns (Empty);
   rpc UpdateConnectedNodes(UpdateConnectedNodesRequest) returns (Empty);
+  rpc UpdateRegisteredGates(UpdateRegisteredGatesRequest) returns (Empty);
   rpc RegisterGate(RegisterGateRequest) returns (RegisterGateResponse);
   rpc UnregisterGate(UnregisterGateRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);
