@@ -27,6 +27,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT / 'tests' / 'samples'))
 
 from BinaryHelper import BinaryHelper
+from PortHelper import get_free_port
 
 # Import protobuf libraries
 try:
@@ -46,11 +47,6 @@ except ImportError as e:
     print(f"ERROR: Failed to import tictactoe_pb2: {e}")
     print("Proto files should be compiled beforehand via ./samples/tictactoe/compile-proto.sh")
     sys.exit(1)
-
-# Server ports
-NODE_PORT = 50051
-GATE_PORT = 49000
-HTTP_PORT = 8080
 
 # Binary path
 TICTACTOE_BINARY = '/tmp/tictactoe_server'
@@ -161,7 +157,7 @@ def print_board(board):
             print("   -----------")
 
 
-def call_new_game(service_id, game_id, client_id):
+def call_new_game(service_id, game_id, client_id, http_port):
     """Call the NewGame method via HTTP REST API.
     
     Returns the parsed GameState response.
@@ -169,7 +165,7 @@ def call_new_game(service_id, game_id, client_id):
     import urllib.request
     import urllib.error
     
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/TicTacToeService/{service_id}/NewGame'
+    url = f'http://localhost:{http_port}/api/v1/objects/call/TicTacToeService/{service_id}/NewGame'
     request_body = json.dumps({
         'request': create_new_game_request(game_id)
     }).encode('utf-8')
@@ -193,7 +189,7 @@ def call_new_game(service_id, game_id, client_id):
         raise RuntimeError(f"HTTP {e.code}: {error_body}")
 
 
-def call_make_move(service_id, game_id, position, client_id):
+def call_make_move(service_id, game_id, position, client_id, http_port):
     """Call the MakeMove method via HTTP REST API.
     
     Returns the parsed GameState response.
@@ -201,7 +197,7 @@ def call_make_move(service_id, game_id, position, client_id):
     import urllib.request
     import urllib.error
     
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/TicTacToeService/{service_id}/MakeMove'
+    url = f'http://localhost:{http_port}/api/v1/objects/call/TicTacToeService/{service_id}/MakeMove'
     request_body = json.dumps({
         'request': create_move_request(game_id, position)
     }).encode('utf-8')
@@ -225,7 +221,7 @@ def call_make_move(service_id, game_id, position, client_id):
         raise RuntimeError(f"HTTP {e.code}: {error_body}")
 
 
-def wait_for_cluster_ready(service_id, game_id, client_id, timeout=60):
+def wait_for_cluster_ready(service_id, game_id, client_id, http_port, timeout=60):
     """Wait for the cluster to be ready by polling NewGame until it succeeds.
     
     Returns the GameState on success, raises RuntimeError on timeout.
@@ -237,7 +233,7 @@ def wait_for_cluster_ready(service_id, game_id, client_id, timeout=60):
     
     while time.time() - start_time < timeout:
         try:
-            game_state = call_new_game(service_id, game_id, client_id)
+            game_state = call_new_game(service_id, game_id, client_id, http_port)
             return game_state
         except RuntimeError as e:
             last_error = e
@@ -258,13 +254,17 @@ def wait_for_cluster_ready(service_id, game_id, client_id, timeout=60):
     raise RuntimeError(f"Timeout waiting for cluster to be ready. Last error: {last_error}")
 
 
-def start_server():
+def start_server(gate_port, http_port):
     """Start the TicTacToe server process."""
-    print(f"Starting TicTacToe server...")
+    print(f"Starting TicTacToe server (gate: {gate_port}, http: {http_port})...")
     
-    # Start the process
+    # Start the process with dynamic port arguments
     process = subprocess.Popen(
-        [TICTACTOE_BINARY],
+        [
+            TICTACTOE_BINARY,
+            '--gate-addr', f'localhost:{gate_port}',
+            '--http-addr', f':{http_port}'
+        ],
         stdout=None,
         stderr=None
     )
@@ -320,6 +320,11 @@ def main():
     print("=" * 60)
     print()
     
+    # Allocate dynamic ports
+    gate_port = get_free_port()
+    http_port = get_free_port()
+    print(f"Using dynamic ports - Gate: {gate_port}, HTTP: {http_port}")
+    
     process = None
     
     try:
@@ -338,15 +343,15 @@ def main():
         
         # Step 2: Start the server
         print("\n--- Step 2: Starting TicTacToe server ---")
-        process = start_server()
+        process = start_server(gate_port, http_port)
         
         # Step 3: Wait for server to be ready
         print("\n--- Step 3: Waiting for server to be ready ---")
-        print(f"Checking HTTP port {HTTP_PORT}...")
-        if not check_port(HTTP_PORT, timeout=30):
-            print(f"❌ TicTacToe server HTTP port {HTTP_PORT} not available after 30 seconds")
+        print(f"Checking HTTP port {http_port}...")
+        if not check_port(http_port, timeout=30):
+            print(f"❌ TicTacToe server HTTP port {http_port} not available after 30 seconds")
             return 1
-        print(f"✅ HTTP port {HTTP_PORT} is ready")
+        print(f"✅ HTTP port {http_port} is ready")
         
         # Step 4: Start a new game using HTTP API
         print("\n--- Step 4: Starting a new game ---")
@@ -363,7 +368,7 @@ def main():
         try:
             # Wait for cluster to be ready and start new game
             print("Waiting for cluster to be ready...")
-            game_state = wait_for_cluster_ready(service_id, game_id, client_id, timeout=60)
+            game_state = wait_for_cluster_ready(service_id, game_id, client_id, http_port, timeout=60)
             print(f"✅ New game created successfully!")
             print(f"   Game ID: {game_state['game_id']}")
             print(f"   Status: {game_state['status']}")
@@ -410,7 +415,7 @@ def main():
                 print(f"\n  Move {move_count + 1}: Player X plays at position {position}")
                 
                 # Make the move
-                game_state = call_make_move(service_id, game_id, position, client_id)
+                game_state = call_make_move(service_id, game_id, position, client_id, http_port)
                 move_count += 1
                 
                 # Display the board

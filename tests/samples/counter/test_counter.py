@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT / 'tests' / 'samples'))
 
 from BinaryHelper import BinaryHelper
+from PortHelper import get_free_port
 
 # Import protobuf libraries
 try:
@@ -43,11 +44,6 @@ except ImportError as e:
     print(f"ERROR: Failed to import counter_pb2: {e}")
     print("Proto files should be compiled beforehand via ./samples/counter/compile-proto.sh")
     sys.exit(1)
-
-# Server ports
-NODE_PORT = 47000
-GATE_PORT = 48000
-HTTP_PORT = 48000  # Gate HTTP and gRPC on same port
 
 # Binary paths
 COUNTER_BINARY = '/tmp/counter_server'
@@ -164,7 +160,7 @@ def http_post(url, data=None, timeout=30):
         raise RuntimeError(f"HTTP {e.code}: {error_body}")
 
 
-def wait_for_cluster_ready(counter_name, timeout=90):
+def wait_for_cluster_ready(counter_name, http_port, timeout=90):
     """Wait for the cluster to be ready by polling create until it succeeds.
 
     Returns True on success, raises RuntimeError on timeout.
@@ -174,7 +170,7 @@ def wait_for_cluster_ready(counter_name, timeout=90):
 
     while time.time() - start_time < timeout:
         try:
-            url = f'http://localhost:{HTTP_PORT}/api/v1/objects/create/Counter/Counter-{counter_name}'
+            url = f'http://localhost:{http_port}/api/v1/objects/create/Counter/Counter-{counter_name}'
             http_post(url, {'request': ''})
             return True
         except RuntimeError as e:
@@ -199,47 +195,47 @@ def wait_for_cluster_ready(counter_name, timeout=90):
     raise RuntimeError(f"Timeout waiting for cluster to be ready. Last error: {last_error}")
 
 
-def call_get(counter_name):
+def call_get(counter_name, http_port):
     """Call the Get method via HTTP REST API."""
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/Counter/Counter-{counter_name}/Get'
+    url = f'http://localhost:{http_port}/api/v1/objects/call/Counter/Counter-{counter_name}/Get'
     response = http_post(url, {'request': create_get_request()})
     return parse_counter_response(response['response'])
 
 
-def call_increment(counter_name, amount):
+def call_increment(counter_name, amount, http_port):
     """Call the Increment method via HTTP REST API."""
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/Counter/Counter-{counter_name}/Increment'
+    url = f'http://localhost:{http_port}/api/v1/objects/call/Counter/Counter-{counter_name}/Increment'
     response = http_post(url, {'request': create_increment_request(amount)})
     return parse_counter_response(response['response'])
 
 
-def call_decrement(counter_name, amount):
+def call_decrement(counter_name, amount, http_port):
     """Call the Decrement method via HTTP REST API."""
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/Counter/Counter-{counter_name}/Decrement'
+    url = f'http://localhost:{http_port}/api/v1/objects/call/Counter/Counter-{counter_name}/Decrement'
     response = http_post(url, {'request': create_decrement_request(amount)})
     return parse_counter_response(response['response'])
 
 
-def call_reset(counter_name):
+def call_reset(counter_name, http_port):
     """Call the Reset method via HTTP REST API."""
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/call/Counter/Counter-{counter_name}/Reset'
+    url = f'http://localhost:{http_port}/api/v1/objects/call/Counter/Counter-{counter_name}/Reset'
     response = http_post(url, {'request': create_reset_request()})
     return parse_counter_response(response['response'])
 
 
-def call_delete(counter_name):
+def call_delete(counter_name, http_port):
     """Call the Delete method via HTTP REST API."""
-    url = f'http://localhost:{HTTP_PORT}/api/v1/objects/delete/Counter-{counter_name}'
+    url = f'http://localhost:{http_port}/api/v1/objects/delete/Counter-{counter_name}'
     http_post(url)
     return True
 
 
-def start_counter_server():
+def start_counter_server(node_port):
     """Start the Counter server process."""
-    print("Starting Counter server...")
+    print(f"Starting Counter server on port {node_port}...")
 
     process = subprocess.Popen(
-        [COUNTER_BINARY, '-listen', f'localhost:{NODE_PORT}', '-advertise', f'localhost:{NODE_PORT}'],
+        [COUNTER_BINARY, '-listen', f'localhost:{node_port}', '-advertise', f'localhost:{node_port}'],
         stdout=None,
         stderr=None
     )
@@ -247,12 +243,12 @@ def start_counter_server():
     return process
 
 
-def start_gate_server():
+def start_gate_server(http_port):
     """Start the Gate server process."""
-    print("Starting Gate server...")
+    print(f"Starting Gate server on port {http_port}...")
 
     process = subprocess.Popen(
-        [GATE_BINARY, '--http-listen', f':{HTTP_PORT}'],
+        [GATE_BINARY, '--http-listen', f':{http_port}'],
         stdout=None,
         stderr=None
     )
@@ -297,7 +293,7 @@ def stop_server(process, name="Server"):
     return process.returncode if process.returncode is not None else -1
 
 
-def run_counter_tests(counter_name):
+def run_counter_tests(counter_name, http_port):
     """Run all counter tests and return True if all pass."""
     print("\n--- Testing Counter Operations ---")
     success = True
@@ -305,7 +301,7 @@ def run_counter_tests(counter_name):
     # Test 1: Get initial value (should be 0)
     print("\n  Test 1: Get initial value")
     try:
-        result = call_get(counter_name)
+        result = call_get(counter_name, http_port)
         if result['value'] == 0:
             print(f"    ✅ Initial value is 0")
         else:
@@ -318,7 +314,7 @@ def run_counter_tests(counter_name):
     # Test 2: Increment by 5
     print("\n  Test 2: Increment by 5")
     try:
-        result = call_increment(counter_name, 5)
+        result = call_increment(counter_name, 5, http_port)
         if result['value'] == 5:
             print(f"    ✅ Value after increment: {result['value']}")
         else:
@@ -331,7 +327,7 @@ def run_counter_tests(counter_name):
     # Test 3: Increment by 10
     print("\n  Test 3: Increment by 10")
     try:
-        result = call_increment(counter_name, 10)
+        result = call_increment(counter_name, 10, http_port)
         if result['value'] == 15:
             print(f"    ✅ Value after increment: {result['value']}")
         else:
@@ -344,7 +340,7 @@ def run_counter_tests(counter_name):
     # Test 4: Get current value
     print("\n  Test 4: Get current value")
     try:
-        result = call_get(counter_name)
+        result = call_get(counter_name, http_port)
         if result['value'] == 15:
             print(f"    ✅ Current value: {result['value']}")
         else:
@@ -357,7 +353,7 @@ def run_counter_tests(counter_name):
     # Test 5: Decrement by 3
     print("\n  Test 5: Decrement by 3")
     try:
-        result = call_decrement(counter_name, 3)
+        result = call_decrement(counter_name, 3, http_port)
         if result['value'] == 12:
             print(f"    ✅ Value after decrement: {result['value']}")
         else:
@@ -370,7 +366,7 @@ def run_counter_tests(counter_name):
     # Test 6: Reset
     print("\n  Test 6: Reset counter")
     try:
-        result = call_reset(counter_name)
+        result = call_reset(counter_name, http_port)
         if result['value'] == 0:
             print(f"    ✅ Value after reset: {result['value']}")
         else:
@@ -383,7 +379,7 @@ def run_counter_tests(counter_name):
     # Test 7: Delete counter
     print("\n  Test 7: Delete counter")
     try:
-        call_delete(counter_name)
+        call_delete(counter_name, http_port)
         print("    ✅ Counter deleted successfully")
     except Exception as e:
         print(f"    ❌ Failed: {e}")
@@ -402,6 +398,11 @@ def main():
     print("Goverse Counter Sample Test")
     print("=" * 60)
     print()
+
+    # Allocate dynamic ports
+    node_port = get_free_port()
+    http_port = get_free_port()
+    print(f"Using dynamic ports - Node: {node_port}, HTTP: {http_port}")
 
     counter_process = None
     gate_process = None
@@ -426,22 +427,22 @@ def main():
 
         # Step 2: Start the Counter server
         print("\n--- Step 2: Starting Counter server ---")
-        counter_process = start_counter_server()
+        counter_process = start_counter_server(node_port)
 
         # Give counter server time to register with etcd and claim shards
         time.sleep(5)
 
         # Step 3: Start the Gate server
         print("\n--- Step 3: Starting Gate server ---")
-        gate_process = start_gate_server()
+        gate_process = start_gate_server(http_port)
 
         # Step 4: Wait for Gate server to be ready
         print("\n--- Step 4: Waiting for Gate server to be ready ---")
-        print(f"Checking HTTP port {HTTP_PORT}...")
-        if not check_port(HTTP_PORT, timeout=30):
-            print(f"❌ Gate server HTTP port {HTTP_PORT} not available after 30 seconds")
+        print(f"Checking HTTP port {http_port}...")
+        if not check_port(http_port, timeout=30):
+            print(f"❌ Gate server HTTP port {http_port} not available after 30 seconds")
             return 1
-        print(f"✅ HTTP port {HTTP_PORT} is ready")
+        print(f"✅ HTTP port {http_port} is ready")
 
         # Step 5: Wait for cluster to be ready and create a counter
         print("\n--- Step 5: Waiting for cluster to be ready ---")
@@ -449,7 +450,7 @@ def main():
         print(f"Counter name: {counter_name}")
 
         try:
-            wait_for_cluster_ready(counter_name, timeout=90)
+            wait_for_cluster_ready(counter_name, http_port, timeout=90)
             print("✅ Cluster is ready and counter created!")
         except Exception as e:
             print(f"❌ Failed to create counter: {e}")
@@ -457,7 +458,7 @@ def main():
 
         # Step 6: Run counter tests
         print("\n--- Step 6: Running counter tests ---")
-        if not run_counter_tests(counter_name):
+        if not run_counter_tests(counter_name, http_port):
             print("\n❌ Some counter tests failed!")
             return 1
 
