@@ -195,6 +195,29 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 			expectedBatch:   0,
 			shouldRebalance: false,
 		},
+		// New test case to demonstrate more aggressive rebalancing (20% threshold vs 100% threshold)
+		{
+			name:       "8192 shards - 30% imbalance - should rebalance with new algorithm",
+			numShards:  8192,
+			node1Count: 3550, // ~43% of shards (30% above ideal of 2730)
+			node2Count: 2321, // ~28% of shards (15% below ideal)
+			node3Count: 2321, // ~28% of shards (15% below ideal)
+			// Old algorithm: a=3550, b=2321, would require a > 2*b (3550 > 4642) - NO rebalance
+			// New algorithm: ideal=2730, threshold=546, diff=1229 > 546 - YES rebalance
+			expectedBatch:   1,
+			shouldRebalance: true,
+		},
+		{
+			name:       "64 shards - 30% imbalance - should rebalance with new algorithm",
+			numShards:  64,
+			node1Count: 28, // ~44% of shards (30% above ideal of 21.33)
+			node2Count: 18, // ~28% of shards (15% below ideal)
+			node3Count: 18, // ~28% of shards (15% below ideal)
+			// Old algorithm: a=28, b=18, would require a > 2*b (28 > 36) - NO rebalance
+			// New algorithm: ideal=21.33, threshold=4.27, diff=10 > 4.27 - YES rebalance
+			expectedBatch:   1,
+			shouldRebalance: true,
+		},
 	}
 
 	for _, tc := range testCases {
