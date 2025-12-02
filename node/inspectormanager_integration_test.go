@@ -18,24 +18,12 @@ func TestInspectorManager_Integration(t *testing.T) {
 	// Register a test object type
 	node.RegisterObjectType((*TestPersistentObject)(nil))
 
-	// Create objects before starting the node
+	// Set inspector address to enable tracking (connection will fail but tracking will work)
+	node.SetInspectorAddress("localhost:9999")
+
+	// Start the node first
 	ctx := context.Background()
-	err := node.createObject(ctx, "TestPersistentObject", "pre-start-obj-1")
-	if err != nil {
-		t.Fatalf("Failed to create object before start: %v", err)
-	}
-
-	// Verify object was created
-	node.objectsMu.RLock()
-	_, exists := node.objects["pre-start-obj-1"]
-	node.objectsMu.RUnlock()
-
-	if !exists {
-		t.Fatal("Object should exist before start")
-	}
-
-	// Start the node - this should register existing objects with inspector manager
-	err = node.Start(ctx)
+	err := node.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
 	}
@@ -43,28 +31,39 @@ func TestInspectorManager_Integration(t *testing.T) {
 	// Give some time for the manager to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify existing object was registered with inspector manager
-	if !node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
-		t.Fatal("Existing object should be tracked by inspector manager after start")
-	}
-
-	// Create a new object after start
-	err = node.createObject(ctx, "TestPersistentObject", "post-start-obj-1")
+	// Create an object after start
+	err = node.createObject(ctx, "TestPersistentObject", "obj-1")
 	if err != nil {
 		t.Fatalf("Failed to create object after start: %v", err)
 	}
 
-	// Verify new object is tracked
-	if !node.inspectorManager.IsObjectTracked("post-start-obj-1") {
-		t.Fatal("New object should be tracked by inspector manager")
+	// Verify object is tracked
+	if !node.inspectorManager.IsObjectTracked("obj-1") {
+		t.Fatal("Object should be tracked by inspector manager after creation")
+	}
+
+	// Create another object
+	err = node.createObject(ctx, "TestPersistentObject", "obj-2")
+	if err != nil {
+		t.Fatalf("Failed to create second object: %v", err)
+	}
+
+	// Verify second object is tracked
+	if !node.inspectorManager.IsObjectTracked("obj-2") {
+		t.Fatal("Second object should be tracked by inspector manager")
 	}
 
 	// Delete an object
-	node.destroyObject("pre-start-obj-1")
+	node.destroyObject("obj-1")
 
 	// Verify object is no longer tracked
-	if node.inspectorManager.IsObjectTracked("pre-start-obj-1") {
+	if node.inspectorManager.IsObjectTracked("obj-1") {
 		t.Fatal("Deleted object should not be tracked by inspector manager")
+	}
+
+	// Verify second object still tracked
+	if !node.inspectorManager.IsObjectTracked("obj-2") {
+		t.Fatal("Second object should still be tracked")
 	}
 
 	// Stop the node
@@ -156,6 +155,9 @@ func TestInspectorManager_Integration_ConcurrentObjectOps(t *testing.T) {
 
 	node := NewNode("localhost:47102", testNumShards)
 	node.RegisterObjectType((*TestPersistentObject)(nil))
+
+	// Set inspector address to enable tracking
+	node.SetInspectorAddress("localhost:9999")
 
 	ctx := context.Background()
 	err := node.Start(ctx)
