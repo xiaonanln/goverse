@@ -110,8 +110,12 @@ func (im *InspectorManager) SetClusterInfoProvider(provider clusterinfo.ClusterI
 // Works for both node mode (node-to-node connections) and gate mode (gate-to-node connections).
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetConnectedNodesProvider(provider ConnectedNodesProvider) {
-	// Wrap the legacy provider in a ClusterInfoProvider adapter
-	im.clusterInfoProvider = &legacyProviderAdapter{connectedNodesProvider: provider}
+	// If we already have a legacy adapter, update it; otherwise create a new one
+	if adapter, ok := im.clusterInfoProvider.(*legacyProviderAdapter); ok {
+		adapter.connectedNodesProvider = provider
+	} else {
+		im.clusterInfoProvider = &legacyProviderAdapter{connectedNodesProvider: provider}
+	}
 }
 
 // SetRegisteredGatesProvider sets the provider function for getting registered gate addresses.
