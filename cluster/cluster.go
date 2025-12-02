@@ -777,7 +777,7 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 	c.logger.Infof("Registered gate connection for %s", gateAddr)
 
 	// Notify inspector that registered gates have changed
-	c.node.NotifyRegisteredGatesChanged()
+	go c.node.NotifyRegisteredGatesChanged()
 
 	return ch, nil
 }
@@ -801,7 +801,7 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
 
 			// Notify inspector that registered gates have changed
-			c.node.NotifyRegisteredGatesChanged()
+			go c.node.NotifyRegisteredGatesChanged()
 		} else {
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
 		}
@@ -1314,10 +1314,10 @@ func (c *Cluster) updateNodeConnections() {
 
 	// Notify inspector that connected nodes have changed
 	if c.isNode() {
-		c.node.NotifyConnectedNodesChanged()
+		go c.node.NotifyConnectedNodesChanged()
 	}
 	if c.isGate() {
-		c.gate.NotifyConnectedNodesChanged()
+		go c.gate.NotifyConnectedNodesChanged()
 	}
 }
 
