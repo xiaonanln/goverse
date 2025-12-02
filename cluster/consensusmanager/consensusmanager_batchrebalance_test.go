@@ -199,9 +199,9 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		{
 			name:       "8192 shards - 30% imbalance - should rebalance with new algorithm",
 			numShards:  8192,
-			node1Count: 3550, // ~43% of shards (30% above ideal)
-			node2Count: 2321, // ~28% of shards (15% below ideal)
-			node3Count: 2321, // ~28% of shards (15% below ideal)
+			node1Count: 3550, // Significantly above ideal
+			node2Count: 2321, // Significantly below ideal
+			node3Count: 2321, // Significantly below ideal
 			// Old algorithm: would require a > 2*b - NO rebalance
 			// New algorithm: difference exceeds 20% of ideal load - YES rebalance
 			expectedBatch:   1,
@@ -210,9 +210,9 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		{
 			name:       "64 shards - 30% imbalance - should rebalance with new algorithm",
 			numShards:  64,
-			node1Count: 28, // ~44% of shards (30% above ideal)
-			node2Count: 18, // ~28% of shards (15% below ideal)
-			node3Count: 18, // ~28% of shards (15% below ideal)
+			node1Count: 28, // Significantly above ideal
+			node2Count: 18, // Significantly below ideal
+			node3Count: 18, // Significantly below ideal
 			// Old algorithm: would require a > 2*b - NO rebalance
 			// New algorithm: difference exceeds 20% of ideal load - YES rebalance
 			expectedBatch:   1,
