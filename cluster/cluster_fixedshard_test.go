@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -141,9 +142,9 @@ func TestFixedShardVsRegularID(t *testing.T) {
 	regularID := objectPart
 	regularShard := sharding.GetShardID(regularID, numShards)
 
-	// Create a fixed shard ID for a different shard
+	// Create a fixed shard ID for a different shard using fixed-shard format
 	fixedShardNum := (regularShard + 10) % numShards
-	fixedID := testutil.GetObjectIDForShard(fixedShardNum, objectPart)
+	fixedID := fmt.Sprintf("shard#%d/%s", fixedShardNum, objectPart)
 	fixedShard := sharding.GetShardID(fixedID, numShards)
 
 	// Verify they map to different shards
@@ -200,8 +201,10 @@ func TestFixedShardDistinctFromFixedNode(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for fixed shard without shard mapping, got nil")
 	}
-	// The error should be about shard mapping, not about treating it as a node address
-	if !strings.Contains(err.Error(), "shard") {
-		t.Fatalf("Expected shard-related error, got: %v", err)
+	// The error should be about shard assignment, not about node connections
+	// This confirms it went through shard mapping logic rather than being treated as a fixed node address
+	expectedErrorPattern := "no node assigned to shard"
+	if !strings.Contains(err.Error(), expectedErrorPattern) {
+		t.Fatalf("Expected error containing '%s', got: %v", expectedErrorPattern, err)
 	}
 }
