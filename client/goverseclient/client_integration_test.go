@@ -45,8 +45,13 @@ func (o *TestIntegrationObject) Echo(ctx context.Context, req *structpb.Struct) 
 // Request format: {a: number, b: number}
 // Response format: {result: number}
 func (o *TestIntegrationObject) Add(ctx context.Context, req *structpb.Struct) (*structpb.Struct, error) {
-	a := req.Fields["a"].GetNumberValue()
-	b := req.Fields["b"].GetNumberValue()
+	var a, b float64
+	if req != nil && req.Fields["a"] != nil {
+		a = req.Fields["a"].GetNumberValue()
+	}
+	if req != nil && req.Fields["b"] != nil {
+		b = req.Fields["b"].GetNumberValue()
+	}
 
 	return &structpb.Struct{
 		Fields: map[string]*structpb.Value{
