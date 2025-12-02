@@ -9,8 +9,11 @@ and provides a user-friendly API for interacting with Goverse services.
 """
 
 import logging
+import sys
 import threading
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, List, Optional
 
 import grpc
@@ -18,14 +21,19 @@ from google.protobuf.any_pb2 import Any as AnyProto
 from google.protobuf.message import Message
 
 # Import gate proto - these are generated from client/proto/gate.proto
-# The path depends on how protobuf files are generated
-import sys
-from pathlib import Path
-
-# Add repository root directory to path to import client.proto
+# The path depends on how protobuf files are generated and how this package is used.
 _current_dir = Path(__file__).parent
-_repo_root = _current_dir.parent.parent
-sys.path.insert(0, str(_repo_root))
+
+# Search upward for repository root (contains go.mod or .git)
+_repo_root = _current_dir
+for _ in range(10):
+    if (_repo_root / "go.mod").exists() or (_repo_root / ".git").exists():
+        break
+    _repo_root = _repo_root.parent
+
+# Add paths if not already present
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
 try:
     from client.proto import gate_pb2, gate_pb2_grpc
@@ -33,7 +41,8 @@ except ImportError:
     # Try alternative import path (from client directory)
     try:
         _client_dir = _current_dir.parent
-        sys.path.insert(0, str(_client_dir))
+        if str(_client_dir) not in sys.path:
+            sys.path.insert(0, str(_client_dir))
         from proto import gate_pb2, gate_pb2_grpc
     except ImportError as e:
         raise ImportError(
@@ -622,8 +631,6 @@ class Client:
         Raises:
             TimeoutError: If connection is not established within timeout.
         """
-        import time
-
         start_time = time.time()
         while time.time() - start_time < timeout:
             if self.is_connected():

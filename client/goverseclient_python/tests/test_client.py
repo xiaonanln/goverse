@@ -3,20 +3,29 @@
 """Unit tests for the Goverse Python client library."""
 
 import logging
+import sys
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import sys
-from pathlib import Path
-
-# Add repository root to path for imports (to match how proto files are generated)
+# Add paths for imports - find repo root by looking for go.mod or .git
 _current_dir = Path(__file__).parent
-_repo_root = _current_dir.parent.parent.parent.parent
-_client_dir = _current_dir.parent.parent
-sys.path.insert(0, str(_repo_root))
-sys.path.insert(0, str(_client_dir))
+_client_dir = _current_dir.parent.parent  # client/goverseclient_python/tests -> client/
+
+# Search upward for repository root (contains go.mod or .git)
+_repo_root = _current_dir
+for _ in range(10):
+    if (_repo_root / "go.mod").exists() or (_repo_root / ".git").exists():
+        break
+    _repo_root = _repo_root.parent
+
+# Add paths if not already present
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+if str(_client_dir) not in sys.path:
+    sys.path.insert(0, str(_client_dir))
 
 # Skip tests if grpc is not available
 try:
