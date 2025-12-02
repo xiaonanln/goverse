@@ -1,8 +1,9 @@
 codecov:
   require_ci_to_pass: no
-  # Wait for all 3 coverage uploads (test.yml, chat.yml, chat-clustered.yml) 
-  # before reporting project status to avoid false failures when tests haven't finished
-  after_n_builds: 3
+  # Wait for all 9 coverage uploads before reporting project status to avoid false failures when tests haven't finished
+  # test.yml: coverage.out, coverage-etcd-restart.out, coverage-parallel.out
+  # samples.yml: coverage-chat.out, coverage-chat-clustered.out, coverage-counter.out, coverage-counter-clustered.out, coverage-tictactoe.out, coverage-tictactoe-clustered.out
+  after_n_builds: 9
   precision: 2
   round: down
   layout: "reach,diff,flags,tree"

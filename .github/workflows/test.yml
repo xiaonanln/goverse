@@ -92,10 +92,19 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
 
-      - name: Run tests in parallel
-        run: go test -v ./...
+      - name: Run tests in parallel with coverage
+        run: go test -v -coverprofile=coverage-parallel.out -covermode=atomic ./...
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-parallel.out
+          flags: parallel-tests
+          name: codecov-parallel
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
