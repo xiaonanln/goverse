@@ -7,11 +7,13 @@ in Go, with tracking of recently allocated ports to prevent immediate reuse.
 """
 import socket
 import threading
-from typing import Set
+from collections import OrderedDict
+from typing import Dict
 
 
-# Module-level state for tracking recently allocated ports
-_recent_ports: Set[int] = set()
+# Module-level state for tracking recently allocated ports using OrderedDict
+# to maintain insertion order for proper LRU eviction
+_recent_ports: Dict[int, bool] = OrderedDict()
 _recent_ports_lock = threading.Lock()
 _MAX_TRACKED_PORTS = 1000
 
@@ -35,22 +37,18 @@ def get_free_port() -> int:
         for _ in range(max_retries):
             # Let the OS assign a free port
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(('localhost', 0))
                 port = sock.getsockname()[1]
             
             # Check if this port was recently allocated
             if port not in _recent_ports:
                 # Mark this port as recently used
-                _recent_ports.add(port)
+                _recent_ports[port] = True
                 
-                # Keep only the most recent ports
-                if len(_recent_ports) > _MAX_TRACKED_PORTS:
-                    # Remove approximately half of the oldest ports
-                    # (sets are unordered, so we just remove some)
-                    ports_to_remove = list(_recent_ports)[:_MAX_TRACKED_PORTS // 2]
-                    for p in ports_to_remove:
-                        _recent_ports.discard(p)
+                # Keep only the most recent ports (LRU eviction)
+                while len(_recent_ports) > _MAX_TRACKED_PORTS:
+                    # Remove the oldest entry (first item in OrderedDict)
+                    _recent_ports.popitem(last=False)
                 
                 return port
         
