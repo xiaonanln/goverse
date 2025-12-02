@@ -70,7 +70,6 @@ type Client struct {
 	connected    bool
 	closed       bool
 	currentAddr  string
-	cancel       context.CancelFunc
 	streamCancel context.CancelFunc
 }
 
@@ -403,10 +402,6 @@ func (c *Client) Close() error {
 	c.closed = true
 	c.connected = false
 
-	if c.cancel != nil {
-		c.cancel()
-	}
-
 	if c.streamCancel != nil {
 		c.streamCancel()
 	}
@@ -474,10 +469,14 @@ func (c *Client) CallObject(ctx context.Context, objectType, objectID, method st
 		defer cancel()
 	}
 
-	// Marshal request to Any
-	anyReq, err := anypb.New(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	// Marshal request to Any (handle nil request)
+	var anyReq *anypb.Any
+	if request != nil {
+		var err error
+		anyReq, err = anypb.New(request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request: %w", err)
+		}
 	}
 
 	// Make the call
