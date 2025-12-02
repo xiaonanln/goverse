@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xiaonanln/goverse/util/clusterinfo"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -34,23 +35,24 @@ const (
 
 // ConnectedNodesProvider is a function type that returns the list of connected node addresses.
 // This is used by InspectorManager to get the current list of connected nodes when registering with the inspector.
+// Deprecated: Use ClusterInfoProvider instead.
 type ConnectedNodesProvider func() []string
 
 // RegisteredGatesProvider is a function type that returns the list of registered gate addresses.
 // This is used by InspectorManager (in node mode) to get the current list of gates registered to this node.
+// Deprecated: Use ClusterInfoProvider instead.
 type RegisteredGatesProvider func() []string
 
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 // It can operate in node mode or gate mode, using the appropriate registration RPCs.
 type InspectorManager struct {
-	address                 string // advertise address (node or gate)
-	mode                    Mode   // operating mode (node or gate)
-	inspectorAddress        string
-	healthCheckInterval     time.Duration
-	logger                  *logger.Logger
-	connectedNodesProvider  ConnectedNodesProvider  // optional provider for connected nodes (works for both node and gate modes)
-	registeredGatesProvider RegisteredGatesProvider // optional provider for registered gates (node mode only)
+	address             string // advertise address (node or gate)
+	mode                Mode   // operating mode (node or gate)
+	inspectorAddress    string
+	healthCheckInterval time.Duration
+	logger              *logger.Logger
+	clusterInfoProvider clusterinfo.ClusterInfoProvider // consolidated provider for cluster info (preferred)
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -94,19 +96,55 @@ func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 	im.healthCheckInterval = interval
 }
 
+// SetClusterInfoProvider sets the consolidated cluster info provider.
+// This is the preferred way to provide cluster information to the InspectorManager.
+// The provider will be used to get connected nodes and registered gates.
+// Must be called before Start() to take effect.
+func (im *InspectorManager) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
+	im.clusterInfoProvider = provider
+}
+
 // SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// Deprecated: Use SetClusterInfoProvider instead.
 // This is used when registering with the inspector to report which nodes this component is connected to.
 // Works for both node mode (node-to-node connections) and gate mode (gate-to-node connections).
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetConnectedNodesProvider(provider ConnectedNodesProvider) {
-	im.connectedNodesProvider = provider
+	// Wrap the legacy provider in a ClusterInfoProvider adapter
+	im.clusterInfoProvider = &legacyProviderAdapter{connectedNodesProvider: provider}
 }
 
 // SetRegisteredGatesProvider sets the provider function for getting registered gate addresses.
+// Deprecated: Use SetClusterInfoProvider instead.
 // This is used when registering with the inspector to report which gates are registered to this node.
 // Only applicable in node mode. Must be called before Start() to take effect.
 func (im *InspectorManager) SetRegisteredGatesProvider(provider RegisteredGatesProvider) {
-	im.registeredGatesProvider = provider
+	// If we already have a legacy adapter, update it; otherwise create a new one
+	if adapter, ok := im.clusterInfoProvider.(*legacyProviderAdapter); ok {
+		adapter.registeredGatesProvider = provider
+	} else {
+		im.clusterInfoProvider = &legacyProviderAdapter{registeredGatesProvider: provider}
+	}
+}
+
+// legacyProviderAdapter adapts the old-style function providers to the ClusterInfoProvider interface
+type legacyProviderAdapter struct {
+	connectedNodesProvider  ConnectedNodesProvider
+	registeredGatesProvider RegisteredGatesProvider
+}
+
+func (a *legacyProviderAdapter) GetConnectedNodes() []string {
+	if a.connectedNodesProvider != nil {
+		return a.connectedNodesProvider()
+	}
+	return nil
+}
+
+func (a *legacyProviderAdapter) GetRegisteredGates() []string {
+	if a.registeredGatesProvider != nil {
+		return a.registeredGatesProvider()
+	}
+	return nil
 }
 
 // Start initializes the connection to the Inspector and starts background management.
@@ -265,16 +303,12 @@ func (im *InspectorManager) registerLocked() error {
 			objects = append(objects, obj)
 		}
 
-		// Get connected nodes if provider is set
+		// Get connected nodes and registered gates from cluster info provider
 		var connectedNodes []string
-		if im.connectedNodesProvider != nil {
-			connectedNodes = im.connectedNodesProvider()
-		}
-
-		// Get registered gates if provider is set
 		var registeredGates []string
-		if im.registeredGatesProvider != nil {
-			registeredGates = im.registeredGatesProvider()
+		if im.clusterInfoProvider != nil {
+			connectedNodes = im.clusterInfoProvider.GetConnectedNodes()
+			registeredGates = im.clusterInfoProvider.GetRegisteredGates()
 		}
 
 		registerReq := &inspector_pb.RegisterNodeRequest{
@@ -292,10 +326,10 @@ func (im *InspectorManager) registerLocked() error {
 		im.logger.Infof("Successfully registered node %s with inspector (%d objects, %d connected nodes, %d registered gates)", im.address, len(objects), len(connectedNodes), len(registeredGates))
 
 	case ModeGate:
-		// Get connected nodes if provider is set
+		// Get connected nodes from cluster info provider
 		var connectedNodes []string
-		if im.connectedNodesProvider != nil {
-			connectedNodes = im.connectedNodesProvider()
+		if im.clusterInfoProvider != nil {
+			connectedNodes = im.clusterInfoProvider.GetConnectedNodes()
 		}
 
 		registerReq := &inspector_pb.RegisterGateRequest{
@@ -392,10 +426,10 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 		return
 	}
 
-	// Get current connected nodes
+	// Get current connected nodes from cluster info provider
 	var connectedNodes []string
-	if im.connectedNodesProvider != nil {
-		connectedNodes = im.connectedNodesProvider()
+	if im.clusterInfoProvider != nil {
+		connectedNodes = im.clusterInfoProvider.GetConnectedNodes()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -431,10 +465,10 @@ func (im *InspectorManager) UpdateRegisteredGates() {
 		return
 	}
 
-	// Get current registered gates
+	// Get current registered gates from cluster info provider
 	var registeredGates []string
-	if im.registeredGatesProvider != nil {
-		registeredGates = im.registeredGatesProvider()
+	if im.clusterInfoProvider != nil {
+		registeredGates = im.clusterInfoProvider.GetRegisteredGates()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -148,21 +148,14 @@ func (c *Cluster) init(cfg Config) error {
 	// Note: Gates don't need ShardLock as they don't host objects
 	if c.isNode() {
 		c.node.SetShardLock(c.shardLock)
-		// Set the connected nodes provider so the node's InspectorManager can report connected nodes
-		c.node.SetConnectedNodesProvider(func() []string {
-			return c.nodeConnections.GetConnectedNodeAddresses()
-		})
-		// Set the registered gates provider so the node's InspectorManager can report registered gates
-		c.node.SetRegisteredGatesProvider(func() []string {
-			return c.getRegisteredGateAddresses()
-		})
+		// Set the cluster info provider so the node's InspectorManager can report cluster info
+		// The cluster implements clusterinfo.ClusterInfoProvider interface
+		c.node.SetClusterInfoProvider(c)
 	}
 
-	// Set the connected nodes provider for gates so the gate's InspectorManager can report connected nodes
+	// Set the cluster info provider for gates so the gate's InspectorManager can report cluster info
 	if c.isGate() {
-		c.gate.SetConnectedNodesProvider(func() []string {
-			return c.nodeConnections.GetConnectedNodeAddresses()
-		})
+		c.gate.SetClusterInfoProvider(c)
 	}
 
 	mgr, err := createAndConnectEtcdManager(cfg.EtcdAddress, cfg.EtcdPrefix)
@@ -868,6 +861,20 @@ func (c *Cluster) getRegisteredGateAddresses() []string {
 		addresses = append(addresses, addr)
 	}
 	return addresses
+}
+
+// GetConnectedNodes returns the list of node addresses that this cluster component
+// is currently connected to. This implements the clusterinfo.ClusterInfoProvider interface.
+// For both nodes and gates, this returns the addresses of other nodes in the cluster.
+func (c *Cluster) GetConnectedNodes() []string {
+	return c.nodeConnections.GetConnectedNodeAddresses()
+}
+
+// GetRegisteredGates returns the list of gate addresses that are registered to this node.
+// This implements the clusterinfo.ClusterInfoProvider interface.
+// This is only meaningful for nodes; for gates, it returns nil.
+func (c *Cluster) GetRegisteredGates() []string {
+	return c.getRegisteredGateAddresses()
 }
 
 // PushMessageToClient sends a message to a client by its ID

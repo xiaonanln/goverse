@@ -14,6 +14,7 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/util/clusterinfo"
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
@@ -171,7 +172,15 @@ func (node *Node) SetLifecycleValidator(lv *config.LifecycleValidator) {
 	node.lifecycleValidator = lv
 }
 
+// SetClusterInfoProvider sets the consolidated cluster info provider for the node.
+// This is the preferred way to provide cluster information to the node's InspectorManager.
+// Must be called during initialization before the node is used concurrently.
+func (node *Node) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
+	node.inspectorManager.SetClusterInfoProvider(provider)
+}
+
 // SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// Deprecated: Use SetClusterInfoProvider instead.
 // This is used by the InspectorManager to report connected nodes to the inspector.
 // Must be called during initialization before the node is used concurrently.
 func (node *Node) SetConnectedNodesProvider(provider inspectormanager.ConnectedNodesProvider) {
@@ -185,6 +194,7 @@ func (node *Node) NotifyConnectedNodesChanged() {
 }
 
 // SetRegisteredGatesProvider sets the provider function for getting registered gate addresses.
+// Deprecated: Use SetClusterInfoProvider instead.
 // This is used by the InspectorManager to report registered gates to the inspector.
 // Must be called during initialization before the node is used concurrently.
 func (node *Node) SetRegisteredGatesProvider(provider inspectormanager.RegisteredGatesProvider) {

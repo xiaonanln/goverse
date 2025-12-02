@@ -7,6 +7,7 @@ import (
 
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/clusterinfo"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/uniqueid"
@@ -179,7 +180,14 @@ func (g *Gate) GetAdvertiseAddress() string {
 	return g.advertiseAddress
 }
 
+// SetClusterInfoProvider sets the consolidated cluster info provider for the gate.
+// This is the preferred way to provide cluster information to the gate's InspectorManager.
+func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
+	g.inspectorManager.SetClusterInfoProvider(provider)
+}
+
 // SetConnectedNodesProvider sets the provider function for getting connected node addresses.
+// Deprecated: Use SetClusterInfoProvider instead.
 // This is used by the InspectorManager to report connected nodes to the inspector.
 func (g *Gate) SetConnectedNodesProvider(provider inspectormanager.ConnectedNodesProvider) {
 	g.inspectorManager.SetConnectedNodesProvider(provider)
