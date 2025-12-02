@@ -183,8 +183,8 @@ function buildGraphNodesAndLinks() {
     }
   })
 
-  // Add node-to-node links - all pairs with connection status
-  // Material Design colors: Red=#F44336, Green=#4CAF50, Blue=#2196F3
+  // Add node-to-node links - only when there are actual connections
+  // Green for bidirectional, Red for unidirectional
   const addrToNodeId = new Map()
   const clusterNodes = []
   graphData.goverse_nodes.forEach(n => {
@@ -198,7 +198,7 @@ function buildGraphNodesAndLinks() {
     })
   })
 
-  // Create links for all cluster node pairs
+  // Create links only for actual connections
   for (let i = 0; i < clusterNodes.length; i++) {
     for (let j = i + 1; j < clusterNodes.length; j++) {
       const nodeA = clusterNodes[i]
@@ -209,24 +209,24 @@ function buildGraphNodesAndLinks() {
       // Check if B connects to A
       const bConnectsToA = nodeB.connectedNodes.includes(nodeA.advertiseAddr)
       
-      let linkColor
-      if (aConnectsToB && bConnectsToA) {
-        // Dual connection: green
-        linkColor = '#4CAF50'
-      } else if (aConnectsToB || bConnectsToA) {
-        // Single direction: blue
-        linkColor = '#2196F3'
-      } else {
-        // No connection: red
-        linkColor = '#F44336'
+      // Only create link if there's at least one connection
+      if (aConnectsToB || bConnectsToA) {
+        let linkColor
+        if (aConnectsToB && bConnectsToA) {
+          // Dual connection: green
+          linkColor = '#4CAF50'
+        } else {
+          // Single direction: red
+          linkColor = '#F44336'
+        }
+        
+        links.push({
+          source: nodeA.id,
+          target: nodeB.id,
+          type: 'node-node',
+          color: linkColor
+        })
       }
-      
-      links.push({
-        source: nodeA.id,
-        target: nodeB.id,
-        type: 'node-node',
-        color: linkColor
-      })
     }
   }
 
@@ -443,8 +443,8 @@ function updateGraphIncremental() {
     }
   })
 
-  // Add node-to-node links - all pairs with connection status
-  // Material Design colors: Red=#F44336, Green=#4CAF50, Blue=#2196F3
+  // Add node-to-node links - only when there are actual connections
+  // Green for bidirectional, Red for unidirectional
   const addrToNodeId = new Map()
   const clusterNodes = []
   graphData.goverse_nodes.forEach(n => {
@@ -458,7 +458,7 @@ function updateGraphIncremental() {
     })
   })
 
-  // Create links for all cluster node pairs
+  // Create links only for actual connections
   for (let i = 0; i < clusterNodes.length; i++) {
     for (let j = i + 1; j < clusterNodes.length; j++) {
       const nodeA = clusterNodes[i]
@@ -469,24 +469,24 @@ function updateGraphIncremental() {
       // Check if B connects to A
       const bConnectsToA = nodeB.connectedNodes.includes(nodeA.advertiseAddr)
       
-      let linkColor
-      if (aConnectsToB && bConnectsToA) {
-        // Dual connection: green
-        linkColor = '#4CAF50'
-      } else if (aConnectsToB || bConnectsToA) {
-        // Single direction: blue
-        linkColor = '#2196F3'
-      } else {
-        // No connection: red
-        linkColor = '#F44336'
+      // Only create link if there's at least one connection
+      if (aConnectsToB || bConnectsToA) {
+        let linkColor
+        if (aConnectsToB && bConnectsToA) {
+          // Dual connection: green
+          linkColor = '#4CAF50'
+        } else {
+          // Single direction: red
+          linkColor = '#F44336'
+        }
+        
+        links.push({
+          source: nodeA.id,
+          target: nodeB.id,
+          type: 'node-node',
+          color: linkColor
+        })
       }
-      
-      links.push({
-        source: nodeA.id,
-        target: nodeB.id,
-        type: 'node-node',
-        color: linkColor
-      })
     }
   }
 

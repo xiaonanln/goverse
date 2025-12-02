@@ -194,6 +194,10 @@ func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNode
 	connectionTicker := time.NewTicker(15 * time.Second)
 	defer connectionTicker.Stop()
 
+	// Separate ticker for gate connection changes
+	gateConnectionTicker := time.NewTicker(12 * time.Second)
+	defer gateConnectionTicker.Stop()
+
 	objectTypes := []string{"Counter", "ChatRoom", "Player", "GameSession", "Inventory", "Leaderboard"}
 	typeColors := map[string]string{
 		"Counter":     "#FF9800",
@@ -312,6 +316,43 @@ func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNode
 						pg.AddOrUpdateNode(*n)
 					}
 					log.Printf("[Demo] All nodes connections restored to full mesh")
+				}
+			}
+		case <-gateConnectionTicker.C:
+			// Simulate gate connection changes (gates temporarily disconnect/reconnect to nodes)
+			gates := pg.GetGates()
+			if len(gates) > 0 && len(nodeAddrs) > 0 {
+				// Pick a random gate
+				gateIdx := rand.Intn(len(gates))
+				gate := &gates[gateIdx]
+
+				// Randomly either remove some connections or restore full connections
+				if rand.Float32() < 0.5 && len(gate.ConnectedNodes) > 1 {
+					// Remove some node connections from gate
+					numToRemove := 1 + rand.Intn(len(gate.ConnectedNodes)-1)
+					newConnections := make([]string, 0)
+					
+					// Keep some connections randomly
+					for _, addr := range gate.ConnectedNodes {
+						if rand.Float32() > float32(numToRemove)/float32(len(gate.ConnectedNodes)) {
+							newConnections = append(newConnections, addr)
+						}
+					}
+					
+					// Ensure at least one connection remains
+					if len(newConnections) == 0 && len(gate.ConnectedNodes) > 0 {
+						newConnections = []string{gate.ConnectedNodes[0]}
+					}
+					
+					gate.ConnectedNodes = newConnections
+					pg.AddOrUpdateGate(*gate)
+					log.Printf("[Demo] Gate %s connections reduced to %d nodes", gate.Label, len(newConnections))
+				} else {
+					// Restore full connections to all nodes
+					gate.ConnectedNodes = make([]string, len(nodeAddrs))
+					copy(gate.ConnectedNodes, nodeAddrs)
+					pg.AddOrUpdateGate(*gate)
+					log.Printf("[Demo] Gate %s connections restored to all %d nodes", gate.Label, len(nodeAddrs))
 				}
 			}
 		}

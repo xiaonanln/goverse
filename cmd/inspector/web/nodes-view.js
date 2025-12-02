@@ -176,12 +176,12 @@ function updateNodesView() {
     nodeMap.set(g.id, node)
   })
 
-  // Build links between all node pairs with connection status
-  // Material Design colors: Red=#F44336, Green=#4CAF50, Blue=#2196F3
+  // Build links only for actual connections
+  // Green for bidirectional, Red for unidirectional
   const links = []
   const nodeList = Array.from(nodeMap.values()).filter(n => n.nodeType === NODE_TYPE_NODE)
   
-  // Create links for all node pairs
+  // Create links only for node pairs with actual connections
   for (let i = 0; i < nodeList.length; i++) {
     for (let j = i + 1; j < nodeList.length; j++) {
       const nodeA = nodeList[i]
@@ -192,29 +192,29 @@ function updateNodesView() {
       // Check if B connects to A
       const bConnectsToA = nodeB.connectedNodes.includes(nodeA.advertiseAddr)
       
-      let linkColor, linkWidth
-      if (aConnectsToB && bConnectsToA) {
-        // Dual connection: green, 2px
-        linkColor = '#4CAF50'
-        linkWidth = 2
-      } else if (aConnectsToB || bConnectsToA) {
-        // Single direction: blue, 2px
-        linkColor = '#2196F3'
-        linkWidth = 2
-      } else {
-        // No connection: red, 2px
-        linkColor = '#F44336'
-        linkWidth = 2
+      // Only create link if there's at least one connection
+      if (aConnectsToB || bConnectsToA) {
+        let linkColor, linkWidth, connectionType
+        if (aConnectsToB && bConnectsToA) {
+          // Dual connection: green
+          linkColor = '#4CAF50'
+          linkWidth = 2
+          connectionType = 'dual'
+        } else {
+          // Single direction: red
+          linkColor = '#F44336'
+          linkWidth = 2
+          connectionType = 'single'
+        }
+        
+        links.push({
+          source: nodeA.id,
+          target: nodeB.id,
+          color: linkColor,
+          width: linkWidth,
+          connectionType: connectionType
+        })
       }
-      
-      links.push({
-        source: nodeA.id,
-        target: nodeB.id,
-        color: linkColor,
-        width: linkWidth,
-        connectionType: aConnectsToB && bConnectsToA ? 'dual' : 
-                       (aConnectsToB || bConnectsToA ? 'single' : 'none')
-      })
     }
   }
 
