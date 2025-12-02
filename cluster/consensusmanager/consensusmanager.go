@@ -1254,6 +1254,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		// Check rebalance conditions: a >= b + 2 and imbalance > 20% of ideal load
 		// Ideal load per node is numShards / numNodes
 		// We rebalance if: maxCount >= minCount + 2 AND (maxCount - minCount) > 0.2 * idealLoad
+		// Note: len(nodes) is guaranteed to be > 0 by the check at the start of this function
 		idealLoad := float64(cm.numShards) / float64(len(nodes))
 		imbalanceThreshold := 0.2 * idealLoad
 		if maxCount < minCount+2 || float64(maxCount-minCount) <= imbalanceThreshold {
