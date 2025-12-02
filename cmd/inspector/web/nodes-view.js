@@ -44,10 +44,10 @@ function initNodesView() {
 
   // Initialize force simulation for nodes only
   nodesSimulation = d3.forceSimulation()
-    .force('charge', d3.forceManyBody().strength(-150))
+    .force('charge', d3.forceManyBody().strength(-300))
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(50))
-    .force('link', d3.forceLink().id(d => d.id).distance(150).strength(0.5))
+    .force('collision', d3.forceCollide().radius(60))
+    .force('link', d3.forceLink().id(d => d.id).distance(200).strength(0.3))
     .on('tick', nodesViewTicked)
 
   // Zoom controls for nodes view
