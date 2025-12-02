@@ -18,6 +18,7 @@ type GateConfig struct {
 	AdvertiseAddress string // Address to advertise to the cluster (e.g., "localhost:49000")
 	EtcdAddress      string // Address of etcd for cluster state
 	EtcdPrefix       string // etcd key prefix (default: "/goverse")
+	InspectorAddress string // Optional: address of the inspector service (if empty, inspector is disabled)
 }
 
 // nodeReg holds registration information for a single node
@@ -51,7 +52,7 @@ func NewGate(config *GateConfig) (*Gate, error) {
 		logger:           logger.NewLogger("Gate"),
 		clients:          make(map[string]*ClientProxy),
 		nodeRegs:         make(map[string]*nodeReg),
-		inspectorManager: inspectormanager.NewGateInspectorManager(config.AdvertiseAddress),
+		inspectorManager: inspectormanager.NewGateInspectorManager(config.AdvertiseAddress, config.InspectorAddress),
 	}
 
 	return gate, nil

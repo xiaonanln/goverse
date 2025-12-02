@@ -38,6 +38,7 @@ type ServerConfig struct {
 	NodeStabilityDuration     time.Duration              // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
 	ShardMappingCheckInterval time.Duration              // Optional: how often to check if shard mapping needs updating (default: 5s)
 	NumShards                 int                        // Optional: number of shards in the cluster (default: 8192)
+	InspectorAddress          string                     // Optional: address of the inspector service (if empty, inspector is disabled)
 	AccessValidator           *config.AccessValidator    // Optional: access validator for node access control
 	LifecycleValidator        *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
 }
@@ -65,7 +66,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		numShards = 8192
 	}
 
-	n := node.NewNode(config.AdvertiseAddress, numShards)
+	n := node.NewNode(config.AdvertiseAddress, numShards, config.InspectorAddress)
 
 	// Set lifecycle validator on the node if configured
 	if config.LifecycleValidator != nil {

@@ -28,6 +28,7 @@ type GateServerConfig struct {
 	EtcdAddress       string // Address of etcd for cluster state
 	EtcdPrefix        string // Optional: etcd key prefix (default: "/goverse")
 	NumShards         int    // Optional: number of shards in the cluster (default: 8192)
+	InspectorAddress  string // Optional: address of the inspector service (if empty, inspector is disabled)
 
 	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
 	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
@@ -65,6 +66,7 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		AdvertiseAddress: config.AdvertiseAddress,
 		EtcdAddress:      config.EtcdAddress,
 		EtcdPrefix:       config.EtcdPrefix,
+		InspectorAddress: config.InspectorAddress,
 	}
 	gw, err := gate.NewGate(gateConfig)
 	if err != nil {

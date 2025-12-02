@@ -8,7 +8,7 @@ import (
 )
 
 func MustNewNode(ctx context.Context, t *testing.T, advertiseAddr string) *node.Node {
-	n := node.NewNode(advertiseAddr, TestNumShards)
+	n := node.NewNode(advertiseAddr, TestNumShards, "") // Empty inspector address for tests
 	err := n.Start(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start node: %v", err)
