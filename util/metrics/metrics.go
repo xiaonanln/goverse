@@ -142,6 +142,15 @@ var (
 		},
 		[]string{"node", "gate"},
 	)
+
+	// ShardMethodCallsTotal tracks the total number of method calls per shard
+	ShardMethodCallsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_shard_method_calls_total",
+			Help: "Total number of method calls per shard",
+		},
+		[]string{"shard"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -239,4 +248,9 @@ func RecordNodePushedMessage(node, gate string) {
 // RecordNodeDroppedMessage increments the dropped message counter for a node to a specific gate
 func RecordNodeDroppedMessage(node, gate string) {
 	NodeDroppedMessages.WithLabelValues(node, gate).Inc()
+}
+
+// RecordShardMethodCall increments the method call counter for a given shard
+func RecordShardMethodCall(shard int) {
+	ShardMethodCallsTotal.WithLabelValues(fmt.Sprintf("%d", shard)).Inc()
 }

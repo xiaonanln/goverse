@@ -237,6 +237,9 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	startTime := time.Now()
 	var callErr error
 
+	// Calculate shard ID for shard-level metrics
+	shardID := node.GetShardID(id)
+
 	// Defer metrics recording to ensure it happens on all return paths
 	defer func() {
 		duration := time.Since(startTime).Seconds()
@@ -246,6 +249,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		}
 		metrics.RecordMethodCall(node.advertiseAddress, typ, method, status)
 		metrics.RecordMethodCallDuration(node.advertiseAddress, typ, method, status, duration)
+		metrics.RecordShardMethodCall(shardID)
 	}()
 
 	// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
