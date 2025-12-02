@@ -92,6 +92,15 @@ func TestInspectorManager_DisabledWhenEmptyAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stop should return nil when disabled: %v", err)
 	}
+
+	// NotifyObjectAdded should be a no-op when disabled (no objects stored)
+	mgr.NotifyObjectAdded("test-obj", "TestType", 0)
+	mgr.mu.RLock()
+	objCount := len(mgr.objects)
+	mgr.mu.RUnlock()
+	if objCount != 0 {
+		t.Fatalf("Objects should not be stored when inspector is disabled, got %d", objCount)
+	}
 }
 
 func TestInspectorManager_EnabledWhenAddressProvided(t *testing.T) {
