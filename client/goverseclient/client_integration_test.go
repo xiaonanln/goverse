@@ -962,8 +962,9 @@ func TestClientIntegrationPushMessages(t *testing.T) {
 
 			if time.Now().After(deadline) {
 				mu.Lock()
-				t.Fatalf("Timeout waiting for push messages, received %d of %d", len(receivedMessages), pushCount)
+				receivedCount := len(receivedMessages)
 				mu.Unlock()
+				t.Fatalf("Timeout waiting for push messages, received %d of %d", receivedCount, pushCount)
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
