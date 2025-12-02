@@ -3,6 +3,7 @@ package goverseclient
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -701,5 +703,396 @@ func TestClientIntegrationWithCallbacks(t *testing.T) {
 		}
 
 		t.Logf("OnConnect callback correctly called with clientID: %s", connectedClientID)
+	})
+}
+
+// TestClientIntegrationPushMessages tests that pushed messages from the cluster are received
+// by the client via both the OnMessage callback and the MessageChan() channel.
+// This tests the client's ability to receive server-initiated push messages.
+func TestClientIntegrationPushMessages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	t.Parallel()
+
+	ctx := context.Background()
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	// Create and start a node with cluster
+	nodeAddr := testutil.GetFreeAddress()
+	nodeCluster := mustNewClusterForClientTest(ctx, t, nodeAddr, etcdPrefix)
+	testNode := nodeCluster.GetThisNode()
+	t.Logf("Created node cluster at %s", nodeAddr)
+
+	// Register test object type on the node (needed for some operations)
+	testNode.RegisterObjectType((*TestIntegrationObject)(nil))
+
+	// Start mock gRPC server for the node
+	mockNodeServer := testutil.NewMockGoverseServer()
+	mockNodeServer.SetNode(testNode)
+	mockNodeServer.SetCluster(nodeCluster)
+	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
+	err := nodeServer.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer.Stop() })
+	t.Logf("Started mock node server at %s", nodeAddr)
+
+	// Create and start the real GateServer
+	gateAddr := testutil.GetFreeAddress()
+	gwServerConfig := &gateserver.GateServerConfig{
+		ListenAddress:    gateAddr,
+		AdvertiseAddress: gateAddr,
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       etcdPrefix,
+		NumShards:        testutil.TestNumShards,
+	}
+	gwServer, err := gateserver.NewGateServer(gwServerConfig)
+	if err != nil {
+		t.Fatalf("Failed to create gate server: %v", err)
+	}
+	t.Cleanup(func() { gwServer.Stop() })
+
+	if err := gwServer.Start(ctx); err != nil {
+		t.Fatalf("Gate server failed to start: %v", err)
+	}
+	t.Logf("Started real gate server at %s", gateAddr)
+
+	// Wait for cluster to be ready
+	testutil.WaitForClusterReady(t, nodeCluster)
+
+	// Wait for gate to register with the node
+	testutil.WaitFor(t, 10*time.Second, "gate to register with node", func() bool {
+		return nodeCluster.IsGateConnected(gateAddr)
+	})
+	t.Logf("Gate %s registered with node %s", gateAddr, nodeAddr)
+
+	t.Run("PushMessageViaOnMessageCallback", func(t *testing.T) {
+		var receivedMessages []proto.Message
+		var mu sync.Mutex
+
+		// Create a client with OnMessage callback
+		client, err := NewClient(
+			[]string{gateAddr},
+			WithOnMessage(func(msg proto.Message) {
+				mu.Lock()
+				receivedMessages = append(receivedMessages, msg)
+				mu.Unlock()
+			}),
+		)
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+		defer client.Close()
+
+		err = client.Connect(ctx)
+		if err != nil {
+			t.Fatalf("Failed to connect: %v", err)
+		}
+		clientID := client.ClientID()
+		t.Logf("Client connected with ID: %s", clientID)
+
+		// Push a message directly via the cluster to the connected client
+		pushMsg := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"type":      structpb.NewStringValue("notification"),
+				"message":   structpb.NewStringValue("Hello via callback!"),
+				"timestamp": structpb.NewNumberValue(float64(time.Now().Unix())),
+			},
+		}
+
+		err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+		if err != nil {
+			t.Fatalf("PushMessageToClient failed: %v", err)
+		}
+		t.Logf("Pushed message to client %s", clientID)
+
+		// Wait for the push message to be received via callback
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			mu.Lock()
+			count := len(receivedMessages)
+			mu.Unlock()
+
+			if count > 0 {
+				break
+			}
+
+			if time.Now().After(deadline) {
+				t.Fatal("Timeout waiting for push message via OnMessage callback")
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		// Verify the received message
+		mu.Lock()
+		if len(receivedMessages) != 1 {
+			t.Fatalf("Expected 1 message, got %d", len(receivedMessages))
+		}
+		receivedStruct, ok := receivedMessages[0].(*structpb.Struct)
+		mu.Unlock()
+
+		if !ok {
+			t.Fatalf("Expected *structpb.Struct, got %T", receivedMessages[0])
+		}
+
+		msgType := receivedStruct.Fields["type"].GetStringValue()
+		msgContent := receivedStruct.Fields["message"].GetStringValue()
+
+		if msgType != "notification" {
+			t.Fatalf("Expected type 'notification', got %q", msgType)
+		}
+		if msgContent != "Hello via callback!" {
+			t.Fatalf("Expected message 'Hello via callback!', got %q", msgContent)
+		}
+
+		t.Logf("Successfully received push message via OnMessage callback: type=%s, message=%s", msgType, msgContent)
+	})
+
+	t.Run("PushMessageViaMessageChan", func(t *testing.T) {
+		// Create a client without OnMessage callback to test MessageChan
+		client, err := NewClient([]string{gateAddr})
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+		defer client.Close()
+
+		err = client.Connect(ctx)
+		if err != nil {
+			t.Fatalf("Failed to connect: %v", err)
+		}
+		clientID := client.ClientID()
+		t.Logf("Client connected with ID: %s", clientID)
+
+		// Push a message directly via the cluster to the connected client
+		pushMsg := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"type":      structpb.NewStringValue("notification"),
+				"message":   structpb.NewStringValue("Hello via channel!"),
+				"timestamp": structpb.NewNumberValue(float64(time.Now().Unix())),
+			},
+		}
+
+		err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+		if err != nil {
+			t.Fatalf("PushMessageToClient failed: %v", err)
+		}
+		t.Logf("Pushed message to client %s", clientID)
+
+		// Receive the push message via MessageChan()
+		msgChan := client.MessageChan()
+		select {
+		case msg := <-msgChan:
+			receivedStruct, ok := msg.(*structpb.Struct)
+			if !ok {
+				t.Fatalf("Expected *structpb.Struct, got %T", msg)
+			}
+
+			msgType := receivedStruct.Fields["type"].GetStringValue()
+			msgContent := receivedStruct.Fields["message"].GetStringValue()
+
+			if msgType != "notification" {
+				t.Fatalf("Expected type 'notification', got %q", msgType)
+			}
+			if msgContent != "Hello via channel!" {
+				t.Fatalf("Expected message 'Hello via channel!', got %q", msgContent)
+			}
+
+			t.Logf("Successfully received push message via MessageChan: type=%s, message=%s", msgType, msgContent)
+
+		case <-time.After(5 * time.Second):
+			t.Fatal("Timeout waiting for push message via MessageChan")
+		}
+	})
+
+	t.Run("MultiplePushMessages", func(t *testing.T) {
+		var receivedMessages []proto.Message
+		var mu sync.Mutex
+
+		// Create a client with OnMessage callback
+		client, err := NewClient(
+			[]string{gateAddr},
+			WithOnMessage(func(msg proto.Message) {
+				mu.Lock()
+				receivedMessages = append(receivedMessages, msg)
+				mu.Unlock()
+			}),
+		)
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+		defer client.Close()
+
+		err = client.Connect(ctx)
+		if err != nil {
+			t.Fatalf("Failed to connect: %v", err)
+		}
+		clientID := client.ClientID()
+		t.Logf("Client connected with ID: %s", clientID)
+
+		// Push multiple messages to the connected client
+		pushCount := 3
+		for i := 0; i < pushCount; i++ {
+			pushMsg := &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"type":    structpb.NewStringValue("notification"),
+					"message": structpb.NewStringValue(fmt.Sprintf("Notification #%d", i+1)),
+					"index":   structpb.NewNumberValue(float64(i)),
+				},
+			}
+
+			err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+			if err != nil {
+				t.Fatalf("PushMessageToClient failed for message %d: %v", i, err)
+			}
+		}
+		t.Logf("Pushed %d messages to client %s", pushCount, clientID)
+
+		// Wait for all push messages to be received
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			mu.Lock()
+			count := len(receivedMessages)
+			mu.Unlock()
+
+			if count >= pushCount {
+				break
+			}
+
+			if time.Now().After(deadline) {
+				mu.Lock()
+				t.Fatalf("Timeout waiting for push messages, received %d of %d", len(receivedMessages), pushCount)
+				mu.Unlock()
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		// Verify all received messages
+		mu.Lock()
+		defer mu.Unlock()
+
+		if len(receivedMessages) != pushCount {
+			t.Fatalf("Expected %d messages, got %d", pushCount, len(receivedMessages))
+		}
+
+		for i, msg := range receivedMessages {
+			receivedStruct, ok := msg.(*structpb.Struct)
+			if !ok {
+				t.Fatalf("Message %d: Expected *structpb.Struct, got %T", i, msg)
+			}
+
+			msgType := receivedStruct.Fields["type"].GetStringValue()
+			msgContent := receivedStruct.Fields["message"].GetStringValue()
+			index := int(receivedStruct.Fields["index"].GetNumberValue())
+
+			if msgType != "notification" {
+				t.Fatalf("Message %d: Expected type 'notification', got %q", i, msgType)
+			}
+
+			// Messages may arrive out of order, so just verify content format
+			if msgContent == "" {
+				t.Fatalf("Message %d: Expected non-empty message", i)
+			}
+
+			t.Logf("Received message %d: type=%s, message=%s, index=%d", i, msgType, msgContent, index)
+		}
+
+		t.Logf("Successfully received all %d push messages", pushCount)
+	})
+
+	t.Run("PushMessageBothCallbackAndChannel", func(t *testing.T) {
+		// Test that messages are received via both callback and channel
+		var callbackMessages []proto.Message
+		var mu sync.Mutex
+
+		client, err := NewClient(
+			[]string{gateAddr},
+			WithOnMessage(func(msg proto.Message) {
+				mu.Lock()
+				callbackMessages = append(callbackMessages, msg)
+				mu.Unlock()
+			}),
+		)
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+		defer client.Close()
+
+		err = client.Connect(ctx)
+		if err != nil {
+			t.Fatalf("Failed to connect: %v", err)
+		}
+		clientID := client.ClientID()
+		t.Logf("Client connected with ID: %s", clientID)
+
+		// Push a message
+		pushMsg := &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"type":    structpb.NewStringValue("dual"),
+				"message": structpb.NewStringValue("Hello to both!"),
+			},
+		}
+
+		err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+		if err != nil {
+			t.Fatalf("PushMessageToClient failed: %v", err)
+		}
+		t.Logf("Pushed message to client %s", clientID)
+
+		// Wait for message via callback
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			mu.Lock()
+			count := len(callbackMessages)
+			mu.Unlock()
+
+			if count > 0 {
+				break
+			}
+
+			if time.Now().After(deadline) {
+				t.Fatal("Timeout waiting for push message via callback")
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		// Also receive via channel (message should be in both)
+		msgChan := client.MessageChan()
+		select {
+		case msg := <-msgChan:
+			receivedStruct, ok := msg.(*structpb.Struct)
+			if !ok {
+				t.Fatalf("Expected *structpb.Struct, got %T", msg)
+			}
+
+			msgType := receivedStruct.Fields["type"].GetStringValue()
+			if msgType != "dual" {
+				t.Fatalf("Expected type 'dual', got %q", msgType)
+			}
+			t.Logf("Received message via MessageChan: type=%s", msgType)
+
+		case <-time.After(5 * time.Second):
+			t.Fatal("Timeout waiting for push message via MessageChan")
+		}
+
+		// Verify callback also received it
+		mu.Lock()
+		if len(callbackMessages) != 1 {
+			t.Fatalf("Expected 1 callback message, got %d", len(callbackMessages))
+		}
+		callbackStruct, ok := callbackMessages[0].(*structpb.Struct)
+		mu.Unlock()
+
+		if !ok {
+			t.Fatalf("Expected *structpb.Struct in callback, got %T", callbackMessages[0])
+		}
+
+		callbackType := callbackStruct.Fields["type"].GetStringValue()
+		if callbackType != "dual" {
+			t.Fatalf("Expected callback type 'dual', got %q", callbackType)
+		}
+
+		t.Logf("Successfully received push message via both OnMessage callback and MessageChan")
 	})
 }
