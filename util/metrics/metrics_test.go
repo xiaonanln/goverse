@@ -1087,3 +1087,111 @@ func TestRecordNodeDroppedMessage(t *testing.T) {
 		t.Fatalf("Expected count for 47000->49001 to be 1.0, got %f", count)
 	}
 }
+
+func TestRecordShardMethodCall(t *testing.T) {
+	// Reset metrics before test
+	ShardMethodCallsTotal.Reset()
+
+	// Record a method call on shard 0
+	RecordShardMethodCall(0)
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("0"))
+	if count != 1.0 {
+		t.Fatalf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record another call on the same shard
+	RecordShardMethodCall(0)
+	count = testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("0"))
+	if count != 2.0 {
+		t.Fatalf("Expected count to be 2.0, got %f", count)
+	}
+
+	// Record call on a different shard
+	RecordShardMethodCall(5)
+	count = testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("5"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for shard 5 to be 1.0, got %f", count)
+	}
+}
+
+func TestShardMethodCallsMultipleShards(t *testing.T) {
+	// Reset metrics before test
+	ShardMethodCallsTotal.Reset()
+
+	// Record calls on multiple shards
+	RecordShardMethodCall(0)
+	RecordShardMethodCall(1)
+	RecordShardMethodCall(2)
+	RecordShardMethodCall(0) // Second call on shard 0
+	RecordShardMethodCall(1) // Second call on shard 1
+
+	// Verify shard 0 has 2 calls
+	count := testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("0"))
+	if count != 2.0 {
+		t.Fatalf("Expected count for shard 0 to be 2.0, got %f", count)
+	}
+
+	// Verify shard 1 has 2 calls
+	count = testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("1"))
+	if count != 2.0 {
+		t.Fatalf("Expected count for shard 1 to be 2.0, got %f", count)
+	}
+
+	// Verify shard 2 has 1 call
+	count = testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("2"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for shard 2 to be 1.0, got %f", count)
+	}
+}
+
+func TestShardMethodCallsHighShardNumbers(t *testing.T) {
+	// Reset metrics before test
+	ShardMethodCallsTotal.Reset()
+
+	// Record calls on high shard numbers (production uses 8192 shards)
+	RecordShardMethodCall(1000)
+	RecordShardMethodCall(5000)
+	RecordShardMethodCall(8191)
+
+	// Verify each shard has the correct count
+	count := testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("1000"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for shard 1000 to be 1.0, got %f", count)
+	}
+
+	count = testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("5000"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for shard 5000 to be 1.0, got %f", count)
+	}
+
+	count = testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("8191"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for shard 8191 to be 1.0, got %f", count)
+	}
+}
+
+func TestShardMethodCallMetricsRegistration(t *testing.T) {
+	// Verify that the metric is properly registered with Prometheus
+	if ShardMethodCallsTotal == nil {
+		t.Fatal("ShardMethodCallsTotal metric should not be nil")
+	}
+}
+
+func TestShardMethodCallsAccumulation(t *testing.T) {
+	// Reset metrics before test
+	ShardMethodCallsTotal.Reset()
+
+	// Simulate many method calls on the same shard
+	shard := 42
+	for i := 0; i < 100; i++ {
+		RecordShardMethodCall(shard)
+	}
+
+	// Verify the count accumulated correctly
+	count := testutil.ToFloat64(ShardMethodCallsTotal.WithLabelValues("42"))
+	if count != 100.0 {
+		t.Fatalf("Expected count to be 100.0, got %f", count)
+	}
+}
