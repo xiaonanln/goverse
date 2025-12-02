@@ -172,7 +172,13 @@ func (im *InspectorManager) Stop() error {
 }
 
 // NotifyObjectAdded notifies the Inspector that a new object has been created.
+// If the inspector is disabled (empty address), this is a no-op.
 func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shardID int) {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
@@ -190,7 +196,13 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shard
 }
 
 // NotifyObjectRemoved notifies the Inspector that an object has been removed.
+// If the inspector is disabled (empty address), this is a no-op.
 func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
@@ -379,7 +391,13 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 // UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
 // This is called when the component's connections change.
 // The same RPC is used for both nodes and gates - the inspector determines the type based on the address.
+// If the inspector is disabled (empty address), this is a no-op.
 func (im *InspectorManager) UpdateConnectedNodes() {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
@@ -413,7 +431,13 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 // UpdateRegisteredGates sends an UpdateRegisteredGates RPC to the Inspector.
 // This is called when the node's registered gates change.
 // This method is only applicable in node mode.
+// If the inspector is disabled (empty address), this is a no-op.
 func (im *InspectorManager) UpdateRegisteredGates() {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
