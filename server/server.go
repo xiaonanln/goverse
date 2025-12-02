@@ -240,12 +240,12 @@ func (server *Server) validateObjectShardOwnership(ctx context.Context, objectID
 	// Check with cluster that this ID is sharded to this node
 	targetNode, err := clusterInstance.GetCurrentNodeForObject(ctx, objectID)
 	if err != nil {
-		return fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
+		return status.Errorf(codes.FailedPrecondition, "failed to determine target node for object %s: %v", objectID, err)
 	}
 
 	thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
 	if targetNode != thisNodeAddr {
-		return fmt.Errorf("object %s is sharded to node %s, not this node %s", objectID, targetNode, thisNodeAddr)
+		return status.Errorf(codes.FailedPrecondition, "object %s is sharded to node %s, not this node %s", objectID, targetNode, thisNodeAddr)
 	}
 
 	// GetCurrentNodeForObject already validates that shards are not in migration state
@@ -286,7 +286,7 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 	if req.Request != nil {
 		requestMsg, err = req.Request.UnmarshalNew()
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal request: %w", err)
+			return nil, status.Errorf(codes.InvalidArgument, "failed to unmarshal request: %v", err)
 		}
 	}
 
@@ -298,7 +298,7 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 	var respAny anypb.Any
 	err = respAny.MarshalFrom(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
+		return nil, status.Errorf(codes.Internal, "failed to marshal response: %v", err)
 	}
 	response := &goverse_pb.CallObjectResponse{
 		Response: &respAny,
@@ -311,7 +311,7 @@ func (server *Server) CreateObject(ctx context.Context, req *goverse_pb.CreateOb
 
 	// ID must be specified in the request
 	if req.GetId() == "" {
-		return nil, fmt.Errorf("object ID must be specified in CreateObject request")
+		return nil, status.Errorf(codes.InvalidArgument, "object ID must be specified in CreateObject request")
 	}
 
 	// Validate that this object should be on this node
@@ -344,7 +344,7 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 
 	// ID must be specified in the request
 	if req.GetId() == "" {
-		return nil, fmt.Errorf("object ID must be specified in DeleteObject request")
+		return nil, status.Errorf(codes.InvalidArgument, "object ID must be specified in DeleteObject request")
 	}
 
 	// Check with cluster that this ID is sharded to this node
@@ -352,12 +352,12 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 	if clusterInstance != nil && clusterInstance.GetThisNode() != nil {
 		targetNode, err := clusterInstance.GetCurrentNodeForObject(ctx, req.GetId())
 		if err != nil {
-			return nil, fmt.Errorf("failed to determine target node for object %s: %w", req.GetId(), err)
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to determine target node for object %s: %v", req.GetId(), err)
 		}
 
 		thisNodeAddr := clusterInstance.GetThisNode().GetAdvertiseAddress()
 		if targetNode != thisNodeAddr {
-			return nil, fmt.Errorf("object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
+			return nil, status.Errorf(codes.FailedPrecondition, "object %s is sharded to node %s, not this node %s", req.GetId(), targetNode, thisNodeAddr)
 		}
 	}
 
@@ -408,7 +408,7 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 
 	gateAddr := req.GetGateAddr()
 	if gateAddr == "" {
-		return fmt.Errorf("gate_addr must be specified in RegisterGate request")
+		return status.Errorf(codes.InvalidArgument, "gate_addr must be specified in RegisterGate request")
 	}
 
 	server.logger.Infof("Gate %s registered, starting message stream", gateAddr)

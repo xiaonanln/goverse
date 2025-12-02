@@ -2,7 +2,6 @@ package inspector
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -83,7 +82,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
 		log.Println("RegisterNode called with empty advertise address")
-		return nil, errors.New("advertise address cannot be empty")
+		return nil, status.Errorf(codes.InvalidArgument, "advertise address cannot be empty")
 	}
 
 	node := GoverseNode{
@@ -140,7 +139,7 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
 		log.Println("RegisterGate called with empty advertise address")
-		return nil, errors.New("advertise address cannot be empty")
+		return nil, status.Errorf(codes.InvalidArgument, "advertise address cannot be empty")
 	}
 
 	gate := GoverseGate{
@@ -173,7 +172,7 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
 		log.Println("UpdateConnectedNodes called with empty advertise address")
-		return nil, errors.New("advertise address cannot be empty")
+		return nil, status.Errorf(codes.InvalidArgument, "advertise address cannot be empty")
 	}
 
 	connectedNodes := req.GetConnectedNodes()
@@ -202,7 +201,7 @@ func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
 		log.Println("UpdateRegisteredGates called with empty advertise address")
-		return nil, errors.New("advertise address cannot be empty")
+		return nil, status.Errorf(codes.InvalidArgument, "advertise address cannot be empty")
 	}
 
 	registeredGates := req.GetRegisteredGates()

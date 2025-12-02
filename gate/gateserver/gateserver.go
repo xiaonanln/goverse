@@ -240,11 +240,11 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
 	anyResp, err := anypb.New(regResp)
 	if err != nil {
-		return fmt.Errorf("failed to marshal RegisterResponse: %w", err)
+		return status.Errorf(codes.Internal, "failed to marshal RegisterResponse: %v", err)
 	}
 
 	if err := stream.Send(anyResp); err != nil {
-		return fmt.Errorf("failed to send RegisterResponse: %w", err)
+		return status.Errorf(codes.Internal, "failed to send RegisterResponse: %v", err)
 	}
 
 	// Stream messages to the client using the returned clientProxy

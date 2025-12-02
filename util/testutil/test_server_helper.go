@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -186,7 +188,7 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 	m.mu.Unlock()
 
 	if node == nil {
-		return nil, fmt.Errorf("no node assigned to mock server")
+		return nil, status.Errorf(codes.FailedPrecondition, "no node assigned to mock server")
 	}
 
 	// Inject client_id into context if present in the request
@@ -200,7 +202,7 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 	if req.Request != nil {
 		requestMsg, err = anypb.UnmarshalNew(req.Request, proto.UnmarshalOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal request: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "failed to unmarshal request: %v", err)
 		}
 	}
 
@@ -214,7 +216,7 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 	var respAny anypb.Any
 	if resp != nil {
 		if err := respAny.MarshalFrom(resp); err != nil {
-			return nil, fmt.Errorf("failed to marshal response: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to marshal response: %v", err)
 		}
 	}
 
@@ -230,13 +232,13 @@ func (m *MockGoverseServer) CreateObject(ctx context.Context, req *goverse_pb.Cr
 	m.mu.Unlock()
 
 	if node == nil {
-		return nil, fmt.Errorf("no node assigned to mock server")
+		return nil, status.Errorf(codes.FailedPrecondition, "no node assigned to mock server")
 	}
 
 	// Call CreateObject on the actual node
 	createdID, err := node.CreateObject(ctx, req.Type, req.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create object: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to create object: %v", err)
 	}
 
 	return &goverse_pb.CreateObjectResponse{
@@ -251,13 +253,13 @@ func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.De
 	m.mu.Unlock()
 
 	if node == nil {
-		return nil, fmt.Errorf("no node assigned to mock server")
+		return nil, status.Errorf(codes.FailedPrecondition, "no node assigned to mock server")
 	}
 
 	// Call DeleteObject on the actual node
 	err := node.DeleteObject(ctx, req.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to delete object: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to delete object: %v", err)
 	}
 
 	return &goverse_pb.DeleteObjectResponse{}, nil
@@ -278,11 +280,11 @@ func (m *MockGoverseServer) RegisterGate(req *goverse_pb.RegisterGateRequest, st
 
 	gateAddr := req.GetGateAddr()
 	if gateAddr == "" {
-		return fmt.Errorf("gate_addr must be specified in RegisterGate request")
+		return status.Errorf(codes.InvalidArgument, "gate_addr must be specified in RegisterGate request")
 	}
 
 	if cluster == nil {
-		return fmt.Errorf("no cluster assigned to mock server")
+		return status.Errorf(codes.FailedPrecondition, "no cluster assigned to mock server")
 	}
 
 	m.logger.Infof("Gate %s registered, starting message stream", gateAddr)
