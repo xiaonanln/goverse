@@ -1176,7 +1176,8 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, 
 
 // RebalanceShards checks if all shards are assigned and rebalances if there's significant imbalance.
 // If all shards are assigned, finds the node with max shards (a) and min shards (b).
-// If a >= b + 2 and a > 2*b, migrates shards from overloaded nodes to underloaded nodes.
+// If a >= b + 2 and the imbalance exceeds 20% of the ideal load per node, migrates shards
+// from overloaded nodes to underloaded nodes.
 // The function batches up to 100 shard migrations per call, checking imbalance conditions after each
 // selection to avoid over-migrating. All collected shards are updated in a single storeShardMapping call.
 // Returns true if a rebalance operation was performed, false otherwise, and any error encountered.
@@ -1254,8 +1255,12 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 			}
 		}
 
-		// Check rebalance conditions: a >= b + 2 and a > 2*b
-		if maxCount < minCount+2 || maxCount <= 2*minCount {
+		// Check rebalance conditions: a >= b + 2 and imbalance > 20% of ideal load
+		// Ideal load per node is numShards / numNodes
+		// We rebalance if: maxCount >= minCount + 2 AND (maxCount - minCount) > 0.2 * idealLoad
+		idealLoad := float64(cm.numShards) / float64(len(nodes))
+		imbalanceThreshold := 0.2 * idealLoad
+		if maxCount < minCount+2 || float64(maxCount-minCount) <= imbalanceThreshold {
 			// No more imbalance to fix
 			break
 		}
