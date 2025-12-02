@@ -163,17 +163,14 @@ High-level objectives for future development:
 - **Better leader election strategy** - Improve stability and reduce failover time during node transitions
 - **Shard rebalancing based on actual node load** - Dynamic rebalancing that considers CPU, memory, and object count
 - **Support different object call semantics** - Currently only best-effort; add at-least-once, exactly-once, and idempotent patterns
-- **RPC timeout configuration** - Configurable timeouts for CallObject/CreateObject with proper propagation across node boundaries (see [TIMEOUT_DESIGN.md](docs/TIMEOUT_DESIGN.md))
+- **Configuration hot reload** - Support runtime configuration updates without cluster restart for access control, lifecycle rules, and other policies
 
 ### Gate & Client Features
-- ~~**Gate HTTP client support** - REST/HTTP endpoints alongside gRPC for broader client compatibility~~ ✅ Done (see [HTTP_GATE.md](docs/design/HTTP_GATE.md))
 - **Gate authorization mechanism** - Fine-grained access control and authentication for client connections
-- ~~**Gate object call filtering** - Whitelist/blacklist patterns for security and API governance~~ ✅ Done (see [OBJECT_ACCESS_CONTROL.md](docs/design/OBJECT_ACCESS_CONTROL.md))
 - **Gate rate limiting** - Per-client and per-object throttling to prevent abuse
 - **Client reconnection & backoff** - Automatic retry logic with exponential backoff
 
 ### Performance & Scalability
-- ~~**Configurable shard count** - Move beyond fixed 8192 shards for extreme scale~~ ✅ Done
 - **Runtime shard count reconfiguration** - Allow dynamic shard count changes without cluster restart
 
 ### Observability & Operations
