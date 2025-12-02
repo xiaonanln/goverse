@@ -350,3 +350,115 @@ func TestInspectorManager_ShardIDComputation(t *testing.T) {
 		t.Fatalf("ShardId should be in range [0, 8192), got %d", obj.ShardId)
 	}
 }
+
+func TestInspectorManager_LegacyProvidersBackwardCompatibility(t *testing.T) {
+	t.Parallel()
+
+	mgr := NewInspectorManager("localhost:47000")
+
+	// Test calling SetConnectedNodesProvider first, then SetRegisteredGatesProvider
+	connectedNodes := []string{"node1:8001", "node2:8002"}
+	registeredGates := []string{"gate1:9001"}
+
+	mgr.SetConnectedNodesProvider(func() []string {
+		return connectedNodes
+	})
+
+	mgr.SetRegisteredGatesProvider(func() []string {
+		return registeredGates
+	})
+
+	// Verify both providers work correctly
+	if mgr.clusterInfoProvider == nil {
+		t.Fatal("clusterInfoProvider should be set")
+	}
+
+	gotNodes := mgr.clusterInfoProvider.GetConnectedNodes()
+	if len(gotNodes) != 2 {
+		t.Fatalf("Expected 2 connected nodes, got %d", len(gotNodes))
+	}
+
+	gotGates := mgr.clusterInfoProvider.GetRegisteredGates()
+	if len(gotGates) != 1 {
+		t.Fatalf("Expected 1 registered gate, got %d", len(gotGates))
+	}
+}
+
+func TestInspectorManager_LegacyProvidersReverseOrder(t *testing.T) {
+	t.Parallel()
+
+	mgr := NewInspectorManager("localhost:47000")
+
+	// Test calling SetRegisteredGatesProvider first, then SetConnectedNodesProvider
+	connectedNodes := []string{"node1:8001"}
+	registeredGates := []string{"gate1:9001", "gate2:9002"}
+
+	mgr.SetRegisteredGatesProvider(func() []string {
+		return registeredGates
+	})
+
+	mgr.SetConnectedNodesProvider(func() []string {
+		return connectedNodes
+	})
+
+	// Verify both providers work correctly (order should not matter)
+	if mgr.clusterInfoProvider == nil {
+		t.Fatal("clusterInfoProvider should be set")
+	}
+
+	gotNodes := mgr.clusterInfoProvider.GetConnectedNodes()
+	if len(gotNodes) != 1 {
+		t.Fatalf("Expected 1 connected node, got %d", len(gotNodes))
+	}
+
+	gotGates := mgr.clusterInfoProvider.GetRegisteredGates()
+	if len(gotGates) != 2 {
+		t.Fatalf("Expected 2 registered gates, got %d", len(gotGates))
+	}
+}
+
+func TestInspectorManager_SetClusterInfoProvider(t *testing.T) {
+	t.Parallel()
+
+	mgr := NewInspectorManager("localhost:47000")
+
+	// Create a mock provider
+	connectedNodes := []string{"node1:8001", "node2:8002", "node3:8003"}
+	registeredGates := []string{"gate1:9001", "gate2:9002"}
+
+	provider := &mockClusterInfoProvider{
+		connectedNodes:  connectedNodes,
+		registeredGates: registeredGates,
+	}
+
+	mgr.SetClusterInfoProvider(provider)
+
+	// Verify provider is set
+	if mgr.clusterInfoProvider == nil {
+		t.Fatal("clusterInfoProvider should be set")
+	}
+
+	gotNodes := mgr.clusterInfoProvider.GetConnectedNodes()
+	if len(gotNodes) != 3 {
+		t.Fatalf("Expected 3 connected nodes, got %d", len(gotNodes))
+	}
+
+	gotGates := mgr.clusterInfoProvider.GetRegisteredGates()
+	if len(gotGates) != 2 {
+		t.Fatalf("Expected 2 registered gates, got %d", len(gotGates))
+	}
+}
+
+// mockClusterInfoProvider is a test implementation of ClusterInfoProvider
+type mockClusterInfoProvider struct {
+	connectedNodes  []string
+	registeredGates []string
+}
+
+func (m *mockClusterInfoProvider) GetConnectedNodes() []string {
+	return m.connectedNodes
+}
+
+func (m *mockClusterInfoProvider) GetRegisteredGates() []string {
+	return m.registeredGates
+}
