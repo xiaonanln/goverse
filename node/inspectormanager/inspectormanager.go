@@ -33,16 +33,6 @@ const (
 	ModeGate
 )
 
-// ConnectedNodesProvider is a function type that returns the list of connected node addresses.
-// This is used by InspectorManager to get the current list of connected nodes when registering with the inspector.
-// Deprecated: Use ClusterInfoProvider instead.
-type ConnectedNodesProvider func() []string
-
-// RegisteredGatesProvider is a function type that returns the list of registered gate addresses.
-// This is used by InspectorManager (in node mode) to get the current list of gates registered to this node.
-// Deprecated: Use ClusterInfoProvider instead.
-type RegisteredGatesProvider func() []string
-
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 // It can operate in node mode or gate mode, using the appropriate registration RPCs.
@@ -102,53 +92,6 @@ func (im *InspectorManager) SetHealthCheckInterval(interval time.Duration) {
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
 	im.clusterInfoProvider = provider
-}
-
-// SetConnectedNodesProvider sets the provider function for getting connected node addresses.
-// Deprecated: Use SetClusterInfoProvider instead.
-// This is used when registering with the inspector to report which nodes this component is connected to.
-// Works for both node mode (node-to-node connections) and gate mode (gate-to-node connections).
-// Must be called before Start() to take effect.
-func (im *InspectorManager) SetConnectedNodesProvider(provider ConnectedNodesProvider) {
-	// If we already have a legacy adapter, update it; otherwise create a new one
-	if adapter, ok := im.clusterInfoProvider.(*legacyProviderAdapter); ok {
-		adapter.connectedNodesProvider = provider
-	} else {
-		im.clusterInfoProvider = &legacyProviderAdapter{connectedNodesProvider: provider}
-	}
-}
-
-// SetRegisteredGatesProvider sets the provider function for getting registered gate addresses.
-// Deprecated: Use SetClusterInfoProvider instead.
-// This is used when registering with the inspector to report which gates are registered to this node.
-// Only applicable in node mode. Must be called before Start() to take effect.
-func (im *InspectorManager) SetRegisteredGatesProvider(provider RegisteredGatesProvider) {
-	// If we already have a legacy adapter, update it; otherwise create a new one
-	if adapter, ok := im.clusterInfoProvider.(*legacyProviderAdapter); ok {
-		adapter.registeredGatesProvider = provider
-	} else {
-		im.clusterInfoProvider = &legacyProviderAdapter{registeredGatesProvider: provider}
-	}
-}
-
-// legacyProviderAdapter adapts the old-style function providers to the ClusterInfoProvider interface
-type legacyProviderAdapter struct {
-	connectedNodesProvider  ConnectedNodesProvider
-	registeredGatesProvider RegisteredGatesProvider
-}
-
-func (a *legacyProviderAdapter) GetConnectedNodes() []string {
-	if a.connectedNodesProvider != nil {
-		return a.connectedNodesProvider()
-	}
-	return nil
-}
-
-func (a *legacyProviderAdapter) GetRegisteredGates() []string {
-	if a.registeredGatesProvider != nil {
-		return a.registeredGatesProvider()
-	}
-	return nil
 }
 
 // Start initializes the connection to the Inspector and starts background management.
