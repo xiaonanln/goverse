@@ -46,18 +46,13 @@ func NewGate(config *GateConfig) (*Gate, error) {
 		return nil, fmt.Errorf("invalid gate configuration: %w", err)
 	}
 
-	im := inspectormanager.NewGateInspectorManager(config.AdvertiseAddress)
-	if config.InspectorAddress != "" {
-		im.SetInspectorAddress(config.InspectorAddress)
-	}
-
 	gate := &Gate{
 		config:           config,
 		advertiseAddress: config.AdvertiseAddress,
 		logger:           logger.NewLogger("Gate"),
 		clients:          make(map[string]*ClientProxy),
 		nodeRegs:         make(map[string]*nodeReg),
-		inspectorManager: im,
+		inspectorManager: inspectormanager.NewGateInspectorManager(config.AdvertiseAddress, config.InspectorAddress),
 	}
 
 	return gate, nil

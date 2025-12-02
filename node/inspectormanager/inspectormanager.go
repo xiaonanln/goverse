@@ -56,12 +56,12 @@ type InspectorManager struct {
 }
 
 // NewInspectorManager creates a new InspectorManager instance for a node.
-// By default, the inspector is disabled. Call SetInspectorAddress before Start() to enable it.
-func NewInspectorManager(nodeAddress string) *InspectorManager {
+// If inspectorAddress is empty, the inspector manager will be disabled.
+func NewInspectorManager(nodeAddress string, inspectorAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             nodeAddress,
 		mode:                ModeNode,
-		inspectorAddress:    "", // disabled by default
+		inspectorAddress:    inspectorAddress,
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("InspectorManager"),
 		objects:             make(map[string]*inspector_pb.Object),
@@ -70,12 +70,12 @@ func NewInspectorManager(nodeAddress string) *InspectorManager {
 
 // NewGateInspectorManager creates a new InspectorManager instance for a gate.
 // Gates don't track objects, so the objects map is not initialized.
-// By default, the inspector is disabled. Call SetInspectorAddress before Start() to enable it.
-func NewGateInspectorManager(gateAddress string) *InspectorManager {
+// If inspectorAddress is empty, the inspector manager will be disabled.
+func NewGateInspectorManager(gateAddress string, inspectorAddress string) *InspectorManager {
 	return &InspectorManager{
 		address:             gateAddress,
 		mode:                ModeGate,
-		inspectorAddress:    "", // disabled by default
+		inspectorAddress:    inspectorAddress,
 		healthCheckInterval: defaultHealthCheckInterval,
 		logger:              logger.NewLogger("GateInspectorManager"),
 	}
