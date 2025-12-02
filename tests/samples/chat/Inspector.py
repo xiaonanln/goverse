@@ -19,6 +19,7 @@ SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
 sys.path.insert(0, str(SAMPLES_DIR))
 
 from BinaryHelper import BinaryHelper
+from PortHelper import get_free_port
 
 try:
     from cmd.inspector.proto import inspector_pb2
@@ -36,19 +37,19 @@ class Inspector:
     channel: grpc.Channel | None
     stub: inspector_pb2_grpc.InspectorServiceStub | None
     
-    def __init__(self, binary_path: str | None = None, http_port: int = 8080, grpc_port: int = 8081, 
+    def __init__(self, binary_path: str | None = None, http_port: int | None = None, grpc_port: int | None = None, 
                  build_if_needed: bool = True) -> None:
         """Initialize and optionally build the inspector.
         
         Args:
             binary_path: Path to inspector binary (defaults to /tmp/inspector)
-            http_port: HTTP server port (default: 8080)
-            grpc_port: gRPC server port (default: 8081)
+            http_port: HTTP server port (default: dynamically allocated)
+            grpc_port: gRPC server port (default: dynamically allocated)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/inspector'
-        self.http_port = http_port
-        self.grpc_port = grpc_port
+        self.http_port = http_port if http_port is not None else get_free_port()
+        self.grpc_port = grpc_port if grpc_port is not None else get_free_port()
         self.process = None
         self.channel = None
         self.stub = None
@@ -65,11 +66,15 @@ class Inspector:
             print(f"⚠️  {self.name} is already running")
             return
 
-        print(f"Starting {self.name}...")
+        print(f"Starting {self.name} (HTTP port {self.http_port}, gRPC port {self.grpc_port})...")
         
-        # Start the process (inherits GOCOVERDIR from environment if set)
+        # Start the process with dynamic port arguments (inherits GOCOVERDIR from environment if set)
         self.process = subprocess.Popen(
-            [self.binary_path], 
+            [
+                self.binary_path,
+                '-http-addr', f':{self.http_port}',
+                '-grpc-addr', f':{self.grpc_port}'
+            ], 
             stdout=None, 
             stderr=None
         )

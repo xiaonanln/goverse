@@ -16,6 +16,7 @@ SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
 sys.path.insert(0, str(SAMPLES_DIR))
 
 from BinaryHelper import BinaryHelper
+from PortHelper import get_free_port
 
 
 class Gateway:
@@ -23,17 +24,17 @@ class Gateway:
     
     process: subprocess.Popen | None
     
-    def __init__(self, listen_port: int = 49000, binary_path: str | None = None, 
+    def __init__(self, listen_port: int | None = None, binary_path: str | None = None, 
                  build_if_needed: bool = True) -> None:
         """Initialize and optionally build the gateway.
         
         Args:
-            listen_port: Gateway listen port (default: 49000)
+            listen_port: Gateway listen port (default: dynamically allocated)
             binary_path: Path to gateway binary (defaults to /tmp/gateway)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/gateway'
-        self.listen_port = listen_port
+        self.listen_port = listen_port if listen_port is not None else get_free_port()
         self.process = None
         self.name = "Gateway"
         
@@ -50,9 +51,17 @@ class Gateway:
 
         print(f"Starting {self.name} on port {self.listen_port}...")
         
-        # Start the process (inherits GOCOVERDIR from environment if set)
+        # Build address strings for the gateway
+        listen_addr = f':{self.listen_port}'
+        advertise_addr = f'localhost:{self.listen_port}'
+        
+        # Start the process with dynamic port arguments (inherits GOCOVERDIR from environment if set)
         self.process = subprocess.Popen(
-            [self.binary_path], 
+            [
+                self.binary_path,
+                '-listen', listen_addr,
+                '-advertise', advertise_addr
+            ], 
             stdout=None, 
             stderr=None
         )

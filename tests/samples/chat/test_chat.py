@@ -223,13 +223,16 @@ def main():
             if not server.wait_for_ready(timeout=20):
                 return 1
 
-        # Start gateway using Gateway class
-        gateway = Gateway(listen_port=49000)
+        # Start gateway using Gateway class (uses dynamically allocated port)
+        gateway = Gateway()
         gateway.start()
         
         # Wait for gateway to be ready
         if not gateway.wait_for_ready(timeout=30):
             return 1
+        
+        # Get the dynamically allocated gateway port for client connections
+        gateway_port = gateway.listen_port
 
         # Wait for cluster to be ready and objects to be created
         # We expect: 1 ChatRoomMgr + 5 ChatRooms = 6 objects minimum across all servers
@@ -296,14 +299,14 @@ def main():
             print(objects_response)
 
         # Run push messaging test
-        push_ok = run_push_messaging_test(gateway_port=49000)
+        push_ok = run_push_messaging_test(gateway_port=gateway_port)
 
         if not push_ok:
             print("\n❌ Push messaging test failed!")
             return 1
         
         # Run chat test
-        chat_ok = run_chat_test(gateway_port=49000, num_servers=num_servers)
+        chat_ok = run_chat_test(gateway_port=gateway_port, num_servers=num_servers)
 
         if not chat_ok:
             print("\n❌ Chat test failed!")
