@@ -33,7 +33,7 @@ type GoverseObject = models.GoverseObject
 const sseHeartbeatInterval = 30 * time.Second
 
 // clusterStateStabilityDuration is the duration to wait for cluster state to stabilize
-const clusterStateStabilityDuration = 10 * time.Second
+const clusterStateStabilityDuration = 3 * time.Second
 
 // SSEClient represents a connected SSE client
 type SSEClient struct {
@@ -72,6 +72,7 @@ type Config struct {
 	StaticDir  string
 	EtcdAddr   string // optional etcd address
 	EtcdPrefix string // etcd key prefix
+	NumShards  int    // number of shards in the cluster
 }
 
 // New creates a new InspectorServer
@@ -98,13 +99,17 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 			log.Printf("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
 
 			// Initialize ConsensusManager for watching cluster state
-			shardLock := shardlock.NewShardLock(sharding.NumShards)
+			numShards := cfg.NumShards
+			if numShards <= 0 {
+				numShards = sharding.NumShards
+			}
+			shardLock := shardlock.NewShardLock(numShards)
 			s.consensusManager = consensusmanager.NewConsensusManager(
 				mgr,
 				shardLock,
 				clusterStateStabilityDuration,
 				"", // localNodeAddress (not needed for inspector)
-				sharding.NumShards,
+				numShards,
 			)
 
 			// Initialize and start watching
@@ -113,16 +118,12 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 			defer cancel()
 
 			if err := s.consensusManager.Initialize(ctx); err != nil {
-				log.Printf("Failed to initialize consensus manager: %v", err)
-				s.consensusManager = nil
-			} else if err := s.consensusManager.StartWatch(ctx); err != nil {
-				log.Printf("Failed to start consensus manager watch: %v", err)
-				// Clean up: stop the watch before discarding
-				s.consensusManager.StopWatch()
-				s.consensusManager = nil
-			} else {
-				log.Printf("ConsensusManager initialized and watching cluster state")
+				log.Panicf("Failed to initialize consensus manager: %v", err)
 			}
+			if err := s.consensusManager.StartWatch(ctx); err != nil {
+				log.Panicf("Failed to start consensus manager watch: %v", err)
+			}
+			log.Printf("ConsensusManager initialized and watching cluster state")
 		}
 	}
 

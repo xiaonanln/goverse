@@ -95,6 +95,7 @@ func (l *Loader) Load(args []string) (*inspectserver.Config, error) {
 			StaticDir:  DefaultStaticDir, // Static dir is not configurable in config file
 			EtcdAddr:   cfg.GetEtcdAddress(),
 			EtcdPrefix: cfg.GetEtcdPrefix(),
+			NumShards:  cfg.GetNumShards(),
 		}, nil
 	}
 
@@ -105,6 +106,7 @@ func (l *Loader) Load(args []string) (*inspectserver.Config, error) {
 		StaticDir:  *l.staticDir,
 		EtcdAddr:   *l.etcdAddr,
 		EtcdPrefix: *l.etcdPrefix,
+		NumShards:  0, // Will default to sharding.NumShards in New()
 	}, nil
 }
 
