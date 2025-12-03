@@ -131,24 +131,84 @@ goverseapi.RegisterObjectType((*Player)(nil))
 
 ## Object Lifecycle
 
+### Creating Object IDs
+
+GoVerse provides three methods for creating object IDs, each with different routing behaviors:
+
+#### CreateObjectID
+
+```go
+func CreateObjectID() string
+```
+
+Creates a normal object ID using hash-based sharding. This is the default choice for most use cases.
+
+```go
+objID := goverseapi.CreateObjectID()
+goverseapi.CreateObject(ctx, "Counter", objID)
+```
+
+**Use when:** You want automatic load balancing and fault tolerance across nodes.
+
+#### CreateObjectIDOnShard
+
+```go
+func CreateObjectIDOnShard(shardID int) string
+```
+
+Creates an object ID that will be placed on a specific shard. Valid shard IDs range from 0 to 8191 (production) or 0 to 63 (tests).
+
+```go
+objID := goverseapi.CreateObjectIDOnShard(5)
+goverseapi.CreateObject(ctx, "Counter", objID)
+```
+
+**Use when:** You need objects to be co-located on the same node (e.g., objects that frequently interact).
+
+**Format:** `shard#<shardID>/<uniqueID>` (e.g., `shard#5/AAZFAQkHBWFxJkjOKHgz`)
+
+#### CreateObjectIDOnNode
+
+```go
+func CreateObjectIDOnNode(nodeAddress string) string
+```
+
+Creates an object ID that will be placed on a specific node. The node address should be in the format "host:port".
+
+```go
+objID := goverseapi.CreateObjectIDOnNode("localhost:7001")
+goverseapi.CreateObject(ctx, "Counter", objID)
+```
+
+**Use when:** You need precise control over object placement (e.g., node-local resources).
+
+**Format:** `<nodeAddress>/<uniqueID>` (e.g., `localhost:7001/AAZFAQkHBYPMjtdAA2_4`)
+
 ### CreateObject
 
 ```go
 func CreateObject(ctx context.Context, objType, objID string) (string, error)
 ```
 
-Creates a new object instance. The object will be placed on the appropriate node based on shard assignment.
+Creates a new object instance. The object will be placed on the appropriate node based on the object ID format.
 
 ```go
-id, err := goverseapi.CreateObject(ctx, "Counter", "my-counter")
-if err != nil {
-    log.Printf("Failed to create object: %v", err)
-}
+// Using a normal ID
+objID := goverseapi.CreateObjectID()
+id, err := goverseapi.CreateObject(ctx, "Counter", objID)
+
+// Using a fixed-shard ID
+objID := goverseapi.CreateObjectIDOnShard(5)
+id, err := goverseapi.CreateObject(ctx, "Counter", objID)
+
+// Using a fixed-node ID
+objID := goverseapi.CreateObjectIDOnNode("localhost:7001")
+id, err := goverseapi.CreateObject(ctx, "Counter", objID)
 ```
 
 **Parameters:**
 - `objType`: The registered object type name (e.g., `"Counter"`)
-- `objID`: Unique identifier for the object
+- `objID`: Unique identifier for the object (use CreateObjectID* methods)
 
 **Returns:**
 - The object ID (same as input `objID`)
@@ -433,6 +493,15 @@ resp, err := goverseapi.CallObject(ctx, "Counter", "id", "Get", &emptypb.Empty{}
 ```
 
 ---
+
+## Examples
+
+See the [examples directory](../examples/) for complete working examples:
+
+- [Object ID Creation](../examples/objectid_example/) - Demonstrates all three object ID creation methods
+- [Fixed Node](../examples/fixednode/) - Using fixed node addresses
+- [Persistence](../examples/persistence/) - Database-backed objects
+- [HTTP Gate](../examples/httpgate/) - REST API integration
 
 ## See Also
 
