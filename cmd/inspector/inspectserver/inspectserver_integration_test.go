@@ -188,17 +188,19 @@ func TestHandleShardMapping_WithConsensusManagerAndData(t *testing.T) {
 
 	defer server.Shutdown()
 
-	// Add nodes and shards directly via etcd manager to simulate cluster state
+	// Add nodes and shards directly via etcd to test that ConsensusManager's watch
+	// mechanism properly picks up changes. We intentionally bypass ConsensusManager
+	// to simulate real cluster nodes writing to etcd and verify the watch works.
 	ctx := context.Background()
 	nodeAddr := "localhost:50001"
 
-	// Register a node via etcd
+	// Register a node via etcd (simulating a real node registering itself)
 	nodeKey := prefix + "/nodes/" + nodeAddr
 	if _, err := server.etcdManager.GetClient().Put(ctx, nodeKey, nodeAddr); err != nil {
 		t.Fatalf("Failed to add node to etcd: %v", err)
 	}
 
-	// Add a shard assignment via etcd
+	// Add a shard assignment via etcd (simulating cluster leader assigning shards)
 	shardKey := prefix + "/shard/0"
 	shardValue := nodeAddr + "," + nodeAddr // target,current
 	if _, err := server.etcdManager.GetClient().Put(ctx, shardKey, shardValue); err != nil {
