@@ -1,0 +1,54 @@
+# GoVerse Chat Stress Test Configuration
+# 
+# This configuration sets up a test environment with:
+# - 1 inspector
+# - 3 chat nodes
+# - 2 gates for client connections
+#
+# This file is used by stress_test.py to start the cluster
+
+version: 1
+
+inspector:
+  # Inspector provides HTTP/gRPC interface for cluster monitoring
+  http_addr: "0.0.0.0:8080"
+  grpc_addr: "0.0.0.0:8081"
+  advertise_addr: "localhost:8081"
+
+cluster:
+  # Use fewer shards for testing to speed up operations
+  shards: 64
+  
+  # Cluster metadata / consensus provider
+  provider: "etcd"
+  
+  etcd:
+    # Etcd endpoints (can be overridden by environment)
+    endpoints:
+      - "127.0.0.1:2379"
+    
+    # Etcd key prefix for this test cluster
+    prefix: "/goverse/stress-test"
+
+nodes:
+  - id: "stress-node-1"
+    grpc_addr: "0.0.0.0:9201"
+    advertise_addr: "localhost:9201"
+    http_addr: "0.0.0.0:8201"
+  
+  - id: "stress-node-2"
+    grpc_addr: "0.0.0.0:9202"
+    advertise_addr: "localhost:9202"
+    http_addr: "0.0.0.0:8202"
+  
+  - id: "stress-node-3"
+    grpc_addr: "0.0.0.0:9203"
+    advertise_addr: "localhost:9203"
+    http_addr: "0.0.0.0:8203"
+
+gates:
+  - id: "stress-gate-1"
+    grpc_addr: "0.0.0.0:10101"
+  
+  - id: "stress-gate-2"
+    grpc_addr: "0.0.0.0:10102"
