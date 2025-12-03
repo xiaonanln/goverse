@@ -264,7 +264,7 @@ func TestSSEEndpoint_MultipleClients(t *testing.T) {
 	}
 }
 
-// TestHandleShardMapping_NoConsensusManager tests that handleShardMapping returns empty when ConsensusManager is not initialized
+// TestHandleShardMapping_NoConsensusManager tests that handleShardMapping returns empty when consensusManager is not initialized
 func TestHandleShardMapping_NoConsensusManager(t *testing.T) {
 	pg := graph.NewGoverseGraph()
 
