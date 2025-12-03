@@ -32,14 +32,34 @@ class Gateway:
         Args:
             listen_port: Gateway listen port (default: dynamically allocated, ignored if config_file is provided)
             binary_path: Path to gateway binary (defaults to /tmp/gateway)
-            config_file: Path to YAML config file (if provided, listen_port is ignored)
+            config_file: Path to YAML config file (if provided, ports are read from config)
             gate_id: Gate ID when using config file (required if config_file is provided)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/gateway'
-        self.listen_port = listen_port if listen_port is not None else get_free_port()
         self.config_file = config_file
         self.gate_id = gate_id
+        
+        # If config file is provided, parse port from it
+        if config_file and gate_id:
+            import yaml
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            # Find the gate configuration by gate_id
+            gate_config = None
+            for gate in config.get('gates', []):
+                if gate.get('id') == gate_id:
+                    gate_config = gate
+                    break
+            if not gate_config:
+                raise ValueError(f"Gate ID '{gate_id}' not found in config file")
+            
+            # Parse listen port from grpc_addr
+            grpc_addr = gate_config.get('grpc_addr', '0.0.0.0:10101')
+            self.listen_port = int(grpc_addr.split(':')[1]) if ':' in grpc_addr else 10101
+        else:
+            self.listen_port = listen_port if listen_port is not None else get_free_port()
+        
         self.process = None
         self.name = "Gateway"
         

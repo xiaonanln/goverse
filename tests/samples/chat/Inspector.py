@@ -45,13 +45,27 @@ class Inspector:
             binary_path: Path to inspector binary (defaults to /tmp/inspector)
             http_port: HTTP server port (default: dynamically allocated, ignored if config_file is provided)
             grpc_port: gRPC server port (default: dynamically allocated, ignored if config_file is provided)
-            config_file: Path to YAML config file (if provided, http_port and grpc_port are ignored)
+            config_file: Path to YAML config file (if provided, ports are read from config)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/inspector'
         self.config_file = config_file
-        self.http_port = http_port if http_port is not None else get_free_port()
-        self.grpc_port = grpc_port if grpc_port is not None else get_free_port()
+        
+        # If config file is provided, parse ports from it
+        if config_file:
+            import yaml
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            inspector_config = config.get('inspector', {})
+            http_addr = inspector_config.get('http_addr', '0.0.0.0:8080')
+            grpc_addr = inspector_config.get('grpc_addr', '0.0.0.0:8081')
+            # Parse ports from addresses (format: "host:port")
+            self.http_port = int(http_addr.split(':')[1]) if ':' in http_addr else 8080
+            self.grpc_port = int(grpc_addr.split(':')[1]) if ':' in grpc_addr else 8081
+        else:
+            self.http_port = http_port if http_port is not None else get_free_port()
+            self.grpc_port = grpc_port if grpc_port is not None else get_free_port()
+        
         self.process = None
         self.channel = None
         self.stub = None
