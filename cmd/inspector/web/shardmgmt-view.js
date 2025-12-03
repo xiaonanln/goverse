@@ -1,4 +1,5 @@
 // Inspector Graph - Shard Management View
+// Depends on: constants.js (typeColors)
 
 // Global state for shard management data
 let shardManagementData = { shards: [], nodes: [] }
