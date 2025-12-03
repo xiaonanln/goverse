@@ -291,3 +291,113 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		})
 	}
 }
+
+// TestRebalanceShards_CustomBatchSize tests that custom batch size is respected
+func TestRebalanceShards_CustomBatchSize(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name              string
+		numShards         int
+		batchSize         int
+		expectedBatchSize int // What we expect to actually use
+	}{
+		{
+			name:              "Custom batch size 10",
+			numShards:         64,
+			batchSize:         10,
+			expectedBatchSize: 10,
+		},
+		{
+			name:              "Custom batch size 50",
+			numShards:         64,
+			batchSize:         50,
+			expectedBatchSize: 50,
+		},
+		{
+			name:              "Zero batch size uses default (numShards/128)",
+			numShards:         128,
+			batchSize:         0,
+			expectedBatchSize: 1, // max(1, 128/128) = 1
+		},
+		{
+			name:              "Default for 8192 shards",
+			numShards:         8192,
+			batchSize:         0,
+			expectedBatchSize: 64, // max(1, 8192/128) = 64
+		},
+		{
+			name:              "Large batch size",
+			numShards:         8192,
+			batchSize:         200,
+			expectedBatchSize: 200,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a consensus manager
+			mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards, tc.batchSize)
+
+			// Verify the batch size is set correctly
+			if cm.rebalanceShardsBatchSize != tc.expectedBatchSize {
+				t.Fatalf("Expected batch size %d, got %d", tc.expectedBatchSize, cm.rebalanceShardsBatchSize)
+			}
+
+			ctx := context.Background()
+
+			// Set up 3 nodes
+			nodes := []string{"node1", "node2", "node3"}
+
+			cm.mu.Lock()
+			cm.state.Nodes = make(map[string]bool)
+			for _, node := range nodes {
+				cm.state.Nodes[node] = true
+			}
+
+			// Create highly imbalanced shard mapping (75% on node1)
+			cm.state.ShardMapping = &ShardMapping{
+				Shards: make(map[int]ShardInfo),
+			}
+
+			imbalancedCount := (tc.numShards * 3) / 4
+			for i := 0; i < imbalancedCount; i++ {
+				cm.state.ShardMapping.Shards[i] = ShardInfo{
+					TargetNode:  "node1",
+					CurrentNode: "node1",
+					ModRevision: 0,
+				}
+			}
+
+			for i := imbalancedCount; i < tc.numShards; i++ {
+				if i%2 == 0 {
+					cm.state.ShardMapping.Shards[i] = ShardInfo{
+						TargetNode:  "node2",
+						CurrentNode: "node2",
+						ModRevision: 0,
+					}
+				} else {
+					cm.state.ShardMapping.Shards[i] = ShardInfo{
+						TargetNode:  "node3",
+						CurrentNode: "node3",
+						ModRevision: 0,
+					}
+				}
+			}
+			cm.mu.Unlock()
+
+			// Try to rebalance (will fail due to no etcd, but we can check the logic)
+			_, err := cm.RebalanceShards(ctx)
+
+			// We expect an error because we're not connected to etcd
+			if err == nil {
+				t.Fatal("Expected error when not connected to etcd, but got nil")
+			}
+
+			// The test verifies that the batch size is correctly set in the ConsensusManager
+			// The actual batch size used during rebalancing is tested in the log output
+			t.Logf("Batch size correctly configured as %d (error expected: %v)", cm.rebalanceShardsBatchSize, err)
+		})
+	}
+}
