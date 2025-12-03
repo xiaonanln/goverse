@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,12 +16,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
-	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 type GoverseNode = models.GoverseNode
@@ -56,6 +57,9 @@ type InspectorServer struct {
 	// etcd connection (optional)
 	etcdManager *etcdmanager.EtcdManager
 	etcdPrefix  string
+
+	// consensus manager for cluster state
+	consensusManager *consensusmanager.ConsensusManager
 }
 
 // Config holds the configuration for InspectorServer
@@ -89,6 +93,28 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 		} else {
 			s.etcdManager = mgr
 			log.Printf("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
+
+			// Initialize ConsensusManager for watching cluster state
+			shardLock := shardlock.NewShardLock(sharding.NumShards)
+			s.consensusManager = consensusmanager.NewConsensusManager(
+				mgr,
+				shardLock,
+				10*time.Second, // clusterStateStabilityDuration
+				"",             // localNodeAddress (not needed for inspector)
+				sharding.NumShards,
+			)
+
+			// Initialize and start watching
+			ctx := context.Background()
+			if err := s.consensusManager.Initialize(ctx); err != nil {
+				log.Printf("Failed to initialize consensus manager: %v", err)
+				s.consensusManager = nil
+			} else if err := s.consensusManager.StartWatch(ctx); err != nil {
+				log.Printf("Failed to start consensus manager watch: %v", err)
+				s.consensusManager = nil
+			} else {
+				log.Printf("ConsensusManager initialized and watching cluster state")
+			}
 		}
 	}
 
@@ -325,32 +351,13 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// If etcd is not connected, return empty result
-	if s.etcdManager == nil {
+	// If consensus manager is not available, return empty result
+	if s.consensusManager == nil {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"shards": []interface{}{},
 			"nodes":  []string{},
 		})
-		return
-	}
-
-	// Get shard mapping from etcd
-	ctx, cancel := etcdmanager.WithEtcdDeadline(context.Background())
-	defer cancel()
-
-	client := s.etcdManager.GetClient()
-	if client == nil {
-		http.Error(w, "etcd client not available", http.StatusInternalServerError)
-		return
-	}
-
-	// Get all shard keys
-	shardPrefix := s.etcdPrefix + "/shard/"
-	resp, err := client.Get(ctx, shardPrefix, clientv3.WithPrefix())
-	if err != nil {
-		log.Printf("Failed to get shard mapping from etcd: %v", err)
-		http.Error(w, "Failed to get shard mapping", http.StatusInternalServerError)
 		return
 	}
 
@@ -373,72 +380,24 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 		objectCountPerShard[obj.ShardID]++
 	}
 
-	for _, kv := range resp.Kvs {
-		key := string(kv.Key)
-		// Extract shard ID from key: /goverse/shard/<shardID>
-		// The key splits into ["", "goverse", "shard", "<shardID>"], so we take the last part
-		parts := strings.Split(key, "/")
-		if len(parts) < 4 {
-			log.Printf("Invalid shard key format: %s", key)
-			continue
-		}
-		shardIDStr := parts[len(parts)-1]
-		shardID, err := strconv.Atoi(shardIDStr)
-		if err != nil {
-			log.Printf("Invalid shard ID in key %s: %v", key, err)
-			continue
-		}
+	// Get shard mapping from ConsensusManager (in-memory, already watched)
+	shardMapping := s.consensusManager.GetShardMapping()
+	if shardMapping != nil {
+		for shardID, shardInfo := range shardMapping.Shards {
+			shards = append(shards, ShardInfo{
+				ShardID:     shardID,
+				TargetNode:  shardInfo.TargetNode,
+				CurrentNode: shardInfo.CurrentNode,
+				ObjectCount: objectCountPerShard[shardID],
+				Flags:       strings.Join(shardInfo.Flags, ","),
+			})
 
-		// Parse shard value: <target_node>,<current_node>[,f=flag1,f=flag2,...]
-		value := string(kv.Value)
-		valueParts := strings.Split(value, ",")
-		var targetNode, currentNode string
-		var flags []string
-		nodePartCount := 0
-
-		for _, part := range valueParts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed == "" {
-				// Handle empty parts (e.g., trailing comma for empty CurrentNode)
-				if nodePartCount == 1 {
-					currentNode = ""
-					nodePartCount++
-				}
-				continue
+			if shardInfo.TargetNode != "" {
+				nodeSet[shardInfo.TargetNode] = true
 			}
-
-			// Check if this is a flag (starts with "f=")
-			if strings.HasPrefix(trimmed, "f=") {
-				flagValue := strings.TrimPrefix(trimmed, "f=")
-				if flagValue != "" {
-					flags = append(flags, flagValue)
-				}
-			} else {
-				// This is a node part
-				if nodePartCount == 0 {
-					targetNode = trimmed
-					nodePartCount++
-				} else if nodePartCount == 1 {
-					currentNode = trimmed
-					nodePartCount++
-				}
-				// Ignore extra node parts beyond the first two
+			if shardInfo.CurrentNode != "" {
+				nodeSet[shardInfo.CurrentNode] = true
 			}
-		}
-
-		shards = append(shards, ShardInfo{
-			ShardID:     shardID,
-			TargetNode:  targetNode,
-			CurrentNode: currentNode,
-			ObjectCount: objectCountPerShard[shardID],
-			Flags:       strings.Join(flags, ","),
-		})
-
-		if targetNode != "" {
-			nodeSet[targetNode] = true
-		}
-		if currentNode != "" {
-			nodeSet[currentNode] = true
 		}
 	}
 
@@ -463,6 +422,9 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 // Shutdown initiates graceful shutdown of all servers
 func (s *InspectorServer) Shutdown() {
 	close(s.shutdownChan)
+	if s.consensusManager != nil {
+		s.consensusManager.StopWatch()
+	}
 	if s.etcdManager != nil {
 		s.etcdManager.Close()
 	}

@@ -264,6 +264,69 @@ func TestSSEEndpoint_MultipleClients(t *testing.T) {
 	}
 }
 
+// TestHandleShardMapping_NoConsensusManager tests that handleShardMapping returns empty when ConsensusManager is not initialized
+func TestHandleShardMapping_NoConsensusManager(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/shards", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", rr.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+
+	shards, ok := result["shards"].([]interface{})
+	if !ok {
+		t.Fatalf("Expected 'shards' to be an array")
+	}
+	if len(shards) != 0 {
+		t.Fatalf("Expected empty shards array, got %d shards", len(shards))
+	}
+
+	nodes, ok := result["nodes"].([]interface{})
+	if !ok {
+		t.Fatalf("Expected 'nodes' to be an array")
+	}
+	if len(nodes) != 0 {
+		t.Fatalf("Expected empty nodes array, got %d nodes", len(nodes))
+	}
+}
+
+// TestHandleShardMapping_MethodNotAllowed tests that non-GET requests are rejected
+func TestHandleShardMapping_MethodNotAllowed(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/shards", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405 for POST, got %d", rr.Code)
+	}
+}
+
 // flushableRecorder wraps httptest.ResponseRecorder with Flush support
 type flushableRecorder struct {
 	*httptest.ResponseRecorder
