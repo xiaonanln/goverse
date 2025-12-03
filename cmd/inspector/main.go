@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -9,16 +8,13 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
+	"github.com/xiaonanln/goverse/cmd/inspector/inspectorconfig"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspectserver"
 )
 
 func main() {
-	// Parse command-line flags
-	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address")
-	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
-	etcdAddr := flag.String("etcd-addr", "", "etcd server address (optional, e.g., localhost:2379)")
-	etcdPrefix := flag.String("etcd-prefix", "/goverse", "etcd key prefix")
-	flag.Parse()
+	// Load configuration
+	cfg := inspectorconfig.Get()
 
 	pg := graph.NewGoverseGraph()
 
@@ -30,13 +26,7 @@ func main() {
 	serversDone := make(chan struct{}, 2)
 
 	// Create and configure the inspector server
-	server := inspectserver.New(pg, inspectserver.Config{
-		GRPCAddr:   *grpcAddr,
-		HTTPAddr:   *httpAddr,
-		StaticDir:  "cmd/inspector/web",
-		EtcdAddr:   *etcdAddr,
-		EtcdPrefix: *etcdPrefix,
-	})
+	server := inspectserver.New(pg, *cfg)
 
 	// Start gRPC server
 	if err := server.ServeGRPC(serversDone); err != nil {
