@@ -42,7 +42,9 @@ function renderShardManagementView(container) {
     return
   }
 
-  // Group shards by node (using CurrentNode or TargetNode as fallback)
+  // Group shards by node
+  // Display each shard under its CurrentNode (where it currently resides)
+  // If CurrentNode is not set, fall back to TargetNode
   const shardsByNode = {}
   nodes.forEach(node => {
     shardsByNode[node] = []
@@ -95,7 +97,9 @@ function renderShardManagementView(container) {
           ${nodeShards.length > 0 ? `
             <div class="shard-list">
               ${nodeShards.map(shard => {
-                const isMigrating = shard.current_node !== shard.target_node
+                // Check if shard is migrating (both nodes must be set and different)
+                const isMigrating = shard.current_node && shard.target_node && 
+                                   shard.current_node !== shard.target_node
                 const shardClass = isMigrating ? 'shard-badge migrating' : 'shard-badge'
                 const shardTitle = isMigrating 
                   ? `Shard ${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node})`
