@@ -1,6 +1,7 @@
 package consensusmanager
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -160,12 +161,12 @@ func TestGetCurrentNodeForObject_ValidShardFormats(t *testing.T) {
 		},
 		{
 			name:     "shard_max",
-			objectID: "shard#63/object-123",
+			objectID: fmt.Sprintf("shard#%d/object-123", testutil.TestNumShards-1),
 			wantNode: "localhost:7001",
 		},
 		{
 			name:     "shard_middle",
-			objectID: "shard#32/object-123",
+			objectID: fmt.Sprintf("shard#%d/object-123", testutil.TestNumShards/2),
 			wantNode: "localhost:7001",
 		},
 	}

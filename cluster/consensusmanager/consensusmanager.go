@@ -827,13 +827,14 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 func (cm *ConsensusManager) validateShardFormat(objectID string, prefix string) error {
 	// Format must be: shard#<number>/<objectID>
 	// prefix is the part before the first "/"
+	const shardPrefix = "shard#"
 
-	if len(prefix) <= 6 { // "shard#" is 6 chars, need at least one digit
+	if len(prefix) <= len(shardPrefix) { // Need at least one digit after "shard#"
 		return fmt.Errorf("invalid object ID format: %s (shard# must be followed by a number)", objectID)
 	}
 
 	// Extract the shard ID part
-	shardIDStr := prefix[6:] // Skip "shard#"
+	shardIDStr := prefix[len(shardPrefix):] // Skip "shard#"
 
 	// Parse the shard ID
 	shardID, err := strconv.Atoi(shardIDStr)
