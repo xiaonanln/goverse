@@ -1064,19 +1064,7 @@ func (c *Cluster) IsShardMappingComplete(ctx context.Context, numShards int) boo
 // 2. Fixed-node format: "<nodeAddress>/<objectID>" - routes directly to specified node
 // 3. Regular format: any other ID - uses hash-based shard assignment
 func (c *Cluster) GetCurrentNodeForObject(ctx context.Context, objectID string) (string, error) {
-	if strings.Contains(objectID, "/") {
-		parts := strings.SplitN(objectID, "/", 2)
-		if len(parts) >= 1 && parts[0] != "" {
-			// Check if it's a fixed-shard format (shard#<shardID>/...)
-			// Fixed-shard format should be processed through normal shard mapping
-			if !strings.HasPrefix(parts[0], "shard#") {
-				// Fixed node address format (e.g., "localhost:7001/object-123")
-				nodeAddr := parts[0]
-				return nodeAddr, nil
-			}
-		}
-	}
-
+	// Delegate to consensus manager which handles all validation
 	return c.consensusManager.GetCurrentNodeForObject(objectID)
 }
 
