@@ -78,8 +78,11 @@ function renderShardManagementView(container) {
   sortedNodes.forEach(nodeId => {
     const nodeShards = shardsByNode[nodeId] || []
     
-    // Sort shards by shard ID
-    nodeShards.sort((a, b) => a.shard_id - b.shard_id)
+    // Sort shards by object count (descending), then by shard ID (ascending)
+    nodeShards.sort((a, b) => {
+      const countDiff = (b.object_count || 0) - (a.object_count || 0)
+      return countDiff !== 0 ? countDiff : a.shard_id - b.shard_id
+    })
 
     // Determine node color (using the same color scheme as the rest of the UI)
     const nodeColor = typeColors.node
@@ -102,10 +105,11 @@ function renderShardManagementView(container) {
                                    shard.current_node !== shard.target_node
                 const shardClass = isMigrating ? 'shard-badge migrating' : 'shard-badge'
                 const objectCount = shard.object_count || 0
+                const objectText = objectCount === 1 ? 'object' : 'objects'
                 const shardTitle = isMigrating 
-                  ? `Shard ${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node}) - ${objectCount} object(s)`
-                  : `Shard ${shard.shard_id} - ${objectCount} object(s)`
-                return `<span class="${shardClass}" title="${shardTitle}">${shard.shard_id} (${objectCount})</span>`
+                  ? `Shard #${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node}) - ${objectCount} ${objectText}`
+                  : `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
+                return `<span class="${shardClass}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
               }).join('')}
             </div>
           ` : `
