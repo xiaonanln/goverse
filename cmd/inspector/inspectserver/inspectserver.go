@@ -108,7 +108,10 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 			)
 
 			// Initialize and start watching
-			ctx := context.Background()
+			// Use a timeout context for initialization
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			if err := s.consensusManager.Initialize(ctx); err != nil {
 				log.Printf("Failed to initialize consensus manager: %v", err)
 				s.consensusManager = nil
