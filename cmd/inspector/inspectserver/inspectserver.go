@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -410,14 +411,7 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Sort nodes alphabetically
-	// Using a simple sort for strings
-	for i := 0; i < len(nodes); i++ {
-		for j := i + 1; j < len(nodes); j++ {
-			if nodes[i] > nodes[j] {
-				nodes[i], nodes[j] = nodes[j], nodes[i]
-			}
-		}
-	}
+	sort.Strings(nodes)
 
 	result := map[string]interface{}{
 		"shards": shards,
