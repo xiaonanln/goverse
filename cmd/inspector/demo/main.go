@@ -211,7 +211,6 @@ func initializeEtcdShardMappings(etcdAddr, etcdPrefix string, nodeAddrs []string
 	}
 	defer mgr.Close()
 
-	ctx := context.Background()
 	client := mgr.GetClient()
 
 	// Initialize shard mappings with random node assignments
@@ -226,7 +225,9 @@ func initializeEtcdShardMappings(etcdAddr, etcdPrefix string, nodeAddrs []string
 		shardValue := fmt.Sprintf("%s,%s", nodeAddr, nodeAddr)
 		shardKey := fmt.Sprintf("%s/shard/%d", etcdPrefix, shardID)
 
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_, err := client.Put(ctx, shardKey, shardValue)
+		cancel()
 		if err != nil {
 			return fmt.Errorf("failed to write shard %d: %w", shardID, err)
 		}
