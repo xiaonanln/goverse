@@ -170,19 +170,17 @@ func (c *Cluster) init(cfg Config) error {
 	if stabilityDuration <= 0 {
 		stabilityDuration = DefaultNodeStabilityDuration
 	}
-
-	// Determine rebalance shards batch size
-	rebalanceShardsBatchSize := cfg.RebalanceShardsBatchSize
-	if rebalanceShardsBatchSize <= 0 {
-		rebalanceShardsBatchSize = max(1, c.numShards/128)
-	}
-
 	// Use the cluster's numShards for consensus manager
-	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr(), c.numShards, rebalanceShardsBatchSize)
+	c.consensusManager = consensusmanager.NewConsensusManager(mgr, c.shardLock, stabilityDuration, c.getAdvertiseAddr(), c.numShards)
 
 	// Set minQuorum on consensus manager if specified
 	if cfg.MinQuorum > 0 {
 		c.consensusManager.SetMinQuorum(cfg.MinQuorum)
+	}
+
+	// Set rebalance shards batch size on consensus manager if specified
+	if cfg.RebalanceShardsBatchSize > 0 {
+		c.consensusManager.SetRebalanceShardsBatchSize(cfg.RebalanceShardsBatchSize)
 	}
 	return nil
 }
@@ -197,7 +195,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
-		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", sharding.NumShards, 0),
+		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", sharding.NumShards),
 		minQuorum:                 1,
 		shardMappingCheckInterval: 1 * time.Second,
 		shardLock:                 shardLock,

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
@@ -171,7 +172,7 @@ type ConsensusManager struct {
 	clusterStateStabilityDuration time.Duration // duration to wait for cluster state to stabilize
 	localNodeAddress              string        // local node address for this consensus manager
 	numShards                     int           // number of shards in the cluster
-	rebalanceShardsBatchSize      int           // maximum number of shards to migrate in a single rebalance operation
+	rebalanceShardsBatchSize      atomic.Int32  // maximum number of shards to migrate in a single rebalance operation
 
 	// Watch management
 	watchCtx     context.Context
@@ -184,24 +185,20 @@ type ConsensusManager struct {
 }
 
 // NewConsensusManager creates a new consensus manager
-func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string, numShards int, rebalanceShardsBatchSize int) *ConsensusManager {
+func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string, numShards int) *ConsensusManager {
 	if clusterStateStabilityDuration <= 0 {
 		clusterStateStabilityDuration = defaultClusterStateStabilityDuration
 	}
 	if numShards <= 0 {
 		numShards = sharding.NumShards
 	}
-	if rebalanceShardsBatchSize <= 0 {
-		rebalanceShardsBatchSize = max(1, numShards/128)
-	}
-	return &ConsensusManager{
+	cm := &ConsensusManager{
 		etcdManager:                   etcdMgr,
 		logger:                        logger.NewLogger("ConsensusManager"),
 		shardLock:                     shardLock,
 		clusterStateStabilityDuration: clusterStateStabilityDuration,
 		localNodeAddress:              localNodeAddress,
 		numShards:                     numShards,
-		rebalanceShardsBatchSize:      rebalanceShardsBatchSize,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -211,6 +208,9 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		},
 		listeners: make([]StateChangeListener, 0),
 	}
+	// Set default batch size
+	cm.rebalanceShardsBatchSize.Store(int32(max(1, numShards/128)))
+	return cm
 }
 
 // AddListener adds a state change listener
@@ -275,6 +275,15 @@ func (cm *ConsensusManager) SetMinQuorum(minQuorum int) {
 	defer cm.mu.Unlock()
 	cm.minQuorum = minQuorum
 	cm.logger.Infof("ConsensusManager minimum quorum set to %d", minQuorum)
+}
+
+// SetRebalanceShardsBatchSize sets the maximum number of shards to migrate in a single rebalance operation
+func (cm *ConsensusManager) SetRebalanceShardsBatchSize(batchSize int) {
+	if batchSize <= 0 {
+		batchSize = max(1, cm.numShards/128)
+	}
+	cm.rebalanceShardsBatchSize.Store(int32(batchSize))
+	cm.logger.Infof("ConsensusManager rebalance shards batch size set to %d", batchSize)
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -1235,7 +1244,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 	}
 
 	// Collect shards to migrate (up to configured batch size per batch)
-	maxBatchSize := cm.rebalanceShardsBatchSize
+	maxBatchSize := int(cm.rebalanceShardsBatchSize.Load())
 	updateShards := make(map[int]ShardInfo)
 
 	// Keep track of which shards we've already selected for migration

@@ -26,7 +26,7 @@ func TestNewConsensusManager(t *testing.T) {
 	// Error is intentionally ignored as we're only testing ConsensusManager creation,
 	// not etcd manager functionality
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	if cm == nil {
 		t.Fatal("NewConsensusManager returned nil")
@@ -48,7 +48,7 @@ func TestNewConsensusManager(t *testing.T) {
 func TestAddRemoveListener(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	listener1 := &mockListener{}
 	listener2 := &mockListener{}
@@ -76,7 +76,7 @@ func TestAddRemoveListener(t *testing.T) {
 func TestGetNodes_Empty(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	nodes := cm.GetNodes()
 	if len(nodes) != 0 {
@@ -87,7 +87,7 @@ func TestGetNodes_Empty(t *testing.T) {
 func TestGetLeaderNode_Empty(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	leader := cm.GetLeaderNode()
 	if leader != "" {
@@ -98,7 +98,7 @@ func TestGetLeaderNode_Empty(t *testing.T) {
 func TestGetLeaderNode_WithNodes(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Add some nodes to internal state
 	cm.mu.Lock()
@@ -116,7 +116,7 @@ func TestGetLeaderNode_WithNodes(t *testing.T) {
 func TestGetShardMapping_NotAvailable(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	mapping := cm.GetShardMapping()
 	if mapping == nil {
@@ -130,7 +130,7 @@ func TestGetShardMapping_NotAvailable(t *testing.T) {
 func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Initialize shard mapping
 	cm.mu.Lock()
@@ -171,7 +171,7 @@ func TestGetShardMapping_ReturnsDeepCopy(t *testing.T) {
 func TestCreateShardMapping_NoNodes(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	n, err := cm.ReassignShardTargetNodes(context.Background())
 	if err != nil {
@@ -190,7 +190,7 @@ func TestCreateShardMapping_WithNodes_NoExistingMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	mgr.Connect()
 
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Add nodes to internal state
 	cm.mu.Lock()
@@ -219,7 +219,7 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", prefix)
 	mgr.Connect()
 
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Add initial nodes
 	cm.mu.Lock()
@@ -260,7 +260,7 @@ func TestUpdateShardMapping_WithExisting(t *testing.T) {
 func TestUpdateShardMapping_NoChanges(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Add nodes
 	cm.mu.Lock()
@@ -304,7 +304,7 @@ func TestIsStateStable(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	localAddr := "localhost:47001"
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, localAddr, testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, localAddr, testNumShards)
 
 	// Not stable when lastNodeChange is zero
 	if cm.IsStateStable() {
@@ -345,7 +345,7 @@ func TestIsStateStable(t *testing.T) {
 func TestGetLastNodeChangeTime(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Initial state
 	changeTime := cm.GetLastNodeChangeTime()
@@ -368,7 +368,7 @@ func TestGetLastNodeChangeTime(t *testing.T) {
 func TestGetNodeForShard_InvalidShard(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	_, err := cm.GetNodeForShard(-1)
 	if err == nil {
@@ -384,7 +384,7 @@ func TestGetNodeForShard_InvalidShard(t *testing.T) {
 func TestGetNodeForShard_NoMapping(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	_, err := cm.GetNodeForShard(0)
 	if err == nil {
@@ -395,7 +395,7 @@ func TestGetNodeForShard_NoMapping(t *testing.T) {
 func TestGetNodeForShard_WithMapping(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a mapping with CurrentNode set
 	cm.mu.Lock()
@@ -420,7 +420,7 @@ func TestGetNodeForShard_WithMapping(t *testing.T) {
 func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a mapping with CurrentNode empty
 	cm.mu.Lock()
@@ -445,7 +445,7 @@ func TestGetNodeForShard_FailsWhenCurrentNodeEmpty(t *testing.T) {
 func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a mapping where CurrentNode differs from TargetNode
 	cm.mu.Lock()
@@ -473,7 +473,7 @@ func TestGetNodeForShard_PrefersCurrentNode(t *testing.T) {
 func TestGetCurrentNodeForObject_NoMapping(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	_, err := cm.GetCurrentNodeForObject("test-object")
 	if err == nil {
@@ -483,7 +483,7 @@ func TestGetCurrentNodeForObject_NoMapping(t *testing.T) {
 
 func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a complete mapping with CurrentNode set
 	cm.mu.Lock()
@@ -516,7 +516,7 @@ func TestGetCurrentNodeForObject_WithMapping(t *testing.T) {
 
 func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a complete mapping with CurrentNode empty
 	cm.mu.Lock()
@@ -544,7 +544,7 @@ func TestGetCurrentNodeForObject_FailsWhenCurrentNodeEmpty(t *testing.T) {
 
 func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a complete mapping where shards are in migration state
 	cm.mu.Lock()
@@ -585,7 +585,7 @@ func TestGetCurrentNodeForObject_FailsWhenShardInMigration(t *testing.T) {
 
 func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a mapping where CurrentNode is not in the node list
 	cm.mu.Lock()
@@ -612,7 +612,7 @@ func TestGetNodeForShard_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 
 func TestGetCurrentNodeForObject_FailsWhenCurrentNodeNotInNodeList(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Set a mapping where CurrentNode is not in the node list
 	cm.mu.Lock()
@@ -732,14 +732,14 @@ func TestFormatShardInfo(t *testing.T) {
 
 func TestStopWatch_NotStarted(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	// Should not panic
 	cm.StopWatch()
 }
 
 func TestStartWatch_NoEtcdManager(t *testing.T) {
-	cm := NewConsensusManager(nil, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(nil, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	ctx := context.Background()
 	err := cm.StartWatch(ctx)
@@ -772,7 +772,7 @@ func TestClaimShardOwnership(t *testing.T) {
 
 	// Define this node's address
 	thisNodeAddr := "localhost:47001"
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards)
 
 	// Add nodes to state
 	cm.mu.Lock()
@@ -859,7 +859,7 @@ func TestClaimShardOwnership(t *testing.T) {
 // when this node address is not set
 func TestClaimShardOwnership_NoThisNode(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 	ctx := context.Background()
 
 	// Set up a stable cluster state with other nodes (but not this node)
@@ -921,7 +921,7 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 	// Define this node's address and a dead node
 	thisNodeAddr := "localhost:47001"
 	deadNodeAddr := "localhost:47003"
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards)
 
 	// Add nodes to state - note that deadNodeAddr is NOT in the active node list
 	cm.mu.Lock()
@@ -1065,7 +1065,7 @@ func TestClaimShardOwnership_TargetAndEmpty(t *testing.T) {
 func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	thisNodeAddr := "localhost:47001"
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards)
 	ctx := context.Background()
 
 	t.Run("Unstable cluster - no claim", func(t *testing.T) {
@@ -1170,7 +1170,7 @@ func TestClaimShardsForNode_StabilityCheck(t *testing.T) {
 // and set TargetNode to match CurrentNode instead of using round-robin assignment.
 func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	node1 := "localhost:47001"
 	node2 := "localhost:47002"
