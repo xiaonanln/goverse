@@ -364,7 +364,7 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 
 	shards := make([]ShardInfo, 0)
 	nodeSet := make(map[string]bool)
-	
+
 	// Count objects per shard from the graph
 	objects := s.pg.GetObjects()
 	objectCountPerShard := make(map[int]int)
