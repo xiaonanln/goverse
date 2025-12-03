@@ -32,8 +32,17 @@ from pathlib import Path
 from typing import List, Optional
 import traceback
 
-# Add the repo root to the path for proto imports
-REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent.resolve()
+# Find repo root by searching upward for go.mod
+def find_repo_root():
+    """Find the repository root by searching upward for go.mod."""
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / 'go.mod').exists():
+            return parent
+    # Fallback to relative path if go.mod not found
+    return Path(__file__).parent.parent.parent.parent.parent.resolve()
+
+REPO_ROOT = find_repo_root()
 sys.path.insert(0, str(REPO_ROOT))
 
 # Expose the chat directory on sys.path for helper modules
@@ -48,6 +57,14 @@ from ChatServer import ChatServer
 from Inspector import Inspector
 from ChatClient import ChatClient
 from Gateway import Gateway
+
+# Constants for test configuration
+ACTION_WEIGHT_SEND = 0.6      # 60% probability to send message
+ACTION_WEIGHT_LEAVE = 0.1     # 10% probability to leave room
+ACTION_WEIGHT_STAY = 0.3      # 30% probability to stay/do nothing
+MIN_ACTION_DELAY = 0.5        # Minimum seconds between actions
+MAX_ACTION_DELAY = 5.0        # Maximum seconds between actions
+CLUSTER_STABILIZATION_WAIT = 15  # Seconds to wait for cluster and chatroom creation
 
 
 class StressTestClient:
@@ -102,7 +119,7 @@ class StressTestClient:
         """Run random actions in a loop."""
         try:
             # Give client time to stabilize
-            time.sleep(random.uniform(0.5, 2.0))
+            time.sleep(random.uniform(MIN_ACTION_DELAY, 2.0))
             
             while self.running:
                 try:
@@ -114,7 +131,7 @@ class StressTestClient:
                         # In a room - randomly choose to leave, send message, or stay
                         action = random.choices(
                             ['send', 'leave', 'stay'],
-                            weights=[0.6, 0.1, 0.3],  # 60% send, 10% leave, 30% stay
+                            weights=[ACTION_WEIGHT_SEND, ACTION_WEIGHT_LEAVE, ACTION_WEIGHT_STAY],
                             k=1
                         )[0]
                         
@@ -125,8 +142,8 @@ class StressTestClient:
                     
                     self.action_count += 1
                     
-                    # Random delay between actions (0.5 to 5 seconds)
-                    time.sleep(random.uniform(0.5, 5.0))
+                    # Random delay between actions
+                    time.sleep(random.uniform(MIN_ACTION_DELAY, MAX_ACTION_DELAY))
                     
                 except Exception as e:
                     if self.running:
@@ -252,9 +269,8 @@ Examples:
     duration_seconds = args.duration
     stats_interval = args.stats_interval
     
-    # Get the repository root directory
-    repo_root = Path(__file__).parent.parent.parent.parent.parent.resolve()
-    os.chdir(repo_root)
+    # Use the already-computed REPO_ROOT
+    os.chdir(REPO_ROOT)
     print(f"Working directory: {os.getcwd()}")
     
     print("=" * 80)
@@ -276,8 +292,11 @@ Examples:
     chatrooms = ['General', 'Technology', 'Crypto', 'Sports', 'Movies']
     
     try:
-        # Add go bin to PATH
-        go_bin_path = os.popen('go env GOPATH').read().strip()
+        # Add go bin to PATH using subprocess for safety
+        import subprocess
+        result = subprocess.run(['go', 'env', 'GOPATH'], 
+                              capture_output=True, text=True, check=True)
+        go_bin_path = result.stdout.strip()
         os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
         
         # Set coverage directory if provided
@@ -336,8 +355,8 @@ Examples:
         # The chat server creates ChatRoomMgr0 after 5 seconds of cluster ready,
         # then ChatRoomMgr creates all 5 chatrooms immediately
         print("\nWaiting for cluster to stabilize and chat rooms to be created...")
-        print("(This takes ~15 seconds: 5s for cluster ready + 5s for ChatRoomMgr + 5s buffer)")
-        time.sleep(15)
+        print(f"(This takes ~{CLUSTER_STABILIZATION_WAIT} seconds: 5s for cluster ready + 5s for ChatRoomMgr + 5s buffer)")
+        time.sleep(CLUSTER_STABILIZATION_WAIT)
         
         # Start clients
         print("\n" + "=" * 80)
