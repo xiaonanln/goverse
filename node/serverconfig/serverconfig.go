@@ -16,6 +16,7 @@ const (
 	DefaultAdvertiseAddr = "localhost:48000"
 	DefaultEtcdAddr      = "localhost:2379"
 	DefaultEtcdPrefix    = "/goverse"
+	DefaultInspectorAddr = "localhost:8081"
 )
 
 // Loader handles parsing of command-line flags and config file loading.
@@ -29,6 +30,7 @@ type Loader struct {
 	httpListenAddr *string
 	etcdAddr       *string
 	etcdPrefix     *string
+	inspectorAddr  *string
 }
 
 // NewLoader creates a new Loader with flags registered on the provided FlagSet.
@@ -45,6 +47,7 @@ func NewLoader(fs *flag.FlagSet) *Loader {
 	l.httpListenAddr = fs.String("http-listen", "", "HTTP listen address for metrics (cannot be used with --config)")
 	l.etcdAddr = fs.String("etcd", DefaultEtcdAddr, "Etcd address (cannot be used with --config)")
 	l.etcdPrefix = fs.String("etcd-prefix", DefaultEtcdPrefix, "Etcd key prefix (cannot be used with --config)")
+	l.inspectorAddr = fs.String("inspector-address", DefaultInspectorAddr, "Inspector service address (cannot be used with --config)")
 	return l
 }
 
@@ -80,6 +83,9 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 		}
 		if *l.etcdPrefix != DefaultEtcdPrefix {
 			return nil, fmt.Errorf("--etcd-prefix cannot be used with --config; configure in config file instead")
+		}
+		if *l.inspectorAddr != DefaultInspectorAddr {
+			return nil, fmt.Errorf("--inspector-address cannot be used with --config; configure in config file instead")
 		}
 
 		// Load config from file
@@ -121,6 +127,7 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 		EtcdAddress:          *l.etcdAddr,
 		EtcdPrefix:           *l.etcdPrefix,
 		NumShards:            0, // Use default when not using config file
+		InspectorAddress:     *l.inspectorAddr,
 	}, nil
 }
 
