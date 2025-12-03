@@ -39,8 +39,8 @@ def find_repo_root():
     for parent in [current] + list(current.parents):
         if (parent / 'go.mod').exists():
             return parent
-    # Fallback to relative path if go.mod not found
-    return Path(__file__).parent.parent.parent.parent.parent.resolve()
+    # Fallback to relative path if go.mod not found (tests/samples/chat/stress/ -> repo root)
+    return Path(__file__).parent.parent.parent.parent.resolve()
 
 REPO_ROOT = find_repo_root()
 sys.path.insert(0, str(REPO_ROOT))
@@ -167,10 +167,13 @@ class StressTestClient:
             print(f"⚠️  Client {self.client_id} failed to join room: {e}")
     
     def _leave_room(self):
-        """Leave the current chatroom."""
+        """Leave the current chatroom.
+        
+        Note: This simulates leaving by clearing the local room state.
+        A full implementation would call a server-side Leave method if available.
+        For stress testing purposes, this is sufficient to trigger re-joining behavior.
+        """
         try:
-            # In the current implementation, we just clear the room
-            # The actual "leave" would require server-side support
             room = self.current_room
             self.current_room = None
             print(f"[Client {self.client_id}] Left chatroom: {room}")
@@ -294,10 +297,14 @@ Examples:
     try:
         # Add go bin to PATH using subprocess for safety
         import subprocess
-        result = subprocess.run(['go', 'env', 'GOPATH'], 
-                              capture_output=True, text=True, check=True)
-        go_bin_path = result.stdout.strip()
-        os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
+        try:
+            result = subprocess.run(['go', 'env', 'GOPATH'], 
+                                  capture_output=True, text=True, check=True)
+            go_bin_path = result.stdout.strip()
+            os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"⚠️  Warning: Could not get GOPATH: {e}")
+            print("   Continuing without adding go bin to PATH...")
         
         # Set coverage directory if provided
         base_cov_dir = os.environ.get('GOCOVERDIR', '').strip()
