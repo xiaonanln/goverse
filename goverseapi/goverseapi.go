@@ -5,11 +5,13 @@ import (
 
 	"github.com/xiaonanln/goverse/client"
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/node/serverconfig"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/server"
 	"github.com/xiaonanln/goverse/util/callcontext"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -145,4 +147,38 @@ func CallerIsClient(ctx context.Context) bool {
 // HasClientID is deprecated. Use CallerIsClient instead.
 func HasClientID(ctx context.Context) bool {
 	return CallerIsClient(ctx)
+}
+
+// CreateObjectID creates a normal object ID using a unique identifier.
+// The object will be distributed to a node based on hash-based sharding.
+//
+// Example:
+//
+//	objID := goverseapi.CreateObjectID()
+//	goverseapi.CreateObject(ctx, "MyObject", objID)
+func CreateObjectID() string {
+	return uniqueid.CreateObjectID()
+}
+
+// CreateObjectIDOnShard creates an object ID that will be placed on a specific shard.
+// The shard ID must be in the valid range [0, numShards).
+// By default, Goverse uses 8192 shards (sharding.NumShards).
+//
+// Example:
+//
+//	objID := goverseapi.CreateObjectIDOnShard(5)
+//	goverseapi.CreateObject(ctx, "MyObject", objID)
+func CreateObjectIDOnShard(shardID int) string {
+	return uniqueid.CreateObjectIDOnShard(shardID, sharding.NumShards)
+}
+
+// CreateObjectIDOnNode creates an object ID that will be placed on a specific node.
+// The node address should be in the format "host:port".
+//
+// Example:
+//
+//	objID := goverseapi.CreateObjectIDOnNode("localhost:7001")
+//	goverseapi.CreateObject(ctx, "MyObject", objID)
+func CreateObjectIDOnNode(nodeAddress string) string {
+	return uniqueid.CreateObjectIDOnNode(nodeAddress)
 }
