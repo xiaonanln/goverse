@@ -283,9 +283,12 @@ func (cm *ConsensusManager) calculateDefaultRebalanceShardsBatchSize() int {
 }
 
 // SetRebalanceShardsBatchSize sets the maximum number of shards to migrate in a single rebalance operation
+// If batchSize <= 0, the default value of max(1, numShards/128) is used
 func (cm *ConsensusManager) SetRebalanceShardsBatchSize(batchSize int) {
 	if batchSize <= 0 {
-		batchSize = cm.calculateDefaultRebalanceShardsBatchSize()
+		defaultSize := cm.calculateDefaultRebalanceShardsBatchSize()
+		cm.logger.Infof("Invalid batch size %d, using default %d", batchSize, defaultSize)
+		batchSize = defaultSize
 	}
 	cm.rebalanceShardsBatchSize.Store(int32(batchSize))
 	cm.logger.Infof("ConsensusManager rebalance shards batch size set to %d", batchSize)
