@@ -300,3 +300,68 @@ func parseSSEEvents(body string) []map[string]string {
 	}
 	return events
 }
+
+// TestHandleShardMapping_NoConsensusManager tests that shard endpoint returns empty result when no consensus manager
+func TestHandleShardMapping_NoConsensusManager(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+		// No etcd configured, so no consensus manager
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/shards", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", rr.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+
+	shards, ok := result["shards"].([]interface{})
+	if !ok {
+		t.Fatal("Expected 'shards' field in response")
+	}
+	if len(shards) != 0 {
+		t.Fatalf("Expected 0 shards, got %d", len(shards))
+	}
+
+	nodes, ok := result["nodes"].([]interface{})
+	if !ok {
+		t.Fatal("Expected 'nodes' field in response")
+	}
+	if len(nodes) != 0 {
+		t.Fatalf("Expected 0 nodes, got %d", len(nodes))
+	}
+}
+
+// TestHandleShardMapping_MethodNotAllowed tests that non-GET requests are rejected
+func TestHandleShardMapping_MethodNotAllowed(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	// Test POST method
+	req := httptest.NewRequest(http.MethodPost, "/shards", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405 for POST, got %d", rr.Code)
+	}
+}
