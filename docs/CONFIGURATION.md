@@ -10,6 +10,7 @@ This document provides a complete reference for the GoVerse configuration file, 
   - [version](#version)
   - [cluster](#cluster)
   - [postgres](#postgres)
+  - [inspector](#inspector)
   - [nodes](#nodes)
   - [gates](#gates)
   - [object_access_rules](#object_access_rules)
@@ -29,6 +30,7 @@ GoVerse uses YAML configuration files to define:
 - **Cluster topology**: etcd connectivity and shard configuration
 - **Node definitions**: gRPC servers that host objects
 - **Gate definitions**: Entry points for client connections
+- **Inspector integration**: Optional monitoring and debugging service
 - **Object access control**: Fine-grained control over method access
 - **Lifecycle rules**: Control over object creation and deletion
 
@@ -50,6 +52,12 @@ cluster:
     endpoints:
       - "localhost:2379"
     prefix: "/goverse"
+
+# Optional: Inspector service configuration
+# inspector:
+#   grpc_addr: "127.0.0.1:8081"
+#   http_addr: "127.0.0.1:8080"
+#   connect_addr: "localhost:8081"
 
 nodes:
   - id: "node-1"
@@ -128,6 +136,33 @@ postgres:
   database: "goverse"
   sslmode: "require"
 ```
+
+---
+
+### inspector
+
+Optional inspector service configuration for monitoring and debugging.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `grpc_addr` | string | No | - | gRPC server address for inspector API |
+| `http_addr` | string | No | - | HTTP server address for inspector web UI |
+| `connect_addr` | string | No | - | Address that nodes and gates use to connect to inspector gRPC service |
+
+```yaml
+inspector:
+  grpc_addr: "10.0.3.10:8081"
+  http_addr: "10.0.3.10:8080"
+  connect_addr: "inspector.cluster.example.com:8081"
+```
+
+**Notes:**
+- The `inspector` section is entirely optional. Omit it to disable inspector integration.
+- `grpc_addr`: Address where the inspector gRPC server listens (used for serving the inspector API)
+- `http_addr`: Address where the inspector HTTP server listens (used for the web UI)
+- `connect_addr`: Address that nodes and gates use to connect to the inspector service. This is typically an advertised address that is reachable from all nodes and gates.
+- When using config files with `--config`, nodes and gates automatically read `connect_addr` from the inspector section.
+- In CLI-only mode (without `--config`), use `--inspector-address` flag to specify the inspector connection address.
 
 ---
 
