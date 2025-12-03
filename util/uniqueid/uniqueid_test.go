@@ -76,13 +76,40 @@ func TestUniqueIdTiming(t *testing.T) {
 
 func TestUniqueIdNoSlash(t *testing.T) {
 	// Test that UniqueId never contains '/' character
-	// This is important because '/' is commonly used as a path separator
-	// and could cause issues in various contexts (URLs, file paths, etc.)
+	// This is important because '/' is used as a delimiter in fixed-node object IDs
+	// (e.g., "localhost:7001/uuid") and could cause routing issues
 	const numTests = 10000
 	for i := 0; i < numTests; i++ {
 		id := UniqueId()
 		if strings.Contains(id, "/") {
 			t.Fatalf("UniqueId() returned string containing '/': %s", id)
+		}
+	}
+}
+
+func TestUniqueIdNoHash(t *testing.T) {
+	// Test that UniqueId never contains '#' character
+	// This is important because '#' is used as a delimiter in fixed-shard object IDs
+	// (e.g., "shard#5/uuid") and could cause routing issues
+	const numTests = 10000
+	for i := 0; i < numTests; i++ {
+		id := UniqueId()
+		if strings.Contains(id, "#") {
+			t.Fatalf("UniqueId() returned string containing '#': %s", id)
+		}
+	}
+}
+
+func TestUniqueIdNoSpecialChars(t *testing.T) {
+	// Test that UniqueId never contains '/' or '#' characters
+	// These characters are reserved for object ID routing:
+	// - '/' is used in fixed-node format: "nodeAddr/uuid"
+	// - '#' is used in fixed-shard format: "shard#N/uuid"
+	const numTests = 10000
+	for i := 0; i < numTests; i++ {
+		id := UniqueId()
+		if strings.ContainsAny(id, "/#") {
+			t.Fatalf("UniqueId() returned string containing '/' or '#': %s", id)
 		}
 	}
 }
@@ -113,9 +140,9 @@ func TestCreateObjectID(t *testing.T) {
 		t.Fatal("CreateObjectID() returned same ID for consecutive calls")
 	}
 
-	// Test that IDs don't contain '/' (important for routing)
-	if strings.Contains(id, "/") {
-		t.Fatalf("CreateObjectID() returned string containing '/': %s", id)
+	// Test that IDs don't contain '/' or '#' (important for routing)
+	if strings.ContainsAny(id, "/#") {
+		t.Fatalf("CreateObjectID() returned string containing '/' or '#': %s", id)
 	}
 }
 

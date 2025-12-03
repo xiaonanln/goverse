@@ -9,6 +9,18 @@ import (
 	"time"
 )
 
+// UniqueId generates a unique identifier string.
+// The generated ID is guaranteed to never contain '/' or '#' characters,
+// which are reserved for special object ID routing formats:
+//   - Fixed-node format: "nodeAddr/uuid"
+//   - Fixed-shard format: "shard#N/uuid"
+//
+// The function uses base64 URL encoding which produces only alphanumeric
+// characters plus '-' and '_', ensuring the generated IDs are safe to use
+// as object identifiers without conflicting with routing logic.
+//
+// Panics if the generated ID contains reserved characters (should never happen
+// with base64.URLEncoding, but validated as a safety check).
 func UniqueId() string {
 	b := make([]byte, 16)
 
@@ -30,7 +42,21 @@ func UniqueId() string {
 		panic(err)
 	}
 
-	return encBufferWriter.String()
+	id := encBufferWriter.String()
+
+	// Validate that the generated ID doesn't contain reserved characters
+	// '/' is used in fixed-node format: "nodeAddr/uuid"
+	// '#' is used in fixed-shard format: "shard#N/uuid"
+	// base64.URLEncoding should never produce these characters, but we validate
+	// as a safety check in case the encoding is accidentally changed
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		if c == '/' || c == '#' {
+			panic(fmt.Sprintf("UniqueId generated invalid ID containing reserved character '%c': %s", c, id))
+		}
+	}
+
+	return id
 }
 
 // CreateObjectID creates a normal object ID using a unique identifier.
