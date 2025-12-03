@@ -359,10 +359,18 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 		ShardID     int    `json:"shard_id"`
 		TargetNode  string `json:"target_node"`
 		CurrentNode string `json:"current_node"`
+		ObjectCount int    `json:"object_count"`
 	}
 
 	shards := make([]ShardInfo, 0)
 	nodeSet := make(map[string]bool)
+	
+	// Count objects per shard from the graph
+	objects := s.pg.GetObjects()
+	objectCountPerShard := make(map[int]int)
+	for _, obj := range objects {
+		objectCountPerShard[obj.ShardID]++
+	}
 
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
@@ -395,6 +403,7 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 			ShardID:     shardID,
 			TargetNode:  targetNode,
 			CurrentNode: currentNode,
+			ObjectCount: objectCountPerShard[shardID],
 		})
 
 		if targetNode != "" {
