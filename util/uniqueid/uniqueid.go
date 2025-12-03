@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -49,11 +50,8 @@ func UniqueId() string {
 	// '#' is used in fixed-shard format: "shard#N/uuid"
 	// base64.URLEncoding should never produce these characters, but we validate
 	// as a safety check in case the encoding is accidentally changed
-	for i := 0; i < len(id); i++ {
-		c := id[i]
-		if c == '/' || c == '#' {
-			panic(fmt.Sprintf("UniqueId generated invalid ID containing reserved character '%c': %s", c, id))
-		}
+	if strings.ContainsAny(id, "/#") {
+		panic(fmt.Sprintf("UniqueId generated invalid ID containing reserved characters: %s", id))
 	}
 
 	return id
