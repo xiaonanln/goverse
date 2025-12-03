@@ -92,6 +92,7 @@ func NewNode(advertiseAddress string, numShards int) *Node {
 // This must be called before Start() to take effect.
 // If address is empty or not set, the inspector manager will be disabled.
 func (node *Node) SetInspectorAddress(address string) {
+	node.logger.Infof("Setting inspector address to: %s", address)
 	node.inspectorManager.SetInspectorAddress(address)
 }
 
