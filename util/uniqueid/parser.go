@@ -79,12 +79,8 @@ func ParseObjectID(objectID string) (*ParsedObjectID, error) {
 				return nil, fmt.Errorf("invalid object ID format: %s (shard# must be followed by a valid number, got %q)", objectID, shardIDStr)
 			}
 
-			// ParseObjectID doesn't validate range, but we do reject negative numbers here
-			// since they're never valid in any context
-			if shardID < 0 {
-				return nil, fmt.Errorf("invalid object ID format: %s (shard ID cannot be negative)", objectID)
-			}
-
+			// Note: We allow negative numbers here - ValidateObjectID will catch them
+			// with the "out of range" error message for consistency
 			parsed.ShardID = shardID
 			return parsed, nil
 		}
