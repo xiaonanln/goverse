@@ -133,3 +133,4 @@ Press `Ctrl+C` to stop the test early. The script will:
 - Each client operates independently in its own thread
 - The test is designed to run continuously for extended periods
 - All processes are cleaned up properly on exit, even if interrupted
+- "Leave room" action simulates leaving by clearing local state (triggers re-join behavior for stress testing)
