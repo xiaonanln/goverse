@@ -621,15 +621,6 @@ func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
-		if trimmed == "" {
-			// Handle empty parts (e.g., trailing comma)
-			if nodePartCount == 1 {
-				// Empty second part means empty CurrentNode
-				currentNode = ""
-				nodePartCount++
-			}
-			continue
-		}
 
 		// Check if this is a flag (starts with "f=")
 		if strings.HasPrefix(trimmed, "f=") {
@@ -637,16 +628,19 @@ func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 			if flagValue != "" {
 				flags = append(flags, flagValue)
 			}
+			continue
+		}
+
+		// This is a node part (including empty strings)
+		if nodePartCount == 0 {
+			targetNode = trimmed // Can be empty
+			nodePartCount++
+		} else if nodePartCount == 1 {
+			currentNode = trimmed // Can be empty
+			nodePartCount++
 		} else {
-			// This is a node part
-			if nodePartCount == 0 {
-				targetNode = trimmed
-				nodePartCount++
-			} else if nodePartCount == 1 {
-				currentNode = trimmed
-				nodePartCount++
-			} else {
-				// More than 2 node parts - log warning
+			// More than 2 node parts - log warning
+			if trimmed != "" {
 				log.Printf("WARNING: parseShardInfo: too many node parts in value %q, ignoring extra parts", value)
 			}
 		}
@@ -1107,6 +1101,7 @@ func (cm *ConsensusManager) calcReleaseShardsForNode(localNode string, localObje
 				TargetNode:  shardInfo.TargetNode,
 				CurrentNode: "", // Clear CurrentNode to release ownership
 				ModRevision: shardInfo.ModRevision,
+				Flags:       shardInfo.Flags, // Preserve flags
 			}
 		}
 	}
