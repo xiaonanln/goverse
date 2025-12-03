@@ -46,6 +46,7 @@ func NewLoader(fs *flag.FlagSet) *Loader {
 	l.httpListenAddr = fs.String("http-listen", "", "HTTP listen address for metrics (cannot be used with --config)")
 	l.etcdAddr = fs.String("etcd", DefaultEtcdAddr, "Etcd address (cannot be used with --config)")
 	l.etcdPrefix = fs.String("etcd-prefix", DefaultEtcdPrefix, "Etcd key prefix (cannot be used with --config)")
+	// Inspector address defaults to empty string (optional) - no default address since inspector is optional
 	l.inspectorAddr = fs.String("inspector-address", "", "Inspector service address (cannot be used with --config)")
 	return l
 }
