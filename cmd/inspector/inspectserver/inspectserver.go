@@ -32,6 +32,9 @@ type GoverseObject = models.GoverseObject
 // sseHeartbeatInterval is the interval between SSE heartbeat events
 const sseHeartbeatInterval = 30 * time.Second
 
+// clusterStateStabilityDuration is the duration to wait for cluster state to stabilize
+const clusterStateStabilityDuration = 10 * time.Second
+
 // SSEClient represents a connected SSE client
 type SSEClient struct {
 	id        string
@@ -99,8 +102,8 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 			s.consensusManager = consensusmanager.NewConsensusManager(
 				mgr,
 				shardLock,
-				10*time.Second, // clusterStateStabilityDuration
-				"",             // localNodeAddress (not needed for inspector)
+				clusterStateStabilityDuration,
+				"", // localNodeAddress (not needed for inspector)
 				sharding.NumShards,
 			)
 
@@ -111,6 +114,8 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 				s.consensusManager = nil
 			} else if err := s.consensusManager.StartWatch(ctx); err != nil {
 				log.Printf("Failed to start consensus manager watch: %v", err)
+				// Clean up: stop the watch before discarding
+				s.consensusManager.StopWatch()
 				s.consensusManager = nil
 			} else {
 				log.Printf("ConsensusManager initialized and watching cluster state")
