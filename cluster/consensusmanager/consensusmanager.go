@@ -287,7 +287,11 @@ func (cm *ConsensusManager) calculateDefaultRebalanceShardsBatchSize() int {
 func (cm *ConsensusManager) SetRebalanceShardsBatchSize(batchSize int) {
 	if batchSize <= 0 {
 		defaultSize := cm.calculateDefaultRebalanceShardsBatchSize()
-		cm.logger.Infof("Invalid batch size %d, using default %d", batchSize, defaultSize)
+		if batchSize == 0 {
+			cm.logger.Infof("Using default batch size %d", defaultSize)
+		} else {
+			cm.logger.Infof("Invalid batch size %d, using default %d", batchSize, defaultSize)
+		}
 		batchSize = defaultSize
 	}
 	cm.rebalanceShardsBatchSize.Store(int32(batchSize))

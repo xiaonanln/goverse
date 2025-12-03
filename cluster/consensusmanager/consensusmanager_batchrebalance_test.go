@@ -341,9 +341,8 @@ func TestRebalanceShards_CustomBatchSize(t *testing.T) {
 			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards)
 
 			// Set the batch size using the setter method
-			if tc.batchSize > 0 {
-				cm.SetRebalanceShardsBatchSize(tc.batchSize)
-			}
+			// Always call setter to test its behavior, including handling of zero/invalid values
+			cm.SetRebalanceShardsBatchSize(tc.batchSize)
 
 			// Verify the batch size is set correctly
 			actualBatchSize := cm.GetRebalanceShardsBatchSize()
