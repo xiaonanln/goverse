@@ -4,11 +4,13 @@
 # - Multiple etcd endpoints for high availability
 # - Two nodes for distributed object hosting
 # - One gate for client connections
+# - Inspector service for monitoring and debugging
 #
 # Notes:
 # - Replace endpoint and address values with your actual infrastructure.
 # - Ensure advertise_addr values are reachable from other nodes.
 # - Keep secrets (if any) in separate files or environment variables.
+# - Inspector section is optional; omit it to disable inspector integration.
 #
 # See docs/config-design.md for full schema documentation.
 
@@ -23,6 +25,11 @@ cluster:
       - "etcd-2.prod.local:2379"
       - "etcd-3.prod.local:2379"
     prefix: "/goverse/production"
+
+inspector:
+  grpc_addr: "10.0.3.10:8081"
+  http_addr: "10.0.3.10:8080"
+  advertise_addr: "inspector.cluster.example.com:8081"
 
 nodes:
   - id: "node-a"

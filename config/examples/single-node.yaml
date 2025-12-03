@@ -15,6 +15,13 @@ cluster:
       - "localhost:2379"
     prefix: "/goverse"
 
+# Optional: Inspector service configuration for monitoring and debugging
+# Uncomment the section below to enable inspector integration
+# inspector:
+#   grpc_addr: "127.0.0.1:8081"
+#   http_addr: "127.0.0.1:8080"
+#   advertise_addr: "localhost:8081"
+
 nodes:
   - id: "dev-node"
     grpc_addr: "127.0.0.1:50051"
