@@ -355,17 +355,17 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	mapping.Shards[0] = ShardInfo{
 		TargetNode:  "node1",
 		CurrentNode: "node1",
-		Flags:       "pinned",
+		Flags:       []string{"pinned"},
 	}
 	mapping.Shards[1] = ShardInfo{
 		TargetNode:  "node2",
 		CurrentNode: "",
-		Flags:       "pinned,readonly",
+		Flags:       []string{"pinned", "readonly"},
 	}
 	mapping.Shards[2] = ShardInfo{
 		TargetNode:  "node1",
 		CurrentNode: "node2",
-		Flags:       "",
+		Flags:       []string{},
 	}
 
 	// Store the mapping
@@ -434,8 +434,8 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	if shard0.CurrentNode != "node1" {
 		t.Fatalf("Shard 0: expected current node 'node1', got %q", shard0.CurrentNode)
 	}
-	if shard0.Flags != "pinned" {
-		t.Fatalf("Shard 0: expected flags 'pinned', got %q", shard0.Flags)
+	if !equalStringSlices(shard0.Flags, []string{"pinned"}) {
+		t.Fatalf("Shard 0: expected flags ['pinned'], got %v", shard0.Flags)
 	}
 
 	// Verify shard 1
@@ -446,8 +446,8 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	if shard1.CurrentNode != "" {
 		t.Fatalf("Shard 1: expected current node '', got %q", shard1.CurrentNode)
 	}
-	if shard1.Flags != "pinned,readonly" {
-		t.Fatalf("Shard 1: expected flags 'pinned,readonly', got %q", shard1.Flags)
+	if !equalStringSlices(shard1.Flags, []string{"pinned", "readonly"}) {
+		t.Fatalf("Shard 1: expected flags ['pinned', 'readonly'], got %v", shard1.Flags)
 	}
 
 	// Verify shard 2
@@ -458,8 +458,8 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	if shard2.CurrentNode != "node2" {
 		t.Fatalf("Shard 2: expected current node 'node2', got %q", shard2.CurrentNode)
 	}
-	if shard2.Flags != "" {
-		t.Fatalf("Shard 2: expected no flags, got %q", shard2.Flags)
+	if len(shard2.Flags) != 0 {
+		t.Fatalf("Shard 2: expected no flags, got %v", shard2.Flags)
 	}
 
 	t.Log("Storage format with flags test passed")
