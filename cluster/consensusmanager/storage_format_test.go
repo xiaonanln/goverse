@@ -324,3 +324,144 @@ func TestConditionalPutWithModRevision(t *testing.T) {
 		}
 	})
 }
+
+// TestStorageFormatWithFlags verifies that shards with flags are stored and loaded correctly
+func TestStorageFormatWithFlags(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	// Create etcd manager
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
+	if err != nil {
+		t.Skipf("Skipping test - etcd not available: %v", err)
+		return
+	}
+
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("Skipping test - etcd connection failed: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	// Create consensus manager
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
+
+	// Create a shard mapping with flags
+	mapping := &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	mapping.Shards[0] = ShardInfo{
+		TargetNode:  "node1",
+		CurrentNode: "node1",
+		Flags:       "manual",
+	}
+	mapping.Shards[1] = ShardInfo{
+		TargetNode:  "node2",
+		CurrentNode: "",
+		Flags:       "manual,pinned",
+	}
+	mapping.Shards[2] = ShardInfo{
+		TargetNode:  "node1",
+		CurrentNode: "node2",
+		Flags:       "",
+	}
+
+	// Store the mapping
+	ctx := context.Background()
+	_, err = cm.storeShardMapping(ctx, mapping.Shards)
+	if err != nil {
+		t.Fatalf("Failed to store shard mapping: %v", err)
+	}
+
+	// Verify the raw values in etcd
+	client := mgr.GetClient()
+	resp, err := client.Get(ctx, prefix+"/shard/0")
+	if err != nil {
+		t.Fatalf("Failed to read shard 0: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatal("Shard 0 not found")
+	}
+	value0 := string(resp.Kvs[0].Value)
+	expectedValue0 := "node1,node1,f=manual"
+	if value0 != expectedValue0 {
+		t.Fatalf("Shard 0: expected value %q, got %q", expectedValue0, value0)
+	}
+
+	resp, err = client.Get(ctx, prefix+"/shard/1")
+	if err != nil {
+		t.Fatalf("Failed to read shard 1: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatal("Shard 1 not found")
+	}
+	value1 := string(resp.Kvs[0].Value)
+	expectedValue1 := "node2,,f=manual,f=pinned"
+	if value1 != expectedValue1 {
+		t.Fatalf("Shard 1: expected value %q, got %q", expectedValue1, value1)
+	}
+
+	resp, err = client.Get(ctx, prefix+"/shard/2")
+	if err != nil {
+		t.Fatalf("Failed to read shard 2: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatal("Shard 2 not found")
+	}
+	value2 := string(resp.Kvs[0].Value)
+	expectedValue2 := "node1,node2"
+	if value2 != expectedValue2 {
+		t.Fatalf("Shard 2: expected value %q, got %q", expectedValue2, value2)
+	}
+
+	// Load the mapping back and verify
+	state, err := cm.loadClusterStateFromEtcd(ctx)
+	if err != nil {
+		t.Fatalf("Failed to load state: %v", err)
+	}
+
+	if state.ShardMapping == nil {
+		t.Fatal("ShardMapping should not be nil")
+	}
+
+	// Verify shard 0
+	shard0 := state.ShardMapping.Shards[0]
+	if shard0.TargetNode != "node1" {
+		t.Fatalf("Shard 0: expected target node 'node1', got %q", shard0.TargetNode)
+	}
+	if shard0.CurrentNode != "node1" {
+		t.Fatalf("Shard 0: expected current node 'node1', got %q", shard0.CurrentNode)
+	}
+	if shard0.Flags != "manual" {
+		t.Fatalf("Shard 0: expected flags 'manual', got %q", shard0.Flags)
+	}
+
+	// Verify shard 1
+	shard1 := state.ShardMapping.Shards[1]
+	if shard1.TargetNode != "node2" {
+		t.Fatalf("Shard 1: expected target node 'node2', got %q", shard1.TargetNode)
+	}
+	if shard1.CurrentNode != "" {
+		t.Fatalf("Shard 1: expected current node '', got %q", shard1.CurrentNode)
+	}
+	if shard1.Flags != "manual,pinned" {
+		t.Fatalf("Shard 1: expected flags 'manual,pinned', got %q", shard1.Flags)
+	}
+
+	// Verify shard 2
+	shard2 := state.ShardMapping.Shards[2]
+	if shard2.TargetNode != "node1" {
+		t.Fatalf("Shard 2: expected target node 'node1', got %q", shard2.TargetNode)
+	}
+	if shard2.CurrentNode != "node2" {
+		t.Fatalf("Shard 2: expected current node 'node2', got %q", shard2.CurrentNode)
+	}
+	if shard2.Flags != "" {
+		t.Fatalf("Shard 2: expected no flags, got %q", shard2.Flags)
+	}
+
+	t.Log("Storage format with flags test passed")
+}
+
