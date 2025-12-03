@@ -1,0 +1,30 @@
+name: Stress Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  stress-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+        with:
+          enable-postgres: 'false'
+      
+      - name: Run stress test for 5 minutes
+        run: |
+          python3 tests/samples/chat/stress/stress_test.py --duration 300
