@@ -1,4 +1,4 @@
-package uniqueid
+package objectid
 
 import (
 	"strings"
