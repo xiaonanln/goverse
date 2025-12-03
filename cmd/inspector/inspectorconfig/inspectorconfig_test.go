@@ -254,6 +254,90 @@ nodes:
 	}
 }
 
+func TestLoaderMissingGRPCAddrInConfig(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+
+inspector:
+  http_addr: "10.0.3.10:8080"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+	}
+
+	_, err := loader.Load(args)
+	if err == nil {
+		t.Fatal("expected error for missing grpc_addr")
+	}
+	if !strings.Contains(err.Error(), "inspector.grpc_addr is required") {
+		t.Errorf("expected error about missing grpc_addr, got %q", err.Error())
+	}
+}
+
+func TestLoaderMissingHTTPAddrInConfig(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+
+inspector:
+  grpc_addr: "10.0.3.10:8081"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+	}
+
+	_, err := loader.Load(args)
+	if err == nil {
+		t.Fatal("expected error for missing http_addr")
+	}
+	if !strings.Contains(err.Error(), "inspector.http_addr is required") {
+		t.Errorf("expected error about missing http_addr, got %q", err.Error())
+	}
+}
+
 func TestLoaderWithOptionalEtcdAddr(t *testing.T) {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	loader := NewLoader(fs)

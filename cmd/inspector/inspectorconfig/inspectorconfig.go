@@ -14,9 +14,9 @@ import (
 const (
 	DefaultGRPCAddr   = ":8081"
 	DefaultHTTPAddr   = ":8080"
-	DefaultEtcdAddr   = "localhost:2379"
 	DefaultEtcdPrefix = "/goverse"
 	DefaultStaticDir  = "cmd/inspector/web"
+	// Note: No default for etcd-addr - etcd connection is optional and defaults to disabled
 )
 
 // Loader handles parsing of command-line flags and config file loading.
@@ -84,9 +84,15 @@ func (l *Loader) Load(args []string) (*inspectserver.Config, error) {
 			return nil, fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Inspector configuration is optional in the config file
-		if cfg.Inspector.GRPCAddr == "" {
+		// Inspector configuration is required in config file mode
+		if cfg.Inspector.GRPCAddr == "" && cfg.Inspector.HTTPAddr == "" {
 			return nil, fmt.Errorf("inspector configuration is missing in config file")
+		}
+		if cfg.Inspector.GRPCAddr == "" {
+			return nil, fmt.Errorf("inspector.grpc_addr is required in config file")
+		}
+		if cfg.Inspector.HTTPAddr == "" {
+			return nil, fmt.Errorf("inspector.http_addr is required in config file")
 		}
 
 		return &inspectserver.Config{
