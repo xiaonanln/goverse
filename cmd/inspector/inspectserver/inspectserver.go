@@ -359,6 +359,7 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 		ShardID     int    `json:"shard_id"`
 		TargetNode  string `json:"target_node"`
 		CurrentNode string `json:"current_node"`
+		Flags       string `json:"flags,omitempty"`
 	}
 
 	shards := make([]ShardInfo, 0)
@@ -380,21 +381,48 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		// Parse shard value: <target_node>,<current_node>
+		// Parse shard value: <target_node>,<current_node>[,f=flag1,f=flag2,...]
 		value := string(kv.Value)
-		valueParts := strings.SplitN(value, ",", 2)
+		valueParts := strings.Split(value, ",")
 		var targetNode, currentNode string
-		if len(valueParts) >= 1 {
-			targetNode = strings.TrimSpace(valueParts[0])
-		}
-		if len(valueParts) >= 2 {
-			currentNode = strings.TrimSpace(valueParts[1])
+		var flags []string
+		nodePartCount := 0
+
+		for _, part := range valueParts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				// Handle empty parts (e.g., trailing comma for empty CurrentNode)
+				if nodePartCount == 1 {
+					currentNode = ""
+					nodePartCount++
+				}
+				continue
+			}
+
+			// Check if this is a flag (starts with "f=")
+			if strings.HasPrefix(trimmed, "f=") {
+				flagValue := strings.TrimPrefix(trimmed, "f=")
+				if flagValue != "" {
+					flags = append(flags, flagValue)
+				}
+			} else {
+				// This is a node part
+				if nodePartCount == 0 {
+					targetNode = trimmed
+					nodePartCount++
+				} else if nodePartCount == 1 {
+					currentNode = trimmed
+					nodePartCount++
+				}
+				// Ignore extra node parts beyond the first two
+			}
 		}
 
 		shards = append(shards, ShardInfo{
 			ShardID:     shardID,
 			TargetNode:  targetNode,
 			CurrentNode: currentNode,
+			Flags:       strings.Join(flags, ","),
 		})
 
 		if targetNode != "" {

@@ -3,6 +3,7 @@ package consensusmanager
 import (
 	"context"
 	"fmt"
+	"log"
 	"maps"
 	"slices"
 	"strconv"
@@ -34,6 +35,9 @@ type ShardInfo struct {
 	// Empty initially - will be populated when shard migration/handoff logic is implemented
 	// to enable tracking of active shard transfers during cluster rebalancing
 	CurrentNode string
+	// Flags contains comma-separated flag values (e.g., "manual" for f=manual)
+	// Used to indicate special handling for shards (e.g., manual assignment prevents rebalancing)
+	Flags string
 
 	// modRevision is the etcd revision when this shard info was last modified
 	ModRevision int64
@@ -608,28 +612,69 @@ func (cm *ConsensusManager) recordShardMigrationLocked(shardID int, newShardInfo
 // parseShardInfo parses shard information from the etcd value
 // Format: "targetNode,currentNode" or just "targetNode" (for backward compatibility)
 func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
-	// Split into exactly 2 parts max
 	value := string(kv.Value)
-	parts := strings.SplitN(value, ",", 2)
-	if len(parts) == 2 {
-		return ShardInfo{
-			TargetNode:  strings.TrimSpace(parts[0]),
-			CurrentNode: strings.TrimSpace(parts[1]),
-			ModRevision: kv.ModRevision,
+	parts := strings.Split(value, ",")
+	
+	var targetNode, currentNode string
+	var flags []string
+	nodePartCount := 0
+	
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			// Handle empty parts (e.g., trailing comma)
+			if nodePartCount == 1 {
+				// Empty second part means empty CurrentNode
+				currentNode = ""
+				nodePartCount++
+			}
+			continue
+		}
+		
+		// Check if this is a flag (starts with "f=")
+		if strings.HasPrefix(trimmed, "f=") {
+			flagValue := strings.TrimPrefix(trimmed, "f=")
+			if flagValue != "" {
+				flags = append(flags, flagValue)
+			}
+		} else {
+			// This is a node part
+			if nodePartCount == 0 {
+				targetNode = trimmed
+				nodePartCount++
+			} else if nodePartCount == 1 {
+				currentNode = trimmed
+				nodePartCount++
+			} else {
+				// More than 2 node parts - log warning
+				log.Printf("WARNING: parseShardInfo: too many node parts in value %q, ignoring extra parts", value)
+			}
 		}
 	}
-	// Backward compatibility: if only one part, it's the target node
+	
 	return ShardInfo{
-		TargetNode:  strings.TrimSpace(value),
-		CurrentNode: "",
+		TargetNode:  targetNode,
+		CurrentNode: currentNode,
+		Flags:       strings.Join(flags, ","),
 		ModRevision: kv.ModRevision,
 	}
 }
 
 // formatShardInfo formats shard information for etcd storage
-// Format: "targetNode,currentNode"
+// Format: "targetNode,currentNode" or "targetNode,currentNode,f=flag1,f=flag2"
 func formatShardInfo(info ShardInfo) string {
-	return info.TargetNode + "," + info.CurrentNode
+	result := info.TargetNode + "," + info.CurrentNode
+	if info.Flags != "" {
+		// Split flags by comma and prefix each with "f="
+		flagParts := strings.Split(info.Flags, ",")
+		for _, flag := range flagParts {
+			flag = strings.TrimSpace(flag)
+			if flag != "" {
+				result += ",f=" + flag
+			}
+		}
+	}
+	return result
 }
 
 // loadClusterStateFromEtcd loads all cluster data at once from etcd
