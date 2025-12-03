@@ -319,6 +319,20 @@ Examples:
         if base_cov_dir:
             os.makedirs(base_cov_dir, exist_ok=True)
         
+        # Force rebuild by removing existing binaries
+        # This ensures stress tests always run with latest code
+        print("\n" + "=" * 80)
+        print("CLEANING OLD BINARIES")
+        print("=" * 80)
+        binaries_to_remove = ['/tmp/inspector', '/tmp/chat_server', '/tmp/gateway']
+        for binary_path in binaries_to_remove:
+            if os.path.exists(binary_path):
+                try:
+                    os.remove(binary_path)
+                    print(f"✅ Removed old binary: {binary_path}")
+                except Exception as e:
+                    print(f"⚠️  Could not remove {binary_path}: {e}")
+        
         # Start inspector
         print("\n" + "=" * 80)
         print("STARTING INSPECTOR")
