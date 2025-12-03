@@ -339,7 +339,7 @@ cluster:
 inspector:
   grpc_addr: "10.0.3.10:8081"
   http_addr: "10.0.3.10:8080"
-  connect_addr: "inspector.cluster.example.com:8081"
+  advertise_addr: "inspector.cluster.example.com:8081"
 
 gates:
   - id: "gate-1"

@@ -111,7 +111,7 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 			EtcdAddress:          cfg.GetEtcdAddress(),
 			EtcdPrefix:           cfg.GetEtcdPrefix(),
 			NumShards:            cfg.GetNumShards(),
-			InspectorAddress:     cfg.GetInspectorConnectAddress(),
+			InspectorAddress:     cfg.GetInspectorAdvertiseAddress(),
 		}, nil
 	}
 

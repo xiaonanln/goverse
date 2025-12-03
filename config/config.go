@@ -48,9 +48,9 @@ type GateConfig struct {
 
 // InspectorConfig holds configuration for the inspector service
 type InspectorConfig struct {
-	GRPCAddr    string `yaml:"grpc_addr"`    // gRPC server address for inspector API
-	HTTPAddr    string `yaml:"http_addr"`    // HTTP server address for web UI
-	ConnectAddr string `yaml:"connect_addr"` // Address that nodes and gates use to connect to inspector gRPC service
+	GRPCAddr      string `yaml:"grpc_addr"`      // gRPC server address for inspector API
+	HTTPAddr      string `yaml:"http_addr"`      // HTTP server address for web UI
+	AdvertiseAddr string `yaml:"advertise_addr"` // Address that nodes and gates use to connect to inspector gRPC service
 }
 
 // Config is the root configuration structure
@@ -186,11 +186,11 @@ func (c *Config) GetNumShards() int {
 	return c.Cluster.Shards
 }
 
-// GetInspectorConnectAddress returns the inspector connect address.
+// GetInspectorAdvertiseAddress returns the inspector advertise address.
 // This is the address that nodes and gates use to connect to the inspector gRPC service.
 // Returns empty string if inspector is not configured.
-func (c *Config) GetInspectorConnectAddress() string {
-	return c.Inspector.ConnectAddr
+func (c *Config) GetInspectorAdvertiseAddress() string {
+	return c.Inspector.AdvertiseAddr
 }
 
 // NewAccessValidator creates an AccessValidator from the config's access rules.

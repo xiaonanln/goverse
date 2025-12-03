@@ -555,7 +555,7 @@ cluster:
 inspector:
   grpc_addr: "127.0.0.1:8081"
   http_addr: "127.0.0.1:8080"
-  connect_addr: "localhost:8081"
+  advertise_addr: "localhost:8081"
 
 nodes:
   - id: "node-1"
@@ -585,13 +585,13 @@ gates:
 	if cfg.Inspector.HTTPAddr != "127.0.0.1:8080" {
 		t.Errorf("expected inspector http_addr 127.0.0.1:8080, got %s", cfg.Inspector.HTTPAddr)
 	}
-	if cfg.Inspector.ConnectAddr != "localhost:8081" {
-		t.Errorf("expected inspector connect_addr localhost:8081, got %s", cfg.Inspector.ConnectAddr)
+	if cfg.Inspector.AdvertiseAddr != "localhost:8081" {
+		t.Errorf("expected inspector connect_addr localhost:8081, got %s", cfg.Inspector.AdvertiseAddr)
 	}
 
 	// Test helper method
-	if addr := cfg.GetInspectorConnectAddress(); addr != "localhost:8081" {
-		t.Errorf("expected GetInspectorConnectAddress() to return localhost:8081, got %s", addr)
+	if addr := cfg.GetInspectorAdvertiseAddress(); addr != "localhost:8081" {
+		t.Errorf("expected GetInspectorAdvertiseAddress() to return localhost:8081, got %s", addr)
 	}
 }
 
@@ -632,17 +632,17 @@ nodes:
 	if cfg.Inspector.HTTPAddr != "" {
 		t.Errorf("expected empty inspector http_addr, got %s", cfg.Inspector.HTTPAddr)
 	}
-	if cfg.Inspector.ConnectAddr != "" {
-		t.Errorf("expected empty inspector connect_addr, got %s", cfg.Inspector.ConnectAddr)
+	if cfg.Inspector.AdvertiseAddr != "" {
+		t.Errorf("expected empty inspector connect_addr, got %s", cfg.Inspector.AdvertiseAddr)
 	}
 
-	// GetInspectorConnectAddress should return empty string
-	if addr := cfg.GetInspectorConnectAddress(); addr != "" {
-		t.Errorf("expected GetInspectorConnectAddress() to return empty string, got %s", addr)
+	// GetInspectorAdvertiseAddress should return empty string
+	if addr := cfg.GetInspectorAdvertiseAddress(); addr != "" {
+		t.Errorf("expected GetInspectorAdvertiseAddress() to return empty string, got %s", addr)
 	}
 }
 
-func TestGetInspectorConnectAddress(t *testing.T) {
+func TestGetInspectorAdvertiseAddress(t *testing.T) {
 	tests := []struct {
 		name         string
 		inspectorCfg InspectorConfig
@@ -653,7 +653,7 @@ func TestGetInspectorConnectAddress(t *testing.T) {
 			inspectorCfg: InspectorConfig{
 				GRPCAddr:    "127.0.0.1:8081",
 				HTTPAddr:    "127.0.0.1:8080",
-				ConnectAddr: "inspector.example.com:8081",
+				AdvertiseAddr: "inspector.example.com:8081",
 			},
 			expectedAddr: "inspector.example.com:8081",
 		},
@@ -678,7 +678,7 @@ func TestGetInspectorConnectAddress(t *testing.T) {
 				Inspector: tt.inspectorCfg,
 			}
 
-			addr := cfg.GetInspectorConnectAddress()
+			addr := cfg.GetInspectorAdvertiseAddress()
 			if addr != tt.expectedAddr {
 				t.Errorf("expected %q, got %q", tt.expectedAddr, addr)
 			}

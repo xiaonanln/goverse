@@ -57,7 +57,7 @@ cluster:
 # inspector:
 #   grpc_addr: "127.0.0.1:8081"
 #   http_addr: "127.0.0.1:8080"
-#   connect_addr: "localhost:8081"
+#   advertise_addr: "localhost:8081"
 
 nodes:
   - id: "node-1"
@@ -147,21 +147,21 @@ Optional inspector service configuration for monitoring and debugging.
 |-------|------|----------|---------|-------------|
 | `grpc_addr` | string | No | - | gRPC server address for inspector API |
 | `http_addr` | string | No | - | HTTP server address for inspector web UI |
-| `connect_addr` | string | No | - | Address that nodes and gates use to connect to inspector gRPC service |
+| `advertise_addr` | string | No | - | Address that nodes and gates use to connect to inspector gRPC service |
 
 ```yaml
 inspector:
   grpc_addr: "10.0.3.10:8081"
   http_addr: "10.0.3.10:8080"
-  connect_addr: "inspector.cluster.example.com:8081"
+  advertise_addr: "inspector.cluster.example.com:8081"
 ```
 
 **Notes:**
 - The `inspector` section is entirely optional. Omit it to disable inspector integration.
 - `grpc_addr`: Address where the inspector gRPC server listens (used for serving the inspector API)
 - `http_addr`: Address where the inspector HTTP server listens (used for the web UI)
-- `connect_addr`: Address that nodes and gates use to connect to the inspector service. This is typically an advertised address that is reachable from all nodes and gates.
-- When using config files with `--config`, nodes and gates automatically read `connect_addr` from the inspector section.
+- `advertise_addr`: Address that nodes and gates use to connect to the inspector service. This is typically an advertised address that is reachable from all nodes and gates.
+- When using config files with `--config`, nodes and gates automatically read `advertise_addr` from the inspector section.
 - In CLI-only mode (without `--config`), use `--inspector-address` flag to specify the inspector connection address.
 
 ---
