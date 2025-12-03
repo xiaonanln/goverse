@@ -614,11 +614,11 @@ func (cm *ConsensusManager) recordShardMigrationLocked(shardID int, newShardInfo
 func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 	value := string(kv.Value)
 	parts := strings.Split(value, ",")
-	
+
 	var targetNode, currentNode string
 	var flags []string
 	nodePartCount := 0
-	
+
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
 		if trimmed == "" {
@@ -630,7 +630,7 @@ func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 			}
 			continue
 		}
-		
+
 		// Check if this is a flag (starts with "f=")
 		if strings.HasPrefix(trimmed, "f=") {
 			flagValue := strings.TrimPrefix(trimmed, "f=")
@@ -651,7 +651,7 @@ func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 			}
 		}
 	}
-	
+
 	return ShardInfo{
 		TargetNode:  targetNode,
 		CurrentNode: currentNode,
