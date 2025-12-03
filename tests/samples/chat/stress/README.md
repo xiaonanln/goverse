@@ -86,7 +86,11 @@ python3 stress_test.py --clients 50 --duration 7200
    - Randomly leaves chatrooms (if in one)
    - Randomly sends messages (when in a room)
    - Displays received messages in real-time
-   - Actions weighted: 60% send message, 10% leave room, 30% stay idle
+   - Action delays: Random interval between 0.5-5.0 seconds
+   - Action weights (configurable in code):
+     - 60% probability to send message
+     - 10% probability to leave room
+     - 30% probability to stay/do nothing
 
 4. **Statistics**
    - Prints client statistics at regular intervals
