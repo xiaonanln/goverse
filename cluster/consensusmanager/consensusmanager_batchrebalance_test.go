@@ -13,7 +13,7 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 	t.Parallel()
 	// Create a consensus manager without connecting to etcd (unit test)
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
 
 	ctx := context.Background()
 
@@ -224,7 +224,7 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a consensus manager without connecting to etcd
 			mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards)
+			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards, 0)
 
 			ctx := context.Background()
 

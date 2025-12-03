@@ -171,6 +171,7 @@ type ConsensusManager struct {
 	clusterStateStabilityDuration time.Duration // duration to wait for cluster state to stabilize
 	localNodeAddress              string        // local node address for this consensus manager
 	numShards                     int           // number of shards in the cluster
+	rebalanceShardsBatchSize      int           // maximum number of shards to migrate in a single rebalance operation
 
 	// Watch management
 	watchCtx     context.Context
@@ -183,12 +184,15 @@ type ConsensusManager struct {
 }
 
 // NewConsensusManager creates a new consensus manager
-func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string, numShards int) *ConsensusManager {
+func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.ShardLock, clusterStateStabilityDuration time.Duration, localNodeAddress string, numShards int, rebalanceShardsBatchSize int) *ConsensusManager {
 	if clusterStateStabilityDuration <= 0 {
 		clusterStateStabilityDuration = defaultClusterStateStabilityDuration
 	}
 	if numShards <= 0 {
 		numShards = sharding.NumShards
+	}
+	if rebalanceShardsBatchSize <= 0 {
+		rebalanceShardsBatchSize = max(1, numShards/128)
 	}
 	return &ConsensusManager{
 		etcdManager:                   etcdMgr,
@@ -197,6 +201,7 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		clusterStateStabilityDuration: clusterStateStabilityDuration,
 		localNodeAddress:              localNodeAddress,
 		numShards:                     numShards,
+		rebalanceShardsBatchSize:      rebalanceShardsBatchSize,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -1229,8 +1234,8 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	// Collect shards to migrate (up to 100 per batch)
-	const maxBatchSize = 100
+	// Collect shards to migrate (up to configured batch size per batch)
+	maxBatchSize := cm.rebalanceShardsBatchSize
 	updateShards := make(map[int]ShardInfo)
 
 	// Keep track of which shards we've already selected for migration
