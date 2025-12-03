@@ -74,37 +74,12 @@ func TestUniqueIdTiming(t *testing.T) {
 	t.Logf("Generated %d unique IDs in 10ms", len(ids))
 }
 
-func TestUniqueIdNoSlash(t *testing.T) {
-	// Test that UniqueId never contains '/' character
-	// This is important because '/' is used as a delimiter in fixed-node object IDs
-	// (e.g., "localhost:7001/uuid") and could cause routing issues
-	const numTests = 10000
-	for i := 0; i < numTests; i++ {
-		id := UniqueId()
-		if strings.Contains(id, "/") {
-			t.Fatalf("UniqueId() returned string containing '/': %s", id)
-		}
-	}
-}
-
-func TestUniqueIdNoHash(t *testing.T) {
-	// Test that UniqueId never contains '#' character
-	// This is important because '#' is used as a delimiter in fixed-shard object IDs
-	// (e.g., "shard#5/uuid") and could cause routing issues
-	const numTests = 10000
-	for i := 0; i < numTests; i++ {
-		id := UniqueId()
-		if strings.Contains(id, "#") {
-			t.Fatalf("UniqueId() returned string containing '#': %s", id)
-		}
-	}
-}
-
 func TestUniqueIdNoSpecialChars(t *testing.T) {
-	// Test that UniqueId never contains '/' or '#' characters
+	// Test that UniqueId never contains '/' or '#' characters.
 	// These characters are reserved for object ID routing:
 	// - '/' is used in fixed-node format: "nodeAddr/uuid"
 	// - '#' is used in fixed-shard format: "shard#N/uuid"
+	// base64.URLEncoding guarantees this by only producing [A-Za-z0-9_-]
 	const numTests = 10000
 	for i := 0; i < numTests; i++ {
 		id := UniqueId()
