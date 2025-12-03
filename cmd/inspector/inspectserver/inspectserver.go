@@ -82,15 +82,13 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 	// Connect to etcd if address is provided
 	if cfg.EtcdAddr != "" {
 		mgr, err := etcdmanager.NewEtcdManager(cfg.EtcdAddr, cfg.EtcdPrefix)
-		if err == nil {
-			if err := mgr.Connect(); err == nil {
-				s.etcdManager = mgr
-				log.Printf("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
-			} else {
-				log.Printf("Failed to connect to etcd: %v", err)
-			}
-		} else {
+		if err != nil {
 			log.Printf("Failed to create etcd manager: %v", err)
+		} else if err := mgr.Connect(); err != nil {
+			log.Printf("Failed to connect to etcd: %v", err)
+		} else {
+			s.etcdManager = mgr
+			log.Printf("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
 		}
 	}
 
@@ -369,13 +367,16 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		// Extract shard ID from key: /goverse/shard/<shardID>
+		// The key splits into ["", "goverse", "shard", "<shardID>"], so we take the last part
 		parts := strings.Split(key, "/")
-		if len(parts) < 3 {
+		if len(parts) < 4 {
+			log.Printf("Invalid shard key format: %s", key)
 			continue
 		}
 		shardIDStr := parts[len(parts)-1]
 		shardID, err := strconv.Atoi(shardIDStr)
 		if err != nil {
+			log.Printf("Invalid shard ID in key %s: %v", key, err)
 			continue
 		}
 
