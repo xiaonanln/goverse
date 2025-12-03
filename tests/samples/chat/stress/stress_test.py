@@ -342,8 +342,7 @@ Examples:
         print("\n" + "=" * 80)
         print("STARTING INSPECTOR")
         print("=" * 80)
-        print(f"Using config file: {
-}")
+        print(f"Using config file: {config_file}")
         inspector = Inspector(config_file=str(config_file))
         inspector.start()
         
