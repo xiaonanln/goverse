@@ -101,10 +101,11 @@ function renderShardManagementView(container) {
                 const isMigrating = shard.current_node && shard.target_node && 
                                    shard.current_node !== shard.target_node
                 const shardClass = isMigrating ? 'shard-badge migrating' : 'shard-badge'
+                const objectCount = shard.object_count || 0
                 const shardTitle = isMigrating 
-                  ? `Shard ${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node})`
-                  : `Shard ${shard.shard_id}`
-                return `<span class="${shardClass}" title="${shardTitle}">${shard.shard_id}</span>`
+                  ? `Shard ${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node}) - ${objectCount} object(s)`
+                  : `Shard ${shard.shard_id} - ${objectCount} object(s)`
+                return `<span class="${shardClass}" title="${shardTitle}">${shard.shard_id} (${objectCount})</span>`
               }).join('')}
             </div>
           ` : `

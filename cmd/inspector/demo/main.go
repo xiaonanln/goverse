@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspectserver"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
@@ -24,6 +25,8 @@ import (
 func main() {
 	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
 	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address (for API)")
+	etcdAddr := flag.String("etcd-addr", "localhost:2379", "etcd server address")
+	etcdPrefix := flag.String("etcd-prefix", "/goverse-demo", "etcd key prefix for demo data")
 	numNodes := flag.Int("nodes", 3, "Number of demo nodes")
 	numGates := flag.Int("gates", 2, "Number of demo gates")
 	numObjects := flag.Int("objects", 50, "Number of demo objects")
@@ -36,7 +39,13 @@ func main() {
 	pg := graph.NewGoverseGraph()
 
 	// Generate demo data
-	generateDemoData(pg, *numNodes, *numGates, *numObjects, *numShards)
+	nodeAddrs := generateDemoData(pg, *numNodes, *numGates, *numObjects, *numShards)
+
+	// Initialize etcd with fake shard mappings
+	if err := initializeEtcdShardMappings(*etcdAddr, *etcdPrefix, nodeAddrs, *numShards); err != nil {
+		log.Printf("Warning: Failed to initialize etcd shard mappings: %v", err)
+		log.Printf("Demo will continue without etcd data")
+	}
 
 	// Handle signals for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -46,9 +55,11 @@ func main() {
 
 	// Create and configure the inspector server
 	server := inspectserver.New(pg, inspectserver.Config{
-		GRPCAddr:  *grpcAddr,
-		HTTPAddr:  *httpAddr,
-		StaticDir: "cmd/inspector/web",
+		GRPCAddr:   *grpcAddr,
+		HTTPAddr:   *httpAddr,
+		StaticDir:  "cmd/inspector/web",
+		EtcdAddr:   *etcdAddr,
+		EtcdPrefix: *etcdPrefix,
 	})
 
 	// Start gRPC server
@@ -98,7 +109,7 @@ func main() {
 	log.Println("Shutdown complete")
 }
 
-func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, numShards int) {
+func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, numShards int) []string {
 	// Generate nodes - first pass to collect all addresses
 	nodeAddrs := make([]string, numNodes)
 	for i := 0; i < numNodes; i++ {
@@ -184,6 +195,45 @@ func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, nu
 
 	log.Printf("Generated demo data: %d nodes, %d gates, %d objects across %d shards",
 		numNodes, numGates, numObjects, numShards)
+
+	return nodeAddrs
+}
+
+func initializeEtcdShardMappings(etcdAddr, etcdPrefix string, nodeAddrs []string, numShards int) error {
+	// Connect to etcd
+	mgr, err := etcdmanager.NewEtcdManager(etcdAddr, etcdPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to create etcd manager: %w", err)
+	}
+
+	if err := mgr.Connect(); err != nil {
+		return fmt.Errorf("failed to connect to etcd: %w", err)
+	}
+	defer mgr.Close()
+
+	ctx := context.Background()
+	client := mgr.GetClient()
+
+	// Initialize shard mappings with random node assignments
+	// Each shard has same target and current node
+	log.Printf("Initializing %d shards in etcd at %s with prefix %s", numShards, etcdAddr, etcdPrefix)
+
+	for shardID := 0; shardID < numShards; shardID++ {
+		// Assign shard to random node
+		nodeAddr := nodeAddrs[rand.Intn(len(nodeAddrs))]
+
+		// Format: "targetNode,currentNode" (both same for stable state)
+		shardValue := fmt.Sprintf("%s,%s", nodeAddr, nodeAddr)
+		shardKey := fmt.Sprintf("%s/shard/%d", etcdPrefix, shardID)
+
+		_, err := client.Put(ctx, shardKey, shardValue)
+		if err != nil {
+			return fmt.Errorf("failed to write shard %d: %w", shardID, err)
+		}
+	}
+
+	log.Printf("Successfully initialized %d shards in etcd", numShards)
+	return nil
 }
 
 func simulateDynamicUpdates(ctx context.Context, pg *graph.GoverseGraph, numNodes, numShards int) {
