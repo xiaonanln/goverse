@@ -74,7 +74,7 @@ python3 stress_test.py --clients 50 --duration 7200
    - Starts the inspector for cluster monitoring
    - Starts 3 chat server nodes
    - Starts 2 gateway servers for client connections
-   - Waits for cluster to stabilize
+   - Waits for cluster to stabilize and create chatrooms (General, Technology, Crypto, Sports, Movies)
 
 2. **Client Simulation**
    - Spawns specified number of clients
@@ -82,7 +82,7 @@ python3 stress_test.py --clients 50 --duration 7200
    - Each client runs independently in its own thread
 
 3. **Client Behavior**
-   - Randomly joins chatrooms (if not in one)
+   - Randomly joins chatrooms from the 5 available rooms (if not in one)
    - Randomly leaves chatrooms (if in one)
    - Randomly sends messages (when in a room)
    - Displays received messages in real-time

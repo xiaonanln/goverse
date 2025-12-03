@@ -272,8 +272,8 @@ Examples:
     gateways = []
     clients = []
     
-    # List of chatrooms for clients to join
-    chatrooms = ['General', 'Technology', 'Random', 'Gaming', 'Music']
+    # List of chatrooms for clients to join (must match server's chatRooms list)
+    chatrooms = ['General', 'Technology', 'Crypto', 'Sports', 'Movies']
     
     try:
         # Add go bin to PATH
@@ -333,8 +333,11 @@ Examples:
         print("\n✅ All infrastructure started successfully")
         
         # Wait for cluster to stabilize and chat rooms to be created
+        # The chat server creates ChatRoomMgr0 after 5 seconds of cluster ready,
+        # then ChatRoomMgr creates all 5 chatrooms immediately
         print("\nWaiting for cluster to stabilize and chat rooms to be created...")
-        time.sleep(10)
+        print("(This takes ~15 seconds: 5s for cluster ready + 5s for ChatRoomMgr + 5s buffer)")
+        time.sleep(15)
         
         # Start clients
         print("\n" + "=" * 80)
