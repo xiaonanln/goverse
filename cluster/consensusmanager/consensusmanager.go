@@ -16,7 +16,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
-	"github.com/xiaonanln/goverse/util/uniqueid"
+	"github.com/xiaonanln/goverse/util/objectid"
 	"github.com/xiaonanln/goverse/util/workerpool"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -765,7 +765,7 @@ func (cm *ConsensusManager) GetShardMapping() *ShardMapping {
 // 3. Regular format: any other ID - uses hash-based shard assignment
 func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, error) {
 	// Parse and validate the object ID format
-	parsed, err := uniqueid.ValidateObjectID(objectID, cm.numShards)
+	parsed, err := objectid.ValidateObjectID(objectID, cm.numShards)
 	if err != nil {
 		return "", err
 	}
