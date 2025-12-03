@@ -25,6 +25,11 @@ cluster:
       - "etcd-3.prod.local:2379"
     prefix: "/goverse/production"
 
+inspector:
+  grpc_addr: "10.0.3.10:8081"
+  http_addr: "10.0.3.10:8080"
+  connect_addr: "inspector.cluster.example.com:8081"
+
 nodes:
   - id: "node-a"
     grpc_addr: "10.0.1.10:50051"

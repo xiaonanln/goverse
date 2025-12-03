@@ -539,3 +539,149 @@ func TestLoadExampleConfigs(t *testing.T) {
 		})
 	}
 }
+
+func TestInspectorConfig(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+inspector:
+  grpc_addr: "127.0.0.1:8081"
+  http_addr: "127.0.0.1:8080"
+  connect_addr: "localhost:8081"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "0.0.0.0:10001"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Validate inspector configuration
+	if cfg.Inspector.GRPCAddr != "127.0.0.1:8081" {
+		t.Errorf("expected inspector grpc_addr 127.0.0.1:8081, got %s", cfg.Inspector.GRPCAddr)
+	}
+	if cfg.Inspector.HTTPAddr != "127.0.0.1:8080" {
+		t.Errorf("expected inspector http_addr 127.0.0.1:8080, got %s", cfg.Inspector.HTTPAddr)
+	}
+	if cfg.Inspector.ConnectAddr != "localhost:8081" {
+		t.Errorf("expected inspector connect_addr localhost:8081, got %s", cfg.Inspector.ConnectAddr)
+	}
+
+	// Test helper method
+	if addr := cfg.GetInspectorConnectAddress(); addr != "localhost:8081" {
+		t.Errorf("expected GetInspectorConnectAddress() to return localhost:8081, got %s", addr)
+	}
+}
+
+func TestInspectorConfigOptional(t *testing.T) {
+	// Test that inspector configuration is optional
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Inspector fields should be empty
+	if cfg.Inspector.GRPCAddr != "" {
+		t.Errorf("expected empty inspector grpc_addr, got %s", cfg.Inspector.GRPCAddr)
+	}
+	if cfg.Inspector.HTTPAddr != "" {
+		t.Errorf("expected empty inspector http_addr, got %s", cfg.Inspector.HTTPAddr)
+	}
+	if cfg.Inspector.ConnectAddr != "" {
+		t.Errorf("expected empty inspector connect_addr, got %s", cfg.Inspector.ConnectAddr)
+	}
+
+	// GetInspectorConnectAddress should return empty string
+	if addr := cfg.GetInspectorConnectAddress(); addr != "" {
+		t.Errorf("expected GetInspectorConnectAddress() to return empty string, got %s", addr)
+	}
+}
+
+func TestGetInspectorConnectAddress(t *testing.T) {
+	tests := []struct {
+		name         string
+		inspectorCfg InspectorConfig
+		expectedAddr string
+	}{
+		{
+			name: "with connect address",
+			inspectorCfg: InspectorConfig{
+				GRPCAddr:    "127.0.0.1:8081",
+				HTTPAddr:    "127.0.0.1:8080",
+				ConnectAddr: "inspector.example.com:8081",
+			},
+			expectedAddr: "inspector.example.com:8081",
+		},
+		{
+			name:         "empty inspector config",
+			inspectorCfg: InspectorConfig{},
+			expectedAddr: "",
+		},
+		{
+			name: "with grpc and http but no connect",
+			inspectorCfg: InspectorConfig{
+				GRPCAddr: "127.0.0.1:8081",
+				HTTPAddr: "127.0.0.1:8080",
+			},
+			expectedAddr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Inspector: tt.inspectorCfg,
+			}
+
+			addr := cfg.GetInspectorConnectAddress()
+			if addr != tt.expectedAddr {
+				t.Errorf("expected %q, got %q", tt.expectedAddr, addr)
+			}
+		})
+	}
+}

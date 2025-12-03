@@ -46,11 +46,19 @@ type GateConfig struct {
 	HTTPAddr      string `yaml:"http_addr"`
 }
 
+// InspectorConfig holds configuration for the inspector service
+type InspectorConfig struct {
+	GRPCAddr    string `yaml:"grpc_addr"`    // gRPC server address for inspector API
+	HTTPAddr    string `yaml:"http_addr"`    // HTTP server address for web UI
+	ConnectAddr string `yaml:"connect_addr"` // Address that nodes and gates use to connect to inspector gRPC service
+}
+
 // Config is the root configuration structure
 type Config struct {
 	Version        int             `yaml:"version"`
 	Cluster        ClusterConfig   `yaml:"cluster"`
 	Postgres       PostgresConfig  `yaml:"postgres"`
+	Inspector      InspectorConfig `yaml:"inspector"` // Optional: inspector service configuration
 	Nodes          []NodeConfig    `yaml:"nodes"`
 	Gates          []GateConfig    `yaml:"gates"`
 	AccessRules    []AccessRule    `yaml:"object_access_rules"`    // Object access control rules
@@ -176,6 +184,13 @@ func (c *Config) GetEtcdPrefix() string {
 // GetNumShards returns the number of shards
 func (c *Config) GetNumShards() int {
 	return c.Cluster.Shards
+}
+
+// GetInspectorConnectAddress returns the inspector connect address.
+// This is the address that nodes and gates use to connect to the inspector gRPC service.
+// Returns empty string if inspector is not configured.
+func (c *Config) GetInspectorConnectAddress() string {
+	return c.Inspector.ConnectAddr
 }
 
 // NewAccessValidator creates an AccessValidator from the config's access rules.
