@@ -13,7 +13,7 @@ func TestRebalanceShards_BatchMigration(t *testing.T) {
 	t.Parallel()
 	// Create a consensus manager without connecting to etcd (unit test)
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards, 0)
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
 
 	ctx := context.Background()
 
@@ -224,7 +224,7 @@ func TestRebalanceShards_BatchLogic(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a consensus manager without connecting to etcd
 			mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards, 0)
+			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards)
 
 			ctx := context.Background()
 
@@ -338,11 +338,17 @@ func TestRebalanceShards_CustomBatchSize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a consensus manager
 			mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards, tc.batchSize)
+			cm := NewConsensusManager(mgr, shardlock.NewShardLock(tc.numShards), 0, "", tc.numShards)
+
+			// Set the batch size using the setter method
+			if tc.batchSize > 0 {
+				cm.SetRebalanceShardsBatchSize(tc.batchSize)
+			}
 
 			// Verify the batch size is set correctly
-			if cm.rebalanceShardsBatchSize != tc.expectedBatchSize {
-				t.Fatalf("Expected batch size %d, got %d", tc.expectedBatchSize, cm.rebalanceShardsBatchSize)
+			actualBatchSize := int(cm.rebalanceShardsBatchSize.Load())
+			if actualBatchSize != tc.expectedBatchSize {
+				t.Fatalf("Expected batch size %d, got %d", tc.expectedBatchSize, actualBatchSize)
 			}
 
 			ctx := context.Background()
@@ -397,7 +403,7 @@ func TestRebalanceShards_CustomBatchSize(t *testing.T) {
 
 			// The test verifies that the batch size is correctly set in the ConsensusManager
 			// The actual batch size used during rebalancing is tested in the log output
-			t.Logf("Batch size correctly configured as %d (error expected: %v)", cm.rebalanceShardsBatchSize, err)
+			t.Logf("Batch size correctly configured as %d (error expected: %v)", actualBatchSize, err)
 		})
 	}
 }
