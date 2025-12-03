@@ -35,9 +35,9 @@ type ShardInfo struct {
 	// Empty initially - will be populated when shard migration/handoff logic is implemented
 	// to enable tracking of active shard transfers during cluster rebalancing
 	CurrentNode string
-	// Flags contains comma-separated flag values (e.g., "pinned" for f=pinned)
+	// Flags contains flag values (e.g., ["pinned"] for f=pinned)
 	// Used to indicate special handling for shards (e.g., pinned assignment prevents rebalancing)
-	Flags string
+	Flags []string
 
 	// modRevision is the etcd revision when this shard info was last modified
 	ModRevision int64
@@ -649,7 +649,7 @@ func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 	return ShardInfo{
 		TargetNode:  targetNode,
 		CurrentNode: currentNode,
-		Flags:       strings.Join(flags, ","),
+		Flags:       flags,
 		ModRevision: kv.ModRevision,
 	}
 }
@@ -658,10 +658,9 @@ func parseShardInfo(kv *mvccpb.KeyValue) ShardInfo {
 // Format: "targetNode,currentNode" or "targetNode,currentNode,f=flag1,f=flag2"
 func formatShardInfo(info ShardInfo) string {
 	result := info.TargetNode + "," + info.CurrentNode
-	if info.Flags != "" {
-		// Split flags by comma and prefix each with "f="
-		flagParts := strings.Split(info.Flags, ",")
-		for _, flag := range flagParts {
+	if len(info.Flags) > 0 {
+		// Prefix each flag with "f="
+		for _, flag := range info.Flags {
 			flag = strings.TrimSpace(flag)
 			if flag != "" {
 				result += ",f=" + flag

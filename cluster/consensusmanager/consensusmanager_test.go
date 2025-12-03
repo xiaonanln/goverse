@@ -12,6 +12,19 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 )
 
+// equalStringSlices compares two string slices for equality
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // mockListener implements StateChangeListener for testing
 type mockListener struct {
 	stateChangedCount int
@@ -747,8 +760,9 @@ func TestParseShardInfo(t *testing.T) {
 			if info.CurrentNode != tt.wantCurrent {
 				t.Fatalf("parseShardInfo(%q).CurrentNode = %q, want %q", tt.value, info.CurrentNode, tt.wantCurrent)
 			}
-			if info.Flags != tt.wantFlags {
-				t.Fatalf("parseShardInfo(%q).Flags = %q, want %q", tt.value, info.Flags, tt.wantFlags)
+			gotFlags := strings.Join(info.Flags, ",")
+			if gotFlags != tt.wantFlags {
+				t.Fatalf("parseShardInfo(%q).Flags = %q, want %q", tt.value, gotFlags, tt.wantFlags)
 			}
 		})
 	}
@@ -781,7 +795,7 @@ func TestFormatShardInfo(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "pinned",
+				Flags:       []string{"pinned"},
 			},
 			want: "localhost:47001,localhost:47002,f=pinned",
 		},
@@ -790,7 +804,7 @@ func TestFormatShardInfo(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "pinned,readonly",
+				Flags:       []string{"pinned", "readonly"},
 			},
 			want: "localhost:47001,localhost:47002,f=pinned,f=readonly",
 		},
@@ -799,7 +813,7 @@ func TestFormatShardInfo(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "",
-				Flags:       "pinned",
+				Flags:       []string{"pinned"},
 			},
 			want: "localhost:47001,,f=pinned",
 		},
@@ -808,7 +822,7 @@ func TestFormatShardInfo(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "pinned, readonly",
+				Flags:       []string{"pinned", " readonly"},
 			},
 			want: "localhost:47001,localhost:47002,f=pinned,f=readonly",
 		},
@@ -841,7 +855,7 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "pinned",
+				Flags:       []string{"pinned"},
 			},
 		},
 		{
@@ -849,7 +863,7 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "pinned,readonly",
+				Flags:       []string{"pinned", "readonly"},
 			},
 		},
 		{
@@ -857,7 +871,7 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "",
-				Flags:       "pinned",
+				Flags:       []string{"pinned"},
 			},
 		},
 	}
@@ -877,8 +891,8 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			if parsed.CurrentNode != tt.info.CurrentNode {
 				t.Errorf("CurrentNode mismatch: got %q, want %q", parsed.CurrentNode, tt.info.CurrentNode)
 			}
-			if parsed.Flags != tt.info.Flags {
-				t.Errorf("Flags mismatch: got %q, want %q", parsed.Flags, tt.info.Flags)
+			if !equalStringSlices(parsed.Flags, tt.info.Flags) {
+				t.Errorf("Flags mismatch: got %v, want %v", parsed.Flags, tt.info.Flags)
 			}
 		})
 	}
