@@ -12,6 +12,19 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 )
 
+// equalStringSlices compares two string slices for equality
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // mockListener implements StateChangeListener for testing
 type mockListener struct {
 	stateChangedCount int
@@ -648,36 +661,91 @@ func TestParseShardInfo(t *testing.T) {
 		value       string
 		wantTarget  string
 		wantCurrent string
+		wantFlags   string
 	}{
 		{
 			name:        "Full format with both nodes",
 			value:       "localhost:47001,localhost:47002",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
+			wantFlags:   "",
 		},
 		{
 			name:        "Full format with empty current node",
 			value:       "localhost:47001,",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "",
+			wantFlags:   "",
 		},
 		{
 			name:        "Backward compatibility - only target node",
 			value:       "localhost:47001",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "",
+			wantFlags:   "",
 		},
 		{
 			name:        "With whitespace",
 			value:       " localhost:47001 , localhost:47002 ",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
+			wantFlags:   "",
 		},
 		{
-			name:        "Edge case - extra commas in current node",
-			value:       "localhost:47001,node2,extra",
+			name:        "With pinned flag at end",
+			value:       "localhost:47001,localhost:47002,f=pinned",
 			wantTarget:  "localhost:47001",
-			wantCurrent: "node2,extra",
+			wantCurrent: "localhost:47002",
+			wantFlags:   "pinned",
+		},
+		{
+			name:        "With pinned flag at beginning",
+			value:       "f=pinned,localhost:47001,localhost:47002",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+			wantFlags:   "pinned",
+		},
+		{
+			name:        "With pinned flag in middle",
+			value:       "localhost:47001,f=pinned,localhost:47002",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+			wantFlags:   "pinned",
+		},
+		{
+			name:        "With multiple flags",
+			value:       "localhost:47001,f=pinned,localhost:47002,f=readonly",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+			wantFlags:   "pinned,readonly",
+		},
+		{
+			name:        "With flag and empty current node",
+			value:       "localhost:47001,,f=pinned",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "",
+			wantFlags:   "pinned",
+		},
+		{
+			name:        "With flag only target node",
+			value:       "localhost:47001,f=pinned",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "",
+			wantFlags:   "pinned",
+		},
+		{
+			name:        "With whitespace around flags",
+			value:       "localhost:47001, f=pinned , localhost:47002",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+			wantFlags:   "pinned",
+		},
+		{
+			name:        "Empty flag value ignored",
+			value:       "localhost:47001,localhost:47002,f=",
+			wantTarget:  "localhost:47001",
+			wantCurrent: "localhost:47002",
+			wantFlags:   "",
 		},
 	}
 
@@ -691,6 +759,10 @@ func TestParseShardInfo(t *testing.T) {
 			}
 			if info.CurrentNode != tt.wantCurrent {
 				t.Fatalf("parseShardInfo(%q).CurrentNode = %q, want %q", tt.value, info.CurrentNode, tt.wantCurrent)
+			}
+			gotFlags := strings.Join(info.Flags, ",")
+			if gotFlags != tt.wantFlags {
+				t.Fatalf("parseShardInfo(%q).Flags = %q, want %q", tt.value, gotFlags, tt.wantFlags)
 			}
 		})
 	}
@@ -718,6 +790,42 @@ func TestFormatShardInfo(t *testing.T) {
 			},
 			want: "localhost:47001,",
 		},
+		{
+			name: "With pinned flag",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+				Flags:       []string{"pinned"},
+			},
+			want: "localhost:47001,localhost:47002,f=pinned",
+		},
+		{
+			name: "With multiple flags",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+				Flags:       []string{"pinned", "readonly"},
+			},
+			want: "localhost:47001,localhost:47002,f=pinned,f=readonly",
+		},
+		{
+			name: "Empty current node with flag",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "",
+				Flags:       []string{"pinned"},
+			},
+			want: "localhost:47001,,f=pinned",
+		},
+		{
+			name: "Flags with whitespace",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+				Flags:       []string{"pinned", " readonly"},
+			},
+			want: "localhost:47001,localhost:47002,f=pinned,f=readonly",
+		},
 	}
 
 	for _, tt := range tests {
@@ -725,6 +833,66 @@ func TestFormatShardInfo(t *testing.T) {
 			got := formatShardInfo(tt.info)
 			if got != tt.want {
 				t.Fatalf("formatShardInfo() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseFormatShardInfoRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		info ShardInfo
+	}{
+		{
+			name: "Both nodes, no flags",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+			},
+		},
+		{
+			name: "With pinned flag",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+				Flags:       []string{"pinned"},
+			},
+		},
+		{
+			name: "With multiple flags",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "localhost:47002",
+				Flags:       []string{"pinned", "readonly"},
+			},
+		},
+		{
+			name: "Empty current node with flag",
+			info: ShardInfo{
+				TargetNode:  "localhost:47001",
+				CurrentNode: "",
+				Flags:       []string{"pinned"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Format then parse
+			formatted := formatShardInfo(tt.info)
+			parsed := parseShardInfo(&mvccpb.KeyValue{
+				Value: []byte(formatted),
+			})
+
+			// Compare fields (ignoring ModRevision)
+			if parsed.TargetNode != tt.info.TargetNode {
+				t.Errorf("TargetNode mismatch: got %q, want %q", parsed.TargetNode, tt.info.TargetNode)
+			}
+			if parsed.CurrentNode != tt.info.CurrentNode {
+				t.Errorf("CurrentNode mismatch: got %q, want %q", parsed.CurrentNode, tt.info.CurrentNode)
+			}
+			if !equalStringSlices(parsed.Flags, tt.info.Flags) {
+				t.Errorf("Flags mismatch: got %v, want %v", parsed.Flags, tt.info.Flags)
 			}
 		})
 	}
