@@ -209,7 +209,7 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		listeners: make([]StateChangeListener, 0),
 	}
 	// Set default batch size
-	cm.rebalanceShardsBatchSize.Store(int32(max(1, numShards/128)))
+	cm.rebalanceShardsBatchSize.Store(int32(cm.calculateDefaultRebalanceShardsBatchSize()))
 	return cm
 }
 
@@ -277,13 +277,23 @@ func (cm *ConsensusManager) SetMinQuorum(minQuorum int) {
 	cm.logger.Infof("ConsensusManager minimum quorum set to %d", minQuorum)
 }
 
+// calculateDefaultRebalanceShardsBatchSize calculates the default batch size based on number of shards
+func (cm *ConsensusManager) calculateDefaultRebalanceShardsBatchSize() int {
+	return max(1, cm.numShards/128)
+}
+
 // SetRebalanceShardsBatchSize sets the maximum number of shards to migrate in a single rebalance operation
 func (cm *ConsensusManager) SetRebalanceShardsBatchSize(batchSize int) {
 	if batchSize <= 0 {
-		batchSize = max(1, cm.numShards/128)
+		batchSize = cm.calculateDefaultRebalanceShardsBatchSize()
 	}
 	cm.rebalanceShardsBatchSize.Store(int32(batchSize))
 	cm.logger.Infof("ConsensusManager rebalance shards batch size set to %d", batchSize)
+}
+
+// GetRebalanceShardsBatchSize returns the current batch size for shard rebalancing
+func (cm *ConsensusManager) GetRebalanceShardsBatchSize() int {
+	return int(cm.rebalanceShardsBatchSize.Load())
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
