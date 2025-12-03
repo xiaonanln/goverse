@@ -34,7 +34,15 @@ import traceback
 
 # Find repo root by searching upward for go.mod
 def find_repo_root():
-    """Find the repository root by searching upward for go.mod."""
+    """Find the repository root by searching upward for go.mod.
+    
+    This is more robust than hardcoded path traversal because:
+    - Works from any subdirectory level
+    - Adapts if directory structure changes
+    - Clearly identifies the actual project root
+    
+    Falls back to relative path if go.mod not found.
+    """
     current = Path(__file__).resolve()
     for parent in [current] + list(current.parents):
         if (parent / 'go.mod').exists():

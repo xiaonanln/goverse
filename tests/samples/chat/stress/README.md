@@ -133,4 +133,15 @@ Press `Ctrl+C` to stop the test early. The script will:
 - Each client operates independently in its own thread
 - The test is designed to run continuously for extended periods
 - All processes are cleaned up properly on exit, even if interrupted
-- "Leave room" action simulates leaving by clearing local state (triggers re-join behavior for stress testing)
+
+### Leave Room Behavior
+
+The chat system does not currently implement a Leave method. The stress test simulates "leaving" by:
+1. Clearing the local room state on the client
+2. Triggering the client to join a new room on the next action
+
+This approach is valid for stress testing because:
+- It tests the Join functionality repeatedly (including re-joining)
+- The server overwrites existing user entries when joining
+- It creates realistic stress patterns (users joining multiple rooms over time)
+- The focus is on stressing the system, not perfect usage simulation
