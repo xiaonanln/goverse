@@ -319,11 +319,15 @@ Examples:
         if base_cov_dir:
             os.makedirs(base_cov_dir, exist_ok=True)
         
-        # Start inspector
+        # Get config file path
+        config_file = Path(__file__).parent / 'stress_config.yml'
+        
+        # Start inspector with config file
         print("\n" + "=" * 80)
         print("STARTING INSPECTOR")
         print("=" * 80)
-        inspector = Inspector()
+        print(f"Using config file: {config_file}")
+        inspector = Inspector(config_file=str(config_file))
         inspector.start()
         
         if not inspector.wait_for_ready(timeout=30):
@@ -334,8 +338,13 @@ Examples:
         print("\n" + "=" * 80)
         print("STARTING CHAT SERVERS")
         print("=" * 80)
+        node_ids = ["stress-node-1", "stress-node-2", "stress-node-3"]
         for i in range(3):
-            server = ChatServer(server_index=i)
+            server = ChatServer(
+                server_index=i,
+                config_file=str(config_file),
+                node_id=node_ids[i]
+            )
             server.start()
             chat_servers.append(server)
         
@@ -353,8 +362,12 @@ Examples:
         print("\n" + "=" * 80)
         print("STARTING GATEWAYS")
         print("=" * 80)
+        gate_ids = ["stress-gate-1", "stress-gate-2"]
         for i in range(2):
-            gateway = Gateway()
+            gateway = Gateway(
+                config_file=str(config_file),
+                gate_id=gate_ids[i]
+            )
             gateway.start()
             gateways.append(gateway)
         

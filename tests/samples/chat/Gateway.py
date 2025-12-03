@@ -25,16 +25,21 @@ class Gateway:
     process: subprocess.Popen | None
     
     def __init__(self, listen_port: int | None = None, binary_path: str | None = None, 
+                 config_file: str | None = None, gate_id: str | None = None,
                  build_if_needed: bool = True) -> None:
         """Initialize and optionally build the gateway.
         
         Args:
-            listen_port: Gateway listen port (default: dynamically allocated)
+            listen_port: Gateway listen port (default: dynamically allocated, ignored if config_file is provided)
             binary_path: Path to gateway binary (defaults to /tmp/gateway)
+            config_file: Path to YAML config file (if provided, listen_port is ignored)
+            gate_id: Gate ID when using config file (required if config_file is provided)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/gateway'
         self.listen_port = listen_port if listen_port is not None else get_free_port()
+        self.config_file = config_file
+        self.gate_id = gate_id
         self.process = None
         self.name = "Gateway"
         
@@ -49,22 +54,29 @@ class Gateway:
             print(f"⚠️  {self.name} is already running")
             return
 
-        print(f"Starting {self.name} on port {self.listen_port}...")
-        
-        # Build address strings for the gateway
-        listen_addr = f':{self.listen_port}'
-        advertise_addr = f'localhost:{self.listen_port}'
-        
-        # Start the process with dynamic port arguments (inherits GOCOVERDIR from environment if set)
-        self.process = subprocess.Popen(
-            [
+        # Build command line arguments
+        if self.config_file:
+            if not self.gate_id:
+                raise ValueError("gate_id is required when config_file is specified")
+            print(f"Starting {self.name} with config file: {self.config_file}, gate ID: {self.gate_id}...")
+            args = [
+                self.binary_path,
+                '-config', self.config_file,
+                '-gate-id', self.gate_id
+            ]
+        else:
+            print(f"Starting {self.name} on port {self.listen_port}...")
+            # Build address strings for the gateway
+            listen_addr = f':{self.listen_port}'
+            advertise_addr = f'localhost:{self.listen_port}'
+            args = [
                 self.binary_path,
                 '-listen', listen_addr,
                 '-advertise', advertise_addr
-            ], 
-            stdout=None, 
-            stderr=None
-        )
+            ]
+        
+        # Start the process (inherits GOCOVERDIR from environment if set)
+        self.process = subprocess.Popen(args, stdout=None, stderr=None)
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     
     def wait_for_ready(self, timeout: float = 30) -> bool:

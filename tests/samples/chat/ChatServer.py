@@ -39,11 +39,13 @@ class ChatServer:
     stub: goverse_pb2_grpc.GoverseStub | None
     
     def __init__(self, server_index=0, listen_port=None, client_port=None, 
-                 binary_path=None):
+                 binary_path=None, config_file=None, node_id=None):
         self.server_index = server_index
         self.listen_port = listen_port if listen_port is not None else get_free_port()
         self.client_port = client_port if client_port is not None else get_free_port()
         self.binary_path = binary_path if binary_path is not None else '/tmp/chat_server'
+        self.config_file = config_file
+        self.node_id = node_id
         self.process = None
         self.channel = None
         self.stub = None
@@ -60,14 +62,23 @@ class ChatServer:
             print(f"⚠️  {self.name} is already running")
             return
 
-        print(f"Starting {self.name} (port {self.listen_port})...")
-        
-        # Start the process (inherits GOCOVERDIR from environment if set)
-        cmd: List[str] = [
-            self.binary_path,
-            '-listen', f'localhost:{self.listen_port}',
-            '-advertise', f'localhost:{self.listen_port}',
-        ]
+        # Build command line arguments
+        if self.config_file:
+            if not self.node_id:
+                raise ValueError("node_id is required when config_file is specified")
+            print(f"Starting {self.name} with config file: {self.config_file}, node ID: {self.node_id}...")
+            cmd: List[str] = [
+                self.binary_path,
+                '-config', self.config_file,
+                '-node-id', self.node_id
+            ]
+        else:
+            print(f"Starting {self.name} (port {self.listen_port})...")
+            cmd: List[str] = [
+                self.binary_path,
+                '-listen', f'localhost:{self.listen_port}',
+                '-advertise', f'localhost:{self.listen_port}',
+            ]
         
         self.process = subprocess.Popen(
             cmd, 
