@@ -38,18 +38,34 @@ class Inspector:
     stub: inspector_pb2_grpc.InspectorServiceStub | None
     
     def __init__(self, binary_path: str | None = None, http_port: int | None = None, grpc_port: int | None = None, 
-                 build_if_needed: bool = True) -> None:
+                 config_file: str | None = None, build_if_needed: bool = True) -> None:
         """Initialize and optionally build the inspector.
         
         Args:
             binary_path: Path to inspector binary (defaults to /tmp/inspector)
-            http_port: HTTP server port (default: dynamically allocated)
-            grpc_port: gRPC server port (default: dynamically allocated)
+            http_port: HTTP server port (default: dynamically allocated, ignored if config_file is provided)
+            grpc_port: gRPC server port (default: dynamically allocated, ignored if config_file is provided)
+            config_file: Path to YAML config file (if provided, ports are read from config)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/inspector'
-        self.http_port = http_port if http_port is not None else get_free_port()
-        self.grpc_port = grpc_port if grpc_port is not None else get_free_port()
+        self.config_file = config_file
+        
+        # If config file is provided, parse ports from it
+        if config_file:
+            import yaml
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            inspector_config = config.get('inspector', {})
+            http_addr = inspector_config.get('http_addr', '0.0.0.0:8080')
+            grpc_addr = inspector_config.get('grpc_addr', '0.0.0.0:8081')
+            # Parse ports from addresses (format: "host:port")
+            self.http_port = int(http_addr.split(':')[1]) if ':' in http_addr else 8080
+            self.grpc_port = int(grpc_addr.split(':')[1]) if ':' in grpc_addr else 8081
+        else:
+            self.http_port = http_port if http_port is not None else get_free_port()
+            self.grpc_port = grpc_port if grpc_port is not None else get_free_port()
+        
         self.process = None
         self.channel = None
         self.stub = None
@@ -66,18 +82,20 @@ class Inspector:
             print(f"⚠️  {self.name} is already running")
             return
 
-        print(f"Starting {self.name} (HTTP port {self.http_port}, gRPC port {self.grpc_port})...")
-        
-        # Start the process with dynamic port arguments (inherits GOCOVERDIR from environment if set)
-        self.process = subprocess.Popen(
-            [
+        # Build command line arguments
+        if self.config_file:
+            print(f"Starting {self.name} with config file: {self.config_file}...")
+            args = [self.binary_path, '-config', self.config_file]
+        else:
+            print(f"Starting {self.name} (HTTP port {self.http_port}, gRPC port {self.grpc_port})...")
+            args = [
                 self.binary_path,
                 '-http-addr', f':{self.http_port}',
                 '-grpc-addr', f':{self.grpc_port}'
-            ], 
-            stdout=None, 
-            stderr=None
-        )
+            ]
+        
+        # Start the process (inherits GOCOVERDIR from environment if set)
+        self.process = subprocess.Popen(args, stdout=None, stderr=None)
         print(f"✅ {self.name} started with PID: {self.process.pid}")
     
     def wait_for_ready(self, timeout: float = 30) -> bool:
