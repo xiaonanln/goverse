@@ -464,4 +464,3 @@ func TestStorageFormatWithFlags(t *testing.T) {
 
 	t.Log("Storage format with flags test passed")
 }
-
