@@ -57,9 +57,12 @@ func TestParseObjectID_FixedShard(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "negative_shard",
-			objectID: "shard#-1/object",
-			wantErr:  true,
+			name:           "negative_shard",
+			objectID:       "shard#-1/object",
+			wantType:       TypeFixedShard,
+			wantShardID:    -1,
+			wantObjectPart: "object",
+			wantErr:        false, // ParseObjectID allows it, ValidateObjectID will reject it
 		},
 		{
 			name:     "shard_with_space",
@@ -262,7 +265,7 @@ func TestValidateObjectID(t *testing.T) {
 			objectID:    "shard#-1/object",
 			numShards:   64,
 			wantErr:     true,
-			errContains: "cannot be negative",
+			errContains: "out of range",
 		},
 		{
 			name:        "invalid_shard_way_out_of_range",
