@@ -321,6 +321,7 @@ Examples:
         
         # Force rebuild by removing existing binaries
         # This ensures stress tests always run with latest code
+        # These paths match the defaults in Inspector, ChatServer, and Gateway classes
         print("\n" + "=" * 80)
         print("CLEANING OLD BINARIES")
         print("=" * 80)
@@ -330,7 +331,7 @@ Examples:
                 try:
                     os.remove(binary_path)
                     print(f"✅ Removed old binary: {binary_path}")
-                except Exception as e:
+                except (OSError, PermissionError) as e:
                     print(f"⚠️  Could not remove {binary_path}: {e}")
         
         # Start inspector
