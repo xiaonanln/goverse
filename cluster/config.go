@@ -27,14 +27,20 @@ type Config struct {
 	// NumShards is the number of shards in the cluster
 	// Default: 8192
 	NumShards int
+
+	// RebalanceShardsBatchSize is the maximum number of shards to migrate in a single rebalance operation
+	// Default: max(1, NumShards / 128)
+	RebalanceShardsBatchSize int
 }
 
 // DefaultConfig returns a Config with production default values
 func DefaultConfig() Config {
+	numShards := 8192
 	return Config{
 		MinQuorum:                     1,
 		ClusterStateStabilityDuration: 10 * time.Second,
 		ShardMappingCheckInterval:     5 * time.Second,
-		NumShards:                     8192,
+		NumShards:                     numShards,
+		RebalanceShardsBatchSize:      max(1, numShards/128),
 	}
 }
