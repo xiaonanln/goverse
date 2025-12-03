@@ -346,7 +346,7 @@ func TestRebalanceShards_CustomBatchSize(t *testing.T) {
 			}
 
 			// Verify the batch size is set correctly
-			actualBatchSize := int(cm.rebalanceShardsBatchSize.Load())
+			actualBatchSize := cm.GetRebalanceShardsBatchSize()
 			if actualBatchSize != tc.expectedBatchSize {
 				t.Fatalf("Expected batch size %d, got %d", tc.expectedBatchSize, actualBatchSize)
 			}
