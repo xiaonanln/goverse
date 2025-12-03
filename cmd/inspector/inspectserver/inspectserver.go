@@ -8,16 +8,20 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 type GoverseNode = models.GoverseNode
@@ -47,13 +51,19 @@ type InspectorServer struct {
 	sseClientsMu sync.RWMutex
 	sseClients   map[string]*SSEClient
 	clientIDSeq  int64
+
+	// etcd connection (optional)
+	etcdManager *etcdmanager.EtcdManager
+	etcdPrefix  string
 }
 
 // Config holds the configuration for InspectorServer
 type Config struct {
-	GRPCAddr  string
-	HTTPAddr  string
-	StaticDir string
+	GRPCAddr   string
+	HTTPAddr   string
+	StaticDir  string
+	EtcdAddr   string // optional etcd address
+	EtcdPrefix string // etcd key prefix
 }
 
 // New creates a new InspectorServer
@@ -65,6 +75,22 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 		staticDir:    cfg.StaticDir,
 		shutdownChan: make(chan struct{}),
 		sseClients:   make(map[string]*SSEClient),
+		etcdPrefix:   cfg.EtcdPrefix,
+	}
+
+	// Connect to etcd if address is provided
+	if cfg.EtcdAddr != "" {
+		mgr, err := etcdmanager.NewEtcdManager(cfg.EtcdAddr, cfg.EtcdPrefix)
+		if err == nil {
+			if err := mgr.Connect(); err == nil {
+				s.etcdManager = mgr
+				log.Printf("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
+			} else {
+				log.Printf("Failed to connect to etcd: %v", err)
+			}
+		} else {
+			log.Printf("Failed to create etcd manager: %v", err)
+		}
 	}
 
 	// Register as observer to receive graph events
@@ -114,6 +140,9 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
 	})
+
+	// Shard mapping endpoint
+	mux.HandleFunc("/shards", s.handleShardMapping)
 
 	// SSE endpoint for push-based updates
 	mux.HandleFunc("/events/stream", s.handleEventsStream)
@@ -290,9 +319,121 @@ func (s *InspectorServer) ServeGRPC(done chan<- struct{}) error {
 	return nil
 }
 
+// handleShardMapping handles GET /shards for shard mapping information
+func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// If etcd is not connected, return empty result
+	if s.etcdManager == nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"shards": []interface{}{},
+			"nodes":  []string{},
+		})
+		return
+	}
+
+	// Get shard mapping from etcd
+	ctx, cancel := etcdmanager.WithEtcdDeadline(context.Background())
+	defer cancel()
+
+	client := s.etcdManager.GetClient()
+	if client == nil {
+		http.Error(w, "etcd client not available", http.StatusInternalServerError)
+		return
+	}
+
+	// Get all shard keys
+	shardPrefix := s.etcdPrefix + "/shard/"
+	resp, err := client.Get(ctx, shardPrefix, clientv3.WithPrefix())
+	if err != nil {
+		log.Printf("Failed to get shard mapping from etcd: %v", err)
+		http.Error(w, "Failed to get shard mapping", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse shard mappings
+	type ShardInfo struct {
+		ShardID     int    `json:"shard_id"`
+		TargetNode  string `json:"target_node"`
+		CurrentNode string `json:"current_node"`
+	}
+
+	shards := make([]ShardInfo, 0)
+	nodeSet := make(map[string]bool)
+
+	for _, kv := range resp.Kvs {
+		key := string(kv.Key)
+		// Extract shard ID from key: /goverse/shard/<shardID>
+		parts := strings.Split(key, "/")
+		if len(parts) < 3 {
+			continue
+		}
+		shardIDStr := parts[len(parts)-1]
+		shardID, err := strconv.Atoi(shardIDStr)
+		if err != nil {
+			continue
+		}
+
+		// Parse shard value: <target_node>:<current_node>
+		value := string(kv.Value)
+		valueParts := strings.Split(value, ":")
+		var targetNode, currentNode string
+		if len(valueParts) >= 1 {
+			targetNode = valueParts[0]
+		}
+		if len(valueParts) >= 2 {
+			currentNode = valueParts[1]
+		}
+
+		shards = append(shards, ShardInfo{
+			ShardID:     shardID,
+			TargetNode:  targetNode,
+			CurrentNode: currentNode,
+		})
+
+		if targetNode != "" {
+			nodeSet[targetNode] = true
+		}
+		if currentNode != "" {
+			nodeSet[currentNode] = true
+		}
+	}
+
+	// Get sorted list of nodes
+	nodes := make([]string, 0, len(nodeSet))
+	for node := range nodeSet {
+		nodes = append(nodes, node)
+	}
+
+	// Sort nodes alphabetically
+	// Using a simple sort for strings
+	for i := 0; i < len(nodes); i++ {
+		for j := i + 1; j < len(nodes); j++ {
+			if nodes[i] > nodes[j] {
+				nodes[i], nodes[j] = nodes[j], nodes[i]
+			}
+		}
+	}
+
+	result := map[string]interface{}{
+		"shards": shards,
+		"nodes":  nodes,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
 // Shutdown initiates graceful shutdown of all servers
 func (s *InspectorServer) Shutdown() {
 	close(s.shutdownChan)
+	if s.etcdManager != nil {
+		s.etcdManager.Close()
+	}
 }
 
 // CreateHTTPHandler creates the HTTP handler for the inspector web UI (exported for testing)

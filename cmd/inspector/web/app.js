@@ -14,6 +14,8 @@ document.querySelectorAll('.tab').forEach(tab => {
       updateShardView()
     } else if (tab.dataset.view === 'nodes') {
       updateNodesView()
+    } else if (tab.dataset.view === 'shardmgmt') {
+      updateShardManagementView()
     }
   })
 })
