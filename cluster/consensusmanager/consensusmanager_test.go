@@ -679,53 +679,53 @@ func TestParseShardInfo(t *testing.T) {
 			wantFlags:   "",
 		},
 		{
-			name:        "With manual flag at end",
-			value:       "localhost:47001,localhost:47002,f=manual",
+			name:        "With pinned flag at end",
+			value:       "localhost:47001,localhost:47002,f=pinned",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
-			wantFlags:   "manual",
+			wantFlags:   "pinned",
 		},
 		{
-			name:        "With manual flag at beginning",
-			value:       "f=manual,localhost:47001,localhost:47002",
+			name:        "With pinned flag at beginning",
+			value:       "f=pinned,localhost:47001,localhost:47002",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
-			wantFlags:   "manual",
+			wantFlags:   "pinned",
 		},
 		{
-			name:        "With manual flag in middle",
-			value:       "localhost:47001,f=manual,localhost:47002",
+			name:        "With pinned flag in middle",
+			value:       "localhost:47001,f=pinned,localhost:47002",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
-			wantFlags:   "manual",
+			wantFlags:   "pinned",
 		},
 		{
 			name:        "With multiple flags",
-			value:       "localhost:47001,f=manual,localhost:47002,f=pinned",
+			value:       "localhost:47001,f=pinned,localhost:47002,f=readonly",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
-			wantFlags:   "manual,pinned",
+			wantFlags:   "pinned,readonly",
 		},
 		{
 			name:        "With flag and empty current node",
-			value:       "localhost:47001,,f=manual",
+			value:       "localhost:47001,,f=pinned",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "",
-			wantFlags:   "manual",
+			wantFlags:   "pinned",
 		},
 		{
 			name:        "With flag only target node",
-			value:       "localhost:47001,f=manual",
+			value:       "localhost:47001,f=pinned",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "",
-			wantFlags:   "manual",
+			wantFlags:   "pinned",
 		},
 		{
 			name:        "With whitespace around flags",
-			value:       "localhost:47001, f=manual , localhost:47002",
+			value:       "localhost:47001, f=pinned , localhost:47002",
 			wantTarget:  "localhost:47001",
 			wantCurrent: "localhost:47002",
-			wantFlags:   "manual",
+			wantFlags:   "pinned",
 		},
 		{
 			name:        "Empty flag value ignored",
@@ -777,40 +777,40 @@ func TestFormatShardInfo(t *testing.T) {
 			want: "localhost:47001,",
 		},
 		{
-			name: "With manual flag",
+			name: "With pinned flag",
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "manual",
+				Flags:       "pinned",
 			},
-			want: "localhost:47001,localhost:47002,f=manual",
+			want: "localhost:47001,localhost:47002,f=pinned",
 		},
 		{
 			name: "With multiple flags",
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "manual,pinned",
+				Flags:       "pinned,readonly",
 			},
-			want: "localhost:47001,localhost:47002,f=manual,f=pinned",
+			want: "localhost:47001,localhost:47002,f=pinned,f=readonly",
 		},
 		{
 			name: "Empty current node with flag",
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "",
-				Flags:       "manual",
+				Flags:       "pinned",
 			},
-			want: "localhost:47001,,f=manual",
+			want: "localhost:47001,,f=pinned",
 		},
 		{
 			name: "Flags with whitespace",
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "manual, pinned",
+				Flags:       "pinned, readonly",
 			},
-			want: "localhost:47001,localhost:47002,f=manual,f=pinned",
+			want: "localhost:47001,localhost:47002,f=pinned,f=readonly",
 		},
 	}
 
@@ -837,11 +837,11 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			name: "With manual flag",
+			name: "With pinned flag",
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "manual",
+				Flags:       "pinned",
 			},
 		},
 		{
@@ -849,7 +849,7 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "localhost:47002",
-				Flags:       "manual,pinned",
+				Flags:       "pinned,readonly",
 			},
 		},
 		{
@@ -857,7 +857,7 @@ func TestParseFormatShardInfoRoundTrip(t *testing.T) {
 			info: ShardInfo{
 				TargetNode:  "localhost:47001",
 				CurrentNode: "",
-				Flags:       "manual",
+				Flags:       "pinned",
 			},
 		},
 	}

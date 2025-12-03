@@ -355,12 +355,12 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	mapping.Shards[0] = ShardInfo{
 		TargetNode:  "node1",
 		CurrentNode: "node1",
-		Flags:       "manual",
+		Flags:       "pinned",
 	}
 	mapping.Shards[1] = ShardInfo{
 		TargetNode:  "node2",
 		CurrentNode: "",
-		Flags:       "manual,pinned",
+		Flags:       "pinned,readonly",
 	}
 	mapping.Shards[2] = ShardInfo{
 		TargetNode:  "node1",
@@ -385,7 +385,7 @@ func TestStorageFormatWithFlags(t *testing.T) {
 		t.Fatal("Shard 0 not found")
 	}
 	value0 := string(resp.Kvs[0].Value)
-	expectedValue0 := "node1,node1,f=manual"
+	expectedValue0 := "node1,node1,f=pinned"
 	if value0 != expectedValue0 {
 		t.Fatalf("Shard 0: expected value %q, got %q", expectedValue0, value0)
 	}
@@ -398,7 +398,7 @@ func TestStorageFormatWithFlags(t *testing.T) {
 		t.Fatal("Shard 1 not found")
 	}
 	value1 := string(resp.Kvs[0].Value)
-	expectedValue1 := "node2,,f=manual,f=pinned"
+	expectedValue1 := "node2,,f=pinned,f=readonly"
 	if value1 != expectedValue1 {
 		t.Fatalf("Shard 1: expected value %q, got %q", expectedValue1, value1)
 	}
@@ -434,8 +434,8 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	if shard0.CurrentNode != "node1" {
 		t.Fatalf("Shard 0: expected current node 'node1', got %q", shard0.CurrentNode)
 	}
-	if shard0.Flags != "manual" {
-		t.Fatalf("Shard 0: expected flags 'manual', got %q", shard0.Flags)
+	if shard0.Flags != "pinned" {
+		t.Fatalf("Shard 0: expected flags 'pinned', got %q", shard0.Flags)
 	}
 
 	// Verify shard 1
@@ -446,8 +446,8 @@ func TestStorageFormatWithFlags(t *testing.T) {
 	if shard1.CurrentNode != "" {
 		t.Fatalf("Shard 1: expected current node '', got %q", shard1.CurrentNode)
 	}
-	if shard1.Flags != "manual,pinned" {
-		t.Fatalf("Shard 1: expected flags 'manual,pinned', got %q", shard1.Flags)
+	if shard1.Flags != "pinned,readonly" {
+		t.Fatalf("Shard 1: expected flags 'pinned,readonly', got %q", shard1.Flags)
 	}
 
 	// Verify shard 2

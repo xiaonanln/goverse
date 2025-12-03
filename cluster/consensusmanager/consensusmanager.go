@@ -35,8 +35,8 @@ type ShardInfo struct {
 	// Empty initially - will be populated when shard migration/handoff logic is implemented
 	// to enable tracking of active shard transfers during cluster rebalancing
 	CurrentNode string
-	// Flags contains comma-separated flag values (e.g., "manual" for f=manual)
-	// Used to indicate special handling for shards (e.g., manual assignment prevents rebalancing)
+	// Flags contains comma-separated flag values (e.g., "pinned" for f=pinned)
+	// Used to indicate special handling for shards (e.g., pinned assignment prevents rebalancing)
 	Flags string
 
 	// modRevision is the etcd revision when this shard info was last modified

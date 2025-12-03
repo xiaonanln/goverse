@@ -114,7 +114,7 @@ Shard mappings are stored in etcd as individual keys, one for each shard:
 - **Value format**: `"<target-node>,<current-node>[,f=<flag1>,f=<flag2>,...]"`
   - `<target-node>`: The node that should handle this shard
   - `<current-node>`: The node currently handling this shard (may be empty during transitions)
-  - `f=<flag>`: Optional flags for special handling (e.g., `f=manual` to prevent rebalancing)
+  - `f=<flag>`: Optional flags for special handling (e.g., `f=pinned` to prevent rebalancing)
 
 Each of the 8192 shards has its own key in etcd. This allows for:
 - More granular watching and updates
@@ -131,18 +131,18 @@ Each of the 8192 shards has its own key in etcd. This allows for:
 
 **With flags**:
 ```
-/goverse/shard/2 = "localhost:47001,localhost:47002,f=manual"           # Manual assignment flag
-/goverse/shard/3 = "localhost:47001,,f=manual"                          # Manual flag with empty current
-/goverse/shard/4 = "f=manual,localhost:47001,localhost:47002"           # Flag at beginning (flexible parsing)
-/goverse/shard/5 = "localhost:47001,f=manual,localhost:47002"           # Flag in middle (flexible parsing)
-/goverse/shard/6 = "localhost:47001,localhost:47002,f=manual,f=pinned"  # Multiple flags
+/goverse/shard/2 = "localhost:47001,localhost:47002,f=pinned"           # Pinned assignment flag
+/goverse/shard/3 = "localhost:47001,,f=pinned"                          # Pinned flag with empty current
+/goverse/shard/4 = "f=pinned,localhost:47001,localhost:47002"           # Flag at beginning (flexible parsing)
+/goverse/shard/5 = "localhost:47001,f=pinned,localhost:47002"           # Flag in middle (flexible parsing)
+/goverse/shard/6 = "localhost:47001,localhost:47002,f=pinned,f=readonly"  # Multiple flags
 ```
 
 ### Flags
 
 Flags provide additional metadata about shard assignments:
 
-- **`manual`**: Indicates that the shard's target is manually fixed and should not be rebalanced automatically by the cluster
+- **`pinned`**: Indicates that the shard's target is pinned/fixed and should not be rebalanced automatically by the cluster
 - Future flags can be added as needed (e.g., `pinned`, `readonly`, etc.)
 
 Flags are parsed flexibly - they can appear anywhere in the comma-separated value and are identified by the `f=` prefix. The parsing logic extracts the first two non-flag parts as target and current nodes, and collects all flag values.
