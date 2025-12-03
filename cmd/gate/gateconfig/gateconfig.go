@@ -29,6 +29,7 @@ type Loader struct {
 	httpListenAddr *string
 	etcdAddr       *string
 	etcdPrefix     *string
+	inspectorAddr  *string
 }
 
 // NewLoader creates a new Loader with flags registered on the provided FlagSet.
@@ -45,6 +46,7 @@ func NewLoader(fs *flag.FlagSet) *Loader {
 	l.httpListenAddr = fs.String("http-listen", "", "HTTP listen address for REST API and metrics (cannot be used with --config)")
 	l.etcdAddr = fs.String("etcd", DefaultEtcdAddr, "Etcd address (cannot be used with --config)")
 	l.etcdPrefix = fs.String("etcd-prefix", DefaultEtcdPrefix, "Etcd key prefix (cannot be used with --config)")
+	l.inspectorAddr = fs.String("inspector-address", "", "Inspector service address (cannot be used with --config)")
 	return l
 }
 
@@ -81,6 +83,9 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 		if *l.etcdPrefix != DefaultEtcdPrefix {
 			return nil, fmt.Errorf("--etcd-prefix cannot be used with --config; configure in config file instead")
 		}
+		if *l.inspectorAddr != "" {
+			return nil, fmt.Errorf("--inspector-address cannot be used with --config; configure in config file instead")
+		}
 
 		// Load config from file
 		cfg, err := config.LoadConfig(*l.configPath)
@@ -105,6 +110,7 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 			EtcdAddress:       cfg.GetEtcdAddress(),
 			EtcdPrefix:        cfg.GetEtcdPrefix(),
 			NumShards:         cfg.GetNumShards(),
+			InspectorAddress:  cfg.GetInspectorAdvertiseAddress(),
 		}, nil
 	}
 
@@ -121,6 +127,7 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 		EtcdAddress:       *l.etcdAddr,
 		EtcdPrefix:        *l.etcdPrefix,
 		NumShards:         0, // Use default when not using config file
+		InspectorAddress:  *l.inspectorAddr,
 	}, nil
 }
 

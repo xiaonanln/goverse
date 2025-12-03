@@ -118,7 +118,7 @@ gates:
 `
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
@@ -181,7 +181,7 @@ gates:
 `
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
@@ -252,7 +252,7 @@ nodes:
 `
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
@@ -289,7 +289,7 @@ nodes:
 `
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
@@ -304,5 +304,113 @@ nodes:
 	_, err := loader.Load(args)
 	if err == nil {
 		t.Fatal("expected error for invalid node-id")
+	}
+}
+
+func TestLoaderWithInspectorAddress(t *testing.T) {
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-inspector-address", "inspector.local:8081",
+	}
+
+	cfg, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.InspectorAddress != "inspector.local:8081" {
+		t.Errorf("expected InspectorAddress inspector.local:8081, got %s", cfg.InspectorAddress)
+	}
+}
+
+func TestLoaderWithConfigFileAndInspector(t *testing.T) {
+	// Create a temp config file with inspector section
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-cluster:2379"
+    prefix: "/goverse-test"
+
+inspector:
+  grpc_addr: "10.0.3.10:8081"
+  http_addr: "10.0.3.10:8080"
+  advertise_addr: "inspector.cluster.example.com:8081"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+		"-node-id", "node-1",
+	}
+
+	cfg, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.InspectorAddress != "inspector.cluster.example.com:8081" {
+		t.Errorf("expected InspectorAddress inspector.cluster.example.com:8081, got %s", cfg.InspectorAddress)
+	}
+}
+
+func TestLoaderInspectorFlagWithConfigForbidden(t *testing.T) {
+	// Create a temp config file
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-cluster:2379"
+    prefix: "/goverse-test"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+		"-node-id", "node-1",
+		"-inspector-address", "override:8081",
+	}
+
+	_, err := loader.Load(args)
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	if !strings.Contains(err.Error(), "--inspector-address cannot be used with --config") {
+		t.Errorf("expected error containing '--inspector-address cannot be used with --config', got %q", err.Error())
 	}
 }
