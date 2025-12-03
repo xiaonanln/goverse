@@ -15,6 +15,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 	"github.com/xiaonanln/goverse/util/workerpool"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -732,27 +733,15 @@ func (cm *ConsensusManager) GetShardMapping() *ShardMapping {
 // 2. Fixed-node format: "<nodeAddress>/<objectID>" - routes directly to specified node
 // 3. Regular format: any other ID - uses hash-based shard assignment
 func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, error) {
-	// Check if object ID contains a "/" separator
-	if strings.Contains(objectID, "/") {
-		parts := strings.SplitN(objectID, "/", 2)
-		if len(parts) >= 1 && parts[0] != "" {
-			// Check if it's a fixed-shard format (shard#<shardID>/...)
-			// Fixed-shard format should be processed through normal shard mapping
-			if !strings.HasPrefix(parts[0], "shard#") {
-				// Fixed node address format (e.g., "localhost:7001/object-123")
-				nodeAddr := parts[0]
-				return nodeAddr, nil
-			}
-			// If it has "shard#" prefix, validate the format
-			if err := cm.validateShardFormat(objectID, parts[0]); err != nil {
-				return "", err
-			}
-		}
-	} else if strings.Contains(objectID, "#") {
-		// If ID contains "#" but no "/", check if it's an invalid shard# format
-		if strings.HasPrefix(objectID, "shard#") {
-			return "", fmt.Errorf("invalid object ID format: %s (shard# prefix requires format shard#<number>/<objectID>)", objectID)
-		}
+	// Parse and validate the object ID format
+	parsed, err := uniqueid.ValidateObjectID(objectID, cm.numShards)
+	if err != nil {
+		return "", err
+	}
+
+	// Handle fixed-node format - route directly to the specified node
+	if parsed.IsFixedNodeFormat() {
+		return parsed.NodeAddress, nil
 	}
 
 	// Use the sharding logic to determine the node
@@ -789,34 +778,6 @@ func (cm *ConsensusManager) GetCurrentNodeForObject(objectID string) (string, er
 	}
 
 	return shardInfo.CurrentNode, nil
-}
-
-// validateShardFormat validates that a shard# format object ID is valid
-// Returns an error if the format is invalid
-func (cm *ConsensusManager) validateShardFormat(objectID string, prefix string) error {
-	// Format must be: shard#<number>/<objectID>
-	// prefix is the part before the first "/"
-	const shardPrefix = "shard#"
-
-	if len(prefix) <= len(shardPrefix) { // Need at least one digit after "shard#"
-		return fmt.Errorf("invalid object ID format: %s (shard# must be followed by a number)", objectID)
-	}
-
-	// Extract the shard ID part
-	shardIDStr := prefix[len(shardPrefix):] // Skip "shard#"
-
-	// Parse the shard ID
-	shardID, err := strconv.Atoi(shardIDStr)
-	if err != nil {
-		return fmt.Errorf("invalid object ID format: %s (shard# must be followed by a valid number, got %q)", objectID, shardIDStr)
-	}
-
-	// Validate shard ID is in range
-	if shardID < 0 || shardID >= cm.numShards {
-		return fmt.Errorf("invalid object ID format: %s (shard ID %d out of range [0, %d))", objectID, shardID, cm.numShards)
-	}
-
-	return nil
 }
 
 // GetNodeForShard returns the node that owns the given shard
