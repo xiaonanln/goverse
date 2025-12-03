@@ -378,15 +378,15 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		// Parse shard value: <target_node>:<current_node>
+		// Parse shard value: <target_node>,<current_node>
 		value := string(kv.Value)
-		valueParts := strings.Split(value, ":")
+		valueParts := strings.SplitN(value, ",", 2)
 		var targetNode, currentNode string
 		if len(valueParts) >= 1 {
-			targetNode = valueParts[0]
+			targetNode = strings.TrimSpace(valueParts[0])
 		}
 		if len(valueParts) >= 2 {
-			currentNode = valueParts[1]
+			currentNode = strings.TrimSpace(valueParts[1])
 		}
 
 		shards = append(shards, ShardInfo{
