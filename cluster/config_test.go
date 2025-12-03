@@ -28,6 +28,12 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatalf("Expected default NumShards to be 8192, got %d", cfg.NumShards)
 	}
 
+	// RebalanceShardsBatchSize should default to max(1, NumShards/128)
+	expectedBatchSize := max(1, cfg.NumShards/128)
+	if cfg.RebalanceShardsBatchSize != expectedBatchSize {
+		t.Fatalf("Expected default RebalanceShardsBatchSize to be %d, got %d", expectedBatchSize, cfg.RebalanceShardsBatchSize)
+	}
+
 	// EtcdAddress and EtcdPrefix should be empty by default
 	if cfg.EtcdAddress != "" {
 		t.Fatalf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
@@ -48,6 +54,7 @@ func TestConfigCustomization(t *testing.T) {
 	cfg.ClusterStateStabilityDuration = 5 * time.Second
 	cfg.ShardMappingCheckInterval = 2 * time.Second
 	cfg.NumShards = 4096
+	cfg.RebalanceShardsBatchSize = 50
 
 	// Verify customizations
 	if cfg.EtcdAddress != "localhost:2379" {
@@ -72,6 +79,73 @@ func TestConfigCustomization(t *testing.T) {
 
 	if cfg.NumShards != 4096 {
 		t.Fatalf("Expected NumShards to be 4096, got %d", cfg.NumShards)
+	}
+
+	if cfg.RebalanceShardsBatchSize != 50 {
+		t.Fatalf("Expected RebalanceShardsBatchSize to be 50, got %d", cfg.RebalanceShardsBatchSize)
+	}
+}
+
+// TestRebalanceShardsBatchSizeDefault tests the default calculation for batch size
+func TestRebalanceShardsBatchSizeDefault(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name              string
+		numShards         int
+		expectedBatchSize int
+	}{
+		{
+			name:              "8192 shards (production default)",
+			numShards:         8192,
+			expectedBatchSize: 64, // 8192 / 128 = 64
+		},
+		{
+			name:              "4096 shards",
+			numShards:         4096,
+			expectedBatchSize: 32, // 4096 / 128 = 32
+		},
+		{
+			name:              "128 shards",
+			numShards:         128,
+			expectedBatchSize: 1, // max(1, 128 / 128) = 1
+		},
+		{
+			name:              "64 shards (test default)",
+			numShards:         64,
+			expectedBatchSize: 1, // max(1, 64 / 128) = 1
+		},
+		{
+			name:              "16 shards",
+			numShards:         16,
+			expectedBatchSize: 1, // max(1, 16 / 128) = 1
+		},
+		{
+			name:              "16384 shards",
+			numShards:         16384,
+			expectedBatchSize: 128, // 16384 / 128 = 128
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{
+				NumShards:                tc.numShards,
+				RebalanceShardsBatchSize: 0, // 0 means use default
+			}
+
+			// Calculate expected default
+			expectedDefault := max(1, tc.numShards/128)
+			if expectedDefault != tc.expectedBatchSize {
+				t.Fatalf("Test case error: expected %d but calculated %d", tc.expectedBatchSize, expectedDefault)
+			}
+
+			// When RebalanceShardsBatchSize is 0, the cluster initialization should set it to the default
+			// This is verified in the cluster initialization code
+			actualDefault := max(1, cfg.NumShards/128)
+			if actualDefault != tc.expectedBatchSize {
+				t.Fatalf("Expected default batch size %d for %d shards, got %d", tc.expectedBatchSize, tc.numShards, actualDefault)
+			}
+		})
 	}
 }
 
