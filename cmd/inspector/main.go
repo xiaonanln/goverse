@@ -16,6 +16,8 @@ func main() {
 	// Parse command-line flags
 	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address")
 	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
+	etcdAddr := flag.String("etcd-addr", "", "etcd server address (optional, e.g., localhost:2379)")
+	etcdPrefix := flag.String("etcd-prefix", "/goverse", "etcd key prefix")
 	flag.Parse()
 
 	pg := graph.NewGoverseGraph()
@@ -29,9 +31,11 @@ func main() {
 
 	// Create and configure the inspector server
 	server := inspectserver.New(pg, inspectserver.Config{
-		GRPCAddr:  *grpcAddr,
-		HTTPAddr:  *httpAddr,
-		StaticDir: "cmd/inspector/web",
+		GRPCAddr:   *grpcAddr,
+		HTTPAddr:   *httpAddr,
+		StaticDir:  "cmd/inspector/web",
+		EtcdAddr:   *etcdAddr,
+		EtcdPrefix: *etcdPrefix,
 	})
 
 	// Start gRPC server

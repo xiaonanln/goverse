@@ -393,3 +393,172 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
   font-style: italic;
   font-size: 13px;
 }
+
+/* Shard Management View */
+#shardmgmt-container {
+  padding: 20px;
+  overflow-y: auto;
+  background: #fafafa;
+  height: 100%;
+}
+
+.shardmgmt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #ddd;
+}
+
+.shardmgmt-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.shardmgmt-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+}
+
+.stat-item {
+  padding: 8px 15px;
+  background: white;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+}
+
+.node-box {
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.node-box-header {
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.node-box-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.node-icon {
+  font-size: 20px;
+}
+
+.node-id {
+  font-family: monospace;
+}
+
+.node-box-shard-count {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.node-box-content {
+  padding: 15px 20px;
+}
+
+.shard-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shard-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #4CAF50;
+  color: white;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: bold;
+  font-family: monospace;
+  cursor: default;
+  transition: all 0.2s;
+}
+
+.shard-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.shard-badge.migrating {
+  background: #FF9800;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.node-box-empty {
+  color: #999;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+.shard-empty-state {
+  max-width: 600px;
+  margin: 50px auto;
+  padding: 30px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.shard-empty-state h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.shard-empty-state ul {
+  margin: 15px 0;
+  padding-left: 20px;
+}
+
+.shard-empty-state li {
+  margin: 8px 0;
+  color: #666;
+}
+
+.shard-empty-state pre {
+  background: #f5f5f5;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  border: 1px solid #ddd;
+  margin: 10px 0;
+}
+
+.shard-empty-state code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.shard-error {
+  max-width: 600px;
+  margin: 50px auto;
+  padding: 20px;
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 8px;
+  color: #c62828;
+  text-align: center;
+}
