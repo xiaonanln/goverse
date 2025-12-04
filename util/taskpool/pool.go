@@ -4,6 +4,7 @@ import (
 	"context"
 	"hash/fnv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/xiaonanln/goverse/util/logger"
 )
@@ -37,14 +38,19 @@ type worker struct {
 //	defer pool.Stop()
 //
 //	// Submit jobs with keys
-//	pool.Submit("user-123", func(ctx context.Context) {
+//	pool.SubmitByKey("user-123", func(ctx context.Context) {
 //	    // Work for user-123
 //	})
-//	pool.Submit("user-456", func(ctx context.Context) {
+//	pool.SubmitByKey("user-456", func(ctx context.Context) {
 //	    // Work for user-456 (runs in parallel if hashed to different worker)
 //	})
-//	pool.Submit("user-123", func(ctx context.Context) {
+//	pool.SubmitByKey("user-123", func(ctx context.Context) {
 //	    // Another job for user-123 (runs serially after first job)
+//	})
+//
+//	// Submit jobs without a key (distributed round-robin)
+//	pool.Submit(func(ctx context.Context) {
+//	    // Fire-and-forget work
 //	})
 type TaskPool struct {
 	numWorkers int
@@ -54,6 +60,7 @@ type TaskPool struct {
 	stopped    bool
 	mu         sync.RWMutex
 	logger     *logger.Logger
+	nextWorker uint32
 }
 
 var (
@@ -72,9 +79,14 @@ func DefaultPool() *TaskPool {
 	return defaultPool
 }
 
-// Submit submits a job to the default pool
-func Submit(key string, job Job) {
-	DefaultPool().Submit(key, job)
+// Submit submits a job without a key to the default pool
+func Submit(job Job) {
+	DefaultPool().Submit(job)
+}
+
+// SubmitByKey submits a keyed job to the default pool
+func SubmitByKey(key string, job Job) {
+	DefaultPool().SubmitByKey(key, job)
 }
 
 // NewTaskPool creates a new TaskPool with the specified number of workers
@@ -116,22 +128,31 @@ func (tp *TaskPool) hashKey(key string) int {
 	return int(h.Sum32() % uint32(tp.numWorkers))
 }
 
-// Submit adds a job to the queue for the specified key
+// Submit adds a job to the queue without a key
+// Jobs submitted this way are spread round-robin across workers
+func (tp *TaskPool) Submit(job Job) {
+	tp.enqueueJob(tp.nextWorkerIndex(), "", job)
+}
+
+// SubmitByKey adds a job to the queue for the specified key
 // Jobs for the same key are executed serially in order
 // Jobs for different keys may run in parallel (if hashed to different workers)
-func (tp *TaskPool) Submit(key string, job Job) {
+func (tp *TaskPool) SubmitByKey(key string, job Job) {
+	workerIdx := tp.hashKey(key)
+	tp.enqueueJob(workerIdx, key, job)
+}
+
+// enqueueJob dispatches a job to a specific worker index
+func (tp *TaskPool) enqueueJob(workerIdx int, key string, job Job) {
 	tp.mu.RLock()
 	stopped := tp.stopped
 	tp.mu.RUnlock()
 
 	// Check if stopped
 	if stopped {
-		tp.logger.Warnf("TaskPool is stopped, rejecting job for key: %s", key)
+		tp.rejectLog(key, "TaskPool is stopped, rejecting job")
 		return
 	}
-
-	// Hash key to worker
-	workerIdx := tp.hashKey(key)
 	w := tp.workers[workerIdx]
 
 	// Try to submit job
@@ -140,8 +161,23 @@ func (tp *TaskPool) Submit(key string, job Job) {
 		// Job submitted successfully
 	case <-tp.ctx.Done():
 		// Pool is being shut down
-		tp.logger.Warnf("TaskPool context cancelled, rejecting job for key: %s", key)
+		tp.rejectLog(key, "TaskPool context cancelled, rejecting job")
 	}
+}
+
+// nextWorkerIndex returns the next worker index using round-robin selection
+func (tp *TaskPool) nextWorkerIndex() int {
+	val := atomic.AddUint32(&tp.nextWorker, 1) - 1
+	return int(val % uint32(tp.numWorkers))
+}
+
+// rejectLog logs a rejection message with optional key context
+func (tp *TaskPool) rejectLog(key, msg string) {
+	if key == "" {
+		tp.logger.Warnf("%s", msg)
+		return
+	}
+	tp.logger.Warnf("%s for key: %s", msg, key)
 }
 
 // worker processes jobs for its queue
