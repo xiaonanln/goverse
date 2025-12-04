@@ -436,3 +436,61 @@ func parseSSEEvents(body string) []map[string]string {
 	}
 	return events
 }
+
+// TestPprofEndpoints tests that pprof endpoints are available
+func TestPprofEndpoints(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	// Test pprof endpoints
+	tests := []struct {
+		name     string
+		path     string
+		wantCode int
+	}{
+		{
+			name:     "pprof index",
+			path:     "/debug/pprof/",
+			wantCode: http.StatusOK,
+		},
+		{
+			name:     "pprof cmdline",
+			path:     "/debug/pprof/cmdline",
+			wantCode: http.StatusOK,
+		},
+		{
+			name:     "pprof symbol",
+			path:     "/debug/pprof/symbol",
+			wantCode: http.StatusOK,
+		},
+		{
+			name:     "pprof trace",
+			path:     "/debug/pprof/trace",
+			wantCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantCode {
+				t.Errorf("Expected status code %d, got %d", tt.wantCode, rr.Code)
+			}
+
+			// Check that we got some content
+			if rr.Body.Len() == 0 {
+				t.Error("Expected non-empty response body")
+			}
+		})
+	}
+}
