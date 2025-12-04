@@ -133,6 +133,11 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 	return s
 }
 
+// GetConsensusManager returns the consensus manager (for demo simulation)
+func (s *InspectorServer) GetConsensusManager() *consensusmanager.ConsensusManager {
+	return s.consensusManager
+}
+
 // OnGraphEvent implements the graph.Observer interface
 func (s *InspectorServer) OnGraphEvent(event graph.GraphEvent) {
 	s.sseClientsMu.RLock()
