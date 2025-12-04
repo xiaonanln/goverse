@@ -325,6 +325,25 @@ func (pg *GoverseGraph) UpdateGateConnectedNodes(gateID string, connectedNodes [
 	})
 }
 
+// UpdateGateClientCount updates the client_count field for a specific gate.
+func (pg *GoverseGraph) UpdateGateClientCount(gateID string, clientCount int) {
+	pg.mu.Lock()
+	gate, exists := pg.gates[gateID]
+	if !exists {
+		pg.mu.Unlock()
+		return
+	}
+
+	gate.ClientCount = clientCount
+	pg.gates[gateID] = gate
+	pg.mu.Unlock()
+
+	pg.notifyObservers(GraphEvent{
+		Type: EventGateUpdated,
+		Gate: &gate,
+	})
+}
+
 // UpdateNodeRegisteredGates updates the registered_gates field for a specific node.
 func (pg *GoverseGraph) UpdateNodeRegisteredGates(nodeID string, registeredGates []string) {
 	pg.mu.Lock()

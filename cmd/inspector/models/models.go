@@ -22,6 +22,7 @@ type GoverseGate struct {
 	AdvertiseAddr  string    `json:"advertise_addr"`
 	RegisteredAt   time.Time `json:"registered_at"`
 	ConnectedNodes []string  `json:"connected_nodes"` // List of node addresses this gate is connected to
+	ClientCount    int       `json:"client_count"`    // Number of registered clients
 }
 
 type GoverseObject struct {

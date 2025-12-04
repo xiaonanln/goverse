@@ -39,6 +39,7 @@ message RemoveObjectRequest {
 message RegisterGateRequest {
   string advertise_address = 1;  // e.g. "localhost:49000"
   repeated string connected_nodes = 2; // List of node addresses this gate is connected to
+  int32 client_count = 3; // Number of registered clients
 }
 
 message RegisterGateResponse {
@@ -58,6 +59,11 @@ message UpdateRegisteredGatesRequest {
   repeated string registered_gates = 2; // Updated list of gate addresses registered to this node
 }
 
+message UpdateGateClientCountRequest {
+  string advertise_address = 1;  // Gate address, e.g. "localhost:49000"
+  int32 client_count = 2; // Updated number of registered clients
+}
+
 service InspectorService {
   rpc AddOrUpdateObject(AddOrUpdateObjectRequest) returns (Empty);
   rpc RemoveObject(RemoveObjectRequest) returns (Empty);
@@ -67,5 +73,6 @@ service InspectorService {
   rpc UpdateRegisteredGates(UpdateRegisteredGatesRequest) returns (Empty);
   rpc RegisterGate(RegisterGateRequest) returns (RegisterGateResponse);
   rpc UnregisterGate(UnregisterGateRequest) returns (Empty);
+  rpc UpdateGateClientCount(UpdateGateClientCountRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);
 }

@@ -55,6 +55,9 @@ func NewGate(config *GateConfig) (*Gate, error) {
 		inspectorManager: inspectormanager.NewGateInspectorManager(config.AdvertiseAddress, config.InspectorAddress),
 	}
 
+	// Set the client count provider for the inspector manager
+	gate.inspectorManager.SetClientCountProvider(gate.GetClientCount)
+
 	return gate, nil
 }
 
@@ -137,6 +140,9 @@ func (g *Gate) Register(ctx context.Context) *ClientProxy {
 	// Set metrics to current count
 	metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 
+	// Notify inspector of client count change
+	g.NotifyClientCountChanged()
+
 	g.logger.Infof("Registered new client: %s", clientID)
 	return clientProxy
 }
@@ -151,6 +157,8 @@ func (g *Gate) Unregister(clientID string) {
 		delete(g.clients, clientID)
 		// Set metrics to current count
 		metrics.SetGateActiveClients(g.advertiseAddress, len(g.clients))
+		// Notify inspector of client count change
+		g.NotifyClientCountChanged()
 		g.logger.Infof("Unregistered client: %s", clientID)
 	}
 }
@@ -181,6 +189,13 @@ func (g *Gate) GetAdvertiseAddress() string {
 	return g.advertiseAddress
 }
 
+// GetClientCount returns the number of currently registered clients
+func (g *Gate) GetClientCount() int {
+	g.clientsMu.RLock()
+	defer g.clientsMu.RUnlock()
+	return len(g.clients)
+}
+
 // SetClusterInfoProvider sets the consolidated cluster info provider for the gate.
 // This is the preferred way to provide cluster information to the gate's InspectorManager.
 func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
@@ -191,6 +206,12 @@ func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) 
 // This should be called whenever nodes are connected or disconnected.
 func (g *Gate) NotifyConnectedNodesChanged() {
 	g.inspectorManager.UpdateConnectedNodes()
+}
+
+// NotifyClientCountChanged notifies the inspector that the gate's client count has changed.
+// This should be called whenever clients register or unregister.
+func (g *Gate) NotifyClientCountChanged() {
+	g.inspectorManager.UpdateGateClientCount()
 }
 
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet

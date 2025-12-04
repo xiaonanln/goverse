@@ -163,6 +163,7 @@ function updateNodesView() {
       advertiseAddr: g.advertise_addr,
       color: g.color,
       objectCount: 0,
+      clientCount: g.client_count || 0,
       connectedNodes: g.connected_nodes || [],
       // Preserve position if exists
       x: existingPos ? existingPos.x : undefined,
@@ -298,17 +299,17 @@ function updateNodesView() {
         .attr('fill', getNodeColor(d))
     }
 
-    // Add object count badge inside the node
+    // Add count badge inside the node
     el.append('text')
       .attr('class', 'object-count-badge')
       .attr('y', 0)
-      .text(d.objectCount + ' objects')
+      .text(d.nodeType === NODE_TYPE_GATE ? (d.clientCount + ' clients') : (d.objectCount + ' objects'))
   })
 
   // Update existing nodes
   nodeSelection.each(function(d) {
     const el = d3.select(this)
-    el.select('.object-count-badge').text(d.objectCount + ' objects')
+    el.select('.object-count-badge').text(d.nodeType === NODE_TYPE_GATE ? (d.clientCount + ' clients') : (d.objectCount + ' objects'))
   })
 
   // Merge enter and update selections

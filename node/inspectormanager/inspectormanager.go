@@ -32,6 +32,10 @@ const (
 	ModeGate
 )
 
+// ClientCountProvider is a function type that returns the current client count.
+// This is used by gates to provide their client count to the InspectorManager.
+type ClientCountProvider func() int
+
 // InspectorManager manages the connection and communication with the Inspector service.
 // It runs in its own goroutine for active connection management and reconnection.
 // It can operate in node mode or gate mode, using the appropriate registration RPCs.
@@ -42,6 +46,7 @@ type InspectorManager struct {
 	healthCheckInterval time.Duration
 	logger              *logger.Logger
 	clusterInfoProvider clusterinfo.ClusterInfoProvider // consolidated provider for cluster info (preferred)
+	clientCountProvider ClientCountProvider             // provider for getting client count (gate mode only)
 
 	mu        sync.RWMutex
 	client    inspector_pb.InspectorServiceClient
@@ -106,6 +111,14 @@ func (im *InspectorManager) IsEnabled() bool {
 // Must be called before Start() to take effect.
 func (im *InspectorManager) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) {
 	im.clusterInfoProvider = provider
+}
+
+// SetClientCountProvider sets the provider function for getting the current client count.
+// This is used by gates when registering with the inspector to report the number of connected clients.
+// Only applicable in gate mode.
+// Must be called before Start() to take effect.
+func (im *InspectorManager) SetClientCountProvider(provider ClientCountProvider) {
+	im.clientCountProvider = provider
 }
 
 // Start initializes the connection to the Inspector and starts background management.
@@ -312,9 +325,16 @@ func (im *InspectorManager) registerLocked() error {
 			connectedNodes = im.clusterInfoProvider.GetConnectedNodes()
 		}
 
+		// Get client count from provider
+		var clientCount int32
+		if im.clientCountProvider != nil {
+			clientCount = int32(im.clientCountProvider())
+		}
+
 		registerReq := &inspector_pb.RegisterGateRequest{
 			AdvertiseAddress: im.address,
 			ConnectedNodes:   connectedNodes,
+			ClientCount:      clientCount,
 		}
 
 		_, err := im.client.RegisterGate(ctx, registerReq)
@@ -322,7 +342,7 @@ func (im *InspectorManager) registerLocked() error {
 			return err
 		}
 
-		im.logger.Infof("Successfully registered gate %s with inspector (%d connected nodes)", im.address, len(connectedNodes))
+		im.logger.Infof("Successfully registered gate %s with inspector (%d connected nodes, %d clients)", im.address, len(connectedNodes), clientCount)
 	}
 
 	return nil
@@ -478,6 +498,51 @@ func (im *InspectorManager) UpdateRegisteredGates() {
 	}
 
 	im.logger.Debugf("Updated registered gates with inspector (%d gates)", len(registeredGates))
+}
+
+// UpdateGateClientCount sends an UpdateGateClientCount RPC to the Inspector.
+// This is called when the gate's client count changes.
+// This method is only applicable in gate mode.
+// If the inspector is disabled (empty address), this is a no-op.
+func (im *InspectorManager) UpdateGateClientCount() {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	if im.client == nil {
+		return
+	}
+
+	// Only gates can update client count
+	if im.mode != ModeGate {
+		return
+	}
+
+	// Get current client count from provider
+	var clientCount int32
+	if im.clientCountProvider != nil {
+		clientCount = int32(im.clientCountProvider())
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &inspector_pb.UpdateGateClientCountRequest{
+		AdvertiseAddress: im.address,
+		ClientCount:      clientCount,
+	}
+
+	_, err := im.client.UpdateGateClientCount(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to update client count with inspector: %v", err)
+		return
+	}
+
+	im.logger.Debugf("Updated client count with inspector (%d clients)", clientCount)
 }
 
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.

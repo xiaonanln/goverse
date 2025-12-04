@@ -110,6 +110,17 @@ function showDetailsPanel(d) {
       html += '</div>'
     }
 
+    // Client count for gates
+    if (d.nodeType === NODE_TYPE_GATE) {
+      html += '<div class="detail-section">'
+      html += '<h4>Clients</h4>'
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Total Count:</div>`
+      html += `<div class="detail-value">${d.clientCount || 0}</div>`
+      html += `</div>`
+      html += '</div>'
+    }
+
     // Connections
     if (d.connectedNodes && d.connectedNodes.length > 0) {
       html += '<div class="detail-section">'
@@ -194,7 +205,11 @@ function showNodesViewTooltip(event, d) {
   if (d.advertiseAddr) {
     content += `<div class="tooltip-row"><span class="tooltip-label">Address:</span> ${d.advertiseAddr}</div>`
   }
-  content += `<div class="tooltip-row"><span class="tooltip-label">Objects:</span> ${d.objectCount}</div>`
+  if (d.nodeType === NODE_TYPE_GATE) {
+    content += `<div class="tooltip-row"><span class="tooltip-label">Clients:</span> ${d.clientCount || 0}</div>`
+  } else {
+    content += `<div class="tooltip-row"><span class="tooltip-label">Objects:</span> ${d.objectCount}</div>`
+  }
   if (d.connectedNodes && d.connectedNodes.length > 0) {
     content += `<div class="tooltip-row"><span class="tooltip-label">Connected to:</span> ${d.connectedNodes.length} nodes</div>`
   }

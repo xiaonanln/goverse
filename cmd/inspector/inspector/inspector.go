@@ -151,10 +151,11 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 		AdvertiseAddr:  addr,
 		RegisteredAt:   time.Now(),
 		ConnectedNodes: req.GetConnectedNodes(),
+		ClientCount:    int(req.GetClientCount()),
 	}
 	i.pg.AddOrUpdateGate(gate)
 
-	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v", addr, req.GetConnectedNodes())
+	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v, client_count=%d", addr, req.GetConnectedNodes(), req.GetClientCount())
 	return &inspector_pb.RegisterGateResponse{}, nil
 }
 
@@ -217,6 +218,28 @@ func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb
 	} else {
 		// Node is not registered, log but don't error
 		log.Printf("UpdateRegisteredGates: no node registered with address %s", addr)
+	}
+
+	return &inspector_pb.Empty{}, nil
+}
+
+// UpdateGateClientCount handles client count update requests from gates.
+func (i *Inspector) UpdateGateClientCount(ctx context.Context, req *inspector_pb.UpdateGateClientCountRequest) (*inspector_pb.Empty, error) {
+	addr := req.GetAdvertiseAddress()
+	if addr == "" {
+		log.Println("UpdateGateClientCount called with empty advertise address")
+		return nil, errors.New("advertise address cannot be empty")
+	}
+
+	clientCount := int(req.GetClientCount())
+
+	// Only gates can update client count
+	if i.pg.IsGateRegistered(addr) {
+		i.pg.UpdateGateClientCount(addr, clientCount)
+		log.Printf("Gate client_count updated: advertise_addr=%s, client_count=%d", addr, clientCount)
+	} else {
+		// Gate is not registered, log but don't error
+		log.Printf("UpdateGateClientCount: no gate registered with address %s", addr)
 	}
 
 	return &inspector_pb.Empty{}, nil
