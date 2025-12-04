@@ -12,6 +12,12 @@ let draggedSourceNode = null
 function updateShardManagementView() {
   const container = document.getElementById('shardmgmt-container')
 
+  // Initialize modal listeners once
+  if (!window.shardModalInitialized) {
+    initializeModalListeners()
+    window.shardModalInitialized = true
+  }
+
   // Fetch shard mapping from backend
   fetch('/shards')
     .then(response => response.json())
@@ -225,12 +231,41 @@ function handleDrop(e) {
   showShardMoveConfirmation(draggedShardId, draggedSourceNode, targetNode)
 }
 
+// Modal state to track current action
+let currentModalAction = null
+
+// Initialize modal event listeners once
+function initializeModalListeners() {
+  const modal = document.getElementById('shard-move-modal')
+  const confirmBtn = document.getElementById('modal-confirm')
+  const cancelBtn = document.getElementById('modal-cancel')
+  
+  confirmBtn.addEventListener('click', () => {
+    modal.classList.remove('visible')
+    if (currentModalAction) {
+      currentModalAction()
+      currentModalAction = null
+    }
+  })
+  
+  cancelBtn.addEventListener('click', () => {
+    modal.classList.remove('visible')
+    currentModalAction = null
+  })
+  
+  // Close modal on overlay click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('visible')
+      currentModalAction = null
+    }
+  })
+}
+
 // Show confirmation modal for shard movement
 function showShardMoveConfirmation(shardId, sourceNode, targetNode) {
   const modal = document.getElementById('shard-move-modal')
   const modalBody = document.getElementById('modal-body-text')
-  const confirmBtn = document.getElementById('modal-confirm')
-  const cancelBtn = document.getElementById('modal-cancel')
   
   modalBody.innerHTML = `
     <p>Are you sure you want to move shard <strong>#${shardId}</strong>?</p>
@@ -239,31 +274,11 @@ function showShardMoveConfirmation(shardId, sourceNode, targetNode) {
     <p><em>This will update the target node in etcd. The shard will migrate once the target node claims it.</em></p>
   `
   
-  // Remove old event listeners by cloning buttons
-  const newConfirmBtn = confirmBtn.cloneNode(true)
-  const newCancelBtn = cancelBtn.cloneNode(true)
-  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn)
-  cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn)
-  
-  // Add new event listeners
-  newConfirmBtn.addEventListener('click', () => {
-    modal.classList.remove('visible')
-    moveShardToNode(shardId, targetNode)
-  })
-  
-  newCancelBtn.addEventListener('click', () => {
-    modal.classList.remove('visible')
-  })
+  // Set the action to be performed on confirm
+  currentModalAction = () => moveShardToNode(shardId, targetNode)
   
   // Show modal
   modal.classList.add('visible')
-  
-  // Close modal on overlay click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.classList.remove('visible')
-    }
-  })
 }
 
 // Move shard to target node via API
@@ -288,13 +303,21 @@ function moveShardToNode(shardId, targetNode) {
   })
   .then(data => {
     console.log('Shard moved successfully:', data)
-    // Show success message (optional - could add a toast notification)
-    alert(`Shard #${shardId} target updated to ${targetNode}. Migration will start automatically.`)
-    // Refresh the view
+    // Refresh the view to show updated state
     updateShardManagementView()
   })
   .catch(error => {
     console.error('Failed to move shard:', error)
-    alert(`Failed to move shard: ${error.message}`)
+    // Show error in modal body and keep modal open
+    const modal = document.getElementById('shard-move-modal')
+    const modalBody = document.getElementById('modal-body-text')
+    modalBody.innerHTML = `
+      <p style="color: #c62828;">Failed to move shard #${shardId}</p>
+      <p><strong>Error:</strong> ${error.message}</p>
+      <p>Please try again or check the inspector logs for more details.</p>
+    `
+    setTimeout(() => {
+      modal.classList.remove('visible')
+    }, 3000)
   })
 }

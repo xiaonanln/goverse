@@ -456,7 +456,7 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Validate shard ID
+	// Validate shard ID (shards are 0-indexed and range from 0 to numShards-1)
 	if req.ShardID < 0 || req.ShardID >= s.consensusManager.GetNumShards() {
 		http.Error(w, fmt.Sprintf("Invalid shard ID: %d", req.ShardID), http.StatusBadRequest)
 		return
