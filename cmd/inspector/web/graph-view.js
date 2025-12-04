@@ -498,16 +498,9 @@ function updateGraphIncremental() {
     nodeMap.set(n.id, node)
   })
 
-  // Add gates with fixed position at top
-  const container = document.getElementById('graph-container')
-  const containerWidth = container.clientWidth
-  const gateCount = graphData.goverse_gates.length
-  const gateSpacing = 150
-  const gateStartX = (containerWidth - (gateCount - 1) * gateSpacing) / 2
+  // Add gates
   graphData.goverse_gates.forEach((g, index) => {
     const existingPos = positionMap.get(g.id)
-    const fixedX = gateStartX + index * gateSpacing
-    const fixedY = 80
     const node = {
       id: g.id,
       label: g.label || g.id,
@@ -515,14 +508,13 @@ function updateGraphIncremental() {
       advertiseAddr: g.advertise_addr,
       color: g.color,
       connectedNodes: g.connected_nodes || [],
-      // Preserve position if user dragged, else use fixed position
-      x: existingPos ? existingPos.x : fixedX,
-      y: existingPos ? existingPos.y : fixedY,
+      // Preserve position if exists
+      x: existingPos ? existingPos.x : undefined,
+      y: existingPos ? existingPos.y : undefined,
       vx: existingPos ? existingPos.vx : undefined,
       vy: existingPos ? existingPos.vy : undefined,
-      // Keep fx/fy from existing position (user may have dragged), or set fixed
-      fx: existingPos ? existingPos.fx : fixedX,
-      fy: existingPos ? existingPos.fy : fixedY
+      fx: existingPos ? existingPos.fx : undefined,
+      fy: existingPos ? existingPos.fy : undefined
     }
     nodes.push(node)
     nodeMap.set(g.id, node)
