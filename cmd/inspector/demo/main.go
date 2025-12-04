@@ -165,6 +165,9 @@ func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, nu
 			connectedNodes = append(connectedNodes, nodeAddrs[j])
 		}
 
+		// Random number of clients (0-50)
+		clientCount := rand.Intn(51)
+
 		pg.AddOrUpdateGate(models.GoverseGate{
 			ID:             addr,
 			Label:          gateID,
@@ -173,6 +176,7 @@ func generateDemoData(pg *graph.GoverseGraph, numNodes, numGates, numObjects, nu
 			Color:          "#2196F3", // Blue for gates
 			RegisteredAt:   time.Now().Add(-time.Duration(rand.Intn(3600)) * time.Second),
 			ConnectedNodes: connectedNodes,
+			Clients:        clientCount,
 		})
 	}
 
