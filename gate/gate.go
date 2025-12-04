@@ -163,6 +163,13 @@ func (g *Gate) GetClient(clientID string) (*ClientProxy, bool) {
 	return client, exists
 }
 
+// GetClientCount returns the current number of registered clients
+func (g *Gate) GetClientCount() int {
+	g.clientsMu.RLock()
+	defer g.clientsMu.RUnlock()
+	return len(g.clients)
+}
+
 func (g *Gate) cleanupClientProxies() {
 	g.clientsMu.Lock()
 	defer g.clientsMu.Unlock()

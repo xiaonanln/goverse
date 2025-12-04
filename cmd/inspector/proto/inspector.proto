@@ -39,6 +39,7 @@ message RemoveObjectRequest {
 message RegisterGateRequest {
   string advertise_address = 1;  // e.g. "localhost:49000"
   repeated string connected_nodes = 2; // List of node addresses this gate is connected to
+  int32 clients = 3; // Number of registered clients connected to this gate
 }
 
 message RegisterGateResponse {

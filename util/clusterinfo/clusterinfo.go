@@ -16,4 +16,8 @@ type ClusterInfoProvider interface {
 	// GetRegisteredGates returns the list of gate addresses that are registered
 	// to this node. This is only meaningful for nodes; gates should return nil.
 	GetRegisteredGates() []string
+
+	// GetClientCount returns the number of registered clients connected to this gate.
+	// This is only meaningful for gates; nodes should return 0.
+	GetClientCount() int
 }

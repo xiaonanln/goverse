@@ -151,10 +151,11 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 		AdvertiseAddr:  addr,
 		RegisteredAt:   time.Now(),
 		ConnectedNodes: req.GetConnectedNodes(),
+		Clients:        int(req.GetClients()),
 	}
 	i.pg.AddOrUpdateGate(gate)
 
-	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v", addr, req.GetConnectedNodes())
+	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v, clients=%d", addr, req.GetConnectedNodes(), req.GetClients())
 	return &inspector_pb.RegisterGateResponse{}, nil
 }
 

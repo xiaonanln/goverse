@@ -10,6 +10,7 @@ import (
 type mockClusterInfoProvider struct {
 	connectedNodes  []string
 	registeredGates []string
+	clientCount     int
 }
 
 func (m *mockClusterInfoProvider) GetConnectedNodes() []string {
@@ -18,6 +19,10 @@ func (m *mockClusterInfoProvider) GetConnectedNodes() []string {
 
 func (m *mockClusterInfoProvider) GetRegisteredGates() []string {
 	return m.registeredGates
+}
+
+func (m *mockClusterInfoProvider) GetClientCount() int {
+	return m.clientCount
 }
 
 func TestClusterInfoProvider_Interface(t *testing.T) {

@@ -306,15 +306,18 @@ func (im *InspectorManager) registerLocked() error {
 		im.logger.Infof("Successfully registered node %s with inspector (%d objects, %d connected nodes, %d registered gates)", im.address, len(objects), len(connectedNodes), len(registeredGates))
 
 	case ModeGate:
-		// Get connected nodes from cluster info provider
+		// Get connected nodes and client count from cluster info provider
 		var connectedNodes []string
+		var clientCount int32
 		if im.clusterInfoProvider != nil {
 			connectedNodes = im.clusterInfoProvider.GetConnectedNodes()
+			clientCount = int32(im.clusterInfoProvider.GetClientCount())
 		}
 
 		registerReq := &inspector_pb.RegisterGateRequest{
 			AdvertiseAddress: im.address,
 			ConnectedNodes:   connectedNodes,
+			Clients:          clientCount,
 		}
 
 		_, err := im.client.RegisterGate(ctx, registerReq)
@@ -322,7 +325,7 @@ func (im *InspectorManager) registerLocked() error {
 			return err
 		}
 
-		im.logger.Infof("Successfully registered gate %s with inspector (%d connected nodes)", im.address, len(connectedNodes))
+		im.logger.Infof("Successfully registered gate %s with inspector (%d connected nodes, %d clients)", im.address, len(connectedNodes), clientCount)
 	}
 
 	return nil
