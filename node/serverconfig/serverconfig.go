@@ -28,7 +28,6 @@ type Loader struct {
 	listenAddr     *string
 	advertiseAddr  *string
 	httpListenAddr *string
-	enablePprof    *bool
 	etcdAddr       *string
 	etcdPrefix     *string
 	inspectorAddr  *string
@@ -46,7 +45,6 @@ func NewLoader(fs *flag.FlagSet) *Loader {
 	l.listenAddr = fs.String("listen", DefaultListenAddr, "Node listen address (cannot be used with --config)")
 	l.advertiseAddr = fs.String("advertise", DefaultAdvertiseAddr, "Node advertise address (cannot be used with --config)")
 	l.httpListenAddr = fs.String("http-listen", "", "HTTP listen address for metrics (cannot be used with --config)")
-	l.enablePprof = fs.Bool("enable-pprof", false, "Enable pprof endpoints on metrics HTTP server (cannot be used with --config)")
 	l.etcdAddr = fs.String("etcd", DefaultEtcdAddr, "Etcd address (cannot be used with --config)")
 	l.etcdPrefix = fs.String("etcd-prefix", DefaultEtcdPrefix, "Etcd key prefix (cannot be used with --config)")
 	l.inspectorAddr = fs.String("inspector-address", "", "Inspector service address (optional, cannot be used with --config)")
@@ -80,9 +78,6 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 		if *l.httpListenAddr != "" {
 			return nil, fmt.Errorf("--http-listen cannot be used with --config; configure in config file instead")
 		}
-		if *l.enablePprof {
-			return nil, fmt.Errorf("--enable-pprof cannot be used with --config; configure in config file instead")
-		}
 		if *l.etcdAddr != DefaultEtcdAddr {
 			return nil, fmt.Errorf("--etcd cannot be used with --config; configure in config file instead")
 		}
@@ -113,7 +108,6 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 			ListenAddress:        listenAddr,
 			AdvertiseAddress:     advertiseAddr,
 			MetricsListenAddress: nodeCfg.HTTPAddr,
-			EnablePprof:          nodeCfg.EnablePprof,
 			EtcdAddress:          cfg.GetEtcdAddress(),
 			EtcdPrefix:           cfg.GetEtcdPrefix(),
 			NumShards:            cfg.GetNumShards(),
@@ -131,7 +125,6 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 		ListenAddress:        *l.listenAddr,
 		AdvertiseAddress:     *l.advertiseAddr,
 		MetricsListenAddress: *l.httpListenAddr,
-		EnablePprof:          *l.enablePprof,
 		EtcdAddress:          *l.etcdAddr,
 		EtcdPrefix:           *l.etcdPrefix,
 		NumShards:            0, // Use default when not using config file

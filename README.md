@@ -21,8 +21,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 - Gate architecture with streaming gRPC and HTTP REST API
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
-- Built-in Prometheus metrics
-- Optional pprof profiling for performance analysis
+- Built-in Prometheus metrics and pprof profiling
 - Inspector UI for visualizing object topology
 
 ---
