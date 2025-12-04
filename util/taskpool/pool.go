@@ -84,7 +84,7 @@ func Submit(key string, job Job) {
 }
 
 // NewTaskPool creates a new TaskPool with the specified number of workers
-// numWorkers must be at least 1
+// If numWorkers is less than 1, it defaults to 1
 func NewTaskPool(numWorkers int) *TaskPool {
 	if numWorkers <= 0 {
 		numWorkers = 1
