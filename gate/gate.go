@@ -158,17 +158,17 @@ func (g *Gate) Unregister(clientID string) {
 		clientProxy.Close()
 		delete(g.clients, clientID)
 		clientCount := len(g.clients)
-		
+
 		// Set metrics to current count in background
 		taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
 			metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 		})
-		
+
 		// Notify inspector of client count change in background
 		taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
 			g.NotifyClientCountChanged()
 		})
-		
+
 		g.logger.Infof("Unregistered client: %s", clientID)
 	}
 }
@@ -197,7 +197,7 @@ func (g *Gate) cleanupClientProxies() {
 		delete(g.clients, clientID)
 		g.logger.Infof("Cleaned up client proxy: %s", clientID)
 	}
-	
+
 	// Set metrics to current count (should be 0 after cleanup) in background
 	clientCount := len(g.clients)
 	taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
