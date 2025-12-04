@@ -137,6 +137,9 @@ func (g *Gate) Register(ctx context.Context) *ClientProxy {
 	// Set metrics to current count
 	metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 
+	// Notify inspector of client count change
+	g.NotifyClientCountChanged()
+
 	g.logger.Infof("Registered new client: %s", clientID)
 	return clientProxy
 }
@@ -151,6 +154,8 @@ func (g *Gate) Unregister(clientID string) {
 		delete(g.clients, clientID)
 		// Set metrics to current count
 		metrics.SetGateActiveClients(g.advertiseAddress, len(g.clients))
+		// Notify inspector of client count change
+		g.NotifyClientCountChanged()
 		g.logger.Infof("Unregistered client: %s", clientID)
 	}
 }
@@ -198,6 +203,12 @@ func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) 
 // This should be called whenever nodes are connected or disconnected.
 func (g *Gate) NotifyConnectedNodesChanged() {
 	g.inspectorManager.UpdateConnectedNodes()
+}
+
+// NotifyClientCountChanged notifies the inspector that the gate's client count has changed.
+// This should be called whenever clients connect or disconnect.
+func (g *Gate) NotifyClientCountChanged() {
+	g.inspectorManager.UpdateGateClients()
 }
 
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
