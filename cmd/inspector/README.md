@@ -291,12 +291,52 @@ cmd/inspector/
 
 **Solution**: Start etcd before running the demo (see Quick Start section)
 
+## Profiling with pprof
+
+The Inspector includes built-in support for Go's pprof profiler, which allows you to analyze performance and diagnose issues.
+
+### Accessing pprof Endpoints
+
+Once the Inspector is running, pprof endpoints are available at:
+
+- **Index**: `http://localhost:8080/debug/pprof/` - Overview of all available profiles
+- **Heap**: `http://localhost:8080/debug/pprof/heap` - Memory allocation profile
+- **CPU**: `http://localhost:8080/debug/pprof/profile` - CPU profile (30s sample)
+- **Goroutine**: `http://localhost:8080/debug/pprof/goroutine` - Stack traces of all goroutines
+- **Trace**: `http://localhost:8080/debug/pprof/trace` - Execution trace
+- **Other profiles**: block, mutex, threadcreate, etc.
+
+### Using pprof with the go tool
+
+```bash
+# View heap profile in browser
+go tool pprof -http=:8090 http://localhost:8080/debug/pprof/heap
+
+# Capture 30-second CPU profile and analyze
+go tool pprof http://localhost:8080/debug/pprof/profile?seconds=30
+
+# View all goroutines
+curl http://localhost:8080/debug/pprof/goroutine?debug=1
+
+# Save profile for later analysis
+curl -o inspector-heap.prof http://localhost:8080/debug/pprof/heap
+go tool pprof inspector-heap.prof
+```
+
+### Common Use Cases
+
+- **Memory leaks**: Use heap profile to identify growing allocations
+- **High CPU usage**: CPU profile shows which functions are consuming time
+- **Too many goroutines**: Goroutine profile helps find goroutine leaks
+- **Lock contention**: Mutex and block profiles show synchronization issues
+
 ## Performance Considerations
 
 - The Inspector keeps full cluster state in memory for fast access
 - SSE connections push updates in real-time to all connected clients
 - For large clusters (1000+ nodes), consider running Inspector on a dedicated server
 - The demo mode is for testing only; use actual etcd for production
+- Use pprof endpoints to monitor Inspector resource usage and performance
 
 ## License
 
