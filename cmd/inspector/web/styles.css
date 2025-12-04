@@ -504,9 +504,22 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
   animation: pulse 2s ease-in-out infinite;
 }
 
+.shard-badge.highlight {
+  box-shadow: 0 0 0 3px #2196F3, 0 0 12px rgba(33, 150, 243, 0.6); /* Material Blue 500 */
+  animation: highlight-pulse 1s ease-in-out infinite;
+  transform: scale(1.1);
+  z-index: 10;
+  position: relative;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+@keyframes highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px #2196F3, 0 0 12px rgba(33, 150, 243, 0.6); }
+  50% { box-shadow: 0 0 0 5px #2196F3, 0 0 20px rgba(33, 150, 243, 0.8); }
 }
 
 .node-box-empty {
