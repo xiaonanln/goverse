@@ -322,6 +322,19 @@ function updateGraph() {
         .attr('r', r)
         .attr('fill', getNodeColor(d))
     }
+    
+    // Add text label for objects showing first 2 chars of type
+    if (d.nodeType === NODE_TYPE_OBJECT && d.type) {
+      el.append('text')
+        .attr('class', 'object-type-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', 'white')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('pointer-events', 'none')
+        .text(d.type.substring(0, 2))
+    }
   })
 
   // Update existing node colors
@@ -583,6 +596,19 @@ function updateGraphIncremental() {
       el.append('circle')
         .attr('r', r)
         .attr('fill', getNodeColor(d))
+    }
+    
+    // Add text label for objects showing first 2 chars of type
+    if (d.nodeType === NODE_TYPE_OBJECT && d.type) {
+      el.append('text')
+        .attr('class', 'object-type-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', 'white')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('pointer-events', 'none')
+        .text(d.type.substring(0, 2).toUpperCase())
     }
   })
 

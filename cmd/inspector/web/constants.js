@@ -13,17 +13,30 @@ const SSE_RECONNECT_DELAY = 3000       // SSE reconnect delay in milliseconds
 // Pie chart dimensions
 const PIE_CHART_SIZE = 200
 
-// Type colors for nodes and objects
+// Type colors for nodes and gates
 const typeColors = {
   node: '#4CAF50',
   gate: '#2196F3',
-  Counter: '#FF9800',
-  ChatRoom: '#9C27B0',
-  Player: '#E91E63',
-  GameSession: '#00BCD4',
-  Inventory: '#795548',
-  Leaderboard: '#607D8B',
   default: '#999'
+}
+
+// Generate a consistent color from a string (for object types)
+function stringToColor(str) {
+  if (!str) return typeColors.default
+  
+  // Simple hash function
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+    hash = hash & hash // Convert to 32bit integer
+  }
+  
+  // Generate HSL color with good saturation and lightness for visibility
+  const hue = Math.abs(hash % 360)
+  const saturation = 65 + (Math.abs(hash >> 8) % 20) // 65-85%
+  const lightness = 45 + (Math.abs(hash >> 16) % 15) // 45-60%
+  
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
 }
 
 // Application state
@@ -69,7 +82,8 @@ function getNodeRadius(d) {
 function getNodeColor(d) {
   if (d.nodeType === NODE_TYPE_NODE) return typeColors.node
   if (d.nodeType === NODE_TYPE_GATE) return typeColors.gate
-  return d.color || typeColors[d.type] || typeColors.default
+  // For objects: use explicit color if set, otherwise generate from type
+  return d.color || (d.type ? stringToColor(d.type) : typeColors.default)
 }
 
 function getNodeShape(d) {
