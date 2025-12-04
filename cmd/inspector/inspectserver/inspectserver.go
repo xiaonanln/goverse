@@ -125,6 +125,9 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 				log.Panicf("Failed to start consensus manager watch: %v", err)
 			}
 			log.Printf("ConsensusManager initialized and watching cluster state")
+
+			// Register as listener to receive shard state changes
+			s.consensusManager.AddListener(s)
 		}
 	}
 
@@ -137,6 +140,13 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 // GetConsensusManager returns the consensus manager (for demo simulation)
 func (s *InspectorServer) GetConsensusManager() *consensusmanager.ConsensusManager {
 	return s.consensusManager
+}
+
+// OnClusterStateChanged implements consensusmanager.StateChangeListener
+// This is called when shard mappings change in etcd
+func (s *InspectorServer) OnClusterStateChanged() {
+	log.Printf("Cluster state changed, broadcasting shard_update to SSE clients")
+	s.broadcastShardUpdate()
 }
 
 // OnGraphEvent implements the graph.Observer interface

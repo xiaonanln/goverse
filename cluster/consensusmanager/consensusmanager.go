@@ -997,6 +997,11 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	cm.logger.Infof("Stored %d/%d shards in etcd in %d ms",
 		successCount, len(shardIDs), time.Since(startTime).Milliseconds())
 
+	// Notify listeners about state changes if any shards were successfully stored
+	if successCount > 0 {
+		go cm.notifyStateChanged()
+	}
+
 	if firstError != nil {
 		return successCount, firstError
 	}
