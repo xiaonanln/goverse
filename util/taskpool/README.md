@@ -1,13 +1,14 @@
 # TaskPool
 
-TaskPool provides per-key job serialization for Go applications.
+TaskPool provides per-key job serialization for Go applications with a fixed number of workers.
 
 ## Overview
 
 TaskPool manages job execution with the following guarantees:
-- Jobs with the **same key** run serially (one at a time) in a dedicated goroutine
-- Jobs with **different keys** run in parallel
-- Prevents unbounded goroutine creation for keyed operations
+- Jobs with the **same key** run serially (one at a time)
+- Jobs with **different keys** may run in parallel (if hashed to different workers)
+- Fixed number of worker goroutines (prevents unbounded goroutine creation)
+- Keys are hashed to workers for consistent serial execution
 
 This is particularly useful for:
 - Keyed notifications where order matters per key
@@ -16,11 +17,30 @@ This is particularly useful for:
 
 ## Usage
 
+### Using the Default Pool
+
 ```go
 import "github.com/xiaonanln/goverse/util/taskpool"
 
-// Create and start a task pool
-pool := taskpool.NewTaskPool()
+// Use the library-scope default pool (8 workers)
+taskpool.Submit("user-123", func(ctx context.Context) {
+    // Process notification for user-123
+    // This runs serially with other jobs for user-123
+})
+
+taskpool.Submit("user-456", func(ctx context.Context) {
+    // Process notification for user-456
+    // May run in parallel if hashed to different worker
+})
+```
+
+### Creating a Custom Pool
+
+```go
+import "github.com/xiaonanln/goverse/util/taskpool"
+
+// Create a pool with 16 workers
+pool := taskpool.NewTaskPool(16)
 pool.Start()
 defer pool.Stop()
 
@@ -32,7 +52,7 @@ pool.Submit("user-123", func(ctx context.Context) {
 
 pool.Submit("user-456", func(ctx context.Context) {
     // Process notification for user-456
-    // This runs in parallel with user-123 jobs
+    // May run in parallel if hashed to different worker
 })
 
 pool.Submit("user-123", func(ctx context.Context) {
@@ -44,30 +64,49 @@ pool.Submit("user-123", func(ctx context.Context) {
 ## Features
 
 - **Per-key Serialization**: Jobs with the same key execute in order
-- **Cross-key Parallelism**: Different keys execute in parallel
+- **Fixed Workers**: Bounded number of goroutines (specified at creation)
+- **Key Hashing**: Keys are hashed to workers for consistent routing
 - **Context Support**: Jobs receive a context for cancellation
 - **Graceful Shutdown**: `Stop()` cancels running jobs and waits for completion
 - **Thread-safe**: Safe for concurrent use from multiple goroutines
-- **Efficient**: One goroutine per active key (not per job)
+- **Default Pool**: Convenient library-scope instance for simple use cases
 
 ## Design
 
-Each unique key gets its own:
-- Dedicated goroutine (worker)
+The pool has a fixed number of workers (goroutines), each with:
 - Buffered channel (100 jobs capacity)
-- Context for cancellation
+- Jobs processed serially in arrival order
 
-Workers are created on-demand when the first job for a key is submitted and remain active until `Stop()` is called.
+Keys are hashed using FNV-1a to determine which worker handles the job. This ensures:
+- Same key always goes to same worker (serial execution guarantee)
+- Different keys may go to different workers (parallelism)
+- Bounded resource usage (fixed number of goroutines)
 
 ## API
+
+### DefaultPool
+
+```go
+func DefaultPool() *TaskPool
+```
+
+Returns the default library-scope TaskPool instance (8 workers). Created and started automatically on first use.
+
+### Submit (package-level)
+
+```go
+func Submit(key string, job Job)
+```
+
+Submits a job to the default pool.
 
 ### NewTaskPool
 
 ```go
-func NewTaskPool() *TaskPool
+func NewTaskPool(numWorkers int) *TaskPool
 ```
 
-Creates a new TaskPool instance.
+Creates a new TaskPool instance with the specified number of workers. Must be at least 1.
 
 ### Start
 
@@ -75,7 +114,7 @@ Creates a new TaskPool instance.
 func (tp *TaskPool) Start()
 ```
 
-Initializes the task pool. Currently a no-op for interface consistency (workers start on-demand).
+Starts all worker goroutines. Must be called before submitting jobs.
 
 ### Submit
 
@@ -100,19 +139,19 @@ Gracefully shuts down the task pool:
 2. Cancels all running jobs via context
 3. Waits for workers to finish
 
-### Len
+### NumWorkers
 
 ```go
-func (tp *TaskPool) Len() int
+func (tp *TaskPool) NumWorkers() int
 ```
 
-Returns the number of active key queues (for testing/monitoring).
+Returns the number of workers in the pool.
 
 ## Example: Notification System
 
 ```go
 // Use taskpool to serialize notifications per user
-pool := taskpool.NewTaskPool()
+pool := taskpool.NewTaskPool(8)
 pool.Start()
 defer pool.Stop()
 
@@ -140,17 +179,19 @@ go test -race ./util/taskpool/...
 
 ## Performance
 
-- **Memory**: ~2KB per active key (goroutine + channel buffer)
-- **Latency**: Minimal overhead (channel send/receive)
-- **Throughput**: Limited only by job execution time
+- **Memory**: Fixed overhead based on number of workers (~2KB per worker)
+- **Latency**: Minimal overhead (channel send/receive + hash computation)
+- **Throughput**: Limited by number of workers and job execution time
+- **Scalability**: Use more workers for higher throughput, fewer for lower memory
 
 ## Comparison with Alternatives
 
-| Approach | Goroutines | Order Guarantee | Cross-key Parallel |
-|----------|------------|-----------------|-------------------|
-| taskpool | 1 per key | ✓ | ✓ |
-| Lock per key | Variable | ✓ | ✓ |
-| Global lock | Variable | ✓ | ✗ |
-| Goroutine per job | 1 per job | ✗ | ✓ |
+| Approach | Goroutines | Order Guarantee | Cross-key Parallel | Resource Bounded |
+|----------|------------|-----------------|-------------------|------------------|
+| taskpool (fixed) | Fixed N | ✓ | ✓ (limited) | ✓ |
+| 1 per key | Variable | ✓ | ✓ | ✗ |
+| Lock per key | Variable | ✓ | ✓ | ✗ |
+| Global lock | Variable | ✓ | ✗ | ✗ |
+| Goroutine per job | 1 per job | ✗ | ✓ | ✗ |
 
-TaskPool provides the best balance of resource usage and execution guarantees.
+TaskPool provides bounded resource usage while maintaining per-key ordering guarantees.

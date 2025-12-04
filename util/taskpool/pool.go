@@ -2,18 +2,25 @@ package taskpool
 
 import (
 	"context"
+	"hash/fnv"
 	"sync"
+
+	"github.com/xiaonanln/goverse/util/logger"
 )
 
 // Job represents a unit of work to be executed by the task pool
 type Job func(ctx context.Context)
 
-// keyQueue manages jobs for a single key
-type keyQueue struct {
-	jobs   chan Job
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+// keyedJob wraps a job with its key for execution
+type keyedJob struct {
+	key string
+	job Job
+}
+
+// worker manages a queue of jobs
+type worker struct {
+	jobs chan keyedJob
+	wg   sync.WaitGroup
 }
 
 // TaskPool manages per-key job serialization
@@ -25,13 +32,13 @@ type keyQueue struct {
 // Key Features:
 // - Jobs with the same key run serially in one goroutine
 // - Jobs with different keys run in parallel
-// - Automatic cleanup of idle key workers
+// - Fixed number of worker goroutines
 // - Context-based cancellation support
 // - Thread-safe under high concurrency
 //
 // Usage Pattern:
 //
-//	pool := NewTaskPool()
+//	pool := NewTaskPool(8) // 8 workers
 //	pool.Start()
 //	defer pool.Stop()
 //
@@ -40,109 +47,130 @@ type keyQueue struct {
 //	    // Work for user-123
 //	})
 //	pool.Submit("user-456", func(ctx context.Context) {
-//	    // Work for user-456 (runs in parallel)
+//	    // Work for user-456 (runs in parallel if hashed to different worker)
 //	})
 //	pool.Submit("user-123", func(ctx context.Context) {
 //	    // Another job for user-123 (runs serially after first job)
 //	})
 type TaskPool struct {
-	mu      sync.RWMutex
-	queues  map[string]*keyQueue
-	ctx     context.Context
-	cancel  context.CancelFunc
-	stopped bool
+	numWorkers int
+	workers    []*worker
+	ctx        context.Context
+	cancel     context.CancelFunc
+	stopped    bool
+	mu         sync.RWMutex
+	logger     *logger.Logger
 }
 
-// NewTaskPool creates a new TaskPool
-func NewTaskPool() *TaskPool {
+var (
+	// defaultPool is a library-scope TaskPool instance for convenience
+	defaultPool     *TaskPool
+	defaultPoolOnce sync.Once
+)
+
+// DefaultPool returns the default library-scope TaskPool instance
+// It creates a pool with 8 workers on first call
+func DefaultPool() *TaskPool {
+	defaultPoolOnce.Do(func() {
+		defaultPool = NewTaskPool(8)
+		defaultPool.Start()
+	})
+	return defaultPool
+}
+
+// Submit submits a job to the default pool
+func Submit(key string, job Job) {
+	DefaultPool().Submit(key, job)
+}
+
+// NewTaskPool creates a new TaskPool with the specified number of workers
+// numWorkers must be at least 1
+func NewTaskPool(numWorkers int) *TaskPool {
+	if numWorkers <= 0 {
+		numWorkers = 1
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
+	workers := make([]*worker, numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		workers[i] = &worker{
+			jobs: make(chan keyedJob, 100), // Buffer for pending jobs
+		}
+	}
+
 	return &TaskPool{
-		queues: make(map[string]*keyQueue),
-		ctx:    ctx,
-		cancel: cancel,
+		numWorkers: numWorkers,
+		workers:    workers,
+		ctx:        ctx,
+		cancel:     cancel,
+		logger:     logger.NewLogger("taskpool"),
 	}
 }
 
-// Start initializes the task pool (currently a no-op for interface consistency)
+// Start initializes and starts all worker goroutines
 func (tp *TaskPool) Start() {
-	// No-op: workers are started on-demand per key
+	for i := 0; i < tp.numWorkers; i++ {
+		tp.workers[i].wg.Add(1)
+		go tp.worker(i, tp.workers[i])
+	}
+}
+
+// hashKey returns the worker index for a given key
+func (tp *TaskPool) hashKey(key string) int {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return int(h.Sum32() % uint32(tp.numWorkers))
 }
 
 // Submit adds a job to the queue for the specified key
 // Jobs for the same key are executed serially in order
-// Jobs for different keys are executed in parallel
+// Jobs for different keys may run in parallel (if hashed to different workers)
 func (tp *TaskPool) Submit(key string, job Job) {
-	tp.mu.Lock()
+	tp.mu.RLock()
+	stopped := tp.stopped
+	tp.mu.RUnlock()
 
 	// Check if stopped
-	if tp.stopped {
-		tp.mu.Unlock()
+	if stopped {
+		tp.logger.Warnf("TaskPool is stopped, rejecting job for key: %s", key)
 		return
 	}
 
-	queue, exists := tp.queues[key]
-	if !exists {
-		// Create new queue for this key
-		queueCtx, queueCancel := context.WithCancel(tp.ctx)
-		queue = &keyQueue{
-			jobs:   make(chan Job, 100), // Buffer for pending jobs
-			ctx:    queueCtx,
-			cancel: queueCancel,
-		}
-		tp.queues[key] = queue
+	// Hash key to worker
+	workerIdx := tp.hashKey(key)
+	w := tp.workers[workerIdx]
 
-		// Start worker for this key
-		queue.wg.Add(1)
-		go tp.worker(key, queue)
-	}
-
-	// Capture references while holding lock to avoid race
-	jobsChan := queue.jobs
-	queueCtx := queue.ctx
-	poolCtx := tp.ctx
-
-	tp.mu.Unlock()
-
-	// Try to submit job using captured references
+	// Try to submit job
 	select {
-	case jobsChan <- job:
+	case w.jobs <- keyedJob{key: key, job: job}:
 		// Job submitted successfully
-	case <-queueCtx.Done():
-		// Queue is being shut down
-	case <-poolCtx.Done():
+	case <-tp.ctx.Done():
 		// Pool is being shut down
+		tp.logger.Warnf("TaskPool context cancelled, rejecting job for key: %s", key)
 	}
 }
 
-// worker processes jobs for a single key
-func (tp *TaskPool) worker(key string, queue *keyQueue) {
-	defer queue.wg.Done()
-	defer tp.cleanupQueue(key)
+// worker processes jobs for its queue
+// Jobs are processed serially in the order they arrive
+// Since jobs with the same key always hash to the same worker,
+// serial execution per key is guaranteed
+func (tp *TaskPool) worker(id int, w *worker) {
+	defer w.wg.Done()
 
 	for {
 		select {
-		case <-queue.ctx.Done():
-			// Queue-specific cancellation
-			return
 		case <-tp.ctx.Done():
 			// Pool-wide cancellation
 			return
-		case job, ok := <-queue.jobs:
+		case kj, ok := <-w.jobs:
 			if !ok {
 				// Channel closed
 				return
 			}
 			// Execute the job
-			job(queue.ctx)
+			kj.job(tp.ctx)
 		}
 	}
-}
-
-// cleanupQueue removes the queue for a key after the worker exits
-func (tp *TaskPool) cleanupQueue(key string) {
-	tp.mu.Lock()
-	defer tp.mu.Unlock()
-	delete(tp.queues, key)
 }
 
 // Stop gracefully shuts down the task pool
@@ -150,29 +178,19 @@ func (tp *TaskPool) cleanupQueue(key string) {
 func (tp *TaskPool) Stop() {
 	tp.mu.Lock()
 	tp.stopped = true
-	queues := make([]*keyQueue, 0, len(tp.queues))
-	for _, queue := range tp.queues {
-		queues = append(queues, queue)
-	}
 	tp.mu.Unlock()
 
-	// Cancel the pool context first to stop new submissions
+	// Cancel the pool context to stop new submissions and signal workers
 	tp.cancel()
 
-	// Cancel all queue contexts to stop workers
-	for _, queue := range queues {
-		queue.cancel()
-	}
-
 	// Wait for all workers to finish
-	for _, queue := range queues {
-		queue.wg.Wait()
+	// Workers will exit when they see context is cancelled
+	for _, w := range tp.workers {
+		w.wg.Wait()
 	}
 }
 
-// Len returns the number of active key queues (for testing)
-func (tp *TaskPool) Len() int {
-	tp.mu.RLock()
-	defer tp.mu.RUnlock()
-	return len(tp.queues)
+// NumWorkers returns the number of workers (for testing)
+func (tp *TaskPool) NumWorkers() int {
+	return tp.numWorkers
 }
