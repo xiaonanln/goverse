@@ -10,7 +10,7 @@ import (
 
 // TestTaskPool_BasicSubmit tests basic job submission and execution
 func TestTaskPool_BasicSubmit(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -31,7 +31,7 @@ func TestTaskPool_BasicSubmit(t *testing.T) {
 
 // TestTaskPool_SerialExecution tests that jobs with the same key run serially
 func TestTaskPool_SerialExecution(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -80,7 +80,7 @@ func TestTaskPool_SerialExecution(t *testing.T) {
 
 // TestTaskPool_ParallelExecution tests that jobs with different keys run in parallel
 func TestTaskPool_ParallelExecution(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -122,7 +122,7 @@ func TestTaskPool_ParallelExecution(t *testing.T) {
 
 // TestTaskPool_MultipleKeysWithMultipleJobs tests mixed serial and parallel execution
 func TestTaskPool_MultipleKeysWithMultipleJobs(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -165,7 +165,7 @@ func TestTaskPool_MultipleKeysWithMultipleJobs(t *testing.T) {
 
 // TestTaskPool_ContextCancellation tests that jobs respect context cancellation
 func TestTaskPool_ContextCancellation(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 
 	var started atomic.Int32
@@ -210,7 +210,7 @@ func TestTaskPool_ContextCancellation(t *testing.T) {
 
 // TestTaskPool_Stop tests graceful shutdown
 func TestTaskPool_Stop(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 
 	var completed atomic.Int32
@@ -247,9 +247,9 @@ func TestTaskPool_Stop(t *testing.T) {
 	}
 }
 
-// TestTaskPool_QueueCleanup tests that queues are created per key
-func TestTaskPool_QueueCleanup(t *testing.T) {
-	pool := NewTaskPool()
+// TestTaskPool_FixedWorkers tests that pool has fixed number of workers
+func TestTaskPool_FixedWorkers(t *testing.T) {
+	pool := NewTaskPool(3)
 	pool.Start()
 	defer pool.Stop()
 
@@ -266,33 +266,22 @@ func TestTaskPool_QueueCleanup(t *testing.T) {
 		pool.Submit(key, job)
 	}
 
-	// Wait a bit for queues to be created
-	time.Sleep(20 * time.Millisecond)
-
-	// Should have 3 active queues
-	if pool.Len() != 3 {
-		t.Fatalf("Expected 3 active queues, got %d", pool.Len())
+	// Should have fixed number of workers (3)
+	if pool.NumWorkers() != 3 {
+		t.Fatalf("Expected 3 workers, got %d", pool.NumWorkers())
 	}
 
 	wg.Wait()
 
-	// Queues remain active (workers don't auto-cleanup until Stop)
-	// This prevents constant goroutine creation/destruction
-	if pool.Len() != 3 {
-		t.Fatalf("Expected 3 active queues to remain, got %d", pool.Len())
-	}
-
-	// After Stop, queues should be cleaned up
-	pool.Stop()
-
-	if pool.Len() != 0 {
-		t.Fatalf("Expected 0 active queues after Stop, got %d", pool.Len())
+	// Workers remain active (fixed number)
+	if pool.NumWorkers() != 3 {
+		t.Fatalf("Expected 3 workers to remain, got %d", pool.NumWorkers())
 	}
 }
 
 // TestTaskPool_HighConcurrency tests with many keys and jobs
 func TestTaskPool_HighConcurrency(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -327,7 +316,7 @@ func TestTaskPool_HighConcurrency(t *testing.T) {
 
 // TestTaskPool_BufferedJobs tests that job buffer works correctly
 func TestTaskPool_BufferedJobs(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -355,7 +344,7 @@ func TestTaskPool_BufferedJobs(t *testing.T) {
 
 // TestTaskPool_EmptyKey tests submitting jobs with empty keys
 func TestTaskPool_EmptyKey(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -375,7 +364,7 @@ func TestTaskPool_EmptyKey(t *testing.T) {
 
 // TestTaskPool_RaceDetector tests for data races under concurrent access
 func TestTaskPool_RaceDetector(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -408,7 +397,7 @@ func TestTaskPool_RaceDetector(t *testing.T) {
 
 // TestTaskPool_JobOrdering tests that jobs for the same key maintain order
 func TestTaskPool_JobOrdering(t *testing.T) {
-	pool := NewTaskPool()
+	pool := NewTaskPool(8)
 	pool.Start()
 	defer pool.Stop()
 
@@ -447,14 +436,21 @@ func TestTaskPool_JobOrdering(t *testing.T) {
 	}
 }
 
-// TestTaskPool_WorkerLifecycle tests worker creation and termination
+// TestTaskPool_WorkerLifecycle tests worker lifecycle with fixed pool
 func TestTaskPool_WorkerLifecycle(t *testing.T) {
-	pool := NewTaskPool()
+	const numWorkers = 4
+	pool := NewTaskPool(numWorkers)
+
+	// Before Start, should have numWorkers
+	if pool.NumWorkers() != numWorkers {
+		t.Fatalf("Expected %d workers before Start, got %d", numWorkers, pool.NumWorkers())
+	}
+
 	pool.Start()
 
-	// Initially no workers
-	if pool.Len() != 0 {
-		t.Fatalf("Expected 0 workers initially, got %d", pool.Len())
+	// After Start, should still have numWorkers
+	if pool.NumWorkers() != numWorkers {
+		t.Fatalf("Expected %d workers after Start, got %d", numWorkers, pool.NumWorkers())
 	}
 
 	var wg sync.WaitGroup
@@ -466,25 +462,23 @@ func TestTaskPool_WorkerLifecycle(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	})
 
-	// Wait a bit for worker to start
-	time.Sleep(20 * time.Millisecond)
-
-	// Should have 1 worker
-	if pool.Len() != 1 {
-		t.Fatalf("Expected 1 worker after job submission, got %d", pool.Len())
+	// Workers remain fixed
+	if pool.NumWorkers() != numWorkers {
+		t.Fatalf("Expected %d workers after job submission, got %d", numWorkers, pool.NumWorkers())
 	}
 
 	wg.Wait()
 
-	// Worker remains active (doesn't auto-cleanup)
-	if pool.Len() != 1 {
-		t.Fatalf("Expected 1 worker to remain active, got %d", pool.Len())
+	// Still fixed number of workers
+	if pool.NumWorkers() != numWorkers {
+		t.Fatalf("Expected %d workers after job completion, got %d", numWorkers, pool.NumWorkers())
 	}
 
-	// Stop cleans up workers
+	// Stop and verify
 	pool.Stop()
 
-	if pool.Len() != 0 {
-		t.Fatalf("Expected 0 workers after Stop, got %d", pool.Len())
+	// NumWorkers still returns the configured count (doesn't change after Stop)
+	if pool.NumWorkers() != numWorkers {
+		t.Fatalf("Expected %d workers after Stop, got %d", numWorkers, pool.NumWorkers())
 	}
 }
