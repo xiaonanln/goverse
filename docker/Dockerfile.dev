@@ -21,8 +21,8 @@ RUN wget -q https://github.com/etcd-io/etcd/releases/download/v3.5.10/etcd-v3.5.
     && mv etcd-v3.5.10-linux-amd64/etcd* /usr/local/bin/ \
     && rm -rf etcd-v3.5.10-linux-amd64*
 
-# Install Python packages for test_chat.py
-RUN pip3 install --break-system-packages grpcio grpcio-tools
+# Install Python packages for test_chat.py and stress tests
+RUN pip3 install --break-system-packages grpcio grpcio-tools pyyaml
 
 # Install protoc-gen-go and protoc-gen-go-grpc
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
