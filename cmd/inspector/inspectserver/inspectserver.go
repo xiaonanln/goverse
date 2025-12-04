@@ -112,15 +112,16 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 				numShards,
 			)
 
-			// Initialize and start watching
-			// Use a timeout context for initialization
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			if err := s.consensusManager.Initialize(ctx); err != nil {
+			// Initialize with a timeout context
+			initCtx, initCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := s.consensusManager.Initialize(initCtx); err != nil {
+				initCancel()
 				log.Panicf("Failed to initialize consensus manager: %v", err)
 			}
-			if err := s.consensusManager.StartWatch(ctx); err != nil {
+			initCancel()
+
+			// Start watching with a long-lived context (will be cancelled on shutdown)
+			if err := s.consensusManager.StartWatch(context.Background()); err != nil {
 				log.Panicf("Failed to start consensus manager watch: %v", err)
 			}
 			log.Printf("ConsensusManager initialized and watching cluster state")

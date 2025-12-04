@@ -467,7 +467,7 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 	}
 	defer mgr.Close()
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -489,34 +489,25 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 
 			for shardID, shardInfo := range shardMapping.Shards {
 				if shardInfo.TargetNode != "" && shardInfo.CurrentNode != shardInfo.TargetNode {
-					// Simulate migration delay (2-5 seconds)
-					migrationDelay := time.Duration(2+rand.Intn(3)) * time.Second
+					log.Printf("[Demo] Simulating shard %d migration completion: %s → %s",
+						shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
 
-					// Do the migration in a goroutine to not block the ticker
-					go func(sid int, targetNode, currentNode string, flags []string) {
-						time.Sleep(migrationDelay)
-
-						log.Printf("[Demo] Simulating shard %d migration completion: %s → %s",
-							sid, currentNode, targetNode)
-
-						// Use etcd directly to update CurrentNode to match TargetNode
-						key := fmt.Sprintf("%s/shard/%d", etcdPrefix, sid)
-						value := fmt.Sprintf("%s,%s", targetNode, targetNode)
-						if len(flags) > 0 {
-							for _, flag := range flags {
-								value += "," + flag
-							}
+					// Use etcd directly to update CurrentNode to match TargetNode
+					key := fmt.Sprintf("%s/shard/%d", etcdPrefix, shardID)
+					value := fmt.Sprintf("%s,%s", shardInfo.TargetNode, shardInfo.TargetNode)
+					if len(shardInfo.Flags) > 0 {
+						for _, flag := range shardInfo.Flags {
+							value += "," + flag
 						}
+					}
 
-						updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-						defer cancel()
-
-						if err := mgr.Put(updateCtx, key, value); err != nil {
-							log.Printf("[Demo] Failed to complete shard %d migration: %v", sid, err)
-						} else {
-							log.Printf("[Demo] Completed shard %d migration to %s", sid, targetNode)
-						}
-					}(shardID, shardInfo.TargetNode, shardInfo.CurrentNode, shardInfo.Flags)
+					updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if err := mgr.Put(updateCtx, key, value); err != nil {
+						log.Printf("[Demo] Failed to complete shard %d migration: %v", shardID, err)
+					} else {
+						log.Printf("[Demo] Completed shard %d migration to %s", shardID, shardInfo.TargetNode)
+					}
+					cancel()
 				}
 			}
 		}
