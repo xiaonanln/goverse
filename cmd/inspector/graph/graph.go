@@ -298,6 +298,15 @@ func (pg *GoverseGraph) UpdateNodeConnectedNodes(nodeID string, connectedNodes [
 
 	node.ConnectedNodes = connectedNodes
 	pg.nodes[nodeID] = node
+
+	// Calculate object count for this node
+	objectCount := 0
+	for _, obj := range pg.objects {
+		if obj.GoverseNodeID == nodeID {
+			objectCount++
+		}
+	}
+	node.ObjectCount = objectCount
 	pg.mu.Unlock()
 
 	pg.notifyObservers(GraphEvent{
@@ -355,6 +364,15 @@ func (pg *GoverseGraph) UpdateNodeRegisteredGates(nodeID string, registeredGates
 
 	node.RegisteredGates = registeredGates
 	pg.nodes[nodeID] = node
+
+	// Calculate object count for this node
+	objectCount := 0
+	for _, obj := range pg.objects {
+		if obj.GoverseNodeID == nodeID {
+			objectCount++
+		}
+	}
+	node.ObjectCount = objectCount
 	pg.mu.Unlock()
 
 	pg.notifyObservers(GraphEvent{
