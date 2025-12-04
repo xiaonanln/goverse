@@ -21,7 +21,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 - Gate architecture with streaming gRPC and HTTP REST API
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
-- Built-in Prometheus metrics
+- Built-in Prometheus metrics and pprof profiling
 - Inspector UI for visualizing object topology
 
 ---
@@ -130,6 +130,7 @@ Full documentation:
 - [HTTP Gate API](docs/design/HTTP_GATE.md) - REST/HTTP endpoints for clients
 - [Object Access Control](docs/design/OBJECT_ACCESS_CONTROL.md) - Access rules and security
 - [Prometheus Metrics](docs/PROMETHEUS_INTEGRATION.md) - Monitoring & observability
+- [pprof Profiling](examples/pprof/) - Performance profiling and debugging
 - [Inspector UI](cmd/inspector/) - Cluster visualization
 - [Proto Reference](proto/) - Protocol buffer definitions
 
