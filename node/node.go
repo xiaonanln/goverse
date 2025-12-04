@@ -18,6 +18,7 @@ import (
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/taskpool"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -190,13 +191,17 @@ func (node *Node) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvide
 // NotifyConnectedNodesChanged notifies the inspector that the node's connections have changed.
 // This should be called whenever nodes are connected or disconnected.
 func (node *Node) NotifyConnectedNodesChanged() {
-	node.inspectorManager.UpdateConnectedNodes()
+	taskpool.Submit(func(ctx context.Context) {
+		node.inspectorManager.UpdateConnectedNodes()
+	})
 }
 
 // NotifyRegisteredGatesChanged notifies the inspector that the node's registered gates have changed.
 // This should be called whenever gates are registered or unregistered.
 func (node *Node) NotifyRegisteredGatesChanged() {
-	node.inspectorManager.UpdateRegisteredGates()
+	taskpool.Submit(func(ctx context.Context) {
+		node.inspectorManager.UpdateRegisteredGates()
+	})
 }
 
 // RegisterObjectType registers a new object type with the node

@@ -135,15 +135,11 @@ func (g *Gate) Register(ctx context.Context) *ClientProxy {
 	clientCount := len(g.clients)
 	g.clientsMu.Unlock()
 
-	// Set metrics to current count in background
-	taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
-		metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
-	})
+	// Set metrics to current count
+	metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 
-	// Notify inspector of client count change in background
-	taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
-		g.NotifyClientCountChanged()
-	})
+	// Notify inspector of client count change
+	g.NotifyClientCountChanged()
 
 	g.logger.Infof("Registered new client: %s", clientID)
 	return clientProxy
@@ -159,15 +155,11 @@ func (g *Gate) Unregister(clientID string) {
 		delete(g.clients, clientID)
 		clientCount := len(g.clients)
 
-		// Set metrics to current count in background
-		taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
-			metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
-		})
+		// Set metrics to current count
+		metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 
-		// Notify inspector of client count change in background
-		taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
-			g.NotifyClientCountChanged()
-		})
+		// Notify inspector of client count change
+		g.NotifyClientCountChanged()
 
 		g.logger.Infof("Unregistered client: %s", clientID)
 	}
@@ -198,11 +190,9 @@ func (g *Gate) cleanupClientProxies() {
 		g.logger.Infof("Cleaned up client proxy: %s", clientID)
 	}
 
-	// Set metrics to current count (should be 0 after cleanup) in background
+	// Set metrics to current count (should be 0 after cleanup)
 	clientCount := len(g.clients)
-	taskpool.SubmitByKey(g.advertiseAddress, func(ctx context.Context) {
-		metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
-	})
+	metrics.SetGateActiveClients(g.advertiseAddress, clientCount)
 }
 
 // GetAdvertiseAddress returns the advertise address of this gate
@@ -219,13 +209,17 @@ func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) 
 // NotifyConnectedNodesChanged notifies the inspector that the gate's connections have changed.
 // This should be called whenever nodes are connected or disconnected.
 func (g *Gate) NotifyConnectedNodesChanged() {
-	g.inspectorManager.UpdateConnectedNodes()
+	taskpool.Submit(func(ctx context.Context) {
+		g.inspectorManager.UpdateConnectedNodes()
+	})
 }
 
 // NotifyClientCountChanged notifies the inspector that the gate's client count has changed.
 // This should be called whenever clients connect or disconnect.
 func (g *Gate) NotifyClientCountChanged() {
-	g.inspectorManager.UpdateGateClients()
+	taskpool.Submit(func(ctx context.Context) {
+		g.inspectorManager.UpdateGateClients()
+	})
 }
 
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
@@ -352,10 +346,8 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 		client, exists := g.GetClient(clientID)
 		if !exists {
 			g.logger.Warnf("Client %s not found, dropping message from node %s", clientID, nodeAddr)
-			// Record dropped message metric in background
-			taskpool.Submit(func(ctx context.Context) {
-				metrics.RecordGateDroppedMessage(g.advertiseAddress)
-			})
+			// Record dropped message metric
+			metrics.RecordGateDroppedMessage(g.advertiseAddress)
 			return
 		}
 
@@ -364,16 +356,12 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 		if envelope.Message != nil {
 			// Send the google.protobuf.Any directly to client's message channel
 			client.PushMessageAny(envelope.Message)
-			// Record metric for pushed message in background
-			taskpool.Submit(func(ctx context.Context) {
-				metrics.RecordGatePushedMessage(g.advertiseAddress)
-			})
+			// Record metric for pushed message
+			metrics.RecordGatePushedMessage(g.advertiseAddress)
 		} else {
 			g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
-			// Record dropped message metric for nil message in background
-			taskpool.Submit(func(ctx context.Context) {
-				metrics.RecordGateDroppedMessage(g.advertiseAddress)
-			})
+			// Record dropped message metric for nil message
+			metrics.RecordGateDroppedMessage(g.advertiseAddress)
 		}
 	default:
 		g.logger.Warnf("Received unknown message type %v from node %s", msg.Message, nodeAddr)
