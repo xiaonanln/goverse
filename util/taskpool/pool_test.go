@@ -2,6 +2,9 @@ package taskpool
 
 import (
 	"context"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -481,4 +484,311 @@ func TestTaskPool_WorkerLifecycle(t *testing.T) {
 	if pool.NumWorkers() != numWorkers {
 		t.Fatalf("Expected %d workers after Stop, got %d", numWorkers, pool.NumWorkers())
 	}
+}
+
+// TestTaskPool_Submit_BasicExecution tests basic Submit without key
+func TestTaskPool_Submit_BasicExecution(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+	defer pool.Stop()
+
+	var executed atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	pool.Submit(func(ctx context.Context) {
+		executed.Store(true)
+		wg.Done()
+	})
+
+	wg.Wait()
+
+	if !executed.Load() {
+		t.Error("Job should have been executed")
+	}
+}
+
+// TestTaskPool_Submit_MultipleJobs tests that Submit can handle multiple concurrent jobs
+func TestTaskPool_Submit_MultipleJobs(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+	defer pool.Stop()
+
+	const numJobs = 100
+	var counter atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(numJobs)
+
+	for i := 0; i < numJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			counter.Add(1)
+			wg.Done()
+		})
+	}
+
+	wg.Wait()
+
+	if counter.Load() != numJobs {
+		t.Errorf("Expected %d jobs to execute, got %d", numJobs, counter.Load())
+	}
+}
+
+// TestTaskPool_Submit_RoundRobinDistribution tests that Submit distributes jobs round-robin
+func TestTaskPool_Submit_RoundRobinDistribution(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+	defer pool.Stop()
+
+	const numJobs = 100
+	workerIDs := make(map[uint64]bool)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(numJobs)
+
+	for i := 0; i < numJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			// Use goroutine ID as proxy for worker identity
+			gid := getGoroutineID()
+			mu.Lock()
+			workerIDs[gid] = true
+			mu.Unlock()
+			time.Sleep(2 * time.Millisecond)
+			wg.Done()
+		})
+	}
+
+	wg.Wait()
+
+	// With 100 jobs and 4 workers, we should see all 4 workers used
+	if len(workerIDs) < 4 {
+		t.Errorf("Expected jobs distributed across 4 workers, but only saw %d worker(s)", len(workerIDs))
+	}
+
+	t.Logf("Jobs distributed across %d workers", len(workerIDs))
+}
+
+// TestTaskPool_Submit_ParallelExecution tests that Submit jobs can run in parallel
+func TestTaskPool_Submit_ParallelExecution(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+	defer pool.Stop()
+
+	const numJobs = 20
+	const jobDuration = 50 * time.Millisecond
+
+	var wg sync.WaitGroup
+	wg.Add(numJobs)
+
+	start := time.Now()
+
+	for i := 0; i < numJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			defer wg.Done()
+			time.Sleep(jobDuration)
+		})
+	}
+
+	wg.Wait()
+	elapsed := time.Since(start)
+
+	// With 4 workers and 20 jobs at 50ms each:
+	// - Sequential: 1000ms (20 * 50ms)
+	// - Parallel (4 workers): ~250ms (5 batches * 50ms)
+	// Allow some overhead, so use 500ms as threshold
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("Jobs took %v, suggesting insufficient parallelism (expected ~250ms with 4 workers)", elapsed)
+	}
+
+	t.Logf("20 jobs completed in %v with 4 workers", elapsed)
+}
+
+// TestTaskPool_Submit_MixedWithSubmitByKey tests Submit and SubmitByKey working together
+func TestTaskPool_Submit_MixedWithSubmitByKey(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+	defer pool.Stop()
+
+	var keyedCounter atomic.Int32
+	var unkeyedCounter atomic.Int32
+	var wg sync.WaitGroup
+
+	// Submit keyed jobs
+	const numKeyedJobs = 50
+	wg.Add(numKeyedJobs)
+	for i := 0; i < numKeyedJobs; i++ {
+		pool.SubmitByKey("testkey", func(ctx context.Context) {
+			defer wg.Done()
+			keyedCounter.Add(1)
+			time.Sleep(2 * time.Millisecond)
+		})
+	}
+
+	// Submit unkeyed jobs
+	const numUnkeyedJobs = 50
+	wg.Add(numUnkeyedJobs)
+	for i := 0; i < numUnkeyedJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			defer wg.Done()
+			unkeyedCounter.Add(1)
+			time.Sleep(2 * time.Millisecond)
+		})
+	}
+
+	wg.Wait()
+
+	if keyedCounter.Load() != numKeyedJobs {
+		t.Errorf("Expected %d keyed jobs, got %d", numKeyedJobs, keyedCounter.Load())
+	}
+	if unkeyedCounter.Load() != numUnkeyedJobs {
+		t.Errorf("Expected %d unkeyed jobs, got %d", numUnkeyedJobs, unkeyedCounter.Load())
+	}
+}
+
+// TestTaskPool_Submit_AfterStop tests that Submit rejects jobs after Stop
+func TestTaskPool_Submit_AfterStop(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+	pool.Stop()
+
+	var executed atomic.Bool
+	pool.Submit(func(ctx context.Context) {
+		executed.Store(true)
+	})
+
+	time.Sleep(50 * time.Millisecond)
+
+	if executed.Load() {
+		t.Error("Job should not execute after pool is stopped")
+	}
+}
+
+// TestTaskPool_Submit_ContextCancellation tests that Submit jobs respect context cancellation
+func TestTaskPool_Submit_ContextCancellation(t *testing.T) {
+	pool := NewTaskPool(4)
+	pool.Start()
+
+	var started atomic.Int32
+	var cancelled atomic.Int32
+
+	// Submit long-running jobs
+	for i := 0; i < 10; i++ {
+		pool.Submit(func(ctx context.Context) {
+			started.Add(1)
+
+			select {
+			case <-time.After(500 * time.Millisecond):
+				// Job completed
+			case <-ctx.Done():
+				// Job cancelled
+				cancelled.Add(1)
+			}
+		})
+	}
+
+	// Wait for jobs to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop pool - should cancel running jobs
+	pool.Stop()
+
+	// At least some jobs should have been started and cancelled
+	if started.Load() > 0 && cancelled.Load() == 0 {
+		t.Error("Expected at least one job to be cancelled")
+	}
+
+	t.Logf("Started: %d, Cancelled: %d", started.Load(), cancelled.Load())
+}
+
+// TestTaskPool_Submit_HighLoad tests Submit under high load
+func TestTaskPool_Submit_HighLoad(t *testing.T) {
+	pool := NewTaskPool(8)
+	pool.Start()
+	defer pool.Stop()
+
+	const numJobs = 1000
+	var counter atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(numJobs)
+
+	for i := 0; i < numJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			defer wg.Done()
+			counter.Add(1)
+			time.Sleep(time.Millisecond)
+		})
+	}
+
+	wg.Wait()
+
+	if counter.Load() != numJobs {
+		t.Errorf("Expected %d jobs to execute, got %d", numJobs, counter.Load())
+	}
+}
+
+// TestTaskPool_Submit_BufferedQueue tests that job buffer works correctly
+func TestTaskPool_Submit_BufferedQueue(t *testing.T) {
+	pool := NewTaskPool(2)
+	pool.Start()
+	defer pool.Stop()
+
+	const numJobs = 50
+	var counter atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(numJobs)
+
+	// Submit many jobs quickly
+	for i := 0; i < numJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			defer wg.Done()
+			counter.Add(1)
+			time.Sleep(5 * time.Millisecond)
+		})
+	}
+
+	wg.Wait()
+
+	if counter.Load() != numJobs {
+		t.Fatalf("Expected %d jobs to execute, got %d", numJobs, counter.Load())
+	}
+}
+
+// TestTaskPool_Submit_WorkerCountInvariant tests that Submit maintains fixed worker count
+func TestTaskPool_Submit_WorkerCountInvariant(t *testing.T) {
+	const numWorkers = 4
+	pool := NewTaskPool(numWorkers)
+	pool.Start()
+	defer pool.Stop()
+
+	var wg sync.WaitGroup
+
+	// Submit many jobs
+	const numJobs = 100
+	wg.Add(numJobs)
+	for i := 0; i < numJobs; i++ {
+		pool.Submit(func(ctx context.Context) {
+			defer wg.Done()
+			time.Sleep(5 * time.Millisecond)
+		})
+	}
+
+	// Worker count should remain constant
+	if pool.NumWorkers() != numWorkers {
+		t.Errorf("Expected %d workers during execution, got %d", numWorkers, pool.NumWorkers())
+	}
+
+	wg.Wait()
+
+	// Worker count should still be constant after jobs complete
+	if pool.NumWorkers() != numWorkers {
+		t.Errorf("Expected %d workers after execution, got %d", numWorkers, pool.NumWorkers())
+	}
+}
+
+// getGoroutineID returns the current goroutine ID for testing worker distribution
+func getGoroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]
+	id, _ := strconv.ParseUint(idField, 10, 64)
+	return id
 }
