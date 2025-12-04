@@ -145,6 +145,22 @@ function connectSSE() {
     }
   })
 
+  eventSource.addEventListener('shard_update', (event) => {
+    console.log('SSE shard_update received', event)
+    // Refresh shard view if it's active
+    const shardView = document.getElementById('shard-view')
+    if (shardView && shardView.classList.contains('active')) {
+      console.log('Updating shard view...')
+      updateShardView()
+    }
+    // Also refresh shard management view if it's active
+    const shardMgmtView = document.getElementById('shardmgmt-view')
+    if (shardMgmtView && shardMgmtView.classList.contains('active')) {
+      console.log('Updating shard management view...')
+      updateShardManagementView()
+    }
+  })
+
   eventSource.addEventListener('heartbeat', (event) => {
     console.log('SSE heartbeat received')
   })
