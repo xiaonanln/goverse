@@ -456,6 +456,8 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	log.Printf("Received shard move request: shard_id=%d, target_node=%s", req.ShardID, req.TargetNode)
+
 	// Validate shard ID (shards are 0-indexed and range from 0 to numShards-1)
 	if req.ShardID < 0 || req.ShardID >= s.consensusManager.GetNumShards() {
 		http.Error(w, fmt.Sprintf("Invalid shard ID: %d", req.ShardID), http.StatusBadRequest)
@@ -507,7 +509,7 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	log.Printf("Shard %d moved to target node %s", req.ShardID, req.TargetNode)
+	log.Printf("Successfully updated shard %d target to %s (current=%s)", req.ShardID, req.TargetNode, currentShardInfo.CurrentNode)
 
 	// Return success response
 	w.Header().Set("Content-Type", "application/json")
@@ -517,7 +519,9 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		"target_node": req.TargetNode,
 		"message":     fmt.Sprintf("Shard %d target updated to %s", req.ShardID, req.TargetNode),
 	}
-	_ = json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // Shutdown initiates graceful shutdown of all servers

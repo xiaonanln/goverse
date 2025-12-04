@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -53,13 +54,25 @@ func main() {
 
 	serversDone := make(chan struct{}, 2)
 
+	// Determine static directory path - works whether running from root or demo directory
+	staticDir := "cmd/inspector/web"
+	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+		// Try relative path from demo directory
+		staticDir = "../web"
+		if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+			log.Fatalf("Cannot find web static directory. Please run from project root or cmd/inspector/demo")
+		}
+	}
+	staticDir, _ = filepath.Abs(staticDir)
+
 	// Create and configure the inspector server
 	server := inspectserver.New(pg, inspectserver.Config{
 		GRPCAddr:   *grpcAddr,
 		HTTPAddr:   *httpAddr,
-		StaticDir:  "cmd/inspector/web",
+		StaticDir:  staticDir,
 		EtcdAddr:   *etcdAddr,
 		EtcdPrefix: *etcdPrefix,
+		NumShards:  *numShards,
 	})
 
 	// Start gRPC server
