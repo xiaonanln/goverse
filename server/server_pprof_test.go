@@ -66,12 +66,12 @@ func TestServerPprof_Disabled(t *testing.T) {
 			// Connection error is expected if metrics server is not even started
 			continue
 		}
-		defer resp.Body.Close()
 
 		// Should get 404 since pprof is disabled
 		if resp.StatusCode != http.StatusNotFound {
 			t.Errorf("Expected 404 for %s when pprof disabled, got %d", endpoint, resp.StatusCode)
 		}
+		resp.Body.Close()
 	}
 
 	// Metrics endpoint should still work
@@ -155,12 +155,12 @@ func TestServerPprof_Enabled(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to access pprof endpoint %s: %v", endpoint, err)
 		}
-		defer resp.Body.Close()
 
 		// Should get 200 since pprof is enabled
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected 200 for %s when pprof enabled, got %d", endpoint, resp.StatusCode)
 		}
+		resp.Body.Close()
 	}
 
 	// Metrics endpoint should still work
