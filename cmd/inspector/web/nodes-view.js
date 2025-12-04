@@ -302,13 +302,13 @@ function updateNodesView() {
     el.append('text')
       .attr('class', 'object-count-badge')
       .attr('y', 0)
-      .text(d.objectCount)
+      .text(d.objectCount + ' objects')
   })
 
   // Update existing nodes
   nodeSelection.each(function(d) {
     const el = d3.select(this)
-    el.select('.object-count-badge').text(d.objectCount)
+    el.select('.object-count-badge').text(d.objectCount + ' objects')
   })
 
   // Merge enter and update selections
