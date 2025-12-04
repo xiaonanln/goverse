@@ -96,15 +96,20 @@ func (tp *TaskPool) Submit(key string, job Job) {
 		go tp.worker(key, queue)
 	}
 
+	// Capture references while holding lock to avoid race
+	jobsChan := queue.jobs
+	queueCtx := queue.ctx
+	poolCtx := tp.ctx
+
 	tp.mu.Unlock()
 
-	// Try to submit job
+	// Try to submit job using captured references
 	select {
-	case queue.jobs <- job:
+	case jobsChan <- job:
 		// Job submitted successfully
-	case <-queue.ctx.Done():
+	case <-queueCtx.Done():
 		// Queue is being shut down
-	case <-tp.ctx.Done():
+	case <-poolCtx.Done():
 		// Pool is being shut down
 	}
 }

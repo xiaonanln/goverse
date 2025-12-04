@@ -298,13 +298,14 @@ func TestTaskPool_HighConcurrency(t *testing.T) {
 
 	const numKeys = 20
 	const jobsPerKey = 10
+	const numUniqueKeys = 10 // Number of unique keys to generate (keyIdx % numUniqueKeys)
 
 	var totalJobs atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(numKeys * jobsPerKey)
 
 	for keyIdx := 0; keyIdx < numKeys; keyIdx++ {
-		key := "key-" + string(rune('0'+(keyIdx%10)))
+		key := "key-" + string(rune('0'+(keyIdx%numUniqueKeys)))
 
 		for jobIdx := 0; jobIdx < jobsPerKey; jobIdx++ {
 			job := func(ctx context.Context) {
