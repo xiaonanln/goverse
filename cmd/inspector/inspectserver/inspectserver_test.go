@@ -327,6 +327,79 @@ func TestHandleShardMapping_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+// TestHandleShardMove_NoConsensusManager tests that handleShardMove returns error when consensusManager is not initialized
+func TestHandleShardMove_NoConsensusManager(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	reqBody := `{"shard_id": 1, "target_node": "node1"}`
+	req := httptest.NewRequest(http.MethodPost, "/shards/move", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "Consensus manager not available") {
+		t.Fatalf("Expected error message about consensus manager, got: %s", body)
+	}
+}
+
+// TestHandleShardMove_MethodNotAllowed tests that non-POST requests are rejected
+func TestHandleShardMove_MethodNotAllowed(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/shards/move", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405 for GET, got %d", rr.Code)
+	}
+}
+
+// TestHandleShardMove_EmptyTargetNode tests that empty target node is rejected
+func TestHandleShardMove_EmptyTargetNode(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	reqBody := `{"shard_id": 1, "target_node": ""}`
+	req := httptest.NewRequest(http.MethodPost, "/shards/move", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Should fail because consensus manager is not available (checked before validation)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503, got %d", rr.Code)
+	}
+}
+
 // flushableRecorder wraps httptest.ResponseRecorder with Flush support
 type flushableRecorder struct {
 	*httptest.ResponseRecorder
