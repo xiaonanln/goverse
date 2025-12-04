@@ -180,8 +180,8 @@ document.getElementById('details-close').addEventListener('click', () => {
 document.addEventListener('click', (event) => {
   const panel = document.getElementById('details-panel')
   if (panel.classList.contains('visible') && !panel.contains(event.target)) {
-    // Check if click is on a graph node (which will trigger showDetailsPanel)
-    if (!event.target.closest('.graph-node') && !event.target.closest('.node-item')) {
+    // Check if click is on a graph node or shard badge (which will trigger showDetailsPanel)
+    if (!event.target.closest('.graph-node') && !event.target.closest('.node-item') && !event.target.closest('.shard-badge')) {
       panel.classList.remove('visible')
     }
   }

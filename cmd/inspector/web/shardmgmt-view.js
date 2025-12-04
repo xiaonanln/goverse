@@ -267,7 +267,7 @@ function renderUnassignedBox(unassignedShards, maxObjectCount) {
 
 // Setup drag and drop event listeners
 function setupDragAndDrop() {
-  // Make shard badges draggable
+  // Make shard badges draggable and clickable
   const shardBadges = document.querySelectorAll('.shard-badge')
   shardBadges.forEach(badge => {
     badge.draggable = true
@@ -280,6 +280,9 @@ function setupDragAndDrop() {
     
     badge.addEventListener('dragstart', handleDragStart)
     badge.addEventListener('dragend', handleDragEnd)
+    
+    // Click to show details
+    badge.addEventListener('click', handleShardClick)
   })
   
   // Make node boxes drop targets
@@ -471,4 +474,125 @@ function moveShardToNode(shardId, targetNode) {
       modal.classList.remove('visible')
     }, 3000)
   })
+}
+
+// Handle click on shard badge to show details
+function handleShardClick(e) {
+  const badge = e.target
+  const shardId = parseInt(badge.getAttribute('data-shard-id'))
+  
+  // Find the shard data
+  const shard = shardManagementData.shards.find(s => s.shard_id === shardId)
+  if (!shard) return
+  
+  showShardDetailsPanel(shard)
+}
+
+// Show shard details in the details panel
+function showShardDetailsPanel(shard) {
+  const panel = document.getElementById('details-panel')
+  const title = document.getElementById('details-title')
+  const content = document.getElementById('details-content')
+
+  // Set title
+  title.textContent = `Shard #${shard.shard_id}`
+
+  // Build content
+  let html = ''
+
+  // Basic information section
+  html += '<div class="detail-section">'
+  html += '<h4>Basic Information</h4>'
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Shard ID:</div>`
+  html += `<div class="detail-value">${shard.shard_id}</div>`
+  html += `</div>`
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Object Count:</div>`
+  html += `<div class="detail-value"><strong>${shard.object_count || 0}</strong></div>`
+  html += `</div>`
+  html += '</div>'
+
+  // Node assignment section
+  html += '<div class="detail-section">'
+  html += '<h4>Node Assignment</h4>'
+  
+  // Current node
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Current Node:</div>`
+  if (shard.current_node) {
+    html += `<div class="detail-value">${shard.current_node}</div>`
+  } else {
+    html += `<div class="detail-value" style="color: #999; font-style: italic;">Not assigned</div>`
+  }
+  html += `</div>`
+  
+  // Target node
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Target Node:</div>`
+  if (shard.target_node) {
+    html += `<div class="detail-value">${shard.target_node}</div>`
+  } else {
+    html += `<div class="detail-value" style="color: #999; font-style: italic;">Not assigned</div>`
+  }
+  html += `</div>`
+  
+  // Status
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Status:</div>`
+  let statusBadge = ''
+  if (!shard.target_node) {
+    statusBadge = '<span class="detail-badge" style="background: #9E9E9E;">No Target</span>'
+  } else if (shard.target_node !== shard.current_node) {
+    statusBadge = '<span class="detail-badge" style="background: #FF9800;">Migrating</span>'
+  } else {
+    statusBadge = '<span class="detail-badge" style="background: #4CAF50;">Stable</span>'
+  }
+  html += `<div class="detail-value">${statusBadge}</div>`
+  html += `</div>`
+  html += '</div>'
+
+  // Objects in this shard (if we have object data)
+  if (typeof graphData !== 'undefined' && graphData.goverse_objects) {
+    const shardObjects = graphData.goverse_objects.filter(obj => obj.shard_id === shard.shard_id)
+    if (shardObjects.length > 0) {
+      html += '<div class="detail-section">'
+      html += '<h4>Objects in Shard</h4>'
+      
+      // Group by type
+      const typeCount = {}
+      shardObjects.forEach(obj => {
+        const type = obj.type || 'Unknown'
+        typeCount[type] = (typeCount[type] || 0) + 1
+      })
+      
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">By Type:</div>`
+      html += `<div class="detail-value">`
+      Object.entries(typeCount).sort((a, b) => b[1] - a[1]).forEach(([type, count]) => {
+        html += `<div style="margin: 2px 0;">${type}: <strong>${count}</strong></div>`
+      })
+      html += `</div>`
+      html += `</div>`
+      
+      // List first few objects
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Objects:</div>`
+      html += `<div class="detail-value">`
+      const displayObjects = shardObjects.slice(0, 10)
+      displayObjects.forEach(obj => {
+        html += `<div style="margin: 2px 0; font-size: 11px;">${obj.id}</div>`
+      })
+      if (shardObjects.length > 10) {
+        html += `<div style="margin: 2px 0; color: #999; font-style: italic;">... and ${shardObjects.length - 10} more</div>`
+      }
+      html += `</div>`
+      html += `</div>`
+      
+      html += '</div>'
+    }
+  }
+
+  content.innerHTML = html
+  panel.classList.add('visible')
 }
