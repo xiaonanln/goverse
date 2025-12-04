@@ -19,7 +19,7 @@ func TestTaskPool_BasicSubmit(t *testing.T) {
 		executed.Store(true)
 	}
 
-	pool.Submit("key1", job)
+	pool.SubmitByKey("key1", job)
 
 	// Wait for job to execute
 	time.Sleep(50 * time.Millisecond)
@@ -58,7 +58,7 @@ func TestTaskPool_SerialExecution(t *testing.T) {
 				t.Errorf("Expected counter %d, got %d for job %d", idx+1, current, idx)
 			}
 		}
-		pool.Submit("same-key", job)
+		pool.SubmitByKey("same-key", job)
 	}
 
 	wg.Wait()
@@ -107,7 +107,7 @@ func TestTaskPool_ParallelExecution(t *testing.T) {
 			time.Sleep(100 * time.Millisecond) // Simulate work
 			started.Add(-1)
 		}
-		pool.Submit(key, job)
+		pool.SubmitByKey(key, job)
 	}
 
 	wg.Wait()
@@ -149,7 +149,7 @@ func TestTaskPool_MultipleKeysWithMultipleJobs(t *testing.T) {
 					t.Errorf("Key %s: expected counter %d, got %d", key, expectedValue, current)
 				}
 			}
-			pool.Submit(key, job)
+			pool.SubmitByKey(key, job)
 		}
 	}
 
@@ -187,7 +187,7 @@ func TestTaskPool_ContextCancellation(t *testing.T) {
 					cancelled.Add(1)
 				}
 			}
-			pool.Submit(key, job)
+			pool.SubmitByKey(key, job)
 		}()
 	}
 
@@ -220,7 +220,7 @@ func TestTaskPool_Stop(t *testing.T) {
 		job := func(ctx context.Context) {
 			completed.Add(1)
 		}
-		pool.Submit("key1", job)
+		pool.SubmitByKey("key1", job)
 	}
 
 	// Wait for jobs to complete
@@ -236,7 +236,7 @@ func TestTaskPool_Stop(t *testing.T) {
 
 	// Verify no new jobs can be submitted after stop
 	var executed atomic.Bool
-	pool.Submit("key1", func(ctx context.Context) {
+	pool.SubmitByKey("key1", func(ctx context.Context) {
 		executed.Store(true)
 	})
 
@@ -263,7 +263,7 @@ func TestTaskPool_FixedWorkers(t *testing.T) {
 			defer wg.Done()
 			time.Sleep(50 * time.Millisecond)
 		}
-		pool.Submit(key, job)
+		pool.SubmitByKey(key, job)
 	}
 
 	// Should have fixed number of workers (3)
@@ -302,7 +302,7 @@ func TestTaskPool_HighConcurrency(t *testing.T) {
 				totalJobs.Add(1)
 				time.Sleep(time.Microsecond)
 			}
-			pool.Submit(key, job)
+			pool.SubmitByKey(key, job)
 		}
 	}
 
@@ -332,7 +332,7 @@ func TestTaskPool_BufferedJobs(t *testing.T) {
 			counter.Add(1)
 			time.Sleep(5 * time.Millisecond)
 		}
-		pool.Submit("key1", job)
+		pool.SubmitByKey("key1", job)
 	}
 
 	wg.Wait()
@@ -353,7 +353,7 @@ func TestTaskPool_EmptyKey(t *testing.T) {
 		executed.Store(true)
 	}
 
-	pool.Submit("", job)
+	pool.SubmitByKey("", job)
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -384,7 +384,7 @@ func TestTaskPool_RaceDetector(t *testing.T) {
 					// Minimal work
 					time.Sleep(time.Microsecond)
 				}
-				pool.Submit(key, job)
+				pool.SubmitByKey(key, job)
 			}
 		}(i)
 	}
@@ -416,7 +416,7 @@ func TestTaskPool_JobOrdering(t *testing.T) {
 			order = append(order, idx)
 			mu.Unlock()
 		}
-		pool.Submit("ordered-key", job)
+		pool.SubmitByKey("ordered-key", job)
 	}
 
 	wg.Wait()
@@ -457,7 +457,7 @@ func TestTaskPool_WorkerLifecycle(t *testing.T) {
 	wg.Add(1)
 
 	// Submit a job
-	pool.Submit("key1", func(ctx context.Context) {
+	pool.SubmitByKey("key1", func(ctx context.Context) {
 		defer wg.Done()
 		time.Sleep(50 * time.Millisecond)
 	})
