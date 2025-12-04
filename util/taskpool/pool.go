@@ -11,15 +11,9 @@ import (
 // Job represents a unit of work to be executed by the task pool
 type Job func(ctx context.Context)
 
-// keyedJob wraps a job with its key for execution
-type keyedJob struct {
-	key string
-	job Job
-}
-
 // worker manages a queue of jobs
 type worker struct {
-	jobs chan keyedJob
+	jobs chan Job
 	wg   sync.WaitGroup
 }
 
@@ -94,7 +88,7 @@ func NewTaskPool(numWorkers int) *TaskPool {
 	workers := make([]*worker, numWorkers)
 	for i := 0; i < numWorkers; i++ {
 		workers[i] = &worker{
-			jobs: make(chan keyedJob, 100), // Buffer for pending jobs
+			jobs: make(chan Job, 100), // Buffer for pending jobs
 		}
 	}
 
@@ -142,7 +136,7 @@ func (tp *TaskPool) Submit(key string, job Job) {
 
 	// Try to submit job
 	select {
-	case w.jobs <- keyedJob{key: key, job: job}:
+	case w.jobs <- job:
 		// Job submitted successfully
 	case <-tp.ctx.Done():
 		// Pool is being shut down
@@ -162,13 +156,13 @@ func (tp *TaskPool) worker(id int, w *worker) {
 		case <-tp.ctx.Done():
 			// Pool-wide cancellation
 			return
-		case kj, ok := <-w.jobs:
+		case job, ok := <-w.jobs:
 			if !ok {
 				// Channel closed
 				return
 			}
 			// Execute the job
-			kj.job(tp.ctx)
+			job(tp.ctx)
 		}
 	}
 }
