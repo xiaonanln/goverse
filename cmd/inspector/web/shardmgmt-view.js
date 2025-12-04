@@ -8,6 +8,40 @@ let shardManagementData = { shards: [], nodes: [] }
 let draggedShardId = null
 let draggedSourceNode = null
 
+// Track recently moved shards for highlighting (shardId -> timestamp)
+let recentlyMovedShards = new Map()
+
+// Track shards that were migrating in previous state (for detecting completion)
+let previousMigratingShards = new Map() // shardId -> targetNode
+
+// Detect migration completions by comparing new state with previous state
+function detectMigrationCompletions(newShards) {
+  if (!newShards) return
+  
+  const newState = new Map()
+  newShards.forEach(shard => {
+    newState.set(shard.shard_id, shard)
+  })
+  
+  // Check each previously migrating shard
+  previousMigratingShards.forEach((targetNode, shardId) => {
+    const newShard = newState.get(shardId)
+    if (newShard && newShard.current_node === targetNode) {
+      // Migration completed! Highlight this shard
+      console.log(`Shard #${shardId} migration completed to ${targetNode}`)
+      highlightMovedShard(shardId)
+    }
+  })
+  
+  // Update the migrating shards map for next comparison
+  previousMigratingShards.clear()
+  newShards.forEach(shard => {
+    if (shard.target_node && shard.target_node !== shard.current_node) {
+      previousMigratingShards.set(shard.shard_id, shard.target_node)
+    }
+  })
+}
+
 // Update shard management view
 function updateShardManagementView() {
   const container = document.getElementById('shardmgmt-container')
@@ -23,6 +57,16 @@ function updateShardManagementView() {
     .then(response => response.json())
     .then(data => {
       shardManagementData = data
+      
+      // Initialize previousMigratingShards on first load
+      if (previousMigratingShards.size === 0 && data.shards) {
+        data.shards.forEach(shard => {
+          if (shard.target_node && shard.target_node !== shard.current_node) {
+            previousMigratingShards.set(shard.shard_id, shard.target_node)
+          }
+        })
+      }
+      
       renderShardManagementView(container)
     })
     .catch(error => {
@@ -138,7 +182,13 @@ function renderShardManagementView(container) {
                 } else {
                   shardTitle = `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
                 }
-                return `<span class="${shardClass}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
+                
+                // Add highlight class for recently moved shards
+                if (recentlyMovedShards.has(shard.shard_id)) {
+                  shardClass += ' highlight'
+                }
+                
+                return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
               }).join('')}
             </div>
           ` : `
@@ -340,6 +390,21 @@ function showShardMoveConfirmation(shardId, sourceNode, targetNode) {
   modal.classList.add('visible')
 }
 
+// Highlight a recently moved shard and auto-remove highlight after delay
+function highlightMovedShard(shardId) {
+  recentlyMovedShards.set(shardId, Date.now())
+  
+  // Remove highlight after 5 seconds
+  setTimeout(() => {
+    recentlyMovedShards.delete(shardId)
+    // Remove the highlight class from the DOM if element exists
+    const badge = document.querySelector(`.shard-badge[data-shard-id="${shardId}"]`)
+    if (badge) {
+      badge.classList.remove('highlight')
+    }
+  }, 5000)
+}
+
 // Move shard to target node via API
 function moveShardToNode(shardId, targetNode) {
   fetch('/shards/move', {
@@ -362,6 +427,8 @@ function moveShardToNode(shardId, targetNode) {
   })
   .then(data => {
     console.log('Shard moved successfully:', data)
+    // Track this shard as recently moved for highlighting
+    highlightMovedShard(shardId)
     // Refresh the view to show updated state
     updateShardManagementView()
   })

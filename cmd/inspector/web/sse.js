@@ -147,6 +147,17 @@ function connectSSE() {
 
   eventSource.addEventListener('shard_update', (event) => {
     console.log('SSE shard_update received', event)
+    
+    // Try to detect migration completions by comparing with previous state
+    try {
+      const data = JSON.parse(event.data)
+      if (data.shards && typeof detectMigrationCompletions === 'function') {
+        detectMigrationCompletions(data.shards)
+      }
+    } catch (e) {
+      // Ignore parse errors, just refresh the view
+    }
+    
     // Refresh shard view if it's active
     const shardView = document.getElementById('shard-view')
     if (shardView && shardView.classList.contains('active')) {
