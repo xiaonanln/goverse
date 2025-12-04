@@ -38,17 +38,16 @@ import (
 )
 
 func main() {
-	// Configure server with pprof enabled
+	// Configure server - pprof is automatically enabled when HTTP server is configured
 	config := &goverseapi.ServerConfig{
 		ListenAddress:        "localhost:47000",
 		AdvertiseAddress:     "localhost:47000",
-		MetricsListenAddress: "localhost:9090", // Required for pprof
-		EnablePprof:          true,             // Enable pprof endpoints
+		MetricsListenAddress: "localhost:9090", // pprof automatically enabled with HTTP server
 		EtcdAddress:          "localhost:2379",
 		EtcdPrefix:           "/goverse-pprof-example",
 	}
 
-	log.Println("Starting Goverse node with pprof enabled...")
+	log.Println("Starting Goverse node with pprof...")
 	log.Println("Node gRPC server: localhost:47000")
 	log.Println("Metrics and pprof: http://localhost:9090")
 	log.Println("")

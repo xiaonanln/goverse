@@ -1,6 +1,6 @@
 # Goverse pprof Example
 
-This example demonstrates how to enable pprof profiling in a Goverse node server.
+This example demonstrates how to use pprof profiling in a Goverse node server. pprof is automatically enabled when the HTTP server is configured.
 
 ## Overview
 
@@ -21,14 +21,14 @@ docker run -d --name etcd -p 2379:2379 quay.io/coreos/etcd:latest \
   --advertise-client-urls http://localhost:2379
 ```
 
-2. Start the node with pprof enabled:
+2. Start the node:
 ```bash
 go run main.go
 ```
 
 The node will start with:
 - gRPC server on `localhost:47000`
-- Metrics and pprof on `http://localhost:9090`
+- Metrics and pprof on `http://localhost:9090` (pprof is automatically enabled)
 
 ## Using pprof
 
@@ -70,7 +70,9 @@ go tool pprof -http=:8081 http://localhost:9090/debug/pprof/heap
 # Opens browser at http://localhost:8081
 ```
 
-## Configuration Options
+## Configuration
+
+pprof is automatically enabled when you configure an HTTP server. Simply set the `MetricsListenAddress`:
 
 ### Via Code
 
@@ -78,8 +80,7 @@ go tool pprof -http=:8081 http://localhost:9090/debug/pprof/heap
 config := &goverseapi.ServerConfig{
     ListenAddress:        "localhost:47000",
     AdvertiseAddress:     "localhost:47000",
-    MetricsListenAddress: "localhost:9090", // Required for pprof
-    EnablePprof:          true,              // Enable pprof endpoints
+    MetricsListenAddress: "localhost:9090", // pprof automatically enabled
 }
 ```
 
@@ -89,8 +90,7 @@ config := &goverseapi.ServerConfig{
 go run main.go \
   --listen localhost:47000 \
   --advertise localhost:47000 \
-  --http-listen localhost:9090 \
-  --enable-pprof
+  --http-listen localhost:9090
 ```
 
 ### Via Config File
@@ -108,17 +108,17 @@ nodes:
   - id: node1
     grpc_addr: localhost:47000
     advertise_addr: localhost:47000
-    http_addr: localhost:9090
-    enable_pprof: true  # Enable pprof
+    http_addr: localhost:9090  # pprof automatically enabled
 ```
 
 ## Security Note
 
 **Important:** pprof endpoints can expose sensitive information about your application's internals and performance characteristics. 
 
-- pprof is **disabled by default** for security
-- Only enable it in development or when actively debugging
+- pprof is automatically enabled when HTTP server is configured
+- Only use HTTP server (and pprof) in development or when actively debugging
 - In production, consider:
-  - Restricting access to the metrics port with firewall rules
+  - Not enabling the HTTP server unless necessary
+  - Restricting access to the HTTP port with firewall rules
   - Using authentication/authorization middleware
   - Only enabling temporarily when needed for troubleshooting
