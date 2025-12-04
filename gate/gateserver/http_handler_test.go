@@ -437,3 +437,48 @@ func TestWriteSSEEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestPprofEndpoints(t *testing.T) {
+	// Test that pprof endpoints are properly registered
+	gs := &GateServer{}
+	mux := gs.setupHTTPRoutes()
+
+	tests := []struct {
+		name           string
+		path           string
+		method         string
+		expectedStatus int
+	}{
+		{
+			name:           "pprof index",
+			path:           "/debug/pprof/",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "pprof cmdline",
+			path:           "/debug/pprof/cmdline",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "pprof symbol",
+			path:           "/debug/pprof/symbol",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+		})
+	}
+}
