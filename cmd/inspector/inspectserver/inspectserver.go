@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -199,6 +200,13 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 
 	// SSE endpoint for push-based updates
 	mux.HandleFunc("/events/stream", s.handleEventsStream)
+
+	// pprof endpoints for profiling
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	return mux
 }
