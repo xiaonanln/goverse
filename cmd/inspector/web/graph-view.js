@@ -40,7 +40,10 @@ function initGraph() {
 
   // Initialize force simulation
   simulation = d3.forceSimulation()
-    .force('charge', d3.forceManyBody().strength(-200))
+    .force('charge', d3.forceManyBody().strength(d => {
+      // Gates have stronger repulsive force
+      return d.nodeType === NODE_TYPE_GATE ? -5000 : -200
+    }))
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5))
     .force('link', d3.forceLink().id(d => d.id)
@@ -112,14 +115,9 @@ function dragged(event, d) {
 
 function dragEnded(event, d) {
   if (!event.active) simulation.alphaTarget(0)
-  
-  // Gates stay where user drags them (keep fx/fy set)
-  // Other nodes release and let force simulation move them
-  if (d.nodeType !== NODE_TYPE_GATE) {
-    d.fx = null
-    d.fy = null
-  }
-  // Gates keep their fx/fy from the drag position
+  // Release all nodes to let force simulation move them
+  d.fx = null
+  d.fy = null
 }
 
 // Focus on a specific node in the graph
@@ -163,23 +161,15 @@ function buildGraphNodesAndLinks() {
     nodeMap.set(n.id, node)
   })
 
-  // Add gates with fixed position at top
-  const gateCount = graphData.goverse_gates.length
-  const gateSpacing = 150
-  const gateStartX = (containerWidth - (gateCount - 1) * gateSpacing) / 2
+  // Add gates
   graphData.goverse_gates.forEach((g, index) => {
-    const fixedX = gateStartX + index * gateSpacing
-    const fixedY = 80
     const node = {
       id: g.id,
       label: g.label || g.id,
       nodeType: NODE_TYPE_GATE,
       advertiseAddr: g.advertise_addr,
       color: g.color,
-      connectedNodes: g.connected_nodes || [],
-      // Fixed position for gates
-      fx: fixedX,
-      fy: fixedY
+      connectedNodes: g.connected_nodes || []
     }
     nodes.push(node)
     nodeMap.set(g.id, node)
