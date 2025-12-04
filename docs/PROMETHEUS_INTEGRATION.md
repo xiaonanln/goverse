@@ -503,6 +503,114 @@ Alert when a node is constantly releasing shards (possible node degradation):
     description: "Node may be degraded - releasing more shards than claiming"
 ```
 
+## Profiling with pprof
+
+In addition to Prometheus metrics, GoVerse gates expose Go's built-in profiling endpoints via pprof when HTTP is enabled.
+
+### Enabling pprof
+
+The pprof profiling endpoints are automatically available when you configure the gate with an HTTP listen address:
+
+```bash
+# Start gate with HTTP enabled
+go run ./cmd/gate/ -http-listen=:8080
+
+# Or using config file
+go run ./cmd/gate/ -config=config.yaml -gate-id=gate1
+```
+
+### Available Profiling Endpoints
+
+Once the gate HTTP server is running, the following pprof endpoints are available:
+
+- `http://localhost:8080/debug/pprof/` - Index page listing available profiles
+- `http://localhost:8080/debug/pprof/heap` - Heap memory profile
+- `http://localhost:8080/debug/pprof/goroutine` - Goroutine profile
+- `http://localhost:8080/debug/pprof/threadcreate` - Thread creation profile
+- `http://localhost:8080/debug/pprof/block` - Block profile
+- `http://localhost:8080/debug/pprof/mutex` - Mutex contention profile
+- `http://localhost:8080/debug/pprof/profile` - CPU profile (30-second sample by default)
+- `http://localhost:8080/debug/pprof/trace` - Execution trace
+- `http://localhost:8080/debug/pprof/cmdline` - Command-line invocation
+- `http://localhost:8080/debug/pprof/symbol` - Symbol lookup
+
+### Using pprof
+
+#### Interactive Analysis
+
+Use the `go tool pprof` command to analyze profiles interactively:
+
+```bash
+# CPU profiling (captures 30 seconds of CPU activity)
+go tool pprof http://localhost:8080/debug/pprof/profile
+
+# Heap memory profile
+go tool pprof http://localhost:8080/debug/pprof/heap
+
+# Goroutine profile
+go tool pprof http://localhost:8080/debug/pprof/goroutine
+```
+
+#### Generating Visualizations
+
+Generate SVG graphs:
+
+```bash
+# CPU profile graph
+go tool pprof -svg http://localhost:8080/debug/pprof/profile > cpu.svg
+
+# Heap allocation graph
+go tool pprof -svg http://localhost:8080/debug/pprof/heap > heap.svg
+
+# Goroutine call graph
+go tool pprof -svg http://localhost:8080/debug/pprof/goroutine > goroutine.svg
+```
+
+#### Web UI
+
+Launch the interactive web UI:
+
+```bash
+go tool pprof -http=:6060 http://localhost:8080/debug/pprof/heap
+```
+
+This opens a browser with an interactive flame graph and call graph visualization.
+
+#### Common Profiling Scenarios
+
+**Memory Leak Investigation:**
+```bash
+# Take multiple heap snapshots over time
+go tool pprof -base http://localhost:8080/debug/pprof/heap http://localhost:8080/debug/pprof/heap
+```
+
+**High CPU Usage:**
+```bash
+# Capture 60 seconds of CPU profile
+go tool pprof http://localhost:8080/debug/pprof/profile?seconds=60
+```
+
+**Goroutine Leak:**
+```bash
+# Check number of goroutines and their stacks
+go tool pprof http://localhost:8080/debug/pprof/goroutine
+```
+
+**Lock Contention:**
+```bash
+# Analyze mutex contention
+go tool pprof http://localhost:8080/debug/pprof/mutex
+```
+
+### Security Considerations
+
+⚠️ **Important**: The pprof endpoints expose detailed runtime information about your application. In production:
+
+- Use firewall rules to restrict access to the HTTP port
+- Consider using authentication middleware if publicly exposed
+- Monitor access to profiling endpoints
+- Only enable HTTP/pprof when needed for debugging
+
 ## Testing
 
 The metrics package includes comprehensive unit tests:
@@ -520,6 +628,19 @@ go run .
 
 # Check metrics endpoint
 curl http://localhost:8080/metrics | grep goverse
+```
+
+To verify pprof endpoints:
+
+```bash
+# Start gate with HTTP enabled
+go run ./cmd/gate/ -http-listen=:8080
+
+# Check pprof index
+curl http://localhost:8080/debug/pprof/
+
+# Check specific profile
+curl http://localhost:8080/debug/pprof/cmdline
 ```
 
 ## Dependencies
