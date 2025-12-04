@@ -260,7 +260,7 @@ func printUsageInstructions(filename string, numNodes, numGates int, withInspect
 	fmt.Println()
 
 	stepNum := 2
-	
+
 	// Starting inspector
 	if withInspector {
 		fmt.Printf("%d. Start the Inspector (optional, for monitoring):\n", stepNum)

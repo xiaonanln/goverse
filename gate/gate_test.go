@@ -760,93 +760,93 @@ func containsHelper(s, substr string) bool {
 }
 
 func TestGateGetClientCount(t *testing.T) {
-config := &GateConfig{
-AdvertiseAddress: testutil.GetFreeAddress(),
-EtcdAddress:      "localhost:2379",
-EtcdPrefix:       "/test-gate-clientcount",
-}
+	config := &GateConfig{
+		AdvertiseAddress: testutil.GetFreeAddress(),
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gate-clientcount",
+	}
 
-gate, err := NewGate(config)
-if err != nil {
-t.Fatalf("Failed to create gate: %v", err)
-}
-defer gate.Stop()
+	gate, err := NewGate(config)
+	if err != nil {
+		t.Fatalf("Failed to create gate: %v", err)
+	}
+	defer gate.Stop()
 
-ctx := context.Background()
-err = gate.Start(ctx)
-if err != nil {
-t.Fatalf("Gate.Start() returned error: %v", err)
-}
+	ctx := context.Background()
+	err = gate.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gate.Start() returned error: %v", err)
+	}
 
-// Initially should have 0 clients
-if count := gate.GetClientCount(); count != 0 {
-t.Fatalf("Expected 0 clients initially, got %d", count)
-}
+	// Initially should have 0 clients
+	if count := gate.GetClientCount(); count != 0 {
+		t.Fatalf("Expected 0 clients initially, got %d", count)
+	}
 
-// Register 3 clients
-clientProxies := make([]*ClientProxy, 3)
-for i := 0; i < 3; i++ {
-clientProxies[i] = gate.Register(ctx)
-}
+	// Register 3 clients
+	clientProxies := make([]*ClientProxy, 3)
+	for i := 0; i < 3; i++ {
+		clientProxies[i] = gate.Register(ctx)
+	}
 
-// Should have 3 clients now
-if count := gate.GetClientCount(); count != 3 {
-t.Fatalf("Expected 3 clients after registering, got %d", count)
-}
+	// Should have 3 clients now
+	if count := gate.GetClientCount(); count != 3 {
+		t.Fatalf("Expected 3 clients after registering, got %d", count)
+	}
 
-// Unregister one client
-gate.Unregister(clientProxies[0].GetID())
+	// Unregister one client
+	gate.Unregister(clientProxies[0].GetID())
 
-// Should have 2 clients now
-if count := gate.GetClientCount(); count != 2 {
-t.Fatalf("Expected 2 clients after unregistering one, got %d", count)
-}
+	// Should have 2 clients now
+	if count := gate.GetClientCount(); count != 2 {
+		t.Fatalf("Expected 2 clients after unregistering one, got %d", count)
+	}
 
-// Unregister the remaining clients
-gate.Unregister(clientProxies[1].GetID())
-gate.Unregister(clientProxies[2].GetID())
+	// Unregister the remaining clients
+	gate.Unregister(clientProxies[1].GetID())
+	gate.Unregister(clientProxies[2].GetID())
 
-// Should have 0 clients now
-if count := gate.GetClientCount(); count != 0 {
-t.Fatalf("Expected 0 clients after unregistering all, got %d", count)
-}
+	// Should have 0 clients now
+	if count := gate.GetClientCount(); count != 0 {
+		t.Fatalf("Expected 0 clients after unregistering all, got %d", count)
+	}
 }
 
 func TestGateNotifyClientCountChanged(t *testing.T) {
-config := &GateConfig{
-AdvertiseAddress: testutil.GetFreeAddress(),
-EtcdAddress:      "localhost:2379",
-EtcdPrefix:       "/test-gate-notify-clientcount",
-}
+	config := &GateConfig{
+		AdvertiseAddress: testutil.GetFreeAddress(),
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gate-notify-clientcount",
+	}
 
-gate, err := NewGate(config)
-if err != nil {
-t.Fatalf("Failed to create gate: %v", err)
-}
-defer gate.Stop()
+	gate, err := NewGate(config)
+	if err != nil {
+		t.Fatalf("Failed to create gate: %v", err)
+	}
+	defer gate.Stop()
 
-ctx := context.Background()
-err = gate.Start(ctx)
-if err != nil {
-t.Fatalf("Gate.Start() returned error: %v", err)
-}
+	ctx := context.Background()
+	err = gate.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gate.Start() returned error: %v", err)
+	}
 
-// Register a client - this should trigger NotifyClientCountChanged
-clientProxy := gate.Register(ctx)
-if clientProxy == nil {
-t.Fatal("Expected client proxy, got nil")
-}
+	// Register a client - this should trigger NotifyClientCountChanged
+	clientProxy := gate.Register(ctx)
+	if clientProxy == nil {
+		t.Fatal("Expected client proxy, got nil")
+	}
 
-// Verify client count
-if count := gate.GetClientCount(); count != 1 {
-t.Errorf("Expected 1 client after registration, got %d", count)
-}
+	// Verify client count
+	if count := gate.GetClientCount(); count != 1 {
+		t.Errorf("Expected 1 client after registration, got %d", count)
+	}
 
-// Unregister client - this should also trigger NotifyClientCountChanged
-gate.Unregister(clientProxy.GetID())
+	// Unregister client - this should also trigger NotifyClientCountChanged
+	gate.Unregister(clientProxy.GetID())
 
-// Verify client count is back to 0
-if count := gate.GetClientCount(); count != 0 {
-t.Errorf("Expected 0 clients after unregistration, got %d", count)
-}
+	// Verify client count is back to 0
+	if count := gate.GetClientCount(); count != 0 {
+		t.Errorf("Expected 0 clients after unregistration, got %d", count)
+	}
 }
