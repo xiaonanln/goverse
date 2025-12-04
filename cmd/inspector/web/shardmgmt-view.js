@@ -39,7 +39,7 @@ function detectMigrationCompletions(newShards) {
   // Check each previously migrating shard
   previousMigratingShards.forEach((targetNode, shardId) => {
     const newShard = newState.get(shardId)
-    if (newShard && newShard.current_node === targetNode) {
+    if (newShard && newShard.current_node === targetNode && newShard.target_node === targetNode) {
       // Migration completed! Highlight this shard
       console.log(`Shard #${shardId} migration completed to ${targetNode}`)
       highlightMovedShard(shardId)
@@ -47,9 +47,13 @@ function detectMigrationCompletions(newShards) {
   })
   
   // Update the migrating shards map for next comparison
+  // Keep tracking shards that have a target_node set (even if current_node is empty/unclaimed)
+  // This allows us to detect completion even after the shard goes through unclaimed state
   previousMigratingShards.clear()
   newShards.forEach(shard => {
-    if (shard.target_node && shard.target_node !== shard.current_node) {
+    if (shard.target_node) {
+      // Track any shard with a target_node, regardless of current_node
+      // This handles the case where shard goes: Node A -> Unclaimed -> Node B
       previousMigratingShards.set(shard.shard_id, shard.target_node)
     }
   })

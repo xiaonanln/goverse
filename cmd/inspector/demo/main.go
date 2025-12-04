@@ -458,6 +458,7 @@ func openBrowser(url string) {
 
 // simulateShardMigrations watches for shard migrations (TargetNode != CurrentNode)
 // and automatically completes them after a delay to simulate the migration process
+// Simulates the real GoVerse behavior: first unclaim (set current to empty), then claim (set current to target)
 func simulateShardMigrations(ctx context.Context, server *inspectserver.InspectorServer, etcdAddr, etcdPrefix string) {
 	// Connect to etcd
 	mgr, err := etcdmanager.NewEtcdManager(etcdAddr, etcdPrefix)
@@ -473,6 +474,9 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+
+	// Track shards that are in the unclaimed phase (waiting to be claimed by target)
+	unclaimedShards := make(map[int]string) // shardID -> targetNode
 
 	for {
 		select {
@@ -492,13 +496,16 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 			}
 
 			for shardID, shardInfo := range shardMapping.Shards {
-				if shardInfo.TargetNode != "" && shardInfo.CurrentNode != shardInfo.TargetNode {
-					log.Printf("[Demo] Simulating shard %d migration completion: %s → %s",
-						shardID, shardInfo.CurrentNode, shardInfo.TargetNode)
+				targetNode := shardInfo.TargetNode
+				currentNode := shardInfo.CurrentNode
 
-					// Use etcd directly to update CurrentNode to match TargetNode
+				// Check if this shard is already in unclaimed phase
+				if unclaimedTargetNode, isUnclaimed := unclaimedShards[shardID]; isUnclaimed {
+					// Shard is unclaimed, now claim it with the target node
+					log.Printf("[Demo] Claiming shard %d by target node %s", shardID, unclaimedTargetNode)
+
 					key := fmt.Sprintf("%s/shard/%d", etcdPrefix, shardID)
-					value := fmt.Sprintf("%s,%s", shardInfo.TargetNode, shardInfo.TargetNode)
+					value := fmt.Sprintf("%s,%s", unclaimedTargetNode, unclaimedTargetNode)
 					if len(shardInfo.Flags) > 0 {
 						for _, flag := range shardInfo.Flags {
 							value += "," + flag
@@ -507,9 +514,34 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 
 					updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					if err := mgr.Put(updateCtx, key, value); err != nil {
-						log.Printf("[Demo] Failed to complete shard %d migration: %v", shardID, err)
+						log.Printf("[Demo] Failed to claim shard %d: %v", shardID, err)
 					} else {
-						log.Printf("[Demo] Completed shard %d migration to %s", shardID, shardInfo.TargetNode)
+						log.Printf("[Demo] Completed shard %d migration to %s", shardID, unclaimedTargetNode)
+					}
+					cancel()
+
+					// Remove from unclaimed tracking
+					delete(unclaimedShards, shardID)
+				} else if targetNode != "" && currentNode != targetNode {
+					// Shard needs migration: first unclaim it (set current to empty)
+					log.Printf("[Demo] Unclaiming shard %d from %s (target: %s)",
+						shardID, currentNode, targetNode)
+
+					key := fmt.Sprintf("%s/shard/%d", etcdPrefix, shardID)
+					value := fmt.Sprintf("%s,", targetNode) // TargetNode set, CurrentNode empty
+					if len(shardInfo.Flags) > 0 {
+						for _, flag := range shardInfo.Flags {
+							value += "," + flag
+						}
+					}
+
+					updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if err := mgr.Put(updateCtx, key, value); err != nil {
+						log.Printf("[Demo] Failed to unclaim shard %d: %v", shardID, err)
+					} else {
+						log.Printf("[Demo] Unclaimed shard %d, will be claimed by %s in next tick", shardID, targetNode)
+						// Track this shard as unclaimed, to be claimed in next tick
+						unclaimedShards[shardID] = targetNode
 					}
 					cancel()
 				}
