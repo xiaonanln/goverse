@@ -36,6 +36,7 @@ type NodeConfig struct {
 	GRPCAddr      string `yaml:"grpc_addr"`
 	AdvertiseAddr string `yaml:"advertise_addr"`
 	HTTPAddr      string `yaml:"http_addr"`
+	EnablePprof   bool   `yaml:"enable_pprof"` // Optional: enable pprof endpoints on HTTP server
 }
 
 // GateConfig holds configuration for a single gate
