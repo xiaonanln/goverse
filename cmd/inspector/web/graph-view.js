@@ -44,8 +44,17 @@ function initGraph() {
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5))
     .force('link', d3.forceLink().id(d => d.id)
-      .distance(d => (d.type === 'node-node' || d.type === 'gate-node') ? 150 : 100)
-      .strength(d => d.type === 'gate-node' ? 0.1 : 1))
+      .distance(d => {
+        if (d.type === 'object-shard') return 30
+        if (d.type === 'shard-node') return 80
+        if (d.type === 'node-node' || d.type === 'gate-node') return 150
+        return 100
+      })
+      .strength(d => {
+        if (d.type === 'object-shard') return 2
+        if (d.type === 'gate-node') return 0.1
+        return 1
+      }))
     .on('tick', ticked)
 
   // Zoom controls
@@ -103,8 +112,14 @@ function dragged(event, d) {
 
 function dragEnded(event, d) {
   if (!event.active) simulation.alphaTarget(0)
-  d.fx = null
-  d.fy = null
+  
+  // Gates stay where user drags them (keep fx/fy set)
+  // Other nodes release and let force simulation move them
+  if (d.nodeType !== NODE_TYPE_GATE) {
+    d.fx = null
+    d.fy = null
+  }
+  // Gates keep their fx/fy from the drag position
 }
 
 // Focus on a specific node in the graph
@@ -130,6 +145,8 @@ function buildGraphNodesAndLinks() {
   const nodes = []
   const links = []
   const nodeMap = new Map()
+  const container = document.getElementById('graph-container')
+  const containerWidth = container.clientWidth
 
   // Add cluster nodes
   graphData.goverse_nodes.forEach(n => {
@@ -146,21 +163,32 @@ function buildGraphNodesAndLinks() {
     nodeMap.set(n.id, node)
   })
 
-  // Add gates
-  graphData.goverse_gates.forEach(g => {
+  // Add gates with fixed position at top
+  const gateCount = graphData.goverse_gates.length
+  const gateSpacing = 150
+  const gateStartX = (containerWidth - (gateCount - 1) * gateSpacing) / 2
+  graphData.goverse_gates.forEach((g, index) => {
+    const fixedX = gateStartX + index * gateSpacing
+    const fixedY = 80
     const node = {
       id: g.id,
       label: g.label || g.id,
       nodeType: NODE_TYPE_GATE,
       advertiseAddr: g.advertise_addr,
       color: g.color,
-      connectedNodes: g.connected_nodes || []
+      connectedNodes: g.connected_nodes || [],
+      // Fixed position for gates
+      fx: fixedX,
+      fy: fixedY
     }
     nodes.push(node)
     nodeMap.set(g.id, node)
   })
 
-  // Add objects
+  // Track shards and their nodes (a shard can be on multiple nodes during migration)
+  const shardToNodes = new Map() // shardId -> Set of nodeIds
+
+  // Add objects and track their shards
   graphData.goverse_objects.forEach(obj => {
     const node = {
       id: obj.id,
@@ -175,14 +203,59 @@ function buildGraphNodesAndLinks() {
     nodes.push(node)
     nodeMap.set(obj.id, node)
 
-    // Create link from object to its node
-    if (obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
+    // Track which nodes have objects for each shard
+    if (obj.shard_id !== undefined && obj.goverse_node_id) {
+      if (!shardToNodes.has(obj.shard_id)) {
+        shardToNodes.set(obj.shard_id, new Set())
+      }
+      shardToNodes.get(obj.shard_id).add(obj.goverse_node_id)
+    }
+  })
+
+  // Create shard nodes and object-to-shard links
+  const shardNodeMap = new Map()
+  graphData.goverse_objects.forEach(obj => {
+    if (obj.shard_id !== undefined) {
+      const shardId = `shard-${obj.shard_id}`
+      
+      // Create shard node if not exists
+      if (!shardNodeMap.has(shardId)) {
+        const shardNode = {
+          id: shardId,
+          label: `S${obj.shard_id}`,
+          nodeType: NODE_TYPE_SHARD,
+          shardId: obj.shard_id
+        }
+        nodes.push(shardNode)
+        nodeMap.set(shardId, shardNode)
+        shardNodeMap.set(shardId, shardNode)
+      }
+
+      // Link object to shard
       links.push({
         source: obj.id,
-        target: obj.goverse_node_id,
-        type: 'object-node'
+        target: shardId,
+        type: 'object-shard',
+        color: '#9C27B0' // Purple for object-to-shard
       })
     }
+  })
+
+  // Create shard-to-node links
+  shardToNodes.forEach((nodeIds, shardId) => {
+    const shardNodeId = `shard-${shardId}`
+    const isMultiNode = nodeIds.size > 1 // Shard split across multiple nodes (error state)
+    
+    nodeIds.forEach(nodeId => {
+      if (nodeMap.has(nodeId)) {
+        links.push({
+          source: shardNodeId,
+          target: nodeId,
+          type: 'shard-node',
+          color: isMultiNode ? '#F44336' : '#FFA726' // Red if split, orange otherwise
+        })
+      }
+    })
   })
 
   // Add node-to-node links - only when there are actual connections
@@ -317,6 +390,26 @@ function updateGraph() {
       el.append('polygon')
         .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
         .attr('fill', getNodeColor(d))
+    } else if (shape === 'hexagon') {
+      // Hexagon shape for shards
+      const hexPoints = []
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 2
+        hexPoints.push(`${r * Math.cos(angle)},${r * Math.sin(angle)}`)
+      }
+      el.append('polygon')
+        .attr('points', hexPoints.join(' '))
+        .attr('fill', getNodeColor(d))
+      // Add shard label
+      el.append('text')
+        .attr('class', 'shard-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', 'white')
+        .attr('font-size', '9px')
+        .attr('font-weight', 'bold')
+        .attr('pointer-events', 'none')
+        .text(d.label)
     } else {
       el.append('circle')
         .attr('r', r)
@@ -343,7 +436,7 @@ function updateGraph() {
     const shape = getNodeShape(d)
     if (shape === 'square') {
       el.select('rect').attr('fill', getNodeColor(d))
-    } else if (shape === 'diamond') {
+    } else if (shape === 'diamond' || shape === 'hexagon') {
       el.select('polygon').attr('fill', getNodeColor(d))
     } else {
       el.select('circle').attr('fill', getNodeColor(d))
@@ -405,9 +498,16 @@ function updateGraphIncremental() {
     nodeMap.set(n.id, node)
   })
 
-  // Add gates
-  graphData.goverse_gates.forEach(g => {
+  // Add gates with fixed position at top
+  const container = document.getElementById('graph-container')
+  const containerWidth = container.clientWidth
+  const gateCount = graphData.goverse_gates.length
+  const gateSpacing = 150
+  const gateStartX = (containerWidth - (gateCount - 1) * gateSpacing) / 2
+  graphData.goverse_gates.forEach((g, index) => {
     const existingPos = positionMap.get(g.id)
+    const fixedX = gateStartX + index * gateSpacing
+    const fixedY = 80
     const node = {
       id: g.id,
       label: g.label || g.id,
@@ -415,19 +515,23 @@ function updateGraphIncremental() {
       advertiseAddr: g.advertise_addr,
       color: g.color,
       connectedNodes: g.connected_nodes || [],
-      // Preserve position if exists
-      x: existingPos ? existingPos.x : undefined,
-      y: existingPos ? existingPos.y : undefined,
+      // Preserve position if user dragged, else use fixed position
+      x: existingPos ? existingPos.x : fixedX,
+      y: existingPos ? existingPos.y : fixedY,
       vx: existingPos ? existingPos.vx : undefined,
       vy: existingPos ? existingPos.vy : undefined,
-      fx: existingPos ? existingPos.fx : undefined,
-      fy: existingPos ? existingPos.fy : undefined
+      // Keep fx/fy from existing position (user may have dragged), or set fixed
+      fx: existingPos ? existingPos.fx : fixedX,
+      fy: existingPos ? existingPos.fy : fixedY
     }
     nodes.push(node)
     nodeMap.set(g.id, node)
   })
 
-  // Add objects
+  // Track shards and their nodes (a shard can be on multiple nodes during migration)
+  const shardToNodes = new Map() // shardId -> Set of nodeIds
+
+  // Add objects and track their shards
   graphData.goverse_objects.forEach(obj => {
     const existingPos = positionMap.get(obj.id)
     const node = {
@@ -450,14 +554,67 @@ function updateGraphIncremental() {
     nodes.push(node)
     nodeMap.set(obj.id, node)
 
-    // Create link from object to its node
-    if (obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
+    // Track which nodes have objects for each shard
+    if (obj.shard_id !== undefined && obj.goverse_node_id) {
+      if (!shardToNodes.has(obj.shard_id)) {
+        shardToNodes.set(obj.shard_id, new Set())
+      }
+      shardToNodes.get(obj.shard_id).add(obj.goverse_node_id)
+    }
+  })
+
+  // Create shard nodes and object-to-shard links
+  const shardNodeMap = new Map()
+  graphData.goverse_objects.forEach(obj => {
+    if (obj.shard_id !== undefined) {
+      const shardId = `shard-${obj.shard_id}`
+      
+      // Create shard node if not exists
+      if (!shardNodeMap.has(shardId)) {
+        const existingPos = positionMap.get(shardId)
+        const shardNode = {
+          id: shardId,
+          label: `S${obj.shard_id}`,
+          nodeType: NODE_TYPE_SHARD,
+          shardId: obj.shard_id,
+          // Preserve position if exists
+          x: existingPos ? existingPos.x : undefined,
+          y: existingPos ? existingPos.y : undefined,
+          vx: existingPos ? existingPos.vx : undefined,
+          vy: existingPos ? existingPos.vy : undefined,
+          fx: existingPos ? existingPos.fx : undefined,
+          fy: existingPos ? existingPos.fy : undefined
+        }
+        nodes.push(shardNode)
+        nodeMap.set(shardId, shardNode)
+        shardNodeMap.set(shardId, shardNode)
+      }
+
+      // Link object to shard
       links.push({
         source: obj.id,
-        target: obj.goverse_node_id,
-        type: 'object-node'
+        target: shardId,
+        type: 'object-shard',
+        color: '#9C27B0' // Purple for object-to-shard
       })
     }
+  })
+
+  // Create shard-to-node links
+  shardToNodes.forEach((nodeIds, shardId) => {
+    const shardNodeId = `shard-${shardId}`
+    const isMultiNode = nodeIds.size > 1 // Shard split across multiple nodes (error state)
+    
+    nodeIds.forEach(nodeId => {
+      if (nodeMap.has(nodeId)) {
+        links.push({
+          source: shardNodeId,
+          target: nodeId,
+          type: 'shard-node',
+          color: isMultiNode ? '#F44336' : '#FFA726' // Red if split, orange otherwise
+        })
+      }
+    })
   })
 
   // Add node-to-node links - only when there are actual connections
@@ -592,6 +749,26 @@ function updateGraphIncremental() {
       el.append('polygon')
         .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
         .attr('fill', getNodeColor(d))
+    } else if (shape === 'hexagon') {
+      // Hexagon shape for shards
+      const hexPoints = []
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 2
+        hexPoints.push(`${r * Math.cos(angle)},${r * Math.sin(angle)}`)
+      }
+      el.append('polygon')
+        .attr('points', hexPoints.join(' '))
+        .attr('fill', getNodeColor(d))
+      // Add shard label
+      el.append('text')
+        .attr('class', 'shard-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', 'white')
+        .attr('font-size', '9px')
+        .attr('font-weight', 'bold')
+        .attr('pointer-events', 'none')
+        .text(d.label)
     } else {
       el.append('circle')
         .attr('r', r)
@@ -618,7 +795,7 @@ function updateGraphIncremental() {
     const shape = getNodeShape(d)
     if (shape === 'square') {
       el.select('rect').attr('fill', getNodeColor(d))
-    } else if (shape === 'diamond') {
+    } else if (shape === 'diamond' || shape === 'hexagon') {
       el.select('polygon').attr('fill', getNodeColor(d))
     } else {
       el.select('circle').attr('fill', getNodeColor(d))

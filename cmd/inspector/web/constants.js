@@ -3,6 +3,7 @@
 // Node type constants
 const NODE_TYPE_NODE = 'node'
 const NODE_TYPE_GATE = 'gate'
+const NODE_TYPE_SHARD = 'shard'
 const NODE_TYPE_OBJECT = 'object'
 
 // Animation constants
@@ -17,6 +18,7 @@ const PIE_CHART_SIZE = 200
 const typeColors = {
   node: '#4CAF50',
   gate: '#2196F3',
+  shard: '#9C27B0',
   default: '#999'
 }
 
@@ -76,12 +78,14 @@ function upsertObject(obj) {
 function getNodeRadius(d) {
   if (d.nodeType === NODE_TYPE_NODE) return 25
   if (d.nodeType === NODE_TYPE_GATE) return 22
+  if (d.nodeType === NODE_TYPE_SHARD) return 15
   return d.size ? Math.max(8, Math.min(20, d.size / 2)) : 12
 }
 
 function getNodeColor(d) {
   if (d.nodeType === NODE_TYPE_NODE) return typeColors.node
   if (d.nodeType === NODE_TYPE_GATE) return typeColors.gate
+  if (d.nodeType === NODE_TYPE_SHARD) return typeColors.shard
   // For objects: use explicit color if set, otherwise generate from type
   return d.color || (d.type ? stringToColor(d.type) : typeColors.default)
 }
@@ -89,5 +93,6 @@ function getNodeColor(d) {
 function getNodeShape(d) {
   if (d.nodeType === NODE_TYPE_NODE) return 'square'
   if (d.nodeType === NODE_TYPE_GATE) return 'diamond'
+  if (d.nodeType === NODE_TYPE_SHARD) return 'hexagon'
   return 'circle'
 }
