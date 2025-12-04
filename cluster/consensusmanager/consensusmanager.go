@@ -334,15 +334,18 @@ func (cm *ConsensusManager) GetNumShards() int {
 }
 
 // notifyStateChanged notifies all listeners about cluster state changes
+// Uses taskpool to avoid blocking the caller and prevent deadlocks
 func (cm *ConsensusManager) notifyStateChanged() {
-	cm.listenersMu.RLock()
-	listeners := make([]StateChangeListener, len(cm.listeners))
-	copy(listeners, cm.listeners)
-	cm.listenersMu.RUnlock()
+	taskpool.Submit(func(ctx context.Context) {
+		cm.listenersMu.RLock()
+		listeners := make([]StateChangeListener, len(cm.listeners))
+		copy(listeners, cm.listeners)
+		cm.listenersMu.RUnlock()
 
-	for _, listener := range listeners {
-		listener.OnClusterStateChanged()
-	}
+		for _, listener := range listeners {
+			listener.OnClusterStateChanged()
+		}
+	})
 }
 
 // UpdateShardMetrics updates the Prometheus metrics for shard counts per node
@@ -501,12 +504,7 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Node added: %s", nodeAddress)
 		cm.mu.Unlock()
-
-		// Asynchronously notify listeners after releasing lock to prevent deadlocks
-		// Notifications may arrive out of order if rapid changes occur
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 
 	case clientv3.EventTypeDelete:
 		// Extract node address from the key
@@ -516,12 +514,7 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Node removed: %s", nodeAddress)
 		cm.mu.Unlock()
-
-		// Asynchronously notify listeners after releasing lock to prevent deadlocks
-		// Notifications may arrive out of order if rapid changes occur
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 	default:
 		cm.mu.Unlock()
 	}
@@ -538,12 +531,7 @@ func (cm *ConsensusManager) handleGateEvent(event *clientv3.Event, gatesPrefix s
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Gate added: %s", gateAddress)
 		cm.mu.Unlock()
-
-		// Asynchronously notify listeners after releasing lock to prevent deadlocks
-		// Notifications may arrive out of order if rapid changes occur
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 
 	case clientv3.EventTypeDelete:
 		// Extract gate address from the key
@@ -553,12 +541,7 @@ func (cm *ConsensusManager) handleGateEvent(event *clientv3.Event, gatesPrefix s
 		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Gate removed: %s", gateAddress)
 		cm.mu.Unlock()
-
-		// Asynchronously notify listeners after releasing lock to prevent deadlocks
-		// Notifications may arrive out of order if rapid changes occur
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 	default:
 		cm.mu.Unlock()
 	}
@@ -595,20 +578,14 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		// Update state in memory while holding lock
 		cm.state.ShardMapping.Shards[shardID] = newShardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, newShardInfo.TargetNode, newShardInfo.CurrentNode)
-		// Asynchronously notify listeners to prevent deadlocks
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 	} else if event.Type == clientv3.EventTypeDelete {
 		if event.Kv.ModRevision <= cm.state.ShardMapping.Shards[shardID].ModRevision {
 			return
 		}
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
-		// Asynchronously notify listeners to prevent deadlocks
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 	}
 }
 
@@ -1012,9 +989,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 	// Notify listeners about state changes if any shards were successfully stored
 	if successCount > 0 {
-		taskpool.Submit(func(ctx context.Context) {
-			cm.notifyStateChanged()
-		})
+		cm.notifyStateChanged()
 	}
 
 	if firstError != nil {
