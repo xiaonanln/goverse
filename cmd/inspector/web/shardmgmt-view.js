@@ -14,6 +14,19 @@ let recentlyMovedShards = new Map()
 // Track shards that were migrating in previous state (for detecting completion)
 let previousMigratingShards = new Map() // shardId -> targetNode
 
+// Calculate proportional badge scale based on object count
+// Returns a scale factor between 0.85 (min) and 1.4 (max)
+function getShardBadgeScale(objectCount, maxObjectCount) {
+  const minScale = 0.85
+  const maxScale = 1.4
+  
+  if (maxObjectCount <= 0) return 1.0
+  
+  // Use square root for more balanced scaling (prevents huge badges)
+  const ratio = Math.sqrt(objectCount) / Math.sqrt(maxObjectCount)
+  return minScale + ratio * (maxScale - minScale)
+}
+
 // Detect migration completions by comparing new state with previous state
 function detectMigrationCompletions(newShards) {
   if (!newShards) return
@@ -121,6 +134,9 @@ function renderShardManagementView(container) {
   // Sort nodes by ID
   const sortedNodes = nodes.slice().sort()
 
+  // Calculate max object count for proportional sizing
+  const maxObjectCount = Math.max(1, ...shards.map(s => s.object_count || 0))
+
   // Build HTML
   let html = `
     <div class="shardmgmt-header">
@@ -135,7 +151,7 @@ function renderShardManagementView(container) {
 
   // Render Unclaimed box first (only if there are unclaimed shards)
   if (unassignedShards.length > 0) {
-    html += renderUnassignedBox(unassignedShards)
+    html += renderUnassignedBox(unassignedShards, maxObjectCount)
   }
 
   // Render each node as a full-row box
@@ -173,6 +189,10 @@ function renderShardManagementView(container) {
                 const objectCount = shard.object_count || 0
                 const objectText = objectCount === 1 ? 'object' : 'objects'
                 
+                // Calculate proportional size (scale 0.85 to 1.4 based on object count)
+                const sizeScale = getShardBadgeScale(objectCount, maxObjectCount)
+                const sizeStyle = `font-size: ${sizeScale}em; padding: ${3 * sizeScale}px ${6 * sizeScale}px;`
+                
                 if (!shard.target_node) {
                   shardClass = 'shard-badge no-target'
                   shardTitle = `Shard #${shard.shard_id} (no target assigned) - ${objectCount} ${objectText}`
@@ -188,7 +208,7 @@ function renderShardManagementView(container) {
                   shardClass += ' highlight'
                 }
                 
-                return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
+                return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" style="${sizeStyle}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
               }).join('')}
             </div>
           ` : `
@@ -206,7 +226,7 @@ function renderShardManagementView(container) {
 }
 
 // Render the Unclaimed shards box
-function renderUnassignedBox(unassignedShards) {
+function renderUnassignedBox(unassignedShards, maxObjectCount) {
   // Sort shards by shard ID
   unassignedShards.sort((a, b) => a.shard_id - b.shard_id)
 
@@ -229,7 +249,12 @@ function renderUnassignedBox(unassignedShards) {
                 ? `Shard #${shard.shard_id} (target: ${shard.target_node}) - ${objectCount} ${objectText}`
                 : `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
               const shardClass = shard.target_node ? 'shard-badge migrating' : 'shard-badge unassigned'
-              return `<span class="${shardClass}" title="${shardTitle}">#${shard.shard_id}</span>`
+              
+              // Calculate proportional size
+              const sizeScale = getShardBadgeScale(objectCount, maxObjectCount)
+              const sizeStyle = `font-size: ${sizeScale}em; padding: ${3 * sizeScale}px ${6 * sizeScale}px;`
+              
+              return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" style="${sizeStyle}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
             }).join('')}
           </div>
         ` : `
