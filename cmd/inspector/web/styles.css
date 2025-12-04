@@ -170,8 +170,8 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
   filter: brightness(1.2);
 }
 .graph-link {
-  stroke: #999;
-  stroke-opacity: 0.6;
+  /* stroke color set by JavaScript */
+  /* stroke-opacity set by JavaScript */
 }
 .node-label {
   font-size: 14px;
