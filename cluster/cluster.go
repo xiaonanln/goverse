@@ -775,13 +775,9 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 	nodeAddr := c.node.GetAdvertiseAddress()
 	c.logger.Infof("Registered gate connection for %s", gateAddr)
 
-	// Set metric to current gate count in background
+	// Set metric and notify inspector in background
 	taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
 		metrics.SetNodeConnectedGates(nodeAddr, gateCount)
-	})
-
-	// Notify inspector that registered gates have changed in background
-	taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
 		c.node.NotifyRegisteredGatesChanged()
 	})
 
@@ -806,13 +802,9 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 			nodeAddr := c.node.GetAdvertiseAddress()
 			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
 
-			// Set metric to current gate count in background
+			// Set metric and notify inspector in background
 			taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
 				metrics.SetNodeConnectedGates(nodeAddr, gateCount)
-			})
-
-			// Notify inspector that registered gates have changed in background
-			taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
 				c.node.NotifyRegisteredGatesChanged()
 			})
 		} else {

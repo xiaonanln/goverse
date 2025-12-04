@@ -202,7 +202,7 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shard
 	// If connected, send the notification in background
 	if shouldNotify {
 		taskpool.SubmitByKey(im.address, func(ctx context.Context) {
-			im.addOrUpdateObject(objectID, objectType, shardID)
+			im.addOrUpdateObject(ctx, objectID, objectType, shardID)
 		})
 	}
 }
@@ -226,7 +226,7 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 	// If connected, send the removal notification in background
 	if shouldNotify {
 		taskpool.SubmitByKey(im.address, func(ctx context.Context) {
-			im.removeObject(objectID)
+			im.removeObject(ctx, objectID)
 		})
 	}
 }
@@ -409,7 +409,7 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 
 // addOrUpdateObject sends an AddOrUpdateObject RPC to the Inspector without holding a lock.
 // This method is safe to call from background goroutines.
-func (im *InspectorManager) addOrUpdateObject(objectID, objectType string, shardID int) {
+func (im *InspectorManager) addOrUpdateObject(ctx context.Context, objectID, objectType string, shardID int) {
 	im.mu.RLock()
 	client := im.client
 	im.mu.RUnlock()
@@ -427,10 +427,10 @@ func (im *InspectorManager) addOrUpdateObject(objectID, objectType string, shard
 		NodeAddress: im.address,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := client.AddOrUpdateObject(ctx, req)
+	_, err := client.AddOrUpdateObject(rpcCtx, req)
 	if err != nil {
 		im.logger.Warnf("Failed to register object %s with inspector: %v", objectID, err)
 		return
@@ -441,7 +441,7 @@ func (im *InspectorManager) addOrUpdateObject(objectID, objectType string, shard
 
 // removeObject sends a RemoveObject RPC to the Inspector without holding a lock.
 // This method is safe to call from background goroutines.
-func (im *InspectorManager) removeObject(objectID string) {
+func (im *InspectorManager) removeObject(ctx context.Context, objectID string) {
 	im.mu.RLock()
 	client := im.client
 	im.mu.RUnlock()
@@ -455,10 +455,10 @@ func (im *InspectorManager) removeObject(objectID string) {
 		NodeAddress: im.address,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := client.RemoveObject(ctx, req)
+	_, err := client.RemoveObject(rpcCtx, req)
 	if err != nil {
 		im.logger.Warnf("Failed to remove object %s from inspector: %v", objectID, err)
 		return
