@@ -138,7 +138,9 @@ function buildGraphNodesAndLinks() {
       label: n.label || n.id,
       nodeType: NODE_TYPE_NODE,
       advertiseAddr: n.advertise_addr,
-      color: n.color
+      color: n.color,
+      objectCount: n.object_count || 0,
+      connectedNodes: n.connected_nodes || []
     }
     nodes.push(node)
     nodeMap.set(n.id, node)
@@ -376,6 +378,8 @@ function updateGraphIncremental() {
       nodeType: NODE_TYPE_NODE,
       advertiseAddr: n.advertise_addr,
       color: n.color,
+      objectCount: n.object_count || 0,
+      connectedNodes: n.connected_nodes || [],
       // Preserve position if exists
       x: existingPos ? existingPos.x : undefined,
       y: existingPos ? existingPos.y : undefined,
