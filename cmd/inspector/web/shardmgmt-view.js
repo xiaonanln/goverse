@@ -54,19 +54,23 @@ function renderShardManagementView(container) {
 
   // Group shards by node
   // Display each shard under its CurrentNode (where it currently resides)
-  // If CurrentNode is not set, fall back to TargetNode
+  // Shards without a CurrentNode go to "Unassigned"
   const shardsByNode = {}
+  const unassignedShards = []
+  
   nodes.forEach(node => {
     shardsByNode[node] = []
   })
 
   shards.forEach(shard => {
-    const node = shard.current_node || shard.target_node
-    if (node) {
-      if (!shardsByNode[node]) {
-        shardsByNode[node] = []
+    if (shard.current_node) {
+      if (!shardsByNode[shard.current_node]) {
+        shardsByNode[shard.current_node] = []
       }
-      shardsByNode[node].push(shard)
+      shardsByNode[shard.current_node].push(shard)
+    } else {
+      // No current node - shard is unassigned
+      unassignedShards.push(shard)
     }
   })
 
@@ -80,9 +84,15 @@ function renderShardManagementView(container) {
       <div class="shardmgmt-stats">
         <span class="stat-item"><strong>${nodes.length}</strong> Nodes</span>
         <span class="stat-item"><strong>${shards.length}</strong> Shards</span>
+        ${unassignedShards.length > 0 ? `<span class="stat-item stat-warning"><strong>${unassignedShards.length}</strong> Unclaimed</span>` : ''}
       </div>
     </div>
   `
+
+  // Render Unclaimed box first (only if there are unclaimed shards)
+  if (unassignedShards.length > 0) {
+    html += renderUnassignedBox(unassignedShards)
+  }
 
   // Render each node as a full-row box
   sortedNodes.forEach(nodeId => {
@@ -134,6 +144,41 @@ function renderShardManagementView(container) {
   
   // Add drag and drop event listeners
   setupDragAndDrop()
+}
+
+// Render the Unclaimed shards box
+function renderUnassignedBox(unassignedShards) {
+  // Sort shards by shard ID
+  unassignedShards.sort((a, b) => a.shard_id - b.shard_id)
+
+  return `
+    <div class="node-box unassigned-box" data-node-id="">
+      <div class="node-box-header" style="background: #757575">
+        <div class="node-box-title">
+          <span class="node-icon">⚠️</span>
+          <span class="node-id">Unclaimed</span>
+        </div>
+        <div class="node-box-shard-count">${unassignedShards.length} shards</div>
+      </div>
+      <div class="node-box-content">
+        ${unassignedShards.length > 0 ? `
+          <div class="shard-list">
+            ${unassignedShards.map(shard => {
+              const objectCount = shard.object_count || 0
+              const objectText = objectCount === 1 ? 'object' : 'objects'
+              const shardTitle = shard.target_node 
+                ? `Shard #${shard.shard_id} (target: ${shard.target_node}) - ${objectCount} ${objectText}`
+                : `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
+              const shardClass = shard.target_node ? 'shard-badge migrating' : 'shard-badge unassigned'
+              return `<span class="${shardClass}" title="${shardTitle}">#${shard.shard_id}</span>`
+            }).join('')}
+          </div>
+        ` : `
+          <div class="node-box-empty">All shards are claimed by nodes</div>
+        `}
+      </div>
+    </div>
+  `
 }
 
 // Setup drag and drop event listeners

@@ -666,3 +666,26 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 .modal-btn.cancel:hover {
   background: #e0e0e0;
 }
+
+/* Shard Management View Styles */
+.unassigned-box {
+  border: 2px dashed #757575 !important;
+  background: #fafafa;
+}
+
+.unassigned-box .node-box-header {
+  background: #757575 !important;
+}
+
+.shard-badge.unassigned {
+  background: #9e9e9e;
+  color: white;
+}
+
+.stat-warning {
+  color: #f57c00;
+}
+
+.stat-warning strong {
+  color: #e65100;
+}
