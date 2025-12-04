@@ -481,11 +481,12 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Prepare update: set TargetNode to the new node, keep CurrentNode unchanged
+	// Prepare update: set TargetNode to the new node, keep CurrentNode and Flags unchanged
 	updateShards := make(map[int]consensusmanager.ShardInfo)
 	updateShards[req.ShardID] = consensusmanager.ShardInfo{
 		TargetNode:  req.TargetNode,
 		CurrentNode: currentShardInfo.CurrentNode,
+		Flags:       currentShardInfo.Flags,
 		ModRevision: currentShardInfo.ModRevision,
 	}
 
