@@ -178,6 +178,9 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 	// Shard mapping endpoint
 	mux.HandleFunc("/shards", s.handleShardMapping)
 
+	// Shard move endpoint
+	mux.HandleFunc("/shards/move", s.handleShardMove)
+
 	// SSE endpoint for push-based updates
 	mux.HandleFunc("/events/stream", s.handleEventsStream)
 
@@ -426,6 +429,94 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+// handleShardMove handles POST /shards/move for moving a shard to a different node
+func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// If consensus manager is not available, return error
+	if s.consensusManager == nil {
+		http.Error(w, "Consensus manager not available. Start inspector with --etcd-addr flag.", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Parse request body
+	type MoveShardRequest struct {
+		ShardID    int    `json:"shard_id"`
+		TargetNode string `json:"target_node"`
+	}
+
+	var req MoveShardRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Validate shard ID
+	if req.ShardID < 0 || req.ShardID >= s.consensusManager.GetNumShards() {
+		http.Error(w, fmt.Sprintf("Invalid shard ID: %d", req.ShardID), http.StatusBadRequest)
+		return
+	}
+
+	// Validate target node is not empty
+	if req.TargetNode == "" {
+		http.Error(w, "Target node cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Get current shard mapping
+	shardMapping := s.consensusManager.GetShardMapping()
+	if shardMapping == nil {
+		http.Error(w, "Shard mapping not available", http.StatusInternalServerError)
+		return
+	}
+
+	currentShardInfo, exists := shardMapping.Shards[req.ShardID]
+	if !exists {
+		http.Error(w, fmt.Sprintf("Shard %d not found in mapping", req.ShardID), http.StatusNotFound)
+		return
+	}
+
+	// Prepare update: set TargetNode to the new node, keep CurrentNode unchanged
+	updateShards := make(map[int]consensusmanager.ShardInfo)
+	updateShards[req.ShardID] = consensusmanager.ShardInfo{
+		TargetNode:  req.TargetNode,
+		CurrentNode: currentShardInfo.CurrentNode,
+		ModRevision: currentShardInfo.ModRevision,
+	}
+
+	// Use a timeout context for the etcd operation
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Store the updated shard mapping
+	successCount, err := s.consensusManager.StoreShardMapping(ctx, updateShards)
+	if err != nil {
+		log.Printf("Failed to move shard %d to node %s: %v", req.ShardID, req.TargetNode, err)
+		http.Error(w, fmt.Sprintf("Failed to move shard: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if successCount == 0 {
+		http.Error(w, "Failed to move shard: no shards updated", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Shard %d moved to target node %s", req.ShardID, req.TargetNode)
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"success":     true,
+		"shard_id":    req.ShardID,
+		"target_node": req.TargetNode,
+		"message":     fmt.Sprintf("Shard %d target updated to %s", req.ShardID, req.TargetNode),
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // Shutdown initiates graceful shutdown of all servers

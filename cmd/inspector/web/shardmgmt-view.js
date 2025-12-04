@@ -4,6 +4,10 @@
 // Global state for shard management data
 let shardManagementData = { shards: [], nodes: [] }
 
+// Drag state
+let draggedShardId = null
+let draggedSourceNode = null
+
 // Update shard management view
 function updateShardManagementView() {
   const container = document.getElementById('shardmgmt-container')
@@ -121,4 +125,176 @@ function renderShardManagementView(container) {
   })
 
   container.innerHTML = html
+  
+  // Add drag and drop event listeners
+  setupDragAndDrop()
+}
+
+// Setup drag and drop event listeners
+function setupDragAndDrop() {
+  // Make shard badges draggable
+  const shardBadges = document.querySelectorAll('.shard-badge')
+  shardBadges.forEach(badge => {
+    badge.draggable = true
+    badge.classList.add('draggable')
+    
+    badge.addEventListener('dragstart', handleDragStart)
+    badge.addEventListener('dragend', handleDragEnd)
+  })
+  
+  // Make node boxes drop targets
+  const nodeBoxes = document.querySelectorAll('.node-box')
+  nodeBoxes.forEach(box => {
+    const content = box.querySelector('.node-box-content')
+    if (content) {
+      content.classList.add('drop-target')
+      content.addEventListener('dragover', handleDragOver)
+      content.addEventListener('dragleave', handleDragLeave)
+      content.addEventListener('drop', handleDrop)
+    }
+  })
+}
+
+// Handle drag start
+function handleDragStart(e) {
+  const badge = e.target
+  const title = badge.getAttribute('title')
+  
+  // Parse shard ID from title (format: "Shard #123 - X objects")
+  const match = title.match(/Shard #(\d+)/)
+  if (!match) return
+  
+  draggedShardId = parseInt(match[1])
+  
+  // Find the source node
+  const nodeBox = badge.closest('.node-box')
+  if (nodeBox) {
+    draggedSourceNode = nodeBox.getAttribute('data-node-id')
+  }
+  
+  badge.classList.add('dragging')
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', draggedShardId)
+}
+
+// Handle drag end
+function handleDragEnd(e) {
+  e.target.classList.remove('dragging')
+  
+  // Clean up any drag-over states
+  document.querySelectorAll('.drag-over').forEach(el => {
+    el.classList.remove('drag-over')
+  })
+}
+
+// Handle drag over
+function handleDragOver(e) {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  
+  const dropTarget = e.currentTarget
+  dropTarget.classList.add('drag-over')
+}
+
+// Handle drag leave
+function handleDragLeave(e) {
+  const dropTarget = e.currentTarget
+  dropTarget.classList.remove('drag-over')
+}
+
+// Handle drop
+function handleDrop(e) {
+  e.preventDefault()
+  
+  const dropTarget = e.currentTarget
+  dropTarget.classList.remove('drag-over')
+  
+  // Find the target node ID
+  const nodeBox = dropTarget.closest('.node-box')
+  if (!nodeBox) return
+  
+  const targetNode = nodeBox.getAttribute('data-node-id')
+  
+  // Don't do anything if dropped on the same node
+  if (targetNode === draggedSourceNode) {
+    console.log('Dropped on same node, no action needed')
+    return
+  }
+  
+  // Show confirmation modal
+  showShardMoveConfirmation(draggedShardId, draggedSourceNode, targetNode)
+}
+
+// Show confirmation modal for shard movement
+function showShardMoveConfirmation(shardId, sourceNode, targetNode) {
+  const modal = document.getElementById('shard-move-modal')
+  const modalBody = document.getElementById('modal-body-text')
+  const confirmBtn = document.getElementById('modal-confirm')
+  const cancelBtn = document.getElementById('modal-cancel')
+  
+  modalBody.innerHTML = `
+    <p>Are you sure you want to move shard <strong>#${shardId}</strong>?</p>
+    <p>From: <code>${sourceNode}</code></p>
+    <p>To: <code>${targetNode}</code></p>
+    <p><em>This will update the target node in etcd. The shard will migrate once the target node claims it.</em></p>
+  `
+  
+  // Remove old event listeners by cloning buttons
+  const newConfirmBtn = confirmBtn.cloneNode(true)
+  const newCancelBtn = cancelBtn.cloneNode(true)
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn)
+  cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn)
+  
+  // Add new event listeners
+  newConfirmBtn.addEventListener('click', () => {
+    modal.classList.remove('visible')
+    moveShardToNode(shardId, targetNode)
+  })
+  
+  newCancelBtn.addEventListener('click', () => {
+    modal.classList.remove('visible')
+  })
+  
+  // Show modal
+  modal.classList.add('visible')
+  
+  // Close modal on overlay click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('visible')
+    }
+  })
+}
+
+// Move shard to target node via API
+function moveShardToNode(shardId, targetNode) {
+  fetch('/shards/move', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      shard_id: shardId,
+      target_node: targetNode
+    })
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.text().then(text => {
+        throw new Error(text || `HTTP error ${response.status}`)
+      })
+    }
+    return response.json()
+  })
+  .then(data => {
+    console.log('Shard moved successfully:', data)
+    // Show success message (optional - could add a toast notification)
+    alert(`Shard #${shardId} target updated to ${targetNode}. Migration will start automatically.`)
+    // Refresh the view
+    updateShardManagementView()
+  })
+  .catch(error => {
+    console.error('Failed to move shard:', error)
+    alert(`Failed to move shard: ${error.message}`)
+  })
 }

@@ -1242,6 +1242,14 @@ func (cm *ConsensusManager) ReassignShardTargetNodes(ctx context.Context) (int, 
 	return n, err
 }
 
+// StoreShardMapping stores shard mapping updates in etcd.
+// This is an exported wrapper around storeShardMapping for use by external components (e.g., inspector).
+// It allows manual shard assignment by updating TargetNode fields.
+// Returns the number of shards successfully updated and any error encountered.
+func (cm *ConsensusManager) StoreShardMapping(ctx context.Context, updateShards map[int]ShardInfo) (int, error) {
+	return cm.storeShardMapping(ctx, updateShards)
+}
+
 // RebalanceShards checks if all shards are assigned and rebalances if there's significant imbalance.
 // If all shards are assigned, finds the node with max shards (a) and min shards (b).
 // If a >= b + 2 and the imbalance exceeds 20% of the ideal load per node, migrates shards
