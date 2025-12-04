@@ -126,27 +126,27 @@ func generateConfig(filename string, numNodes, numGates int, withInspector bool)
 		sb.WriteString("# Inspector service configuration for monitoring and debugging (optional)\n")
 		sb.WriteString("# The inspector provides a web UI for visualizing the cluster topology\n")
 		sb.WriteString("inspector:\n")
-		sb.WriteString("  # gRPC server address for inspector API (default: \"127.0.0.1:8081\")\n")
-		sb.WriteString("  grpc_addr: \"127.0.0.1:8081\"\n")
+		sb.WriteString("  # gRPC server address for inspector API (default: \"127.0.0.1:9081\")\n")
+		sb.WriteString("  grpc_addr: \"127.0.0.1:9081\"\n")
 		sb.WriteString("  \n")
 		sb.WriteString("  # HTTP server address for inspector web UI (default: \"127.0.0.1:8080\")\n")
 		sb.WriteString("  http_addr: \"127.0.0.1:8080\"\n")
 		sb.WriteString("  \n")
-		sb.WriteString("  # Address that nodes and gates use to connect to inspector (default: \"localhost:8081\")\n")
-		sb.WriteString("  advertise_addr: \"localhost:8081\"\n")
+		sb.WriteString("  # Address that nodes and gates use to connect to inspector (default: \"localhost:9081\")\n")
+		sb.WriteString("  advertise_addr: \"localhost:9081\"\n")
 		sb.WriteString("\n")
 	} else {
 		sb.WriteString("# Inspector service configuration (optional)\n")
 		sb.WriteString("# Uncomment to enable the inspector service for monitoring and debugging\n")
 		sb.WriteString("# inspector:\n")
-		sb.WriteString("#   # gRPC server address for inspector API (default: \"127.0.0.1:8081\")\n")
-		sb.WriteString("#   grpc_addr: \"127.0.0.1:8081\"\n")
+		sb.WriteString("#   # gRPC server address for inspector API (default: \"127.0.0.1:9081\")\n")
+		sb.WriteString("#   grpc_addr: \"127.0.0.1:9081\"\n")
 		sb.WriteString("#   \n")
 		sb.WriteString("#   # HTTP server address for inspector web UI (default: \"127.0.0.1:8080\")\n")
 		sb.WriteString("#   http_addr: \"127.0.0.1:8080\"\n")
 		sb.WriteString("#   \n")
-		sb.WriteString("#   # Address that nodes and gates use to connect to inspector (default: \"localhost:8081\")\n")
-		sb.WriteString("#   advertise_addr: \"localhost:8081\"\n")
+		sb.WriteString("#   # Address that nodes and gates use to connect to inspector (default: \"localhost:9081\")\n")
+		sb.WriteString("#   advertise_addr: \"localhost:9081\"\n")
 		sb.WriteString("\n")
 	}
 
@@ -259,34 +259,38 @@ func printUsageInstructions(filename string, numNodes, numGates int, withInspect
 	fmt.Println("   - Or update the etcd endpoints in the config file")
 	fmt.Println()
 
+	stepNum := 2
+	
 	// Starting inspector
 	if withInspector {
-		fmt.Println("2. Start the Inspector (optional, for monitoring):")
+		fmt.Printf("%d. Start the Inspector (optional, for monitoring):\n", stepNum)
 		fmt.Println("   go run ./cmd/inspector/")
 		fmt.Println()
+		stepNum++
 	}
 
 	// Starting nodes
 	if numNodes == 1 {
-		fmt.Printf("2. Start the Node:\n")
+		fmt.Printf("%d. Start the Node:\n", stepNum)
 		fmt.Printf("   go run <your-app> --config %s --node-id node-1\n", filename)
 		fmt.Println()
 	} else {
-		fmt.Printf("2. Start the Nodes (in separate terminals):\n")
+		fmt.Printf("%d. Start the Nodes (in separate terminals):\n", stepNum)
 		for i := 1; i <= numNodes; i++ {
 			fmt.Printf("   Terminal %d: go run <your-app> --config %s --node-id node-%d\n", i, filename, i)
 		}
 		fmt.Println()
 	}
+	stepNum++
 
 	// Starting gates
 	if numGates > 0 {
 		if numGates == 1 {
-			fmt.Printf("3. Start the Gate:\n")
+			fmt.Printf("%d. Start the Gate:\n", stepNum)
 			fmt.Printf("   go run ./cmd/gate/ --config %s --gate-id gate-1\n", filename)
 			fmt.Println()
 		} else {
-			fmt.Printf("3. Start the Gates (in separate terminals):\n")
+			fmt.Printf("%d. Start the Gates (in separate terminals):\n", stepNum)
 			for i := 1; i <= numGates; i++ {
 				fmt.Printf("   Terminal %d: go run ./cmd/gate/ --config %s --gate-id gate-%d\n", i, filename, i)
 			}
