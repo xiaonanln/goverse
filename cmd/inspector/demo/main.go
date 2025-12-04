@@ -97,9 +97,9 @@ func main() {
 		openBrowser(httpURL)
 	}
 
-	// Start background goroutine to simulate dynamic updates
+	// Start background goroutine to simulate shard migrations
 	ctx, cancel := context.WithCancel(context.Background())
-	go simulateDynamicUpdates(ctx, pg, *numNodes, *numShards)
+	go simulateShardMigrations(ctx, server, *etcdAddr, *etcdPrefix)
 
 	// Wait for shutdown signal
 	<-sigChan
@@ -449,5 +449,76 @@ func openBrowser(url string) {
 	if err := cmd.Start(); err != nil {
 		log.Printf("Failed to open browser: %v", err)
 		log.Printf("Please open %s manually", url)
+	}
+}
+
+// simulateShardMigrations watches for shard migrations (TargetNode != CurrentNode)
+// and automatically completes them after a delay to simulate the migration process
+func simulateShardMigrations(ctx context.Context, server *inspectserver.InspectorServer, etcdAddr, etcdPrefix string) {
+	// Connect to etcd
+	mgr, err := etcdmanager.NewEtcdManager(etcdAddr, etcdPrefix)
+	if err != nil {
+		log.Printf("[Migration Simulator] Failed to create etcd manager: %v", err)
+		return
+	}
+	if err := mgr.Connect(); err != nil {
+		log.Printf("[Migration Simulator] Failed to connect to etcd: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Get consensus manager from server
+			cm := server.GetConsensusManager()
+			if cm == nil {
+				continue
+			}
+
+			// Check for shards that need migration (TargetNode != CurrentNode)
+			shardMapping := cm.GetShardMapping()
+			if shardMapping == nil {
+				continue
+			}
+
+			for shardID, shardInfo := range shardMapping.Shards {
+				if shardInfo.TargetNode != "" && shardInfo.CurrentNode != shardInfo.TargetNode {
+					// Simulate migration delay (2-5 seconds)
+					migrationDelay := time.Duration(2+rand.Intn(3)) * time.Second
+
+					// Do the migration in a goroutine to not block the ticker
+					go func(sid int, targetNode, currentNode string, flags []string) {
+						time.Sleep(migrationDelay)
+
+						log.Printf("[Demo] Simulating shard %d migration completion: %s → %s",
+							sid, currentNode, targetNode)
+
+						// Use etcd directly to update CurrentNode to match TargetNode
+						key := fmt.Sprintf("%s/shard/%d", etcdPrefix, sid)
+						value := fmt.Sprintf("%s,%s", targetNode, targetNode)
+						if len(flags) > 0 {
+							for _, flag := range flags {
+								value += "," + flag
+							}
+						}
+
+						updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer cancel()
+
+						if err := mgr.Put(updateCtx, key, value); err != nil {
+							log.Printf("[Demo] Failed to complete shard %d migration: %v", sid, err)
+						} else {
+							log.Printf("[Demo] Completed shard %d migration to %s", sid, targetNode)
+						}
+					}(shardID, shardInfo.TargetNode, shardInfo.CurrentNode, shardInfo.Flags)
+				}
+			}
+		}
 	}
 }
