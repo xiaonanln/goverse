@@ -566,11 +566,16 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 /* Drag and Drop styles */
 .shard-badge.draggable {
   cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .shard-badge.dragging {
   opacity: 0.5;
   cursor: grabbing;
+  user-select: none;
 }
 
 .node-box.drag-over {

@@ -144,6 +144,11 @@ function setupDragAndDrop() {
     badge.draggable = true
     badge.classList.add('draggable')
     
+    // Prevent text selection during drag without blocking drag
+    badge.addEventListener('selectstart', (e) => {
+      e.preventDefault()
+    })
+    
     badge.addEventListener('dragstart', handleDragStart)
     badge.addEventListener('dragend', handleDragEnd)
   })
