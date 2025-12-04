@@ -7,6 +7,7 @@ import (
 
 	"github.com/xiaonanln/goverse/util/clusterinfo"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/taskpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
@@ -187,8 +188,6 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shard
 	}
 
 	im.mu.Lock()
-	defer im.mu.Unlock()
-
 	// Store object info for re-registration on reconnect
 	im.objects[objectID] = &inspector_pb.Object{
 		Id:      objectID,
@@ -196,9 +195,15 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shard
 		ShardId: int32(shardID),
 	}
 
-	// If connected, send the notification immediately
-	if im.connected && im.client != nil {
-		im.addOrUpdateObjectLocked(objectID, objectType, shardID)
+	// Check if we should send notification
+	shouldNotify := im.connected && im.client != nil
+	im.mu.Unlock()
+
+	// If connected, send the notification in background
+	if shouldNotify {
+		taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+			im.addOrUpdateObject(objectID, objectType, shardID)
+		})
 	}
 }
 
@@ -211,14 +216,18 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 	}
 
 	im.mu.Lock()
-	defer im.mu.Unlock()
-
 	// Remove from local tracking
 	delete(im.objects, objectID)
 
-	// If connected, send the removal notification immediately
-	if im.connected && im.client != nil {
-		im.removeObjectLocked(objectID)
+	// Check if we should send notification
+	shouldNotify := im.connected && im.client != nil
+	im.mu.Unlock()
+
+	// If connected, send the removal notification in background
+	if shouldNotify {
+		taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+			im.removeObject(objectID)
+		})
 	}
 }
 
@@ -398,6 +407,66 @@ func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string,
 	im.logger.Infof("Registered object %s with inspector", objectID)
 }
 
+// addOrUpdateObject sends an AddOrUpdateObject RPC to the Inspector without holding a lock.
+// This method is safe to call from background goroutines.
+func (im *InspectorManager) addOrUpdateObject(objectID, objectType string, shardID int) {
+	im.mu.RLock()
+	client := im.client
+	im.mu.RUnlock()
+
+	if client == nil {
+		return
+	}
+
+	req := &inspector_pb.AddOrUpdateObjectRequest{
+		Object: &inspector_pb.Object{
+			Id:      objectID,
+			Class:   objectType,
+			ShardId: int32(shardID),
+		},
+		NodeAddress: im.address,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.AddOrUpdateObject(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to register object %s with inspector: %v", objectID, err)
+		return
+	}
+
+	im.logger.Infof("Registered object %s with inspector", objectID)
+}
+
+// removeObject sends a RemoveObject RPC to the Inspector without holding a lock.
+// This method is safe to call from background goroutines.
+func (im *InspectorManager) removeObject(objectID string) {
+	im.mu.RLock()
+	client := im.client
+	im.mu.RUnlock()
+
+	if client == nil {
+		return
+	}
+
+	req := &inspector_pb.RemoveObjectRequest{
+		ObjectId:    objectID,
+		NodeAddress: im.address,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.RemoveObject(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to remove object %s from inspector: %v", objectID, err)
+		return
+	}
+
+	im.logger.Debugf("Removed object %s from inspector", objectID)
+}
+
 // UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
 // This is called when the component's connections change.
 // The same RPC is used for both nodes and gates - the inspector determines the type based on the address.
@@ -408,17 +477,20 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 		return
 	}
 
-	im.mu.Lock()
-	defer im.mu.Unlock()
+	// Get client and provider without holding lock during RPC
+	im.mu.RLock()
+	client := im.client
+	provider := im.clusterInfoProvider
+	im.mu.RUnlock()
 
-	if im.client == nil {
+	if client == nil {
 		return
 	}
 
 	// Get current connected nodes from cluster info provider
 	var connectedNodes []string
-	if im.clusterInfoProvider != nil {
-		connectedNodes = im.clusterInfoProvider.GetConnectedNodes()
+	if provider != nil {
+		connectedNodes = provider.GetConnectedNodes()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -429,7 +501,7 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 		ConnectedNodes:   connectedNodes,
 	}
 
-	_, err := im.client.UpdateConnectedNodes(ctx, req)
+	_, err := client.UpdateConnectedNodes(ctx, req)
 	if err != nil {
 		im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
 		return
@@ -448,22 +520,26 @@ func (im *InspectorManager) UpdateRegisteredGates() {
 		return
 	}
 
-	im.mu.Lock()
-	defer im.mu.Unlock()
+	// Get client, mode and provider without holding lock during RPC
+	im.mu.RLock()
+	client := im.client
+	mode := im.mode
+	provider := im.clusterInfoProvider
+	im.mu.RUnlock()
 
-	if im.client == nil {
+	if client == nil {
 		return
 	}
 
 	// Only nodes can have registered gates
-	if im.mode != ModeNode {
+	if mode != ModeNode {
 		return
 	}
 
 	// Get current registered gates from cluster info provider
 	var registeredGates []string
-	if im.clusterInfoProvider != nil {
-		registeredGates = im.clusterInfoProvider.GetRegisteredGates()
+	if provider != nil {
+		registeredGates = provider.GetRegisteredGates()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -474,7 +550,7 @@ func (im *InspectorManager) UpdateRegisteredGates() {
 		RegisteredGates:  registeredGates,
 	}
 
-	_, err := im.client.UpdateRegisteredGates(ctx, req)
+	_, err := client.UpdateRegisteredGates(ctx, req)
 	if err != nil {
 		im.logger.Warnf("Failed to update registered gates with inspector: %v", err)
 		return
@@ -493,22 +569,26 @@ func (im *InspectorManager) UpdateGateClients() {
 		return
 	}
 
-	im.mu.Lock()
-	defer im.mu.Unlock()
+	// Get client, mode and provider without holding lock during RPC
+	im.mu.RLock()
+	client := im.client
+	mode := im.mode
+	provider := im.clusterInfoProvider
+	im.mu.RUnlock()
 
-	if im.client == nil {
+	if client == nil {
 		return
 	}
 
 	// Only gates should call this method
-	if im.mode != ModeGate {
+	if mode != ModeGate {
 		return
 	}
 
 	// Get client count from cluster info provider
 	var clientCount int32
-	if im.clusterInfoProvider != nil {
-		clientCount = int32(im.clusterInfoProvider.GetClientCount())
+	if provider != nil {
+		clientCount = int32(provider.GetClientCount())
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -519,7 +599,7 @@ func (im *InspectorManager) UpdateGateClients() {
 		Clients:          clientCount,
 	}
 
-	_, err := im.client.UpdateGateClients(ctx, req)
+	_, err := client.UpdateGateClients(ctx, req)
 	if err != nil {
 		im.logger.Warnf("Failed to update gate clients with inspector: %v", err)
 		return
