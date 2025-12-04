@@ -222,7 +222,7 @@ function buildGraphNodesAndLinks() {
       if (!shardNodeMap.has(shardId)) {
         const shardNode = {
           id: shardId,
-          label: `S${obj.shard_id}`,
+          label: `#${obj.shard_id}`,
           nodeType: NODE_TYPE_SHARD,
           shardId: obj.shard_id
         }
@@ -574,7 +574,7 @@ function updateGraphIncremental() {
         const existingPos = positionMap.get(shardId)
         const shardNode = {
           id: shardId,
-          label: `S${obj.shard_id}`,
+          label: `#${obj.shard_id}`,
           nodeType: NODE_TYPE_SHARD,
           shardId: obj.shard_id,
           // Preserve position if exists
