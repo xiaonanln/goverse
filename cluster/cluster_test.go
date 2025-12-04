@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -272,4 +273,73 @@ func TestClusterString_WithQuorum(t *testing.T) {
 			}
 		})
 	}
+}
+
+
+func TestClusterGetClientCount(t *testing.T) {
+ctx := context.Background()
+
+t.Run("NodeCluster_ReturnsZero", func(t *testing.T) {
+// Create a simple node cluster
+nodeAddr := testutil.GetFreeAddress()
+n := node.NewNode(nodeAddr, testutil.TestNumShards)
+err := n.Start(ctx)
+if err != nil {
+t.Fatalf("Failed to start node: %v", err)
+}
+defer n.Stop(ctx)
+
+// Create minimal cluster
+cluster := &Cluster{
+node:      n,
+numShards: testutil.TestNumShards,
+}
+
+// Node clusters should return 0
+if count := cluster.GetClientCount(); count != 0 {
+t.Errorf("Expected GetClientCount() = 0 for node cluster, got %d", count)
+}
+})
+
+t.Run("GateCluster_ReturnsActualCount", func(t *testing.T) {
+gateAddr := testutil.GetFreeAddress()
+
+// Create gate
+gateConfig := &gate.GateConfig{
+AdvertiseAddress: gateAddr,
+EtcdAddress:      "localhost:2379",
+EtcdPrefix:       "/test-cluster-clientcount",
+}
+
+g, err := gate.NewGate(gateConfig)
+if err != nil {
+t.Fatalf("Failed to create gate: %v", err)
+}
+
+err = g.Start(ctx)
+if err != nil {
+t.Fatalf("Failed to start gate: %v", err)
+}
+defer g.Stop()
+
+// Create minimal gate cluster
+cluster := &Cluster{
+gate:      g,
+numShards: testutil.TestNumShards,
+}
+
+// Initially should have 0 clients
+if count := cluster.GetClientCount(); count != 0 {
+t.Errorf("Expected GetClientCount() = 0 initially, got %d", count)
+}
+
+// Register 2 clients
+_ = g.Register(ctx)
+_ = g.Register(ctx)
+
+// Should have 2 clients now
+if count := cluster.GetClientCount(); count != 2 {
+t.Errorf("Expected GetClientCount() = 2 after registering clients, got %d", count)
+}
+})
 }
