@@ -81,6 +81,31 @@ function showDetailsPanel(d) {
       html += '</div>'
     }
 
+    // Connections
+    if (d.connectedNodes && d.connectedNodes.length > 0) {
+      html += '<div class="detail-section">'
+      html += '<h4>Connections</h4>'
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Connected to:</div>`
+      html += `<div class="detail-value"><span class="detail-badge connected">${d.connectedNodes.length} nodes</span></div>`
+      html += `</div>`
+      html += `<ul class="detail-list">`
+      d.connectedNodes.forEach(addr => {
+        // Try to find the node/gate by address
+        const connectedNode = graphData.goverse_nodes.find(n => n.advertise_addr === addr)
+        const connectedGate = graphData.goverse_gates.find(g => g.advertise_addr === addr)
+        const displayName = connectedNode?.label || connectedGate?.label || addr
+        html += `<li>${displayName}</li>`
+      })
+      html += `</ul>`
+      html += '</div>'
+    } else {
+      html += '<div class="detail-section">'
+      html += '<h4>Connections</h4>'
+      html += `<div class="detail-empty">No connections</div>`
+      html += '</div>'
+    }
+
     // Object count for nodes
     if (d.nodeType === NODE_TYPE_NODE) {
       html += '<div class="detail-section">'
@@ -106,32 +131,28 @@ function showDetailsPanel(d) {
         })
         html += `</div>`
         html += `</div>`
+        
+        // Show all objects sorted by type then id
+        html += `<div class="detail-row">`
+        html += `<div class="detail-label">All Objects:</div>`
+        html += `<div class="detail-value">`
+        html += `<ul class="detail-list">`
+        nodeObjects
+          .sort((a, b) => {
+            const typeA = a.type || 'Unknown'
+            const typeB = b.type || 'Unknown'
+            if (typeA !== typeB) {
+              return typeA.localeCompare(typeB)
+            }
+            return a.id.localeCompare(b.id)
+          })
+          .forEach(obj => {
+            html += `<li><span style="color: #666;">${obj.type || 'Unknown'}:</span> ${obj.id}</li>`
+          })
+        html += `</ul>`
+        html += `</div>`
+        html += `</div>`
       }
-      html += '</div>'
-    }
-
-    // Connections
-    if (d.connectedNodes && d.connectedNodes.length > 0) {
-      html += '<div class="detail-section">'
-      html += '<h4>Connections</h4>'
-      html += `<div class="detail-row">`
-      html += `<div class="detail-label">Connected to:</div>`
-      html += `<div class="detail-value"><span class="detail-badge connected">${d.connectedNodes.length} nodes</span></div>`
-      html += `</div>`
-      html += `<ul class="detail-list">`
-      d.connectedNodes.forEach(addr => {
-        // Try to find the node/gate by address
-        const connectedNode = graphData.goverse_nodes.find(n => n.advertise_addr === addr)
-        const connectedGate = graphData.goverse_gates.find(g => g.advertise_addr === addr)
-        const displayName = connectedNode?.label || connectedGate?.label || addr
-        html += `<li>${displayName}</li>`
-      })
-      html += `</ul>`
-      html += '</div>'
-    } else {
-      html += '<div class="detail-section">'
-      html += '<h4>Connections</h4>'
-      html += `<div class="detail-empty">No connections</div>`
       html += '</div>'
     }
   } else if (d.nodeType === NODE_TYPE_OBJECT) {
