@@ -230,7 +230,6 @@ go run ./cmd/inspector/demo \
 
 ```
 cmd/inspector/
-├── README.md                          # This file
 ├── main.go                           # Inspector entry point
 ├── demo/                             # Demo application
 │   └── main.go
@@ -344,6 +343,6 @@ This is part of the Goverse project. See the main repository LICENSE file for de
 
 ## See Also
 
-- [Goverse Main Documentation](../../README.md)
-- [Shard Drag & Drop Implementation](./SHARD_DRAG_DROP_IMPLEMENTATION.md)
-- [Testing Shard Drag & Drop](./TESTING_SHARD_DRAG_DROP.md)
+- [Goverse Main Documentation](../README.md)
+- [Shard Drag & Drop Implementation](../cmd/inspector/SHARD_DRAG_DROP_IMPLEMENTATION.md)
+- [Testing Shard Drag & Drop](../cmd/inspector/TESTING_SHARD_DRAG_DROP.md)
