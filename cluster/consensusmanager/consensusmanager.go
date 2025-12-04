@@ -18,6 +18,7 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/objectid"
+	"github.com/xiaonanln/goverse/util/taskpool"
 	"github.com/xiaonanln/goverse/util/workerpool"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -503,7 +504,9 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
 		// Notifications may arrive out of order if rapid changes occur
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 
 	case clientv3.EventTypeDelete:
 		// Extract node address from the key
@@ -516,7 +519,9 @@ func (cm *ConsensusManager) handleNodeEvent(event *clientv3.Event, nodesPrefix s
 
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
 		// Notifications may arrive out of order if rapid changes occur
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 	default:
 		cm.mu.Unlock()
 	}
@@ -536,7 +541,9 @@ func (cm *ConsensusManager) handleGateEvent(event *clientv3.Event, gatesPrefix s
 
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
 		// Notifications may arrive out of order if rapid changes occur
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 
 	case clientv3.EventTypeDelete:
 		// Extract gate address from the key
@@ -549,7 +556,9 @@ func (cm *ConsensusManager) handleGateEvent(event *clientv3.Event, gatesPrefix s
 
 		// Asynchronously notify listeners after releasing lock to prevent deadlocks
 		// Notifications may arrive out of order if rapid changes occur
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 	default:
 		cm.mu.Unlock()
 	}
@@ -587,7 +596,9 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		cm.state.ShardMapping.Shards[shardID] = newShardInfo
 		cm.logger.Debugf("Shard %d assigned to target node %s (current: %s)", shardID, newShardInfo.TargetNode, newShardInfo.CurrentNode)
 		// Asynchronously notify listeners to prevent deadlocks
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 	} else if event.Type == clientv3.EventTypeDelete {
 		if event.Kv.ModRevision <= cm.state.ShardMapping.Shards[shardID].ModRevision {
 			return
@@ -595,7 +606,9 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 		delete(cm.state.ShardMapping.Shards, shardID)
 		cm.logger.Debugf("Shard %d mapping deleted", shardID)
 		// Asynchronously notify listeners to prevent deadlocks
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 	}
 }
 
@@ -999,7 +1012,9 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 	// Notify listeners about state changes if any shards were successfully stored
 	if successCount > 0 {
-		go cm.notifyStateChanged()
+		taskpool.Submit(func(ctx context.Context) {
+			cm.notifyStateChanged()
+		})
 	}
 
 	if firstError != nil {
