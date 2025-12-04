@@ -18,7 +18,6 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
-	"github.com/xiaonanln/goverse/util/taskpool"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -775,11 +774,9 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 	nodeAddr := c.node.GetAdvertiseAddress()
 	c.logger.Infof("Registered gate connection for %s", gateAddr)
 
-	// Set metric and notify inspector in background
-	taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
-		metrics.SetNodeConnectedGates(nodeAddr, gateCount)
-		c.node.NotifyRegisteredGatesChanged()
-	})
+	// Set metric and notify inspector
+	metrics.SetNodeConnectedGates(nodeAddr, gateCount)
+	c.node.NotifyRegisteredGatesChanged()
 
 	return ch, nil
 }
@@ -802,11 +799,9 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 			nodeAddr := c.node.GetAdvertiseAddress()
 			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
 
-			// Set metric and notify inspector in background
-			taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
-				metrics.SetNodeConnectedGates(nodeAddr, gateCount)
-				c.node.NotifyRegisteredGatesChanged()
-			})
+			// Set metric and notify inspector
+			metrics.SetNodeConnectedGates(nodeAddr, gateCount)
+			c.node.NotifyRegisteredGatesChanged()
 		} else {
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
 		}
@@ -1337,16 +1332,11 @@ func (c *Cluster) updateNodeConnections() {
 	c.nodeConnections.SetNodes(otherNodes)
 
 	// Notify inspector that connected nodes have changed in background
-	addr := c.getAdvertiseAddr()
 	if c.isNode() {
-		taskpool.SubmitByKey(addr, func(ctx context.Context) {
-			c.node.NotifyConnectedNodesChanged()
-		})
+		c.node.NotifyConnectedNodesChanged()
 	}
 	if c.isGate() {
-		taskpool.SubmitByKey(addr, func(ctx context.Context) {
-			c.gate.NotifyConnectedNodesChanged()
-		})
+		c.gate.NotifyConnectedNodesChanged()
 	}
 }
 
