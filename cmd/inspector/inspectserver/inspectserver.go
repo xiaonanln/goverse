@@ -269,7 +269,9 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		case event := <-client.eventChan:
-			if err := s.writeSSEEvent(w, flusher, string(event.Type), event); err != nil {
+			eventType := string(event.Type)
+			log.Printf("Sending SSE event '%s' to client %s", eventType, clientID)
+			if err := s.writeSSEEvent(w, flusher, eventType, event); err != nil {
 				log.Printf("Failed to send event to SSE client %s: %v", clientID, err)
 				return
 			}
@@ -511,6 +513,9 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 
 	log.Printf("Successfully updated shard %d target to %s (current=%s)", req.ShardID, req.TargetNode, currentShardInfo.CurrentNode)
 
+	// Broadcast shard update event to all SSE clients
+	s.broadcastShardUpdate()
+
 	// Return success response
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
@@ -521,6 +526,33 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Failed to encode response: %v", err)
+	}
+}
+
+// broadcastShardUpdate sends a shard update event to all SSE clients
+func (s *InspectorServer) broadcastShardUpdate() {
+	event := graph.GraphEvent{
+		Type: "shard_update",
+	}
+
+	s.sseClientsMu.RLock()
+	clients := make([]*SSEClient, 0, len(s.sseClients))
+	for _, c := range s.sseClients {
+		clients = append(clients, c)
+	}
+	s.sseClientsMu.RUnlock()
+
+	log.Printf("Broadcasting shard_update to %d SSE clients", len(clients))
+
+	for _, client := range clients {
+		select {
+		case client.eventChan <- event:
+			log.Printf("Sent shard_update to SSE client %s", client.id)
+		case <-client.done:
+			log.Printf("Client %s already disconnected", client.id)
+		default:
+			log.Printf("Event dropped for SSE client %s: channel full", client.id)
+		}
 	}
 }
 
