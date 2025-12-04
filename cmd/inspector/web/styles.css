@@ -562,3 +562,102 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
   color: #c62828;
   text-align: center;
 }
+
+/* Drag and Drop styles */
+.shard-badge.draggable {
+  cursor: move;
+}
+
+.shard-badge.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.node-box.drag-over {
+  background: #e3f2fd;
+  border: 2px dashed #2196F3;
+}
+
+.node-box-content.drop-target {
+  min-height: 60px;
+  border: 2px dashed transparent;
+  transition: border-color 0.2s;
+}
+
+.node-box-content.drop-target.drag-over {
+  border-color: #2196F3;
+  background: #f0f8ff;
+}
+
+/* Confirmation Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+}
+
+.modal-overlay.visible {
+  display: flex;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 500px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.modal-body {
+  margin-bottom: 20px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.modal-btn.confirm {
+  background: #4CAF50;
+  color: white;
+}
+
+.modal-btn.confirm:hover {
+  background: #45a049;
+}
+
+.modal-btn.cancel {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-btn.cancel:hover {
+  background: #e0e0e0;
+}
