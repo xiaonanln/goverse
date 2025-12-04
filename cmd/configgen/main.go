@@ -157,7 +157,8 @@ func generateConfig(filename string, numNodes, numGates int, withInspector bool)
 	for i := 1; i <= numNodes; i++ {
 		nodeID := fmt.Sprintf("node-%d", i)
 		grpcPort := 50050 + i
-		httpPort := 8080 + i - 1
+		// Start node HTTP ports at 8081 to avoid conflict with inspector on 8080
+		httpPort := 8080 + i
 
 		if i > 1 {
 			sb.WriteString("\n")
@@ -301,7 +302,8 @@ func printUsageInstructions(filename string, numNodes, numGates int, withInspect
 	}
 	if numNodes > 0 {
 		for i := 1; i <= numNodes; i++ {
-			httpPort := 8080 + i - 1
+			// Node HTTP ports start at 8081 to avoid conflict with inspector on 8080
+			httpPort := 8080 + i
 			fmt.Printf("- Node %d metrics: http://127.0.0.1:%d/metrics\n", i, httpPort)
 		}
 	}
