@@ -882,6 +882,16 @@ func (c *Cluster) GetRegisteredGates() []string {
 	return c.getRegisteredGateAddresses()
 }
 
+// GetClientCount returns the number of registered clients connected to this gate.
+// This implements the clusterinfo.ClusterInfoProvider interface.
+// This is only meaningful for gates; for nodes, it returns 0.
+func (c *Cluster) GetClientCount() int {
+	if c.gate != nil {
+		return c.gate.GetClientCount()
+	}
+	return 0
+}
+
 // PushMessageToClient sends a message to a client by its ID
 // Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target gate and routes the message accordingly

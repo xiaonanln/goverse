@@ -106,7 +106,7 @@ function showDetailsPanel(d) {
       html += '</div>'
     }
 
-    // Object count for nodes
+    // Object count for nodes, client count for gates
     if (d.nodeType === NODE_TYPE_NODE) {
       html += '<div class="detail-section">'
       html += '<h4>Objects</h4>'
@@ -153,6 +153,15 @@ function showDetailsPanel(d) {
         html += `</div>`
         html += `</div>`
       }
+      html += '</div>'
+    } else if (d.nodeType === NODE_TYPE_GATE) {
+      // Client count for gates
+      html += '<div class="detail-section">'
+      html += '<h4>Clients</h4>'
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Total Count:</div>`
+      html += `<div class="detail-value">${d.clients || 0}</div>`
+      html += `</div>`
       html += '</div>'
     }
   } else if (d.nodeType === NODE_TYPE_OBJECT) {
@@ -208,14 +217,19 @@ document.addEventListener('click', (event) => {
   }
 })
 
-// Show tooltip for nodes view (includes object count and connections)
+// Show tooltip for nodes view (includes object count/clients and connections)
 function showNodesViewTooltip(event, d) {
   let content = `<div class="tooltip-title">${d.label || d.id}</div>`
   content += `<div class="tooltip-row"><span class="tooltip-label">Type:</span> ${d.nodeType}</div>`
   if (d.advertiseAddr) {
     content += `<div class="tooltip-row"><span class="tooltip-label">Address:</span> ${d.advertiseAddr}</div>`
   }
-  content += `<div class="tooltip-row"><span class="tooltip-label">Objects:</span> ${d.objectCount}</div>`
+  // Show clients for gates, objects for nodes
+  if (d.nodeType === NODE_TYPE_GATE) {
+    content += `<div class="tooltip-row"><span class="tooltip-label">Clients:</span> ${d.clients || 0}</div>`
+  } else {
+    content += `<div class="tooltip-row"><span class="tooltip-label">Objects:</span> ${d.objectCount}</div>`
+  }
   if (d.connectedNodes && d.connectedNodes.length > 0) {
     content += `<div class="tooltip-row"><span class="tooltip-label">Connected to:</span> ${d.connectedNodes.length} nodes</div>`
   }
