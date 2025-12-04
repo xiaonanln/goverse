@@ -198,6 +198,27 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 	return &inspector_pb.Empty{}, nil
 }
 
+// UpdateGateClients handles gate client count update requests.
+func (i *Inspector) UpdateGateClients(ctx context.Context, req *inspector_pb.UpdateGateClientsRequest) (*inspector_pb.Empty, error) {
+	addr := req.GetAdvertiseAddress()
+	if addr == "" {
+		log.Println("UpdateGateClients called with empty advertise address")
+		return nil, errors.New("advertise address cannot be empty")
+	}
+
+	clients := int(req.GetClients())
+
+	// Update gate clients in the graph
+	if i.pg.IsGateRegistered(addr) {
+		i.pg.UpdateGateClients(addr, clients)
+		log.Printf("Gate clients updated: advertise_addr=%s, clients=%d", addr, clients)
+	} else {
+		log.Printf("UpdateGateClients: no gate registered with address %s", addr)
+	}
+
+	return &inspector_pb.Empty{}, nil
+}
+
 // UpdateRegisteredGates handles registered gates update requests from nodes.
 func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb.UpdateRegisteredGatesRequest) (*inspector_pb.Empty, error) {
 	addr := req.GetAdvertiseAddress()

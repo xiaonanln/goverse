@@ -483,6 +483,51 @@ func (im *InspectorManager) UpdateRegisteredGates() {
 	im.logger.Debugf("Updated registered gates with inspector (%d gates)", len(registeredGates))
 }
 
+// UpdateGateClients sends an UpdateGateClients RPC to the Inspector.
+// This is called when the gate's client count changes.
+// This is only meaningful for gates; nodes should not call this method.
+// If the inspector is disabled (empty address), this is a no-op.
+func (im *InspectorManager) UpdateGateClients() {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	if im.client == nil {
+		return
+	}
+
+	// Only gates should call this method
+	if im.mode != ModeGate {
+		return
+	}
+
+	// Get client count from cluster info provider
+	var clientCount int32
+	if im.clusterInfoProvider != nil {
+		clientCount = int32(im.clusterInfoProvider.GetClientCount())
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &inspector_pb.UpdateGateClientsRequest{
+		AdvertiseAddress: im.address,
+		Clients:          clientCount,
+	}
+
+	_, err := im.client.UpdateGateClients(ctx, req)
+	if err != nil {
+		im.logger.Warnf("Failed to update gate clients with inspector: %v", err)
+		return
+	}
+
+	im.logger.Debugf("Updated gate clients with inspector (%d clients)", clientCount)
+}
+
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.
 // Must be called with im.mu held.
 func (im *InspectorManager) removeObjectLocked(objectID string) {

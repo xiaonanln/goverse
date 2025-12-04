@@ -811,3 +811,42 @@ if count := gate.GetClientCount(); count != 0 {
 t.Fatalf("Expected 0 clients after unregistering all, got %d", count)
 }
 }
+
+func TestGateNotifyClientCountChanged(t *testing.T) {
+config := &GateConfig{
+AdvertiseAddress: testutil.GetFreeAddress(),
+EtcdAddress:      "localhost:2379",
+EtcdPrefix:       "/test-gate-notify-clientcount",
+}
+
+gate, err := NewGate(config)
+if err != nil {
+t.Fatalf("Failed to create gate: %v", err)
+}
+defer gate.Stop()
+
+ctx := context.Background()
+err = gate.Start(ctx)
+if err != nil {
+t.Fatalf("Gate.Start() returned error: %v", err)
+}
+
+// Register a client - this should trigger NotifyClientCountChanged
+clientProxy := gate.Register(ctx)
+if clientProxy == nil {
+t.Fatal("Expected client proxy, got nil")
+}
+
+// Verify client count
+if count := gate.GetClientCount(); count != 1 {
+t.Errorf("Expected 1 client after registration, got %d", count)
+}
+
+// Unregister client - this should also trigger NotifyClientCountChanged
+gate.Unregister(clientProxy.GetID())
+
+// Verify client count is back to 0
+if count := gate.GetClientCount(); count != 0 {
+t.Errorf("Expected 0 clients after unregistration, got %d", count)
+}
+}

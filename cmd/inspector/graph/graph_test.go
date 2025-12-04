@@ -1198,3 +1198,38 @@ func TestUpdateNodeRegisteredGates_EmptyList(t *testing.T) {
 		t.Fatalf("Expected 0 registered gates, got %d", len(nodes[0].RegisteredGates))
 	}
 }
+
+func TestUpdateGateClients(t *testing.T) {
+pg := NewGoverseGraph()
+
+// Add a gate
+gate := models.GoverseGate{
+ID:            "gate1",
+Label:         "Gate 1",
+AdvertiseAddr: "localhost:49000",
+Clients:       10,
+}
+pg.AddOrUpdateGate(gate)
+
+// Update gate clients
+pg.UpdateGateClients("gate1", 25)
+
+// Verify the update
+gates := pg.GetGates()
+if len(gates) != 1 {
+t.Fatalf("Expected 1 gate, got %d", len(gates))
+}
+
+if gates[0].Clients != 25 {
+t.Errorf("Expected gate to have 25 clients, got %d", gates[0].Clients)
+}
+
+// Try to update non-existent gate (should be a no-op)
+pg.UpdateGateClients("nonexistent", 100)
+
+// Verify no change to existing gate
+gates = pg.GetGates()
+if len(gates) != 1 {
+t.Fatalf("Expected 1 gate after non-existent update, got %d", len(gates))
+}
+}
