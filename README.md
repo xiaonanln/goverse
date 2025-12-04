@@ -22,6 +22,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics
+- Optional pprof profiling for performance analysis
 - Inspector UI for visualizing object topology
 
 ---
@@ -130,6 +131,7 @@ Full documentation:
 - [HTTP Gate API](docs/design/HTTP_GATE.md) - REST/HTTP endpoints for clients
 - [Object Access Control](docs/design/OBJECT_ACCESS_CONTROL.md) - Access rules and security
 - [Prometheus Metrics](docs/PROMETHEUS_INTEGRATION.md) - Monitoring & observability
+- [pprof Profiling](examples/pprof/) - Performance profiling and debugging
 - [Inspector UI](cmd/inspector/) - Cluster visualization
 - [Proto Reference](proto/) - Protocol buffer definitions
 
