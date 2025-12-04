@@ -120,15 +120,24 @@ function renderShardManagementView(container) {
           ${nodeShards.length > 0 ? `
             <div class="shard-list">
               ${nodeShards.map(shard => {
-                // Check if shard is migrating (both nodes must be set and different)
-                const isMigrating = shard.current_node && shard.target_node && 
-                                   shard.current_node !== shard.target_node
-                const shardClass = isMigrating ? 'shard-badge migrating' : 'shard-badge'
+                // Determine shard badge class based on target_node state
+                // - No target_node: unassigned (grey)
+                // - target_node != current_node: migrating (orange)
+                // - target_node == current_node: normal (green)
+                let shardClass = 'shard-badge'
+                let shardTitle = ''
                 const objectCount = shard.object_count || 0
                 const objectText = objectCount === 1 ? 'object' : 'objects'
-                const shardTitle = isMigrating 
-                  ? `Shard #${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node}) - ${objectCount} ${objectText}`
-                  : `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
+                
+                if (!shard.target_node) {
+                  shardClass = 'shard-badge no-target'
+                  shardTitle = `Shard #${shard.shard_id} (no target assigned) - ${objectCount} ${objectText}`
+                } else if (shard.target_node !== shard.current_node) {
+                  shardClass = 'shard-badge migrating'
+                  shardTitle = `Shard #${shard.shard_id} (migrating: ${shard.current_node} → ${shard.target_node}) - ${objectCount} ${objectText}`
+                } else {
+                  shardTitle = `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
+                }
                 return `<span class="${shardClass}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
               }).join('')}
             </div>
