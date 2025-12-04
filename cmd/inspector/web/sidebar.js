@@ -10,6 +10,15 @@ function updateNodeList() {
     const li = document.createElement('li')
     li.className = 'node-item'
     const typeClass = 'node'
+    
+    // Count objects on this node
+    const objectsOnNode = graphData.goverse_objects.filter(obj => obj.goverse_node_id === node.id)
+    const objectCount = objectsOnNode.length
+    
+    // Get connected nodes count
+    const connectedNodes = node.connected_nodes || []
+    const connectionCount = connectedNodes.length
+    
     li.innerHTML = `
       <div class="node-id">
         ${node.id}
@@ -17,7 +26,8 @@ function updateNodeList() {
       </div>
       <div class="node-details">
         ${node.advertise_addr ? `Address: ${node.advertise_addr}<br>` : ''}
-        ${node.label && node.label !== node.id ? `Label: ${node.label}` : ''}
+        Connections: ${connectionCount}<br>
+        Objects: ${objectCount}
       </div>
     `
 
@@ -30,8 +40,8 @@ function updateNodeList() {
           nodeType: NODE_TYPE_NODE,
           advertiseAddr: node.advertise_addr,
           color: node.color,
-          objectCount: node.object_count || 0,
-          connectedNodes: node.connected_nodes || []
+          objectCount: objectCount,
+          connectedNodes: connectedNodes
         }
         showDetailsPanel(nodeData)
       } else {
@@ -48,6 +58,11 @@ function updateNodeList() {
     const li = document.createElement('li')
     li.className = 'node-item'
     const typeClass = 'gate'
+    
+    // Get connected nodes count
+    const connectedNodes = gate.connected_nodes || []
+    const connectionCount = connectedNodes.length
+    
     li.innerHTML = `
       <div class="node-id">
         ${gate.id}
@@ -55,7 +70,7 @@ function updateNodeList() {
       </div>
       <div class="node-details">
         ${gate.advertise_addr ? `Address: ${gate.advertise_addr}<br>` : ''}
-        ${gate.label && gate.label !== gate.id ? `Label: ${gate.label}` : ''}
+        Connections: ${connectionCount}
       </div>
     `
 
@@ -68,7 +83,7 @@ function updateNodeList() {
           nodeType: NODE_TYPE_GATE,
           advertiseAddr: gate.advertise_addr,
           color: gate.color,
-          connectedNodes: gate.connected_nodes || []
+          connectedNodes: connectedNodes
         }
         showDetailsPanel(gateData)
       } else {
