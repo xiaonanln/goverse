@@ -18,6 +18,7 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/taskpool"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -770,12 +771,19 @@ func (c *Cluster) RegisterGateConnection(gateAddr string) (chan proto.Message, e
 	// Create a buffered channel to prevent blocking
 	ch := make(chan proto.Message, 1024)
 	c.gateChannels[gateAddr] = ch
-	// Set metric to current gate count
-	metrics.SetNodeConnectedGates(c.node.GetAdvertiseAddress(), len(c.gateChannels))
+	gateCount := len(c.gateChannels)
+	nodeAddr := c.node.GetAdvertiseAddress()
 	c.logger.Infof("Registered gate connection for %s", gateAddr)
 
-	// Notify inspector that registered gates have changed
-	go c.node.NotifyRegisteredGatesChanged()
+	// Set metric to current gate count in background
+	taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
+		metrics.SetNodeConnectedGates(nodeAddr, gateCount)
+	})
+
+	// Notify inspector that registered gates have changed in background
+	taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
+		c.node.NotifyRegisteredGatesChanged()
+	})
 
 	return ch, nil
 }
@@ -794,12 +802,19 @@ func (c *Cluster) UnregisterGateConnection(gateAddr string, ch chan proto.Messag
 		if currentCh == ch {
 			close(currentCh)
 			delete(c.gateChannels, gateAddr)
-			// Set metric to current gate count
-			metrics.SetNodeConnectedGates(c.node.GetAdvertiseAddress(), len(c.gateChannels))
+			gateCount := len(c.gateChannels)
+			nodeAddr := c.node.GetAdvertiseAddress()
 			c.logger.Infof("Unregistered gate connection for %s", gateAddr)
 
-			// Notify inspector that registered gates have changed
-			go c.node.NotifyRegisteredGatesChanged()
+			// Set metric to current gate count in background
+			taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
+				metrics.SetNodeConnectedGates(nodeAddr, gateCount)
+			})
+
+			// Notify inspector that registered gates have changed in background
+			taskpool.SubmitByKey(nodeAddr, func(ctx context.Context) {
+				c.node.NotifyRegisteredGatesChanged()
+			})
 		} else {
 			c.logger.Warnf("Skipping unregister for gate %s: channel mismatch (connection replaced)", gateAddr)
 		}
@@ -1329,12 +1344,17 @@ func (c *Cluster) updateNodeConnections() {
 
 	c.nodeConnections.SetNodes(otherNodes)
 
-	// Notify inspector that connected nodes have changed
+	// Notify inspector that connected nodes have changed in background
+	addr := c.getAdvertiseAddr()
 	if c.isNode() {
-		go c.node.NotifyConnectedNodesChanged()
+		taskpool.SubmitByKey(addr, func(ctx context.Context) {
+			c.node.NotifyConnectedNodesChanged()
+		})
 	}
 	if c.isGate() {
-		go c.gate.NotifyConnectedNodesChanged()
+		taskpool.SubmitByKey(addr, func(ctx context.Context) {
+			c.gate.NotifyConnectedNodesChanged()
+		})
 	}
 }
 
