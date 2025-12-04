@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -32,6 +33,7 @@ type ServerConfig struct {
 	ListenAddress             string
 	AdvertiseAddress          string
 	MetricsListenAddress      string // Optional: HTTP address for Prometheus metrics (e.g., ":9090")
+	EnablePprof               bool   // Optional: enable pprof endpoints on metrics HTTP server (default: false)
 	EtcdAddress               string
 	EtcdPrefix                string                     // Optional: etcd key prefix for this cluster (default: "/goverse")
 	MinQuorum                 int                        // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
@@ -171,9 +173,24 @@ func (server *Server) Run(ctx context.Context) error {
 	// Start metrics HTTP server if configured
 	var metricsServer *http.Server
 	if server.config.MetricsListenAddress != "" {
+		mux := http.NewServeMux()
+
+		// Prometheus metrics endpoint
+		mux.Handle("/metrics", promhttp.Handler())
+
+		// Add pprof endpoints if enabled
+		if server.config.EnablePprof {
+			mux.HandleFunc("/debug/pprof/", pprof.Index)
+			mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+			mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+			mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+			mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+			server.logger.Infof("pprof endpoints enabled at /debug/pprof/")
+		}
+
 		metricsServer = &http.Server{
 			Addr:              server.config.MetricsListenAddress,
-			Handler:           promhttp.Handler(),
+			Handler:           mux,
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 		go func() {

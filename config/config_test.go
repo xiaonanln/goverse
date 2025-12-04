@@ -651,8 +651,8 @@ func TestGetInspectorAdvertiseAddress(t *testing.T) {
 		{
 			name: "with connect address",
 			inspectorCfg: InspectorConfig{
-				GRPCAddr:    "127.0.0.1:8081",
-				HTTPAddr:    "127.0.0.1:8080",
+				GRPCAddr:      "127.0.0.1:8081",
+				HTTPAddr:      "127.0.0.1:8080",
 				AdvertiseAddr: "inspector.example.com:8081",
 			},
 			expectedAddr: "inspector.example.com:8081",
