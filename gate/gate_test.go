@@ -758,3 +758,53 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
+
+func TestGate_GetClientCount(t *testing.T) {
+	t.Parallel()
+
+	config := &GateConfig{
+		AdvertiseAddress: "localhost:49000",
+		EtcdAddress:      "localhost:2379",
+		InspectorAddress: "",
+	}
+
+	gate, err := NewGate(config)
+	if err != nil {
+		t.Fatalf("Failed to create gate: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := gate.Start(ctx); err != nil {
+		t.Fatalf("Failed to start gate: %v", err)
+	}
+	defer gate.Stop()
+
+	// Initially, no clients
+	if count := gate.GetClientCount(); count != 0 {
+		t.Fatalf("Expected initial client count to be 0, got %d", count)
+	}
+
+	// Register a client
+	client1 := gate.Register(ctx)
+	if count := gate.GetClientCount(); count != 1 {
+		t.Fatalf("Expected client count to be 1, got %d", count)
+	}
+
+	// Register another client
+	client2 := gate.Register(ctx)
+	if count := gate.GetClientCount(); count != 2 {
+		t.Fatalf("Expected client count to be 2, got %d", count)
+	}
+
+	// Unregister one client
+	gate.Unregister(client1.GetID())
+	if count := gate.GetClientCount(); count != 1 {
+		t.Fatalf("Expected client count to be 1 after unregister, got %d", count)
+	}
+
+	// Unregister the second client
+	gate.Unregister(client2.GetID())
+	if count := gate.GetClientCount(); count != 0 {
+		t.Fatalf("Expected client count to be 0 after all unregister, got %d", count)
+	}
+}

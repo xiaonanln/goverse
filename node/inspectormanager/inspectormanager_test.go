@@ -460,3 +460,38 @@ func (m *mockClusterInfoProvider) GetConnectedNodes() []string {
 func (m *mockClusterInfoProvider) GetRegisteredGates() []string {
 	return m.registeredGates
 }
+
+func TestInspectorManager_ClientCountProvider(t *testing.T) {
+	t.Parallel()
+
+	gateAddr := "localhost:49000"
+	mgr := NewGateInspectorManager(gateAddr, "localhost:8081")
+
+	// Initial client count should be 0 (no provider set)
+	if mgr.clientCountProvider != nil {
+		t.Fatal("ClientCountProvider should initially be nil")
+	}
+
+	// Set a client count provider
+	clientCount := 5
+	provider := func() int {
+		return clientCount
+	}
+
+	mgr.SetClientCountProvider(provider)
+
+	if mgr.clientCountProvider == nil {
+		t.Fatal("ClientCountProvider should be set")
+	}
+
+	// Verify provider returns correct count
+	if mgr.clientCountProvider() != clientCount {
+		t.Fatalf("Expected client count %d, got %d", clientCount, mgr.clientCountProvider())
+	}
+
+	// Change the count and verify
+	clientCount = 10
+	if mgr.clientCountProvider() != clientCount {
+		t.Fatalf("Expected client count %d, got %d", clientCount, mgr.clientCountProvider())
+	}
+}
