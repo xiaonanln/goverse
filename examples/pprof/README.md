@@ -113,12 +113,21 @@ nodes:
 
 ## Security Note
 
-**Important:** pprof endpoints can expose sensitive information about your application's internals and performance characteristics. 
+**⚠️ CRITICAL: pprof endpoints expose sensitive runtime information that could be exploited by attackers:**
 
-- pprof is automatically enabled when HTTP server is configured
-- Only use HTTP server (and pprof) in development or when actively debugging
-- In production, consider:
-  - Not enabling the HTTP server unless necessary
-  - Restricting access to the HTTP port with firewall rules
-  - Using authentication/authorization middleware
-  - Only enabling temporarily when needed for troubleshooting
+- **Memory dumps** - Full heap snapshots can reveal secrets, keys, tokens, and business logic
+- **Stack traces** - Expose code paths, function names, and internal architecture
+- **Goroutine details** - Reveal concurrent operations and timing information
+- **CPU profiles** - Show performance characteristics and hot code paths
+
+### Recommendations
+
+- **Development**: Safe to use pprof for debugging and profiling
+- **Production**: 
+  - ⛔ **Do NOT expose** the HTTP server to public networks
+  - ✅ Use firewall rules to restrict access to trusted IPs only
+  - ✅ Deploy authentication/authorization middleware if HTTP server is needed
+  - ✅ Only enable HTTP server temporarily when troubleshooting issues
+  - ✅ Consider using a VPN or bastion host for accessing diagnostics
+
+pprof is automatically enabled when you configure `MetricsListenAddress`. Control access by controlling who can reach the HTTP port.
