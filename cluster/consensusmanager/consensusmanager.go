@@ -27,6 +27,8 @@ import (
 const (
 	// defaultClusterStateStabilityDuration is the default duration to consider the cluster state stable
 	defaultClusterStateStabilityDuration = 10 * time.Second
+	// defaultLeaderCheckInterval is the default interval for checking and trying to become leader
+	defaultLeaderCheckInterval = 5 * time.Second
 )
 
 // ShardInfo contains information about a shard's node assignment
@@ -224,7 +226,7 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		localNodeAddress:              localNodeAddress,
 		numShards:                     numShards,
 		imbalanceThreshold:            0.2, // Default value
-		leaderCheckInterval:           5 * time.Second,
+		leaderCheckInterval:           defaultLeaderCheckInterval,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -347,6 +349,26 @@ func (cm *ConsensusManager) GetImbalanceThreshold() float64 {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return cm.imbalanceThreshold
+}
+
+// SetLeaderCheckInterval sets the interval for checking and trying to become leader
+// If interval <= 0, the default value of 5 seconds is used
+func (cm *ConsensusManager) SetLeaderCheckInterval(interval time.Duration) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if interval <= 0 {
+		cm.logger.Infof("Invalid leader check interval %v, using default %v", interval, defaultLeaderCheckInterval)
+		interval = defaultLeaderCheckInterval
+	}
+	cm.leaderCheckInterval = interval
+	cm.logger.Infof("ConsensusManager leader check interval set to %v", interval)
+}
+
+// GetLeaderCheckInterval returns the current leader check interval
+func (cm *ConsensusManager) GetLeaderCheckInterval() time.Duration {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.leaderCheckInterval
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -843,7 +865,7 @@ func (cm *ConsensusManager) tryBecomeLeader(ctx context.Context) error {
 
 	client := cm.etcdManager.GetClient()
 	if client == nil {
-		return fmt.Errorf("etcd client not connected")
+		return fmt.Errorf("etcd client is not available")
 	}
 
 	leaderKey := cm.etcdManager.GetPrefix() + "/leader"

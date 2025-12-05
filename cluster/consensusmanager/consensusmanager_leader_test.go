@@ -482,7 +482,7 @@ func TestLeaderElection_AutomaticLeaderElectionLoop(t *testing.T) {
 	nodeAddr := "localhost:47001"
 	// Use shorter interval for faster test
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, nodeAddr, testNumShards)
-	cm.leaderCheckInterval = 500 * time.Millisecond
+	cm.SetLeaderCheckInterval(500 * time.Millisecond)
 
 	ctx := context.Background()
 
