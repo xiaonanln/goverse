@@ -105,13 +105,14 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 		}
 
 		return &server.ServerConfig{
-			ListenAddress:        listenAddr,
-			AdvertiseAddress:     advertiseAddr,
-			MetricsListenAddress: nodeCfg.HTTPAddr,
-			EtcdAddress:          cfg.GetEtcdAddress(),
-			EtcdPrefix:           cfg.GetEtcdPrefix(),
-			NumShards:            cfg.GetNumShards(),
-			InspectorAddress:     cfg.GetInspectorAdvertiseAddress(),
+			ListenAddress:         listenAddr,
+			AdvertiseAddress:      advertiseAddr,
+			MetricsListenAddress:  nodeCfg.HTTPAddr,
+			EtcdAddress:           cfg.GetEtcdAddress(),
+			EtcdPrefix:            cfg.GetEtcdPrefix(),
+			NumShards:             cfg.GetNumShards(),
+			NodeStabilityDuration: cfg.GetClusterStateStabilityDuration(),
+			InspectorAddress:      cfg.GetInspectorAdvertiseAddress(),
 		}, nil
 	}
 

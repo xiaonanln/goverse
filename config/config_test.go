@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -639,6 +640,93 @@ nodes:
 	// GetInspectorAdvertiseAddress should return empty string
 	if addr := cfg.GetInspectorAdvertiseAddress(); addr != "" {
 		t.Errorf("expected GetInspectorAdvertiseAddress() to return empty string, got %s", addr)
+	}
+}
+
+func TestClusterStateStabilityDuration(t *testing.T) {
+	// Test loading config with cluster_state_stability_duration
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+  cluster_state_stability_duration: 15s
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Validate cluster_state_stability_duration is parsed correctly
+	expectedDuration := 15 * time.Second
+	if cfg.Cluster.ClusterStateStabilityDuration != expectedDuration {
+		t.Errorf("expected cluster_state_stability_duration %v, got %v",
+			expectedDuration, cfg.Cluster.ClusterStateStabilityDuration)
+	}
+
+	// Test helper method
+	if duration := cfg.GetClusterStateStabilityDuration(); duration != expectedDuration {
+		t.Errorf("expected GetClusterStateStabilityDuration() to return %v, got %v",
+			expectedDuration, duration)
+	}
+}
+
+func TestClusterStateStabilityDurationOptional(t *testing.T) {
+	// Test that cluster_state_stability_duration is optional
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// cluster_state_stability_duration should be 0 (default)
+	if cfg.Cluster.ClusterStateStabilityDuration != 0 {
+		t.Errorf("expected default cluster_state_stability_duration 0, got %v",
+			cfg.Cluster.ClusterStateStabilityDuration)
+	}
+
+	// GetClusterStateStabilityDuration should return 0
+	if duration := cfg.GetClusterStateStabilityDuration(); duration != 0 {
+		t.Errorf("expected GetClusterStateStabilityDuration() to return 0, got %v", duration)
 	}
 }
 
