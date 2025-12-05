@@ -176,10 +176,10 @@ type StateChangeListener interface {
 
 // ConsensusManager handles all etcd interactions and maintains in-memory cluster state
 type ConsensusManager struct {
-	etcdManager     *etcdmanager.EtcdManager
-	logger          *logger.Logger
-	shardLock       *shardlock.ShardLock
-	leaderElection  *leaderelection.LeaderElection
+	etcdManager       *etcdmanager.EtcdManager
+	logger            *logger.Logger
+	shardLock         *shardlock.ShardLock
+	leaderElection    *leaderelection.LeaderElection
 	leaderElectionTTL int // TTL for leader election session in seconds
 
 	// In-memory state
