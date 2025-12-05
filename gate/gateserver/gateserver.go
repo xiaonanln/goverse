@@ -30,6 +30,8 @@ type GateServerConfig struct {
 	NumShards         int    // Optional: number of shards in the cluster (default: 8192)
 	InspectorAddress  string // Optional: address of the inspector service (if empty, inspector is disabled)
 
+	ClusterStateStabilityDuration time.Duration // Optional: how long the node list must be stable before updating shard mapping (default: 10s)
+
 	DefaultCallTimeout   time.Duration // Optional: default timeout for CallObject operations (default: 30s)
 	DefaultDeleteTimeout time.Duration // Optional: default timeout for DeleteObject operations (default: 30s)
 	DefaultCreateTimeout time.Duration // Optional: default timeout for CreateObject operations (default: 30s)
@@ -76,9 +78,10 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 
 	// Create cluster for this gate
 	clusterCfg := cluster.Config{
-		EtcdAddress: config.EtcdAddress,
-		EtcdPrefix:  config.EtcdPrefix,
-		NumShards:   config.NumShards,
+		EtcdAddress:                   config.EtcdAddress,
+		EtcdPrefix:                    config.EtcdPrefix,
+		NumShards:                     config.NumShards,
+		ClusterStateStabilityDuration: config.ClusterStateStabilityDuration,
 	}
 	c, err := cluster.NewClusterWithGate(clusterCfg, gw)
 	if err != nil {

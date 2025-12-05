@@ -25,6 +25,14 @@ cluster:
       - "etcd-2.prod.local:2379"
       - "etcd-3.prod.local:2379"
     prefix: "/goverse/production"
+  
+  # Optional: How long the node list must be stable before updating shard mapping
+  # Default: 10s
+  # Shorter duration (e.g., 3s): For development/testing environments where faster
+  #   cluster convergence is preferred
+  # Longer duration (e.g., 30s): For production environments with frequent node
+  #   churn where you want to avoid premature shard reassignments
+  # cluster_state_stability_duration: 10s
 
 inspector:
   grpc_addr: "10.0.3.10:8081"

@@ -87,11 +87,12 @@ version: 1
 
 Cluster-level configuration for distributed coordination.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `shards` | int | Yes | Number of shards for object distribution. Recommended: `8192`. |
-| `provider` | string | Yes | Cluster coordination provider. Currently only `"etcd"` is supported. |
-| `etcd` | object | Yes | etcd-specific configuration. |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `shards` | int | Yes | - | Number of shards for object distribution. Recommended: `8192`. |
+| `provider` | string | Yes | - | Cluster coordination provider. Currently only `"etcd"` is supported. |
+| `etcd` | object | Yes | - | etcd-specific configuration. |
+| `cluster_state_stability_duration` | duration | No | `10s` | How long the node list must be stable before updating shard mapping. |
 
 #### cluster.etcd
 
@@ -99,6 +100,12 @@ Cluster-level configuration for distributed coordination.
 |-------|------|----------|-------------|
 | `endpoints` | array[string] | Yes | List of etcd endpoints. At least one required. |
 | `prefix` | string | Yes | Key prefix for all GoVerse keys in etcd. |
+
+#### cluster.cluster_state_stability_duration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `cluster_state_stability_duration` | duration | No | `10s` | How long the node list must be stable before updating shard mapping. Use shorter duration (e.g., `3s`) for development/testing for faster cluster convergence. Use longer duration (e.g., `30s`) in production with frequent node churn to avoid premature shard reassignments. |
 
 ```yaml
 cluster:
@@ -110,6 +117,9 @@ cluster:
       - "etcd-2.local:2379"
       - "etcd-3.local:2379"
     prefix: "/goverse/production"
+  
+  # Optional: Configure cluster state stability duration
+  # cluster_state_stability_duration: 10s  # Default if not specified
 ```
 
 ---
@@ -639,6 +649,12 @@ For access/lifecycle rules:
    ```yaml
    cluster:
      shards: 64  # Test only; use 8192 in production
+   ```
+
+3. **Faster cluster convergence in dev**: Use shorter stability duration:
+   ```yaml
+   cluster:
+     cluster_state_stability_duration: 3s  # Dev/test only; use 10s+ in production
    ```
 
 ---

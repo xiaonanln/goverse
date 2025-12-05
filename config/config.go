@@ -3,16 +3,18 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 // ClusterConfig holds cluster-level configuration
 type ClusterConfig struct {
-	Shards             int        `yaml:"shards"`
-	Provider           string     `yaml:"provider"`
-	Etcd               EtcdConfig `yaml:"etcd"`
-	ImbalanceThreshold float64    `yaml:"imbalance_threshold,omitempty"`
+	Shards                        int           `yaml:"shards"`
+	Provider                      string        `yaml:"provider"`
+	Etcd                          EtcdConfig    `yaml:"etcd"`
+	ImbalanceThreshold            float64    `yaml:"imbalance_threshold,omitempty"`
+	ClusterStateStabilityDuration time.Duration `yaml:"cluster_state_stability_duration,omitempty"`
 }
 
 // EtcdConfig holds etcd-specific configuration
@@ -185,6 +187,12 @@ func (c *Config) GetEtcdPrefix() string {
 // GetNumShards returns the number of shards
 func (c *Config) GetNumShards() int {
 	return c.Cluster.Shards
+}
+
+// GetClusterStateStabilityDuration returns the cluster state stability duration.
+// Returns 0 if not configured (caller should use default).
+func (c *Config) GetClusterStateStabilityDuration() time.Duration {
+	return c.Cluster.ClusterStateStabilityDuration
 }
 
 // GetInspectorAdvertiseAddress returns the inspector advertise address.
