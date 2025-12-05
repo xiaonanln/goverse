@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/cluster/leaderelection"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -175,9 +176,11 @@ type StateChangeListener interface {
 
 // ConsensusManager handles all etcd interactions and maintains in-memory cluster state
 type ConsensusManager struct {
-	etcdManager *etcdmanager.EtcdManager
-	logger      *logger.Logger
-	shardLock   *shardlock.ShardLock
+	etcdManager     *etcdmanager.EtcdManager
+	logger          *logger.Logger
+	shardLock       *shardlock.ShardLock
+	leaderElection  *leaderelection.LeaderElection
+	leaderElectionTTL int // TTL for leader election session in seconds
 
 	// In-memory state
 	mu    sync.RWMutex
@@ -468,6 +471,83 @@ func (cm *ConsensusManager) StopWatch() {
 	}
 	cm.watchStarted = false
 	cm.logger.Infof("Stopped watching")
+}
+
+// StartLeaderElection initializes and starts the leader election process
+// This should be called after Initialize() and before StartWatch()
+func (cm *ConsensusManager) StartLeaderElection(ctx context.Context) error {
+	if cm.etcdManager == nil {
+		return fmt.Errorf("etcd manager not set")
+	}
+
+	client := cm.etcdManager.GetClient()
+	if client == nil {
+		return fmt.Errorf("etcd client not available")
+	}
+
+	// Use default TTL if not configured
+	ttl := cm.leaderElectionTTL
+	if ttl <= 0 {
+		ttl = leaderelection.DefaultSessionTTL
+	}
+
+	// Create leader election with prefix under the etcd prefix
+	electionPrefix := cm.etcdManager.GetPrefix() + "/leader"
+	le, err := leaderelection.NewLeaderElection(client, electionPrefix, cm.localNodeAddress, ttl)
+	if err != nil {
+		return fmt.Errorf("failed to create leader election: %w", err)
+	}
+
+	// Start the election (initializes session and observing)
+	if err := le.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start leader election: %w", err)
+	}
+
+	cm.leaderElection = le
+
+	// Start campaigning for leadership in background
+	le.StartCampaign(ctx)
+
+	cm.logger.Infof("Leader election started with TTL %d seconds", ttl)
+	return nil
+}
+
+// StopLeaderElection stops the leader election and resigns if leader
+func (cm *ConsensusManager) StopLeaderElection(ctx context.Context) error {
+	if cm.leaderElection == nil {
+		return nil
+	}
+
+	// Resign from leadership if we're the leader
+	if err := cm.leaderElection.Resign(ctx); err != nil {
+		cm.logger.Warnf("Failed to resign from leadership: %v", err)
+	}
+
+	// Close the leader election
+	if err := cm.leaderElection.Close(); err != nil {
+		cm.logger.Warnf("Failed to close leader election: %v", err)
+		return err
+	}
+
+	cm.leaderElection = nil
+	cm.logger.Infof("Leader election stopped")
+	return nil
+}
+
+// SetLeaderElectionTTL sets the TTL for leader election session
+// This must be called before StartLeaderElection
+func (cm *ConsensusManager) SetLeaderElectionTTL(ttl int) {
+	cm.leaderElectionTTL = ttl
+	cm.logger.Infof("Leader election TTL set to %d seconds", ttl)
+}
+
+// IsLeader returns true if this node is the current leader
+func (cm *ConsensusManager) IsLeader() bool {
+	if cm.leaderElection != nil {
+		return cm.leaderElection.IsLeader()
+	}
+	// Fallback to lexicographic comparison for backward compatibility
+	return cm.GetLeaderNode() == cm.localNodeAddress
 }
 
 // watchPrefix watches the entire etcd prefix for changes
@@ -780,8 +860,18 @@ func (cm *ConsensusManager) GetGates() []string {
 }
 
 // GetLeaderNode returns the leader node address
-// The leader is the node with the smallest advertised address in lexicographic order
+// Uses etcd-based leader election for fair, lease-based leadership
 func (cm *ConsensusManager) GetLeaderNode() string {
+	// Use leader election if available
+	if cm.leaderElection != nil {
+		leader := cm.leaderElection.GetLeader()
+		if leader != "" {
+			return leader
+		}
+	}
+
+	// Fallback to lexicographic ordering if leader election not available
+	// This maintains backward compatibility during transition
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 

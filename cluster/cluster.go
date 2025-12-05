@@ -183,6 +183,11 @@ func (c *Cluster) init(cfg Config) error {
 		c.consensusManager.SetRebalanceShardsBatchSize(cfg.RebalanceShardsBatchSize)
 	}
 
+	// Set leader election TTL on consensus manager if specified
+	if cfg.LeaderElectionTTL > 0 {
+		c.consensusManager.SetLeaderElectionTTL(cfg.LeaderElectionTTL)
+	}
+
 	// Set imbalance threshold on consensus manager if specified
 	if cfg.ImbalanceThreshold > 0 {
 		c.consensusManager.SetImbalanceThreshold(cfg.ImbalanceThreshold)
@@ -311,6 +316,14 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	// Stop shard mapping management
 	c.stopShardMappingManagement()
+
+	// Stop leader election and resign if leader (only for nodes)
+	if c.isNode() {
+		if err := c.consensusManager.StopLeaderElection(ctx); err != nil {
+			c.logger.Warnf("%s - Failed to stop leader election: %v", c, err)
+			// Continue with cleanup even if stop fails
+		}
+	}
 
 	// Stop watching cluster state (must stop before closing etcd)
 	c.consensusManager.StopWatch()
@@ -1028,6 +1041,15 @@ func (c *Cluster) startWatching(ctx context.Context) error {
 	err = c.consensusManager.StartWatch(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start consensus manager watch: %w", err)
+	}
+
+	// Start leader election (only for nodes, not gates)
+	if c.isNode() {
+		err = c.consensusManager.StartLeaderElection(ctx)
+		if err != nil {
+			c.logger.Warnf("Failed to start leader election: %v", err)
+			// Don't fail cluster startup if leader election fails - fallback to lexicographic
+		}
 	}
 
 	return nil

@@ -32,6 +32,11 @@ type Config struct {
 	// Default: max(1, NumShards / 128)
 	RebalanceShardsBatchSize int
 
+	// LeaderElectionTTL is the TTL for the leader election session in seconds
+	// This determines how long before a crashed leader's lease expires
+	// Default: 10 seconds
+	LeaderElectionTTL int
+
 	// ImbalanceThreshold is the threshold for shard imbalance as a fraction of ideal load
 	// Default: 0.2 (20% of ideal load)
 	ImbalanceThreshold float64
@@ -46,6 +51,7 @@ func DefaultConfig() Config {
 		ShardMappingCheckInterval:     5 * time.Second,
 		NumShards:                     numShards,
 		RebalanceShardsBatchSize:      max(1, numShards/128),
+		LeaderElectionTTL:             10,
 		ImbalanceThreshold:            0.2,
 	}
 }
