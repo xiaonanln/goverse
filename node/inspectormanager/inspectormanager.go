@@ -201,7 +201,7 @@ func (im *InspectorManager) NotifyObjectAdded(objectID, objectType string, shard
 
 	// If connected, send the notification in background
 	if shouldNotify {
-		taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+		taskpool.SubmitByKey(objectID, func(ctx context.Context) {
 			im.addOrUpdateObject(ctx, objectID, objectType, shardID)
 		})
 	}
@@ -225,7 +225,7 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 
 	// If connected, send the removal notification in background
 	if shouldNotify {
-		taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+		taskpool.SubmitByKey(objectID, func(ctx context.Context) {
 			im.removeObject(ctx, objectID)
 		})
 	}
@@ -487,27 +487,30 @@ func (im *InspectorManager) UpdateConnectedNodes() {
 		return
 	}
 
-	// Get current connected nodes from cluster info provider
-	var connectedNodes []string
-	if provider != nil {
-		connectedNodes = provider.GetConnectedNodes()
-	}
+	// Run the update in the background using taskpool to avoid blocking
+	taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+		// Get current connected nodes from cluster info provider
+		var connectedNodes []string
+		if provider != nil {
+			connectedNodes = provider.GetConnectedNodes()
+		}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+		rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-	req := &inspector_pb.UpdateConnectedNodesRequest{
-		AdvertiseAddress: im.address,
-		ConnectedNodes:   connectedNodes,
-	}
+		req := &inspector_pb.UpdateConnectedNodesRequest{
+			AdvertiseAddress: im.address,
+			ConnectedNodes:   connectedNodes,
+		}
 
-	_, err := client.UpdateConnectedNodes(ctx, req)
-	if err != nil {
-		im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
-		return
-	}
+		_, err := client.UpdateConnectedNodes(rpcCtx, req)
+		if err != nil {
+			im.logger.Warnf("Failed to update connected nodes with inspector: %v", err)
+			return
+		}
 
-	im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
+		im.logger.Debugf("Updated connected nodes with inspector (%d nodes)", len(connectedNodes))
+	})
 }
 
 // UpdateRegisteredGates sends an UpdateRegisteredGates RPC to the Inspector.
@@ -536,27 +539,30 @@ func (im *InspectorManager) UpdateRegisteredGates() {
 		return
 	}
 
-	// Get current registered gates from cluster info provider
-	var registeredGates []string
-	if provider != nil {
-		registeredGates = provider.GetRegisteredGates()
-	}
+	// Run the update in the background using taskpool to avoid blocking
+	taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+		// Get current registered gates from cluster info provider
+		var registeredGates []string
+		if provider != nil {
+			registeredGates = provider.GetRegisteredGates()
+		}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+		rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-	req := &inspector_pb.UpdateRegisteredGatesRequest{
-		AdvertiseAddress: im.address,
-		RegisteredGates:  registeredGates,
-	}
+		req := &inspector_pb.UpdateRegisteredGatesRequest{
+			AdvertiseAddress: im.address,
+			RegisteredGates:  registeredGates,
+		}
 
-	_, err := client.UpdateRegisteredGates(ctx, req)
-	if err != nil {
-		im.logger.Warnf("Failed to update registered gates with inspector: %v", err)
-		return
-	}
+		_, err := client.UpdateRegisteredGates(rpcCtx, req)
+		if err != nil {
+			im.logger.Warnf("Failed to update registered gates with inspector: %v", err)
+			return
+		}
 
-	im.logger.Debugf("Updated registered gates with inspector (%d gates)", len(registeredGates))
+		im.logger.Debugf("Updated registered gates with inspector (%d gates)", len(registeredGates))
+	})
 }
 
 // UpdateGateClients sends an UpdateGateClients RPC to the Inspector.
@@ -585,27 +591,30 @@ func (im *InspectorManager) UpdateGateClients() {
 		return
 	}
 
-	// Get client count from cluster info provider
-	var clientCount int32
-	if provider != nil {
-		clientCount = int32(provider.GetClientCount())
-	}
+	// Run the update in the background using taskpool to avoid blocking
+	taskpool.SubmitByKey(im.address, func(ctx context.Context) {
+		// Get client count from cluster info provider
+		var clientCount int32
+		if provider != nil {
+			clientCount = int32(provider.GetClientCount())
+		}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+		rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-	req := &inspector_pb.UpdateGateClientsRequest{
-		AdvertiseAddress: im.address,
-		Clients:          clientCount,
-	}
+		req := &inspector_pb.UpdateGateClientsRequest{
+			AdvertiseAddress: im.address,
+			Clients:          clientCount,
+		}
 
-	_, err := client.UpdateGateClients(ctx, req)
-	if err != nil {
-		im.logger.Warnf("Failed to update gate clients with inspector: %v", err)
-		return
-	}
+		_, err := client.UpdateGateClients(rpcCtx, req)
+		if err != nil {
+			im.logger.Warnf("Failed to update gate clients with inspector: %v", err)
+			return
+		}
 
-	im.logger.Debugf("Updated gate clients with inspector (%d clients)", clientCount)
+		im.logger.Debugf("Updated gate clients with inspector (%d clients)", clientCount)
+	})
 }
 
 // removeObjectLocked sends a RemoveObject RPC to the Inspector.
