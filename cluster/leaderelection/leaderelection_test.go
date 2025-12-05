@@ -248,9 +248,9 @@ func TestLeaderStability(t *testing.T) {
 	initialLeader := le1.GetLeader()
 	t.Logf("Initial leader: %s", initialLeader)
 
-	// Add node3 with a "smaller" address (would win in lexicographic election)
+	// Add node3 with a "smaller" ID (would win in lexicographic election)
 	// but should NOT become leader because node1 is already leading
-	le3, err := createTestLeaderElection(t, "localhost:2379", prefix, "localhost:40000", 10)
+	le3, err := createTestLeaderElection(t, "localhost:2379", prefix, "alpha-node", 10)
 	if err != nil {
 		t.Fatalf("Failed to create le3: %v", err)
 	}

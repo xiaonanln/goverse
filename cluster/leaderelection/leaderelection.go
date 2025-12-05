@@ -183,28 +183,37 @@ func (le *LeaderElection) observeLeader() {
 				le.logger.Warnf("Leader observation channel closed")
 				return
 			}
+			
+			// Handle both leader present and absent cases
+			var leader string
 			if len(resp.Kvs) > 0 {
-				leader := string(resp.Kvs[0].Value)
-				le.mu.Lock()
-				oldLeader := le.currentLeader
-				le.currentLeader = leader
-				le.mu.Unlock()
+				leader = string(resp.Kvs[0].Value)
+			}
+			// If len(resp.Kvs) == 0, leader remains empty string (no leader)
 
-				// Update local leadership status
-				wasLeader := le.isLeader.Load()
-				nowLeader := leader == le.nodeID
-				le.isLeader.Store(nowLeader)
+			le.mu.Lock()
+			oldLeader := le.currentLeader
+			le.currentLeader = leader
+			
+			// Update local leadership status under the same lock
+			wasLeader := le.isLeader.Load()
+			nowLeader := leader != "" && leader == le.nodeID
+			le.isLeader.Store(nowLeader)
+			le.mu.Unlock()
 
-				if oldLeader != leader {
+			if oldLeader != leader {
+				if leader == "" {
+					le.logger.Infof("Leader changed from %s to <none> (no leader)", oldLeader)
+				} else {
 					le.logger.Infof("Leader changed from %s to %s", oldLeader, leader)
 				}
+			}
 
-				// Log leadership transitions
-				if !wasLeader && nowLeader {
-					le.logger.Infof("Node %s became leader", le.nodeID)
-				} else if wasLeader && !nowLeader {
-					le.logger.Infof("Node %s lost leadership", le.nodeID)
-				}
+			// Log leadership transitions
+			if !wasLeader && nowLeader {
+				le.logger.Infof("Node %s became leader", le.nodeID)
+			} else if wasLeader && !nowLeader {
+				le.logger.Infof("Node %s lost leadership", le.nodeID)
 			}
 		}
 	}
