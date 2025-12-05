@@ -122,17 +122,7 @@ func TestAutomaticFailover(t *testing.T) {
 
 	// Wait for lease to expire and node2 to take over
 	// TTL is 3 seconds, so wait up to 10 seconds for failover
-	failedOver := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-		if le2.IsLeader() {
-			failedOver = true
-			t.Logf("Failover successful after ~%d ms", i*500)
-			break
-		}
-	}
-
-	if !failedOver {
+	if !waitForCondition(t, 10*time.Second, func() bool { return le2.IsLeader() }) {
 		t.Errorf("Node2 did not become leader after node1 crashed (waited 10s)")
 	}
 
@@ -346,6 +336,22 @@ func TestMultipleCandidates(t *testing.T) {
 	}
 
 	t.Logf("Multiple candidates test passed - 1 leader elected: %s", leaderID)
+}
+
+// waitForCondition waits for a condition to become true within a timeout
+// Returns true if condition was met, false if timed out
+func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool) bool {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	checkInterval := 100 * time.Millisecond
+
+	for time.Now().Before(deadline) {
+		if condition() {
+			return true
+		}
+		time.Sleep(checkInterval)
+	}
+	return false
 }
 
 // createTestLeaderElection creates a leader election for testing

@@ -127,24 +127,26 @@ func (le *LeaderElection) StartCampaign(ctx context.Context) {
 
 // Resign voluntarily steps down from leadership
 // This allows for graceful leadership handoff during maintenance
+// It's safe to call this even if not the leader - it will be a no-op
 func (le *LeaderElection) Resign(ctx context.Context) error {
 	if le.election == nil {
 		return fmt.Errorf("election not initialized")
 	}
 
-	if !le.isLeader.Load() {
-		le.logger.Debugf("Node %s is not leader, nothing to resign", le.nodeID)
-		return nil
-	}
-
-	le.logger.Infof("Node %s resigning from leadership", le.nodeID)
+	// Try to resign regardless of local state - etcd will handle idempotence
+	// This avoids race conditions where leadership state changes between check and resign
+	le.logger.Infof("Node %s attempting to resign from leadership", le.nodeID)
 
 	err := le.election.Resign(ctx)
 	if err != nil {
+		// Check if we weren't the leader (not an actual error)
+		if err.Error() == "not a leader" {
+			le.logger.Debugf("Node %s was not leader, resign is no-op", le.nodeID)
+			return nil
+		}
 		return fmt.Errorf("resign failed: %w", err)
 	}
 
-	le.isLeader.Store(false)
 	le.logger.Infof("Node %s resigned from leadership", le.nodeID)
 	return nil
 }
@@ -183,7 +185,7 @@ func (le *LeaderElection) observeLeader() {
 				le.logger.Warnf("Leader observation channel closed")
 				return
 			}
-			
+
 			// Handle both leader present and absent cases
 			var leader string
 			if len(resp.Kvs) > 0 {
@@ -191,14 +193,14 @@ func (le *LeaderElection) observeLeader() {
 			}
 			// If len(resp.Kvs) == 0, leader remains empty string (no leader)
 
-			le.mu.Lock()
-			oldLeader := le.currentLeader
-			le.currentLeader = leader
-			
-			// Update local leadership status under the same lock
+			// Update leadership state atomically
 			wasLeader := le.isLeader.Load()
 			nowLeader := leader != "" && leader == le.nodeID
 			le.isLeader.Store(nowLeader)
+
+			le.mu.Lock()
+			oldLeader := le.currentLeader
+			le.currentLeader = leader
 			le.mu.Unlock()
 
 			if oldLeader != leader {
