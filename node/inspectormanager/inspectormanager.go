@@ -379,34 +379,6 @@ func (im *InspectorManager) unregisterLocked() error {
 	return nil
 }
 
-// addOrUpdateObjectLocked sends an AddOrUpdateObject RPC to the Inspector.
-// Must be called with im.mu held.
-func (im *InspectorManager) addOrUpdateObjectLocked(objectID, objectType string, shardID int) {
-	if im.client == nil {
-		return
-	}
-
-	req := &inspector_pb.AddOrUpdateObjectRequest{
-		Object: &inspector_pb.Object{
-			Id:      objectID,
-			Class:   objectType,
-			ShardId: int32(shardID),
-		},
-		NodeAddress: im.address,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := im.client.AddOrUpdateObject(ctx, req)
-	if err != nil {
-		im.logger.Warnf("Failed to register object %s with inspector: %v", objectID, err)
-		return
-	}
-
-	im.logger.Infof("Registered object %s with inspector", objectID)
-}
-
 // addOrUpdateObject sends an AddOrUpdateObject RPC to the Inspector without holding a lock.
 // This method is safe to call from background goroutines.
 func (im *InspectorManager) addOrUpdateObject(ctx context.Context, objectID, objectType string, shardID int) {
@@ -615,30 +587,6 @@ func (im *InspectorManager) UpdateGateClients() {
 
 		im.logger.Debugf("Updated gate clients with inspector (%d clients)", clientCount)
 	})
-}
-
-// removeObjectLocked sends a RemoveObject RPC to the Inspector.
-// Must be called with im.mu held.
-func (im *InspectorManager) removeObjectLocked(objectID string) {
-	if im.client == nil {
-		return
-	}
-
-	req := &inspector_pb.RemoveObjectRequest{
-		ObjectId:    objectID,
-		NodeAddress: im.address,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := im.client.RemoveObject(ctx, req)
-	if err != nil {
-		im.logger.Warnf("Failed to remove object %s from inspector: %v", objectID, err)
-		return
-	}
-
-	im.logger.Infof("Removed object %s from inspector", objectID)
 }
 
 // managementLoop runs in the background to handle health checks and reconnection.
