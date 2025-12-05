@@ -45,6 +45,16 @@ type ShardInfo struct {
 	ModRevision int64
 }
 
+// HasFlag checks if the shard has the specified flag
+func (si *ShardInfo) HasFlag(flag string) bool {
+	for _, f := range si.Flags {
+		if f == flag {
+			return true
+		}
+	}
+	return false
+}
+
 // ShardMapping represents the mapping of shards to nodes
 // Note: Nodes and Version fields have been moved to ClusterState in consensusmanager
 type ShardMapping struct {
@@ -1193,6 +1203,15 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 
 	for shardID := 0; shardID < cm.numShards; shardID++ {
 		currentInfo := currentShards[shardID]
+		
+		// Check if shard has pinned flag
+		isPinned := currentInfo.HasFlag("pinned")
+		
+		// If shard is pinned and TargetNode is set (even if node is not alive), don't change it
+		if isPinned && currentInfo.TargetNode != "" {
+			continue
+		}
+		
 		if !nodeSet[currentInfo.TargetNode] {
 			// If TargetNode is empty but CurrentNode is already set to a valid node,
 			// respect the existing assignment and set TargetNode to CurrentNode
@@ -1208,6 +1227,7 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 				TargetNode:  targetNode,
 				CurrentNode: currentInfo.CurrentNode,
 				ModRevision: currentInfo.ModRevision,
+				Flags:       currentInfo.Flags, // Preserve flags
 			}
 			updateShards[shardID] = newInfo
 		}
@@ -1337,11 +1357,16 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 			break
 		}
 
-		// Find available shards to migrate from maxNode (excluding already selected ones)
+		// Find available shards to migrate from maxNode (excluding already selected ones and pinned shards)
 		var shardToMigrate int
 		found := false
 		for _, shardID := range shardsPerNode[maxNode] {
 			if !selectedShards[shardID] {
+				// Check if shard is pinned - skip if it is
+				existingInfo := cm.state.ShardMapping.Shards[shardID]
+				if existingInfo.HasFlag("pinned") {
+					continue
+				}
 				shardToMigrate = shardID
 				found = true
 				break
@@ -1361,6 +1386,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 			TargetNode:  minNode,
 			CurrentNode: existingInfo.CurrentNode,
 			ModRevision: existingInfo.ModRevision,
+			Flags:       existingInfo.Flags, // Preserve flags
 		}
 
 		// Mark this shard as selected
