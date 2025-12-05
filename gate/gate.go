@@ -10,7 +10,6 @@ import (
 	"github.com/xiaonanln/goverse/util/clusterinfo"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
-	"github.com/xiaonanln/goverse/util/taskpool"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 )
 
@@ -209,17 +208,13 @@ func (g *Gate) SetClusterInfoProvider(provider clusterinfo.ClusterInfoProvider) 
 // NotifyConnectedNodesChanged notifies the inspector that the gate's connections have changed.
 // This should be called whenever nodes are connected or disconnected.
 func (g *Gate) NotifyConnectedNodesChanged() {
-	taskpool.Submit(func(ctx context.Context) {
-		g.inspectorManager.UpdateConnectedNodes()
-	})
+	g.inspectorManager.UpdateConnectedNodes()
 }
 
 // NotifyClientCountChanged notifies the inspector that the gate's client count has changed.
 // This should be called whenever clients connect or disconnect.
 func (g *Gate) NotifyClientCountChanged() {
-	taskpool.Submit(func(ctx context.Context) {
-		g.inspectorManager.UpdateGateClients()
-	})
+	g.inspectorManager.UpdateGateClients()
 }
 
 // RegisterWithNodes registers this gate with all provided node connections that haven't been registered yet
