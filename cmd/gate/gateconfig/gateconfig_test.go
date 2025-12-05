@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoaderWithCLIFlags(t *testing.T) {
@@ -410,5 +411,95 @@ gates:
 	}
 	if !strings.Contains(err.Error(), "--inspector-address cannot be used with --config") {
 		t.Errorf("expected error containing '--inspector-address cannot be used with --config', got %q", err.Error())
+	}
+}
+
+func TestLoaderWithClusterStateStabilityDuration(t *testing.T) {
+	// Create a temp config file with cluster_state_stability_duration
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-cluster:2379"
+    prefix: "/goverse-test"
+  cluster_state_stability_duration: 20s
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "0.0.0.0:10001"
+    advertise_addr: "gate-1.local:10001"
+    http_addr: "0.0.0.0:8081"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+		"-gate-id", "gate-1",
+	}
+
+	cfg, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify cluster_state_stability_duration is passed through correctly
+	expectedDuration := 20 * time.Second
+	if cfg.ClusterStateStabilityDuration != expectedDuration {
+		t.Errorf("expected ClusterStateStabilityDuration %v, got %v", expectedDuration, cfg.ClusterStateStabilityDuration)
+	}
+}
+
+func TestLoaderWithoutClusterStateStabilityDuration(t *testing.T) {
+	// Create a temp config file without cluster_state_stability_duration
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-cluster:2379"
+    prefix: "/goverse-test"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "0.0.0.0:10001"
+    advertise_addr: "gate-1.local:10001"
+    http_addr: "0.0.0.0:8081"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+		"-gate-id", "gate-1",
+	}
+
+	cfg, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// When not specified, ClusterStateStabilityDuration should be 0 (will use default in cluster.Config)
+	if cfg.ClusterStateStabilityDuration != 0 {
+		t.Errorf("expected ClusterStateStabilityDuration 0 (default), got %v", cfg.ClusterStateStabilityDuration)
 	}
 }
