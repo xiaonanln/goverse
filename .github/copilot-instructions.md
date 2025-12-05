@@ -63,7 +63,7 @@ go build ./...
 go test -v -p 1 ./...
 ```
 
-Proto files: `proto/goverse.proto`, `client/proto/gate.proto`, `gate/proto/gate.proto`
+Proto files: `proto/goverse.proto`, `gate/proto/gate.proto`
 
 ## Code Conventions
 

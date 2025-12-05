@@ -23,7 +23,7 @@ cd /path/to/goverse
 ./script/compile-proto.sh
 ```
 
-This will generate the required `gate_pb2.py` and `gate_pb2_grpc.py` files in `client/proto/`.
+This will generate the required `gate_pb2.py` and `gate_pb2_grpc.py` files in `gate/proto/`.
 
 ## Quick Start
 

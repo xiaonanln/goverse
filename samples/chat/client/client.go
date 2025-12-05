@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	gate_pb "github.com/xiaonanln/goverse/client/proto"
+	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 )
