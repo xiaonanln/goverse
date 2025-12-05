@@ -97,35 +97,6 @@ func TestGetNodes_Empty(t *testing.T) {
 	}
 }
 
-func TestGetLeaderNode_Empty(t *testing.T) {
-	t.Parallel()
-	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
-
-	leader := cm.GetLeaderNode()
-	if leader != "" {
-		t.Fatalf("Expected empty leader, got %s", leader)
-	}
-}
-
-func TestGetLeaderNode_WithNodes(t *testing.T) {
-	t.Parallel()
-	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
-
-	// Add some nodes to internal state
-	cm.mu.Lock()
-	cm.state.Nodes["localhost:47003"] = true
-	cm.state.Nodes["localhost:47001"] = true
-	cm.state.Nodes["localhost:47002"] = true
-	cm.mu.Unlock()
-
-	leader := cm.GetLeaderNode()
-	if leader != "localhost:47001" {
-		t.Fatalf("Expected leader localhost:47001, got %s", leader)
-	}
-}
-
 func TestGetShardMapping_NotAvailable(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")

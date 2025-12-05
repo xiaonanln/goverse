@@ -94,11 +94,13 @@ func (sm *ShardMapping) AllShardsHaveMatchingCurrentAndTarget(numShards int) boo
 
 // ClusterState represents the current state of the cluster
 type ClusterState struct {
-	Nodes        map[string]bool
-	Gates        map[string]bool
-	ShardMapping *ShardMapping
-	Revision     int64
-	LastChange   time.Time
+	Nodes             map[string]bool
+	Gates             map[string]bool
+	ShardMapping      *ShardMapping
+	Leader            string // current leader address from /leader key
+	LeaderModRevision int64  // ModRevision of /leader key for Txn
+	Revision          int64
+	LastChange        time.Time
 }
 
 // HasNode returns true if the given node address exists in the cluster state.
@@ -190,11 +192,16 @@ type ConsensusManager struct {
 	numShards                     int           // number of shards in the cluster
 	rebalanceShardsBatchSize      atomic.Int32  // maximum number of shards to migrate in a single rebalance operation
 	imbalanceThreshold            float64       // threshold for shard imbalance as a fraction of ideal load
+	leaderCheckInterval           time.Duration // interval for checking and trying to become leader
 
 	// Watch management
 	watchCtx     context.Context
 	watchCancel  context.CancelFunc
 	watchStarted bool
+
+	// Leader election management
+	leaderElectionCtx    context.Context
+	leaderElectionCancel context.CancelFunc
 
 	// Listeners
 	listenersMu sync.RWMutex
@@ -217,6 +224,7 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		localNodeAddress:              localNodeAddress,
 		numShards:                     numShards,
 		imbalanceThreshold:            0.2, // Default value
+		leaderCheckInterval:           5 * time.Second,
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -457,6 +465,11 @@ func (cm *ConsensusManager) StartWatch(ctx context.Context) error {
 	// Start watching the entire /goverse prefix
 	prefix := cm.etcdManager.GetPrefix()
 	go cm.watchPrefix(prefix)
+
+	// Start leader election goroutine
+	cm.leaderElectionCtx, cm.leaderElectionCancel = context.WithCancel(ctx)
+	go cm.startLeaderElection(cm.leaderElectionCtx)
+
 	return nil
 }
 
@@ -465,6 +478,10 @@ func (cm *ConsensusManager) StopWatch() {
 	if cm.watchCancel != nil {
 		cm.watchCancel()
 		cm.watchCancel = nil
+	}
+	if cm.leaderElectionCancel != nil {
+		cm.leaderElectionCancel()
+		cm.leaderElectionCancel = nil
 	}
 	cm.watchStarted = false
 	cm.logger.Infof("Stopped watching")
@@ -486,6 +503,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
 	gatesPrefix := cm.etcdManager.GetPrefix() + "/gates/"
 	shardPrefix := prefix + "/shard/"
+	leaderKey := prefix + "/leader"
 
 	// Watch from the next revision after our load to prevent missing events
 	watchChan := client.Watch(cm.watchCtx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
@@ -510,8 +528,11 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 				key := string(event.Kv.Key)
 
 				cm.logger.Debugf("Received watch event: %s %s=%s rev %v", event.Type.String(), key, event.Kv.Value, event.Kv.ModRevision)
-				// Handle node changes
-				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
+				// Handle leader key changes
+				if key == leaderKey {
+					cm.handleLeaderEvent(event)
+				} else if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
+					// Handle node changes
 					cm.handleNodeEvent(event, nodesPrefix)
 				} else if len(key) > len(gatesPrefix) && key[:len(gatesPrefix)] == gatesPrefix {
 					// Handle gate changes
@@ -621,6 +642,23 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	}
 }
 
+// handleLeaderEvent processes leader key changes
+func (cm *ConsensusManager) handleLeaderEvent(event *clientv3.Event) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if event.Type == clientv3.EventTypeDelete {
+		cm.state.Leader = ""
+		cm.state.LeaderModRevision = 0
+		cm.logger.Infof("Leader key deleted")
+	} else {
+		cm.state.Leader = string(event.Kv.Value)
+		cm.state.LeaderModRevision = event.Kv.ModRevision
+		cm.logger.Infof("Leader updated to: %s", cm.state.Leader)
+	}
+	cm.notifyStateChanged()
+}
+
 func (cm *ConsensusManager) recordShardMigrationLocked(shardID int, newShardInfo ShardInfo) {
 	// Check if this is a migration completion (CurrentNode changed from one node to another)
 	oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
@@ -725,10 +763,14 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
 	gatesPrefix := cm.etcdManager.GetPrefix() + "/gates/"
 	shardPrefix := prefix + "/shard/"
+	leaderKey := prefix + "/leader"
 
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
-		if strings.HasPrefix(key, nodesPrefix) {
+		if key == leaderKey {
+			state.Leader = string(kv.Value)
+			state.LeaderModRevision = kv.ModRevision
+		} else if strings.HasPrefix(key, nodesPrefix) {
 			state.Nodes[string(kv.Value)] = true
 		} else if strings.HasPrefix(key, gatesPrefix) {
 			state.Gates[string(kv.Value)] = true
@@ -750,7 +792,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 		}
 	}
 
-	cm.logger.Infof("Loaded %d nodes, %d gates and %d shards from etcd", len(state.Nodes), len(state.Gates), len(state.ShardMapping.Shards))
+	cm.logger.Infof("Loaded %d nodes, %d gates, %d shards, and leader=%s from etcd", len(state.Nodes), len(state.Gates), len(state.ShardMapping.Shards), state.Leader)
 
 	return state, nil
 }
@@ -779,24 +821,71 @@ func (cm *ConsensusManager) GetGates() []string {
 	return gates
 }
 
-// GetLeaderNode returns the leader node address
-// The leader is the node with the smallest advertised address in lexicographic order
+// GetLeaderNode returns the leader node address from the cluster state
 func (cm *ConsensusManager) GetLeaderNode() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
+	return cm.state.Leader
+}
 
-	if len(cm.state.Nodes) == 0 {
-		return ""
+// tryBecomeLeader attempts to become the leader if no leader exists or the current leader is not alive
+func (cm *ConsensusManager) tryBecomeLeader(ctx context.Context) error {
+	cm.mu.RLock()
+	currentLeader := cm.state.Leader
+	leaderAlive := cm.state.Nodes[currentLeader]
+	leaderModRevision := cm.state.LeaderModRevision
+	cm.mu.RUnlock()
+
+	// Leader is alive, do nothing
+	if currentLeader != "" && leaderAlive {
+		return nil
 	}
 
-	// Find the smallest address (leader)
-	var leader string
-	for node := range cm.state.Nodes {
-		if leader == "" || node < leader {
-			leader = node
+	client := cm.etcdManager.GetClient()
+	if client == nil {
+		return fmt.Errorf("etcd client not connected")
+	}
+
+	leaderKey := cm.etcdManager.GetPrefix() + "/leader"
+
+	// Ensure context has a deadline for etcd operation
+	txnCtx, cancel := etcdmanager.WithEtcdDeadline(ctx)
+	defer cancel()
+
+	// Only write if key hasn't changed since we last saw it
+	txnResp, err := client.Txn(txnCtx).
+		If(clientv3.Compare(clientv3.ModRevision(leaderKey), "=", leaderModRevision)).
+		Then(clientv3.OpPut(leaderKey, cm.localNodeAddress)).
+		Commit()
+
+	if err != nil {
+		return err
+	}
+
+	if !txnResp.Succeeded {
+		// Someone else updated it first, watch will update our state
+		return nil
+	}
+
+	cm.logger.Infof("This node became leader: %s", cm.localNodeAddress)
+	return nil
+}
+
+// startLeaderElection starts a goroutine that periodically checks and tries to become leader
+func (cm *ConsensusManager) startLeaderElection(ctx context.Context) {
+	ticker := time.NewTicker(cm.leaderCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := cm.tryBecomeLeader(ctx); err != nil {
+				cm.logger.Warnf("Failed to try become leader: %v", err)
+			}
 		}
 	}
-	return leader
 }
 
 // GetShardMapping returns the current shard mapping
