@@ -2,6 +2,7 @@ package leaderelection
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -298,7 +299,7 @@ func TestMultipleCandidates(t *testing.T) {
 
 	// Create and start all nodes
 	for i := 0; i < numNodes; i++ {
-		nodeID := testutil.GetObjectIDForShard(i, "node")
+		nodeID := fmt.Sprintf("node%d", i)
 		le, err := createTestLeaderElection(t, "localhost:2379", prefix, nodeID, 10)
 		if err != nil {
 			t.Skipf("Skipping - etcd unavailable: %v", err)

@@ -73,7 +73,7 @@ func (le *LeaderElection) Start(ctx context.Context) error {
 	// Create a new session with the specified TTL
 	session, err := concurrency.NewSession(le.client, concurrency.WithTTL(le.ttl))
 	if err != nil {
-		return fmt.Errorf("failed to create etcd session: %w", err)
+		return fmt.Errorf("failed to create etcd session with TTL %d: %w", le.ttl, err)
 	}
 
 	le.session = session
