@@ -31,6 +31,10 @@ type Config struct {
 	// RebalanceShardsBatchSize is the maximum number of shards to migrate in a single rebalance operation
 	// Default: max(1, NumShards / 128)
 	RebalanceShardsBatchSize int
+
+	// ImbalanceThreshold is the threshold for shard imbalance as a fraction of ideal load
+	// Default: 0.2 (20% of ideal load)
+	ImbalanceThreshold float64
 }
 
 // DefaultConfig returns a Config with production default values
@@ -42,5 +46,6 @@ func DefaultConfig() Config {
 		ShardMappingCheckInterval:     5 * time.Second,
 		NumShards:                     numShards,
 		RebalanceShardsBatchSize:      max(1, numShards/128),
+		ImbalanceThreshold:            0.2,
 	}
 }

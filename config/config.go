@@ -9,9 +9,10 @@ import (
 
 // ClusterConfig holds cluster-level configuration
 type ClusterConfig struct {
-	Shards   int        `yaml:"shards"`
-	Provider string     `yaml:"provider"`
-	Etcd     EtcdConfig `yaml:"etcd"`
+	Shards             int        `yaml:"shards"`
+	Provider           string     `yaml:"provider"`
+	Etcd               EtcdConfig `yaml:"etcd"`
+	ImbalanceThreshold float64    `yaml:"imbalance_threshold,omitempty"`
 }
 
 // EtcdConfig holds etcd-specific configuration

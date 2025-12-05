@@ -179,6 +179,7 @@ type ConsensusManager struct {
 	localNodeAddress              string        // local node address for this consensus manager
 	numShards                     int           // number of shards in the cluster
 	rebalanceShardsBatchSize      atomic.Int32  // maximum number of shards to migrate in a single rebalance operation
+	imbalanceThreshold            float64       // threshold for shard imbalance as a fraction of ideal load
 
 	// Watch management
 	watchCtx     context.Context
@@ -205,6 +206,7 @@ func NewConsensusManager(etcdMgr *etcdmanager.EtcdManager, shardLock *shardlock.
 		clusterStateStabilityDuration: clusterStateStabilityDuration,
 		localNodeAddress:              localNodeAddress,
 		numShards:                     numShards,
+		imbalanceThreshold:            0.2, // Default value
 		state: &ClusterState{
 			Nodes: make(map[string]bool),
 			ShardMapping: &ShardMapping{
@@ -307,6 +309,26 @@ func (cm *ConsensusManager) SetRebalanceShardsBatchSize(batchSize int) {
 // GetRebalanceShardsBatchSize returns the current batch size for shard rebalancing
 func (cm *ConsensusManager) GetRebalanceShardsBatchSize() int {
 	return int(cm.rebalanceShardsBatchSize.Load())
+}
+
+// SetImbalanceThreshold sets the threshold for shard imbalance as a fraction of ideal load
+// If threshold <= 0, the default value of 0.2 is used
+func (cm *ConsensusManager) SetImbalanceThreshold(threshold float64) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if threshold <= 0 {
+		cm.logger.Infof("Invalid imbalance threshold %f, using default 0.2", threshold)
+		threshold = 0.2
+	}
+	cm.imbalanceThreshold = threshold
+	cm.logger.Infof("ConsensusManager imbalance threshold set to %f", threshold)
+}
+
+// GetImbalanceThreshold returns the current imbalance threshold
+func (cm *ConsensusManager) GetImbalanceThreshold() float64 {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.imbalanceThreshold
 }
 
 // GetMinQuorum returns the minimal number of nodes required for cluster stability
@@ -1326,12 +1348,12 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 			}
 		}
 
-		// Check rebalance conditions: a >= b + 2 and imbalance > 20% of ideal load
+		// Check rebalance conditions: a >= b + 2 and imbalance > threshold * ideal load
 		// Ideal load per node is numShards / numNodes
-		// We rebalance if: maxCount >= minCount + 2 AND (maxCount - minCount) > 0.2 * idealLoad
+		// We rebalance if: maxCount >= minCount + 2 AND (maxCount - minCount) > imbalanceThreshold * idealLoad
 		// Note: len(nodes) is guaranteed to be > 0 by the check at the start of this function
 		idealLoad := float64(cm.numShards) / float64(len(nodes))
-		imbalanceThreshold := 0.2 * idealLoad
+		imbalanceThreshold := cm.imbalanceThreshold * idealLoad
 		if maxCount < minCount+2 || float64(maxCount-minCount) <= imbalanceThreshold {
 			// No more imbalance to fix
 			break

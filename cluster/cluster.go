@@ -182,6 +182,11 @@ func (c *Cluster) init(cfg Config) error {
 	if cfg.RebalanceShardsBatchSize > 0 {
 		c.consensusManager.SetRebalanceShardsBatchSize(cfg.RebalanceShardsBatchSize)
 	}
+
+	// Set imbalance threshold on consensus manager if specified
+	if cfg.ImbalanceThreshold > 0 {
+		c.consensusManager.SetImbalanceThreshold(cfg.ImbalanceThreshold)
+	}
 	return nil
 }
 

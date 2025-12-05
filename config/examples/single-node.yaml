@@ -14,6 +14,8 @@ cluster:
     endpoints:
       - "localhost:2379"
     prefix: "/goverse"
+  # Optional: Imbalance threshold for shard rebalancing (default: 0.2)
+  # imbalance_threshold: 0.2
 
 # Optional: Inspector service configuration for monitoring and debugging
 # Uncomment the section below to enable inspector integration

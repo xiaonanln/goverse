@@ -685,3 +685,75 @@ func TestGetInspectorAdvertiseAddress(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigWithImbalanceThreshold(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+  imbalance_threshold: 0.3
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Verify imbalance threshold is loaded correctly
+	if cfg.Cluster.ImbalanceThreshold != 0.3 {
+		t.Errorf("expected imbalance threshold 0.3, got %f", cfg.Cluster.ImbalanceThreshold)
+	}
+}
+
+func TestLoadConfigWithoutImbalanceThreshold(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// When not specified, imbalance threshold should be 0 (the zero value)
+	// The cluster initialization code will set it to the default value of 0.2
+	if cfg.Cluster.ImbalanceThreshold != 0 {
+		t.Errorf("expected imbalance threshold 0 when not specified, got %f", cfg.Cluster.ImbalanceThreshold)
+	}
+}

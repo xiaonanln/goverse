@@ -34,6 +34,11 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatalf("Expected default RebalanceShardsBatchSize to be %d, got %d", expectedBatchSize, cfg.RebalanceShardsBatchSize)
 	}
 
+	// ImbalanceThreshold should default to 0.2
+	if cfg.ImbalanceThreshold != 0.2 {
+		t.Fatalf("Expected default ImbalanceThreshold to be 0.2, got %f", cfg.ImbalanceThreshold)
+	}
+
 	// EtcdAddress and EtcdPrefix should be empty by default
 	if cfg.EtcdAddress != "" {
 		t.Fatalf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
@@ -55,6 +60,7 @@ func TestConfigCustomization(t *testing.T) {
 	cfg.ShardMappingCheckInterval = 2 * time.Second
 	cfg.NumShards = 4096
 	cfg.RebalanceShardsBatchSize = 50
+	cfg.ImbalanceThreshold = 0.3
 
 	// Verify customizations
 	if cfg.EtcdAddress != "localhost:2379" {
@@ -83,6 +89,10 @@ func TestConfigCustomization(t *testing.T) {
 
 	if cfg.RebalanceShardsBatchSize != 50 {
 		t.Fatalf("Expected RebalanceShardsBatchSize to be 50, got %d", cfg.RebalanceShardsBatchSize)
+	}
+
+	if cfg.ImbalanceThreshold != 0.3 {
+		t.Fatalf("Expected ImbalanceThreshold to be 0.3, got %f", cfg.ImbalanceThreshold)
 	}
 }
 
