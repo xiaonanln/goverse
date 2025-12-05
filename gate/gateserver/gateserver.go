@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
+	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
