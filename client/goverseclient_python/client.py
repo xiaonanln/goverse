@@ -20,7 +20,7 @@ import grpc
 from google.protobuf.any_pb2 import Any as AnyProto
 from google.protobuf.message import Message
 
-# Import gate proto - these are generated from client/proto/gate.proto
+# Import gate proto - these are generated from gate/proto/gate.proto
 # The path depends on how protobuf files are generated and how this package is used.
 _current_dir = Path(__file__).parent
 
@@ -36,18 +36,11 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 try:
-    from client.proto import gate_pb2, gate_pb2_grpc
-except ImportError:
-    # Try alternative import path (from client directory)
-    try:
-        _client_dir = _current_dir.parent
-        if str(_client_dir) not in sys.path:
-            sys.path.insert(0, str(_client_dir))
-        from proto import gate_pb2, gate_pb2_grpc
-    except ImportError as e:
-        raise ImportError(
-            "Failed to import gate_pb2. Please run ./script/compile-proto.sh to generate the proto files."
-        ) from e
+    from gate.proto import gate_pb2, gate_pb2_grpc
+except ImportError as e:
+    raise ImportError(
+        "Failed to import gate_pb2. Please run ./script/compile-proto.sh to generate the proto files."
+    ) from e
 
 # Default timeouts in seconds
 DEFAULT_CONNECTION_TIMEOUT = 30.0

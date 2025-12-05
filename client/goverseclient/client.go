@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	gate_pb "github.com/xiaonanln/goverse/client/proto"
+	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"

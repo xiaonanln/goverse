@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/any.proto";
 
-option go_package = "github.com/xiaonanln/goverse/client/proto/gate_pb";
+option go_package = "github.com/xiaonanln/goverse/gate/proto/gate_pb";
 
 package gate;
 
