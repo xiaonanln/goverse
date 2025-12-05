@@ -1203,15 +1203,15 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 
 	for shardID := 0; shardID < cm.numShards; shardID++ {
 		currentInfo := currentShards[shardID]
-		
+
 		// Check if shard has pinned flag
 		isPinned := currentInfo.HasFlag("pinned")
-		
+
 		// If shard is pinned and TargetNode is set (even if node is not alive), don't change it
 		if isPinned && currentInfo.TargetNode != "" {
 			continue
 		}
-		
+
 		if !nodeSet[currentInfo.TargetNode] {
 			// If TargetNode is empty but CurrentNode is already set to a valid node,
 			// respect the existing assignment and set TargetNode to CurrentNode

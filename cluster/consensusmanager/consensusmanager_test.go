@@ -1623,18 +1623,18 @@ func TestRebalanceShards_WithPinnedShards(t *testing.T) {
 
 	// Call RebalanceShards - it will fail to store to etcd, but the logic should produce correct output
 	_, err := cm.RebalanceShards(context.Background())
-	
+
 	// We expect error because etcd is not connected, but that's okay - we're testing the logic
 	if err == nil {
 		t.Log("Note: etcd not connected, but testing rebalance logic")
 	}
-	
+
 	// The key test is that the function should have tried to move only the non-pinned shard
 	// Since we can't directly check what was attempted without etcd, we verify the input state
 	// was correctly set up: 3 pinned shards on node1, 1 non-pinned shard
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	
+
 	pinnedCount := 0
 	nonPinnedCount := 0
 	for shardID := 0; shardID < 4; shardID++ {
@@ -1645,7 +1645,7 @@ func TestRebalanceShards_WithPinnedShards(t *testing.T) {
 			nonPinnedCount++
 		}
 	}
-	
+
 	if pinnedCount != 3 {
 		t.Errorf("Expected 3 pinned shards, got %d", pinnedCount)
 	}
@@ -1697,7 +1697,7 @@ func TestRebalanceShards_AllPinnedNoRebalance(t *testing.T) {
 
 	// Try to rebalance - should return false because no non-pinned shards to move
 	rebalanced, err := cm.RebalanceShards(context.Background())
-	
+
 	// Should not rebalance since all shards are pinned
 	// If etcd is not connected, we still verify the function didn't try to rebalance
 	if err == nil && rebalanced {
