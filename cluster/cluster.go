@@ -1044,8 +1044,8 @@ func (c *Cluster) GetGates() []string {
 }
 
 // GetLeaderNode returns the leader node address.
-// The leader is the node with the smallest advertised address in lexicographic order.
-// Returns an empty string if there are no registered nodes or if consensus manager is not set.
+// The leader is elected via a race-safe mechanism using etcd transactions.
+// Returns an empty string if no leader has been elected yet or if consensus manager is not set.
 func (c *Cluster) GetLeaderNode() string {
 	return c.consensusManager.GetLeaderNode()
 }
