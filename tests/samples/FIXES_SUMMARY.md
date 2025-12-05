@@ -31,7 +31,7 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
 
 ### 4. Wrong Stub Name in ChatClient.py ✅ Fixed
-**Error**: `AttributeError: module 'client.proto.gate_pb2_grpc' has no attribute 'ClientServiceStub'`
+**Error**: `AttributeError: module 'gate.proto.gate_pb2_grpc' has no attribute 'ClientServiceStub'`
 
 **Solution**: Changed `ClientServiceStub` to `GateServiceStub` (the correct name from gate.proto)
 

@@ -12,7 +12,7 @@ import sys
 REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 
-from client.proto import gate_pb2, gate_pb2_grpc
+from gate.proto import gate_pb2, gate_pb2_grpc
 from samples.chat.proto import chat_pb2
 
 
