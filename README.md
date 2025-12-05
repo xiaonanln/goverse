@@ -131,7 +131,7 @@ Full documentation:
 - [Object Access Control](docs/design/OBJECT_ACCESS_CONTROL.md) - Access rules and security
 - [Prometheus Metrics](docs/PROMETHEUS_INTEGRATION.md) - Monitoring & observability
 - [pprof Profiling](examples/pprof/) - Performance profiling and debugging
-- [Inspector UI](cmd/inspector/) - Cluster visualization
+- [Inspector UI](docs/INSPECTOR.md) - Cluster visualization
 - [Proto Reference](proto/) - Protocol buffer definitions
 
 ---
