@@ -104,13 +104,14 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 		}
 
 		return &gateserver.GateServerConfig{
-			ListenAddress:     listenAddr,
-			AdvertiseAddress:  advertiseAddr,
-			HTTPListenAddress: gateCfg.HTTPAddr,
-			EtcdAddress:       cfg.GetEtcdAddress(),
-			EtcdPrefix:        cfg.GetEtcdPrefix(),
-			NumShards:         cfg.GetNumShards(),
-			InspectorAddress:  cfg.GetInspectorAdvertiseAddress(),
+			ListenAddress:                 listenAddr,
+			AdvertiseAddress:              advertiseAddr,
+			HTTPListenAddress:             gateCfg.HTTPAddr,
+			EtcdAddress:                   cfg.GetEtcdAddress(),
+			EtcdPrefix:                    cfg.GetEtcdPrefix(),
+			NumShards:                     cfg.GetNumShards(),
+			ClusterStateStabilityDuration: cfg.GetClusterStateStabilityDuration(),
+			InspectorAddress:              cfg.GetInspectorAdvertiseAddress(),
 		}, nil
 	}
 
