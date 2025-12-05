@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/cluster"
+	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/goverseapi"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
