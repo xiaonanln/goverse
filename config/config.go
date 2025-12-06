@@ -10,12 +10,12 @@ import (
 
 // ClusterConfig holds cluster-level configuration
 type ClusterConfig struct {
-	Shards                        int                     `yaml:"shards"`
-	Provider                      string                  `yaml:"provider"`
-	Etcd                          EtcdConfig              `yaml:"etcd"`
-	ImbalanceThreshold            float64                 `yaml:"imbalance_threshold,omitempty"`
-	ClusterStateStabilityDuration time.Duration           `yaml:"cluster_state_stability_duration,omitempty"`
-	AutoLoadObjects               []AutoLoadObjectConfig  `yaml:"auto_load_objects,omitempty"`
+	Shards                        int                    `yaml:"shards"`
+	Provider                      string                 `yaml:"provider"`
+	Etcd                          EtcdConfig             `yaml:"etcd"`
+	ImbalanceThreshold            float64                `yaml:"imbalance_threshold,omitempty"`
+	ClusterStateStabilityDuration time.Duration          `yaml:"cluster_state_stability_duration,omitempty"`
+	AutoLoadObjects               []AutoLoadObjectConfig `yaml:"auto_load_objects,omitempty"`
 }
 
 // AutoLoadObjectConfig specifies an object to auto-load when a node starts

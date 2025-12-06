@@ -1,0 +1,61 @@
+# GoVerse cluster configuration with auto-load objects example
+# 
+# This configuration file demonstrates auto-loading objects when nodes start,
+# including both single objects and per-shard objects.
+# 
+# You can start a node using: goverse-node --config cluster-with-autoload.yml --node-id node-1
+
+version: 1
+
+cluster:
+  # Number of shards in the cluster (same for all nodes/gates).
+  shards: 8192
+
+  # Cluster metadata / consensus provider.
+  provider: "etcd"
+
+  etcd:
+    # Etcd endpoints
+    endpoints:
+      - "127.0.0.1:2379"
+
+    # Etcd key prefix for this GoVerse cluster
+    prefix: "/goverse"
+
+  # Auto-load objects when nodes start
+  # Objects are created automatically when nodes claim their shards
+  auto_load_objects:
+    # Example 1: Single global object
+    # This creates one object with the exact ID "GlobalMatchmaker"
+    # It will be placed on whichever node owns the shard for that ID
+    - type: "MatchmakingService"
+      id: "GlobalMatchmaker"
+      per_shard: false  # Optional, defaults to false
+    
+    # Example 2: Per-shard objects
+    # This creates one object per shard: shard#0/ShardManager, shard#1/ShardManager, etc.
+    # Each node creates objects only for the shards it owns
+    - type: "ShardManager"
+      id: "ShardManager"
+      per_shard: true
+    
+    # Example 3: Another per-shard object
+    # Multiple per-shard objects can coexist on the same shard
+    - type: "ShardLeaderboard"
+      id: "Leaderboard"
+      per_shard: true
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+  - id: "node-2"
+    grpc_addr: "0.0.0.0:9102"
+    advertise_addr: "node-2.local:9102"
+    http_addr: "0.0.0.0:8102"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "0.0.0.0:10001"
