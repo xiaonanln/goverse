@@ -14,6 +14,11 @@ let recentlyMovedShards = new Map()
 // Track shards that were migrating in previous state (for detecting completion)
 let previousMigratingShards = new Map() // shardId -> targetNode
 
+// Helper function to check if a shard is pinned
+function isShardPinned(shard) {
+  return shard.flags && shard.flags.includes('pinned')
+}
+
 // Calculate proportional badge scale based on object count
 // Returns a scale factor between 0.85 (min) and 1.4 (max)
 function getShardBadgeScale(objectCount, maxObjectCount) {
@@ -192,7 +197,7 @@ function renderShardManagementView(container) {
                 let shardTitle = ''
                 const objectCount = shard.object_count || 0
                 const objectText = objectCount === 1 ? 'object' : 'objects'
-                const isPinned = shard.flags && shard.flags.includes('pinned')
+                const isPinned = isShardPinned(shard)
                 const pinIndicator = isPinned ? '📌 ' : ''
                 
                 // Calculate proportional size (scale 0.85 to 1.4 based on object count)
@@ -255,7 +260,7 @@ function renderUnassignedBox(unassignedShards, maxObjectCount) {
             ${unassignedShards.map(shard => {
               const objectCount = shard.object_count || 0
               const objectText = objectCount === 1 ? 'object' : 'objects'
-              const isPinned = shard.flags && shard.flags.includes('pinned')
+              const isPinned = isShardPinned(shard)
               const pinIndicator = isPinned ? '📌 ' : ''
               let shardTitle = shard.target_node 
                 ? `Shard #${shard.shard_id} (target: ${shard.target_node}) - ${objectCount} ${objectText}`
@@ -567,7 +572,7 @@ function showShardDetailsPanel(shard) {
   html += `</div>`
   
   // Pinned status
-  const isPinned = shard.flags && shard.flags.includes('pinned')
+  const isPinned = isShardPinned(shard)
   html += `<div class="detail-row">`
   html += `<div class="detail-label">Pinned:</div>`
   html += `<div class="detail-value">`
