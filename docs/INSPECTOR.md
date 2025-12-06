@@ -8,11 +8,12 @@ The Inspector provides a comprehensive dashboard for observing and managing your
 
 ## Features
 
-- **Real-time Cluster Monitoring**: Live updates via Server-Sent Events (SSE)
+- **Real-time Cluster Monitoring**: Live updates via Server-Sent Events (SSE) with automatic reconnection
 - **Interactive Visualizations**: Force-directed graphs and charts for cluster topology
-- **Shard Management**: Drag-and-drop shard migration between nodes
+- **Shard Management**: Drag-and-drop shard migration with pinning support
 - **Multi-View Dashboard**: Four specialized views for different aspects of your cluster
-- **Node & Gate Tracking**: Monitor connections and health of all cluster components
+- **Node & Gate Tracking**: Monitor connections, object counts, and client connections in real-time
+- **Built-in Profiling**: Integrated pprof endpoints for performance analysis
 
 ## Quick Start
 
@@ -62,7 +63,7 @@ The Inspector provides four specialized views accessible via tabs at the top of 
 
 Visualizes the relationship between nodes, gates, and objects in your cluster using an interactive force-directed graph.
 
-![Objects View](https://github.com/user-attachments/assets/1bcbf878-d557-4a00-9494-db8b33235136)
+![Objects View](https://github.com/user-attachments/assets/d09bd75b-d1d3-4ecd-b546-aca2e6d4fa45)
 
 **Features:**
 - **Green squares**: Goverse nodes
@@ -81,13 +82,14 @@ Visualizes the relationship between nodes, gates, and objects in your cluster us
 
 Shows the cluster topology with focus on node-to-node and gate-to-node connections, displaying object counts per component.
 
-![Nodes View](https://github.com/user-attachments/assets/4ac6a4b1-df89-4585-bf96-e6077270e67f)
+![Nodes View](https://github.com/user-attachments/assets/d95cc83d-c0c5-4c69-8840-31d00c5c2e94)
 
 **Features:**
 - **Green boxes with counts**: Nodes showing number of hosted objects
-- **Blue diamonds with counts**: Gates showing number of hosted objects
+- **Blue diamonds with counts**: Gates showing number of connected clients
 - **Connection lines**: Node interconnections and gate connections
-- **Object counts**: See how many objects each component manages
+- **Object counts**: See how many objects each node manages
+- **Live sidebar**: Left panel shows all nodes and gates with detailed metrics
 
 **Use Cases:**
 - Monitoring cluster connectivity health
@@ -99,7 +101,7 @@ Shows the cluster topology with focus on node-to-node and gate-to-node connectio
 
 Provides statistical visualizations and distribution analysis of your cluster's shards and objects.
 
-![Shard Distribution](https://github.com/user-attachments/assets/f3183f36-7d17-45ae-ba0c-f1f1834e01db)
+![Shard Distribution](https://github.com/user-attachments/assets/23910da9-76d6-4856-ae61-04e4bca6e336)
 
 **Features:**
 - **Cluster Summary**: Node count, gate count, object count, active shard count
@@ -117,7 +119,7 @@ Provides statistical visualizations and distribution analysis of your cluster's 
 
 Interactive interface for viewing and managing shard assignments across nodes.
 
-![Shard Management](https://github.com/user-attachments/assets/0075638d-b6bd-4475-96a7-6dcaacf00526)
+![Shard Management](https://github.com/user-attachments/assets/1562afaf-0867-4225-bc45-2ec9acda8969)
 
 **Features:**
 - **Node Sections**: Each node shows its assigned shards with object counts
@@ -125,13 +127,32 @@ Interactive interface for viewing and managing shard assignments across nodes.
   - **Bright green**: Shards with objects
   - **Muted green**: Empty shards
 - **Drag & Drop**: Move shards between nodes by dragging shard pills
-- **Real-time Updates**: See migrations in progress and completion
+- **Shard Pinning**: Right-click on a shard to pin/unpin it, preventing automatic rebalancing
+- **Real-time Updates**: See migrations in progress and completion via Server-Sent Events (SSE)
 
 **Use Cases:**
 - Rebalancing shards across nodes for better load distribution
 - Moving shards to prepare for node maintenance
 - Consolidating shards to optimize resource usage
 - Managing cluster capacity by redistributing workload
+
+## Cluster Sidebar
+
+The left sidebar provides a real-time overview of all cluster components:
+
+**Node Information:**
+- Node ID and status badge
+- Network address
+- Number of connections to other nodes
+- Total object count hosted on the node
+
+**Gate Information:**
+- Gate ID and status badge
+- Network address
+- Number of connections to nodes
+- Number of connected clients
+
+The sidebar updates in real-time as the cluster state changes and allows you to quickly identify and click on components to view their details.
 
 ## Configuration
 
@@ -179,8 +200,13 @@ The Inspector consists of several components:
 1. **Registration**: Nodes and gates register with the Inspector via gRPC
 2. **Updates**: Components send periodic updates about their state
 3. **Graph Updates**: Inspector updates its internal graph representation
-4. **Client Notification**: Changes are pushed to web clients via SSE
+4. **Client Notification**: Changes are pushed to web clients via Server-Sent Events (SSE)
+   - Initial state sent on connection
+   - Incremental updates for object/node/gate changes
+   - Heartbeat messages every 30 seconds to keep connections alive
+   - Automatic reconnection on disconnect
 5. **Shard Operations**: Management operations are written to etcd and executed by nodes
+6. **Consensus Watching**: ConsensusManager watches etcd for shard mapping changes and broadcasts updates
 
 ## Integration with Goverse Cluster
 
@@ -289,6 +315,20 @@ cmd/inspector/
 **Problem**: `Failed to connect to etcd`
 
 **Solution**: Start etcd before running the demo (see Quick Start section)
+
+### Shard pinning
+
+**How to pin/unpin shards**:
+1. Navigate to the Shard Management view
+2. Right-click on a shard pill
+3. Select "Pin Shard" or "Unpin Shard" from the context menu
+
+**What pinning does**:
+- Pinned shards are marked with a special flag in etcd
+- Prevents automatic rebalancing from moving the shard
+- Useful for keeping critical shards on specific nodes
+
+**Note**: The drag-and-drop interface can still manually move pinned shards if needed.
 
 ## Profiling with pprof
 
