@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -375,4 +376,244 @@ func TestClusterAutoLoadObjects_InvalidType(t *testing.T) {
 			t.Errorf("Invalid object type should not have been created: %s", objID)
 		}
 	}
+}
+
+// TestClusterAutoLoadObjects_PerShard verifies that per-shard auto-load creates
+// one object per shard owned by the node
+func TestClusterAutoLoadObjects_PerShard(t *testing.T) {
+	t.Parallel()
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	ctx := context.Background()
+
+	// Create a node
+	nodeAddr := "localhost:47540"
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
+
+	// Register test object type
+	n.RegisterObjectType((*TestAutoLoadObject)(nil))
+
+	// Start the node
+	err := n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+	defer n.Stop(ctx)
+
+	// Create cluster config with per-shard auto-load object
+	cfg := Config{
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 2 * time.Second,
+		ShardMappingCheckInterval:     500 * time.Millisecond,
+		NumShards:                     testutil.TestNumShards,
+		AutoLoadObjects: []config.AutoLoadObjectConfig{
+			{Type: "TestAutoLoadObject", ID: "PerShardTest", PerShard: true},
+		},
+	}
+
+	// Create cluster with etcd and auto-load config
+	c, err := NewClusterWithNode(cfg, n)
+	if err != nil {
+		t.Fatalf("Failed to create cluster: %v", err)
+	}
+	defer c.Stop(ctx)
+
+	// Start the cluster
+	err = c.Start(ctx, n)
+	if err != nil {
+		t.Fatalf("Failed to start cluster: %v", err)
+	}
+
+	// Wait for cluster to be ready and auto-load objects
+	testutil.WaitForClusterReady(t, c)
+
+	// Give some time for auto-load to complete
+	time.Sleep(2 * time.Second)
+
+	// Verify objects were created - should be one per shard (64 in tests)
+	objectIDs := n.ListObjectIDs()
+	t.Logf("Objects on node: %d objects", len(objectIDs))
+
+	// Count objects matching the per-shard pattern
+	perShardCount := 0
+	for _, id := range objectIDs {
+		// Check if ID matches the pattern shard#<N>/PerShardTest
+		if len(id) > 6 && id[:6] == "shard#" {
+			// Find the slash
+			slashIdx := -1
+			for i := 6; i < len(id); i++ {
+				if id[i] == '/' {
+					slashIdx = i
+					break
+				}
+			}
+			if slashIdx > 6 && id[slashIdx+1:] == "PerShardTest" {
+				perShardCount++
+			}
+		}
+	}
+
+	// All shards should have objects since this is the only node
+	expectedCount := testutil.TestNumShards
+	if perShardCount != expectedCount {
+		t.Errorf("Expected %d per-shard objects, got %d", expectedCount, perShardCount)
+	}
+
+	// Verify a few specific shard IDs
+	expectedShardIDs := []int{0, 5, 10, testutil.TestNumShards - 1}
+	for _, shardID := range expectedShardIDs {
+		expectedID := fmt.Sprintf("shard#%d/PerShardTest", shardID)
+		found := false
+		for _, id := range objectIDs {
+			if id == expectedID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected to find object with ID %s, but it was not created", expectedID)
+		}
+	}
+}
+
+// TestClusterAutoLoadObjects_PerShardMultiNode verifies that per-shard auto-load
+// creates objects only on nodes that own each shard
+func TestClusterAutoLoadObjects_PerShardMultiNode(t *testing.T) {
+	t.Parallel()
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	ctx := context.Background()
+
+	// Create two nodes
+	node1Addr := "localhost:47550"
+	node2Addr := "localhost:47551"
+
+	n1 := node.NewNode(node1Addr, testutil.TestNumShards)
+	n2 := node.NewNode(node2Addr, testutil.TestNumShards)
+
+	// Register test object type on both nodes
+	n1.RegisterObjectType((*TestAutoLoadObject)(nil))
+	n2.RegisterObjectType((*TestAutoLoadObject)(nil))
+
+	// Start nodes
+	err := n1.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node1: %v", err)
+	}
+	defer n1.Stop(ctx)
+
+	err = n2.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node2: %v", err)
+	}
+	defer n2.Stop(ctx)
+
+	// Create cluster configs with per-shard auto-load object
+	cfg1 := Config{
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 2 * time.Second,
+		ShardMappingCheckInterval:     500 * time.Millisecond,
+		NumShards:                     testutil.TestNumShards,
+		AutoLoadObjects: []config.AutoLoadObjectConfig{
+			{Type: "TestAutoLoadObject", ID: "MultiNodePerShard", PerShard: true},
+		},
+	}
+
+	cfg2 := cfg1 // Same config for both nodes
+
+	// Create clusters
+	c1, err := NewClusterWithNode(cfg1, n1)
+	if err != nil {
+		t.Fatalf("Failed to create cluster1: %v", err)
+	}
+	defer c1.Stop(ctx)
+
+	c2, err := NewClusterWithNode(cfg2, n2)
+	if err != nil {
+		t.Fatalf("Failed to create cluster2: %v", err)
+	}
+	defer c2.Stop(ctx)
+
+	// Start clusters
+	err = c1.Start(ctx, n1)
+	if err != nil {
+		t.Fatalf("Failed to start cluster1: %v", err)
+	}
+
+	err = c2.Start(ctx, n2)
+	if err != nil {
+		t.Fatalf("Failed to start cluster2: %v", err)
+	}
+
+	// Wait for clusters to be ready
+	testutil.WaitForClustersReady(t, c1, c2)
+
+	// Give time for auto-load to complete
+	time.Sleep(3 * time.Second)
+
+	// Get objects on both nodes
+	objects1 := n1.ListObjectIDs()
+	objects2 := n2.ListObjectIDs()
+
+	t.Logf("Node1 objects: %d", len(objects1))
+	t.Logf("Node2 objects: %d", len(objects2))
+
+	// Count per-shard objects on each node
+	perShardCount1 := 0
+	perShardCount2 := 0
+
+	for _, id := range objects1 {
+		if len(id) > 6 && id[:6] == "shard#" {
+			slashIdx := -1
+			for i := 6; i < len(id); i++ {
+				if id[i] == '/' {
+					slashIdx = i
+					break
+				}
+			}
+			if slashIdx > 6 && id[slashIdx+1:] == "MultiNodePerShard" {
+				perShardCount1++
+			}
+		}
+	}
+
+	for _, id := range objects2 {
+		if len(id) > 6 && id[:6] == "shard#" {
+			slashIdx := -1
+			for i := 6; i < len(id); i++ {
+				if id[i] == '/' {
+					slashIdx = i
+					break
+				}
+			}
+			if slashIdx > 6 && id[slashIdx+1:] == "MultiNodePerShard" {
+				perShardCount2++
+			}
+		}
+	}
+
+	// Total objects should equal total shards
+	totalPerShardObjects := perShardCount1 + perShardCount2
+	if totalPerShardObjects != testutil.TestNumShards {
+		t.Errorf("Expected total of %d per-shard objects across both nodes, got %d (node1: %d, node2: %d)",
+			testutil.TestNumShards, totalPerShardObjects, perShardCount1, perShardCount2)
+	}
+
+	// Each node should have some objects (roughly half)
+	if perShardCount1 == 0 {
+		t.Error("Node1 should have some per-shard objects")
+	}
+	if perShardCount2 == 0 {
+		t.Error("Node2 should have some per-shard objects")
+	}
+
+	t.Logf("Node1 has %d per-shard objects, Node2 has %d per-shard objects", perShardCount1, perShardCount2)
 }

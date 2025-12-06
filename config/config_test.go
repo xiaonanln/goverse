@@ -983,3 +983,162 @@ gates: []
 		})
 	}
 }
+
+func TestAutoLoadObjectsValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      Config
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "valid single auto-load object",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Shards:   8192,
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+					AutoLoadObjects: []AutoLoadObjectConfig{
+						{Type: "TestType", ID: "TestID"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid per-shard auto-load object",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Shards:   8192,
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+					AutoLoadObjects: []AutoLoadObjectConfig{
+						{Type: "TestType", ID: "PerShardTest", PerShard: true},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing type in auto-load object",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Shards:   8192,
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+					AutoLoadObjects: []AutoLoadObjectConfig{
+						{ID: "TestID"},
+					},
+				},
+			},
+			wantErr:     true,
+			errContains: "type is required",
+		},
+		{
+			name: "missing id in auto-load object",
+			config: Config{
+				Version: 1,
+				Cluster: ClusterConfig{
+					Shards:   8192,
+					Provider: "etcd",
+					Etcd:     EtcdConfig{Endpoints: []string{"localhost:2379"}, Prefix: "/goverse"},
+					AutoLoadObjects: []AutoLoadObjectConfig{
+						{Type: "TestType"},
+					},
+				},
+			},
+			wantErr:     true,
+			errContains: "id is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestAutoLoadObjectsPerShardConfig(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+  
+  auto_load_objects:
+    - type: "ShardManager"
+      id: "PerShardManager"
+      per_shard: true
+    
+    - type: "GlobalService"
+      id: "SingletonService"
+      per_shard: false
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+gates: []
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Check auto-load objects
+	autoLoadObjects := cfg.GetAutoLoadObjects()
+	if len(autoLoadObjects) != 2 {
+		t.Errorf("expected 2 auto-load objects, got %d", len(autoLoadObjects))
+	}
+
+	// Check first object (per-shard)
+	if autoLoadObjects[0].Type != "ShardManager" {
+		t.Errorf("expected first object type ShardManager, got %s", autoLoadObjects[0].Type)
+	}
+	if autoLoadObjects[0].ID != "PerShardManager" {
+		t.Errorf("expected first object ID PerShardManager, got %s", autoLoadObjects[0].ID)
+	}
+	if !autoLoadObjects[0].PerShard {
+		t.Error("expected first object to have per_shard=true")
+	}
+
+	// Check second object (single)
+	if autoLoadObjects[1].Type != "GlobalService" {
+		t.Errorf("expected second object type GlobalService, got %s", autoLoadObjects[1].Type)
+	}
+	if autoLoadObjects[1].ID != "SingletonService" {
+		t.Errorf("expected second object ID SingletonService, got %s", autoLoadObjects[1].ID)
+	}
+	if autoLoadObjects[1].PerShard {
+		t.Error("expected second object to have per_shard=false")
+	}
+}
