@@ -61,14 +61,23 @@ func TestLeaderElection_NoLeaderExists(t *testing.T) {
 		t.Fatalf("Failed to initialize: %v", err)
 	}
 
+	// Start watch to receive leader updates
+	err = cm.StartWatch(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watch: %v", err)
+	}
+	defer cm.StopWatch()
+
 	// Try to become leader
 	err = cm.TryBecomeLeader(ctx)
 	if err != nil {
 		t.Fatalf("Failed to become leader: %v", err)
 	}
 
-	// Wait a bit for watch events to propagate
-	time.Sleep(100 * time.Millisecond)
+	// Wait for watch events to propagate
+	testutil.WaitFor(t, 5*time.Second, "node to become leader", func() bool {
+		return cm.GetLeaderNode() == nodeAddr
+	})
 
 	// Verify this node became leader
 	leader := cm.GetLeaderNode()
@@ -138,13 +147,29 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 		t.Fatalf("Failed to initialize cm2: %v", err)
 	}
 
+	// Start watches for both
+	err = cm1.StartWatch(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watch for cm1: %v", err)
+	}
+	defer cm1.StopWatch()
+
+	err = cm2.StartWatch(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start watch for cm2: %v", err)
+	}
+	defer cm2.StopWatch()
+
 	// Node 1 becomes leader first
 	err = cm1.TryBecomeLeader(ctx)
 	if err != nil {
 		t.Fatalf("Failed for node1 to become leader: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for node1 to become leader
+	testutil.WaitFor(t, 5*time.Second, "node1 to become leader", func() bool {
+		return cm1.GetLeaderNode() == node1Addr
+	})
 
 	// Verify node1 is leader
 	leader1 := cm1.GetLeaderNode()
@@ -158,7 +183,10 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 		t.Fatalf("TryBecomeLeader should not error: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for node2 to observe node1 as leader
+	testutil.WaitFor(t, 5*time.Second, "node2 to observe node1 as leader", func() bool {
+		return cm2.GetLeaderNode() == node1Addr
+	})
 
 	// Verify leader is still node1
 	leader2 := cm2.GetLeaderNode()
@@ -218,21 +246,27 @@ func TestLeaderElection_NewLeaderWhenCurrentFails(t *testing.T) {
 
 	// Add node1 to etcd (to simulate it being alive)
 	client := mgr.GetClient()
-	node1Key := prefix + "/nodes/node1"
+	node1Key := prefix + "/nodes/" + node1Addr
 	_, err = client.Put(ctx, node1Key, node1Addr)
 	if err != nil {
 		t.Fatalf("Failed to register node1: %v", err)
 	}
 
 	// Add node2 to etcd
-	node2Key := prefix + "/nodes/node2"
+	node2Key := prefix + "/nodes/" + node2Addr
 	_, err = client.Put(ctx, node2Key, node2Addr)
 	if err != nil {
 		t.Fatalf("Failed to register node2: %v", err)
 	}
 
 	// Wait for watches to pick up nodes
-	time.Sleep(200 * time.Millisecond)
+	testutil.WaitFor(t, 5*time.Second, "watches to pick up nodes", func() bool {
+		cm1.mu.RLock()
+		defer cm1.mu.RUnlock()
+		cm2.mu.RLock()
+		defer cm2.mu.RUnlock()
+		return len(cm1.state.Nodes) == 2 && len(cm2.state.Nodes) == 2
+	})
 
 	// Node 1 becomes leader
 	err = cm1.TryBecomeLeader(ctx)
@@ -241,7 +275,9 @@ func TestLeaderElection_NewLeaderWhenCurrentFails(t *testing.T) {
 	}
 
 	// Wait for leader to be established
-	time.Sleep(200 * time.Millisecond)
+	testutil.WaitFor(t, 5*time.Second, "node1 to become leader", func() bool {
+		return cm2.GetLeaderNode() == node1Addr
+	})
 
 	// Verify node1 is leader
 	if cm2.GetLeaderNode() != node1Addr {
@@ -255,7 +291,12 @@ func TestLeaderElection_NewLeaderWhenCurrentFails(t *testing.T) {
 	}
 
 	// Wait for watch to process the deletion
-	time.Sleep(200 * time.Millisecond)
+	testutil.WaitFor(t, 5*time.Second, "watch to process node1 deletion", func() bool {
+		cm2.mu.RLock()
+		defer cm2.mu.RUnlock()
+		_, exists := cm2.state.Nodes[node1Addr]
+		return !exists
+	})
 
 	// Node 2 tries to become leader (should succeed now)
 	err = cm2.TryBecomeLeader(ctx)
@@ -264,7 +305,9 @@ func TestLeaderElection_NewLeaderWhenCurrentFails(t *testing.T) {
 	}
 
 	// Wait for leader change to propagate
-	time.Sleep(200 * time.Millisecond)
+	testutil.WaitFor(t, 5*time.Second, "node2 to become leader", func() bool {
+		return cm2.GetLeaderNode() == node2Addr
+	})
 
 	// Verify node2 is now the leader
 	leader := cm2.GetLeaderNode()
@@ -460,5 +503,3 @@ func TestLeaderElection_WatchUpdatesState(t *testing.T) {
 		t.Fatalf("Expected no leader after deletion, got %s", cm.GetLeaderNode())
 	}
 }
-
-
