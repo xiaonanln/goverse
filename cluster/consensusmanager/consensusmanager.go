@@ -1127,6 +1127,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 				TargetNode:  shardInfo.TargetNode,
 				CurrentNode: localNode,
 				ModRevision: shardInfo.ModRevision,
+				Flags:       shardInfo.Flags, // Preserve flags
 			}
 		}
 	}
