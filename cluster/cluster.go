@@ -1214,6 +1214,12 @@ func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
 		return
 	}
 
+	// Check if cluster state is stable without cloning
+	if !c.consensusManager.IsStateStable() {
+		c.logger.Debugf("%s - Skipping auto-load: cluster state is not stable yet", c)
+		return
+	}
+
 	c.logger.Infof("Auto-loading %d configured objects", len(c.config.AutoLoadObjects))
 
 	for _, cfg := range c.config.AutoLoadObjects {

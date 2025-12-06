@@ -19,6 +19,11 @@ cluster:
   # Use fewer shards for testing to speed up operations
   shards: 64
   
+  # Auto-load ChatRoomMgr0 when the node starts and claims its shard
+  auto_load_objects:
+    - type: "ChatRoomMgr"
+      id: "ChatRoomMgr0"
+
   # Cluster metadata / consensus provider
   provider: "etcd"
   
