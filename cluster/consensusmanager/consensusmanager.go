@@ -633,6 +633,10 @@ func (cm *ConsensusManager) handleLeaderEvent(event *clientv3.Event) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
+	if event.Kv.ModRevision <= cm.state.LeaderModRevision {
+		return
+	}
+
 	if event.Type == clientv3.EventTypeDelete {
 		cm.state.Leader = ""
 		cm.state.LeaderModRevision = 0
@@ -866,6 +870,17 @@ func (cm *ConsensusManager) TryBecomeLeader(ctx context.Context) error {
 		return nil
 	}
 
+	// Successfully became leader, update in-memory state
+	cm.mu.Lock()
+	if cm.state.LeaderModRevision < txnResp.Header.Revision {
+		cm.state.Leader = cm.localNodeAddress
+		cm.state.LeaderModRevision = txnResp.Header.Revision
+	}
+	cm.mu.Unlock()
+
+	// Notify listeners
+	cm.notifyStateChanged()
+
 	cm.logger.Infof("This node became leader: %s", cm.localNodeAddress)
 	return nil
 }
@@ -1066,7 +1081,6 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 						ModRevision: resp.Header.Revision,
 						Flags:       shardInfo.Flags,
 					}
-					cm.state.LastChange = time.Now()
 				}
 				cm.mu.Unlock()
 			}
@@ -1092,7 +1106,9 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 	cm.logger.Infof("Stored %d/%d shards in etcd in %d ms",
 		successCount, len(shardIDs), time.Since(startTime).Milliseconds())
 
-	// Notify listeners about state changes if any shards were successfully stored
+	// Don't update LastChange here - this is a self-initiated change by the leader
+	// The cluster state is stable from this node's perspective since it controls the change
+	// Watch events will update other nodes' state, and they will track LastChange appropriately
 	if successCount > 0 {
 		cm.notifyStateChanged()
 	}
