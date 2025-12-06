@@ -2,6 +2,8 @@ package cluster
 
 import (
 	"time"
+
+	"github.com/xiaonanln/goverse/config"
 )
 
 // Config holds cluster-level configuration parameters
@@ -35,6 +37,9 @@ type Config struct {
 	// ImbalanceThreshold is the threshold for shard imbalance as a fraction of ideal load
 	// Default: 0.2 (20% of ideal load)
 	ImbalanceThreshold float64
+
+	// AutoLoadObjects is the list of objects to automatically load when the node starts
+	AutoLoadObjects []config.AutoLoadObjectConfig
 }
 
 // DefaultConfig returns a Config with production default values
