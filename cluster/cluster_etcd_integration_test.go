@@ -227,14 +227,41 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	// Wait for all nodes to be registered and watches to sync
 	time.Sleep(1 * time.Second)
 
-	// All clusters should see the same leader (the one with smallest address)
-	expectedLeader := "localhost:47050" // This is the smallest address
+	// Wait for a leader to be elected (with new implementation, any node can become leader)
+	// Poll until we have a leader or timeout after 10 seconds
+	var electedLeader string
+	for attempts := 0; attempts < 20; attempts++ {
+		electedLeader = clusters[0].GetLeaderNode()
+		if electedLeader != "" {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 
+	if electedLeader == "" {
+		t.Fatalf("No leader was elected after waiting")
+	}
+
+	t.Logf("Leader elected: %s", electedLeader)
+
+	// Verify the elected leader is one of the nodes in the cluster
+	validLeader := false
+	for _, addr := range addresses {
+		if electedLeader == addr {
+			validLeader = true
+			break
+		}
+	}
+	if !validLeader {
+		t.Fatalf("Elected leader %s is not one of the cluster nodes %v", electedLeader, addresses)
+	}
+
+	// Verify all clusters agree on the same leader
 	for i, cluster := range clusters {
 		leader := cluster.GetLeaderNode()
 		t.Logf("Cluster %d sees leader: %s", i+1, leader)
-		if leader != expectedLeader {
-			t.Fatalf("Cluster %d: GetLeaderNode() = %s, want %s", i+1, leader, expectedLeader)
+		if leader != electedLeader {
+			t.Fatalf("Cluster %d: GetLeaderNode() = %s, want %s (all nodes should agree)", i+1, leader, electedLeader)
 		}
 	}
 
@@ -300,27 +327,74 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	// Wait for all nodes to be registered and watches to sync
 	time.Sleep(1 * time.Second)
 
-	// Initially, node2 should be the leader (smaller address)
-	initialLeader := cluster1.GetLeaderNode()
+	// Wait for a leader to be elected (with new implementation, any node can become leader)
+	// Poll until we have a leader or timeout after 10 seconds
+	var initialLeader string
+	for attempts := 0; attempts < 20; attempts++ {
+		initialLeader = cluster1.GetLeaderNode()
+		if initialLeader != "" {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if initialLeader == "" {
+		t.Fatalf("No leader was elected after waiting")
+	}
+
 	t.Logf("Initial leader: %s", initialLeader)
-	if initialLeader != "localhost:47200" {
-		t.Fatalf("Initial leader should be localhost:47200, got %s", initialLeader)
+
+	// Verify the initial leader is one of the two nodes
+	if initialLeader != "localhost:47300" && initialLeader != "localhost:47200" {
+		t.Fatalf("Initial leader %s is not one of the expected nodes", initialLeader)
 	}
 
-	// Stop cluster2 (current leader) - this will unregister the node
-	err = cluster2.Stop(ctx)
+	// Both clusters should agree on the leader
+	leader2 := cluster2.GetLeaderNode()
+	if initialLeader != leader2 {
+		t.Fatalf("Clusters disagree on leader: cluster1=%s, cluster2=%s", initialLeader, leader2)
+	}
+
+	// Stop the cluster that is currently the leader
+	var clusterToStop *Cluster
+	var remainingNode string
+	if initialLeader == "localhost:47200" {
+		clusterToStop = cluster2
+		remainingNode = "localhost:47300"
+	} else {
+		clusterToStop = cluster1
+		remainingNode = "localhost:47200"
+	}
+
+	err = clusterToStop.Stop(ctx)
 	if err != nil {
-		t.Fatalf("Failed to stop cluster2: %v", err)
+		t.Fatalf("Failed to stop cluster: %v", err)
 	}
 
-	// Wait for watch to detect the removal
-	time.Sleep(1 * time.Second)
+	// Wait for watch to detect the removal and new leader to be elected
+	time.Sleep(2 * time.Second)
 
-	// Now node1 should be the leader (only remaining node)
-	newLeader := cluster1.GetLeaderNode()
-	t.Logf("New leader after node2 left: %s", newLeader)
-	if newLeader != "localhost:47300" {
-		t.Fatalf("After node2 left, leader should be localhost:47300, got %s", newLeader)
+	// The remaining node should become the new leader
+	var newLeader string
+	var remainingCluster *Cluster
+	if remainingNode == "localhost:47300" {
+		remainingCluster = cluster1
+	} else {
+		remainingCluster = cluster2
+	}
+
+	// Poll for the new leader with timeout
+	for attempts := 0; attempts < 20; attempts++ {
+		newLeader = remainingCluster.GetLeaderNode()
+		if newLeader == remainingNode {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	t.Logf("New leader after old leader left: %s", newLeader)
+	if newLeader != remainingNode {
+		t.Fatalf("After leader left, remaining node %s should become leader, got %s", remainingNode, newLeader)
 	}
 }
 
