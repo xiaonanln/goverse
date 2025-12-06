@@ -12,6 +12,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
@@ -1224,28 +1225,73 @@ func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
 	c.logger.Infof("Auto-loading %d configured objects", len(c.config.AutoLoadObjects))
 
 	for _, cfg := range c.config.AutoLoadObjects {
-		// Check if this node owns the shard for this object
-		shardID := sharding.GetShardID(cfg.ID, c.numShards)
+		if cfg.PerShard {
+			// Create one object per shard using fixed-shard ID format
+			c.loadPerShardObject(ctx, cfg)
+		} else {
+			// Create a single object with the specified ID
+			c.loadSingleObject(ctx, cfg)
+		}
+	}
+}
+
+// loadSingleObject creates a single auto-load object with the specified ID
+func (c *Cluster) loadSingleObject(ctx context.Context, cfg config.AutoLoadObjectConfig) {
+	// Check if this node owns the shard for this object
+	shardID := sharding.GetShardID(cfg.ID, c.numShards)
+	nodeAddr, err := c.GetNodeForShard(ctx, shardID)
+	if err != nil {
+		c.logger.Errorf("Failed to determine node for auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
+		return
+	}
+
+	localAddr := c.getAdvertiseAddr()
+	if nodeAddr != localAddr {
+		return
+	}
+
+	// Create or load the object locally
+	_, err = c.CreateObject(ctx, cfg.Type, cfg.ID)
+	if err != nil {
+		c.logger.Errorf("Failed to auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
+		return
+	}
+
+	c.logger.Infof("Auto-loaded object %s (%s)", cfg.ID, cfg.Type)
+}
+
+// loadPerShardObject creates one object per shard that this node owns
+func (c *Cluster) loadPerShardObject(ctx context.Context, cfg config.AutoLoadObjectConfig) {
+	localAddr := c.getAdvertiseAddr()
+	loadedCount := 0
+
+	// Iterate through all shards and create objects for shards owned by this node
+	for shardID := 0; shardID < c.numShards; shardID++ {
 		nodeAddr, err := c.GetNodeForShard(ctx, shardID)
 		if err != nil {
-			c.logger.Errorf("Failed to determine node for auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
+			c.logger.Errorf("Failed to determine node for shard %d: %v", shardID, err)
 			continue
 		}
 
-		localAddr := c.getAdvertiseAddr()
+		// Only create objects for shards owned by this node
 		if nodeAddr != localAddr {
 			continue
 		}
 
+		// Generate fixed-shard object ID: shard#<shardID>/<baseName>
+		objectID := fmt.Sprintf("shard#%d/%s", shardID, cfg.ID)
+
 		// Create or load the object locally
-		_, err = c.CreateObject(ctx, cfg.Type, cfg.ID)
+		_, err = c.CreateObject(ctx, cfg.Type, objectID)
 		if err != nil {
-			c.logger.Errorf("Failed to auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
+			c.logger.Errorf("Failed to auto-load per-shard object %s (%s): %v", objectID, cfg.Type, err)
 			continue
 		}
 
-		c.logger.Infof("Auto-loaded object %s (%s)", cfg.ID, cfg.Type)
+		loadedCount++
 	}
+
+	c.logger.Infof("Auto-loaded %d per-shard objects of type %s (base name: %s)", loadedCount, cfg.Type, cfg.ID)
 }
 
 // releaseShardOwnership releases ownership of shards when:

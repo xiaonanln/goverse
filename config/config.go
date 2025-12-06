@@ -20,8 +20,9 @@ type ClusterConfig struct {
 
 // AutoLoadObjectConfig specifies an object to auto-load when a node starts
 type AutoLoadObjectConfig struct {
-	Type string `yaml:"type"` // Registered object type
-	ID   string `yaml:"id"`   // Full object ID
+	Type     string `yaml:"type"`      // Registered object type
+	ID       string `yaml:"id"`        // Full object ID or base name for per-shard objects
+	PerShard bool   `yaml:"per_shard"` // If true, create one object per shard using fixed-shard IDs
 }
 
 // EtcdConfig holds etcd-specific configuration
@@ -152,6 +153,16 @@ func (c *Config) Validate() error {
 
 		if gate.GRPCAddr == "" {
 			return fmt.Errorf("gate %s: grpc_addr is required", gate.ID)
+		}
+	}
+
+	// Validate auto-load objects
+	for i, obj := range c.Cluster.AutoLoadObjects {
+		if obj.Type == "" {
+			return fmt.Errorf("auto_load_objects[%d]: type is required", i)
+		}
+		if obj.ID == "" {
+			return fmt.Errorf("auto_load_objects[%d]: id is required", i)
 		}
 	}
 
