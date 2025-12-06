@@ -848,11 +848,11 @@ nodes:
 
 func TestAutoLoadObjectsConfig(t *testing.T) {
 	tests := []struct {
-		name           string
-		configContent  string
-		expectedCount  int
-		expectedFirst  AutoLoadObjectConfig
-		expectError    bool
+		name          string
+		configContent string
+		expectedCount int
+		expectedFirst AutoLoadObjectConfig
+		expectError   bool
 	}{
 		{
 			name: "with auto_load_objects",
