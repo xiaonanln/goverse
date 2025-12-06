@@ -1713,7 +1713,7 @@ func TestShardInfo_WithCurrentNode(t *testing.T) {
 	if updated.ModRevision != 123 {
 		t.Errorf("ModRevision should be preserved as 123, got %d", updated.ModRevision)
 	}
-	if len(updated.Flags) != 2 || updated.Flags[0] != "pinned" || updated.Flags[1] != "readonly" {
+	if !equalStringSlices(updated.Flags, []string{"pinned", "readonly"}) {
 		t.Errorf("Flags should be preserved as ['pinned', 'readonly'], got %v", updated.Flags)
 	}
 
@@ -1785,9 +1785,10 @@ func TestShardInfo_WithFlags(t *testing.T) {
 		Flags:       []string{"pinned"},
 	}
 
-	updated := original.WithFlags([]string{"readonly"})
+	newFlags := []string{"readonly"}
+	updated := original.WithFlags(newFlags)
 
-	if len(updated.Flags) != 1 || updated.Flags[0] != "readonly" {
+	if !equalStringSlices(updated.Flags, []string{"readonly"}) {
 		t.Errorf("Flags should be ['readonly'], got %v", updated.Flags)
 	}
 	if updated.TargetNode != "node1" {
@@ -1801,8 +1802,14 @@ func TestShardInfo_WithFlags(t *testing.T) {
 	}
 
 	// Verify original flags unchanged
-	if len(original.Flags) != 1 || original.Flags[0] != "pinned" {
+	if !equalStringSlices(original.Flags, []string{"pinned"}) {
 		t.Errorf("Original Flags should remain ['pinned'], got %v", original.Flags)
+	}
+
+	// Verify defensive copy: modifying input slice should not affect the ShardInfo
+	newFlags[0] = "modified"
+	if !equalStringSlices(updated.Flags, []string{"readonly"}) {
+		t.Errorf("Flags should remain ['readonly'] after input slice mutation, got %v", updated.Flags)
 	}
 }
 
