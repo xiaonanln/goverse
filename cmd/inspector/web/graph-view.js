@@ -767,7 +767,7 @@ function updateGraphIncremental() {
         .attr('font-size', '10px')
         .attr('font-weight', 'bold')
         .attr('pointer-events', 'none')
-        .text(d.type.substring(0, 2).toUpperCase())
+        .text(d.type.substring(0, 2))
     }
   })
 
