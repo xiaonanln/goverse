@@ -251,9 +251,9 @@ func (c *Config) NewLifecycleValidator() (*LifecycleValidator, error) {
 	return NewLifecycleValidator(c.LifecycleRules)
 }
 
-// GetAutoLoadObjects returns the list of objects to auto-load
+// GetAutoLoadObjects returns the list of objects to auto-load.
 // This returns only cluster-level auto-load objects.
-// Use GetAutoLoadObjectsForNode to get both cluster and node-specific objects.
+// Use GetAutoLoadObjectsForNode to get merged cluster and node-specific objects.
 func (c *Config) GetAutoLoadObjects() []AutoLoadObjectConfig {
 	return c.Cluster.AutoLoadObjects
 }

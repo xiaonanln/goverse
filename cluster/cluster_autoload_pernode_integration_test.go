@@ -21,7 +21,8 @@ func (o *TestNodeSpecificAutoLoadObject) OnCreated() {}
 var _ object.Object = (*TestNodeSpecificAutoLoadObject)(nil)
 
 // TestClusterAutoLoadObjects_PerNodeConfig verifies that per-node auto-load objects
-// are only created on the specific node, while cluster-level objects are created on all nodes
+// are only created on the specific node that owns the shard, while cluster-level objects
+// are created on nodes that own their respective shards
 func TestClusterAutoLoadObjects_PerNodeConfig(t *testing.T) {
 	t.Parallel()
 
