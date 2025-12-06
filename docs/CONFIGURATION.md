@@ -93,6 +93,7 @@ Cluster-level configuration for distributed coordination.
 | `provider` | string | Yes | - | Cluster coordination provider. Currently only `"etcd"` is supported. |
 | `etcd` | object | Yes | - | etcd-specific configuration. |
 | `cluster_state_stability_duration` | duration | No | `10s` | How long the node list must be stable before updating shard mapping. |
+| `auto_load_objects` | array | No | `[]` | List of objects to automatically load when a node starts. See [cluster.auto_load_objects](#clusterauto_load_objects). |
 
 #### cluster.etcd
 
@@ -121,6 +122,39 @@ cluster:
   # Optional: Configure cluster state stability duration
   # cluster_state_stability_duration: 10s  # Default if not specified
 ```
+
+#### cluster.auto_load_objects
+
+Specifies objects that should be automatically loaded when a node starts and claims the relevant shards. This is useful for pre-loading important objects (like global services) so they're always ready without cold start latency.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | The registered object type name |
+| `id` | string | Yes | The full object ID |
+
+**Example:**
+
+```yaml
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+  
+  auto_load_objects:
+    - type: "MatchmakingService"
+      id: "GlobalMatchmaker"
+    
+    - type: "LeaderboardService"
+      id: "GlobalLeaderboard"
+    
+    - type: "AuctionHouse"
+      id: "MainAuction"
+```
+
+**Note:** Objects are only loaded on the node that owns the shard for that object ID. If the shard migrates to a different node, the new node will auto-load the object after claiming the shard.
 
 ---
 
