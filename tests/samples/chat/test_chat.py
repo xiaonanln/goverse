@@ -241,7 +241,7 @@ def main():
         # In a clustered setup, objects are distributed across servers based on sharding
         # So we need to wait for at least 6 objects total across all servers
         start_time = time.time()
-        timeout = 30
+        timeout = 60  # Increased from 30 to allow more time for cluster stabilization (10s stability duration)
         expected_total_objects = 6
         
         # Initialize counters

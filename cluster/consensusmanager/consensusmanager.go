@@ -94,11 +94,13 @@ func (sm *ShardMapping) AllShardsHaveMatchingCurrentAndTarget(numShards int) boo
 
 // ClusterState represents the current state of the cluster
 type ClusterState struct {
-	Nodes        map[string]bool
-	Gates        map[string]bool
-	ShardMapping *ShardMapping
-	Revision     int64
-	LastChange   time.Time
+	Nodes             map[string]bool
+	Gates             map[string]bool
+	ShardMapping      *ShardMapping
+	Leader            string // current leader address from /leader key
+	LeaderModRevision int64  // ModRevision of /leader key for Txn
+	Revision          int64
+	LastChange        time.Time
 }
 
 // HasNode returns true if the given node address exists in the cluster state.
@@ -457,6 +459,7 @@ func (cm *ConsensusManager) StartWatch(ctx context.Context) error {
 	// Start watching the entire /goverse prefix
 	prefix := cm.etcdManager.GetPrefix()
 	go cm.watchPrefix(prefix)
+
 	return nil
 }
 
@@ -486,6 +489,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
 	gatesPrefix := cm.etcdManager.GetPrefix() + "/gates/"
 	shardPrefix := prefix + "/shard/"
+	leaderKey := prefix + "/leader"
 
 	// Watch from the next revision after our load to prevent missing events
 	watchChan := client.Watch(cm.watchCtx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
@@ -510,8 +514,11 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 				key := string(event.Kv.Key)
 
 				cm.logger.Debugf("Received watch event: %s %s=%s rev %v", event.Type.String(), key, event.Kv.Value, event.Kv.ModRevision)
-				// Handle node changes
-				if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
+				// Handle leader key changes
+				if key == leaderKey {
+					cm.handleLeaderEvent(event)
+				} else if len(key) > len(nodesPrefix) && key[:len(nodesPrefix)] == nodesPrefix {
+					// Handle node changes
 					cm.handleNodeEvent(event, nodesPrefix)
 				} else if len(key) > len(gatesPrefix) && key[:len(gatesPrefix)] == gatesPrefix {
 					// Handle gate changes
@@ -621,6 +628,24 @@ func (cm *ConsensusManager) handleShardEvent(event *clientv3.Event, shardPrefix 
 	}
 }
 
+// handleLeaderEvent processes leader key changes
+func (cm *ConsensusManager) handleLeaderEvent(event *clientv3.Event) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if event.Type == clientv3.EventTypeDelete {
+		cm.state.Leader = ""
+		cm.state.LeaderModRevision = 0
+		cm.logger.Infof("Leader key deleted")
+	} else {
+		cm.state.Leader = string(event.Kv.Value)
+		cm.state.LeaderModRevision = event.Kv.ModRevision
+		cm.logger.Infof("Leader updated to: %s", cm.state.Leader)
+	}
+	cm.state.LastChange = time.Now()
+	cm.notifyStateChanged()
+}
+
 func (cm *ConsensusManager) recordShardMigrationLocked(shardID int, newShardInfo ShardInfo) {
 	// Check if this is a migration completion (CurrentNode changed from one node to another)
 	oldShardInfo, exists := cm.state.ShardMapping.Shards[shardID]
@@ -725,10 +750,14 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 	nodesPrefix := cm.etcdManager.GetPrefix() + "/nodes/"
 	gatesPrefix := cm.etcdManager.GetPrefix() + "/gates/"
 	shardPrefix := prefix + "/shard/"
+	leaderKey := prefix + "/leader"
 
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
-		if strings.HasPrefix(key, nodesPrefix) {
+		if key == leaderKey {
+			state.Leader = string(kv.Value)
+			state.LeaderModRevision = kv.ModRevision
+		} else if strings.HasPrefix(key, nodesPrefix) {
 			state.Nodes[string(kv.Value)] = true
 		} else if strings.HasPrefix(key, gatesPrefix) {
 			state.Gates[string(kv.Value)] = true
@@ -750,7 +779,7 @@ func (cm *ConsensusManager) loadClusterStateFromEtcd(ctx context.Context) (*Clus
 		}
 	}
 
-	cm.logger.Infof("Loaded %d nodes, %d gates and %d shards from etcd", len(state.Nodes), len(state.Gates), len(state.ShardMapping.Shards))
+	cm.logger.Infof("Loaded %d nodes, %d gates, %d shards, and leader=%s from etcd", len(state.Nodes), len(state.Gates), len(state.ShardMapping.Shards), state.Leader)
 
 	return state, nil
 }
@@ -779,24 +808,66 @@ func (cm *ConsensusManager) GetGates() []string {
 	return gates
 }
 
-// GetLeaderNode returns the leader node address
-// The leader is the node with the smallest advertised address in lexicographic order
+// GetLeaderNode returns the leader node address from the cluster state
 func (cm *ConsensusManager) GetLeaderNode() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
+	return cm.state.Leader
+}
 
-	if len(cm.state.Nodes) == 0 {
-		return ""
+// TryBecomeLeader attempts to become the leader if no leader exists or the current leader is not alive
+func (cm *ConsensusManager) TryBecomeLeader(ctx context.Context) error {
+	cm.mu.RLock()
+	currentLeader := cm.state.Leader
+	leaderAlive := cm.state.Nodes[currentLeader]
+	leaderModRevision := cm.state.LeaderModRevision
+	selfAlive := cm.state.Nodes[cm.localNodeAddress]
+	cm.mu.RUnlock()
+
+	// Leader is alive, do nothing
+	if currentLeader != "" && leaderAlive {
+		return nil
 	}
 
-	// Find the smallest address (leader)
-	var leader string
-	for node := range cm.state.Nodes {
-		if leader == "" || node < leader {
-			leader = node
-		}
+	// Already the leader, do nothing
+	if currentLeader == cm.localNodeAddress {
+		return nil
 	}
-	return leader
+
+	// Don't attempt to become leader if we're not in the cluster ourselves
+	if !selfAlive {
+		return fmt.Errorf("not attempting to become leader: node %s is not in the cluster", cm.localNodeAddress)
+	}
+
+	client := cm.etcdManager.GetClient()
+	if client == nil {
+		return fmt.Errorf("etcd client is not available")
+	}
+
+	leaderKey := cm.etcdManager.GetPrefix() + "/leader"
+
+	// Ensure context has a deadline for etcd operation
+	txnCtx, cancel := etcdmanager.WithEtcdDeadline(ctx)
+	defer cancel()
+
+	// Only write if key hasn't changed since we last saw it
+	cm.logger.Infof("Attempting to become leader (current leader: %s, alive: %v, mod_revision: %d)", currentLeader, leaderAlive, leaderModRevision)
+	txnResp, err := client.Txn(txnCtx).
+		If(clientv3.Compare(clientv3.ModRevision(leaderKey), "=", leaderModRevision)).
+		Then(clientv3.OpPut(leaderKey, cm.localNodeAddress)).
+		Commit()
+
+	if err != nil {
+		return err
+	}
+
+	if !txnResp.Succeeded {
+		// Someone else updated it first, watch will update our state
+		return nil
+	}
+
+	cm.logger.Infof("This node became leader: %s", cm.localNodeAddress)
+	return nil
 }
 
 // GetShardMapping returns the current shard mapping
@@ -994,6 +1065,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 						CurrentNode: shardInfo.CurrentNode,
 						ModRevision: resp.Header.Revision,
 					}
+					cm.state.LastChange = time.Now()
 				}
 				cm.mu.Unlock()
 			}

@@ -1044,8 +1044,8 @@ func (c *Cluster) GetGates() []string {
 }
 
 // GetLeaderNode returns the leader node address.
-// The leader is the node with the smallest advertised address in lexicographic order.
-// Returns an empty string if there are no registered nodes or if consensus manager is not set.
+// The leader is elected via a race-safe mechanism using etcd transactions.
+// Returns an empty string if no leader has been elected yet or if consensus manager is not set.
 func (c *Cluster) GetLeaderNode() string {
 	return c.consensusManager.GetLeaderNode()
 }
@@ -1148,6 +1148,11 @@ func (c *Cluster) clusterManagementTick() {
 // handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
 func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.clusterManagementCtx
+
+	// Try to become leader if no leader exists or current leader is dead
+	if err := c.consensusManager.TryBecomeLeader(ctx); err != nil {
+		c.logger.Warnf("%s - Failed to try become leader: %v", c, err)
+	}
 
 	// If leader made changes to cluster state, skip other operations this cycle
 	// to allow the cluster state to stabilize before proceeding. Always update
