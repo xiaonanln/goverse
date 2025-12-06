@@ -48,11 +48,6 @@ func TestLeaderElection_NoLeaderExists(t *testing.T) {
 	nodeAddr := "localhost:47001"
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, nodeAddr, testNumShards)
 
-	// Add this node to the cluster state
-	cm.mu.Lock()
-	cm.state.Nodes[nodeAddr] = true
-	cm.mu.Unlock()
-
 	ctx := context.Background()
 
 	// Initialize and load state
@@ -61,12 +56,28 @@ func TestLeaderElection_NoLeaderExists(t *testing.T) {
 		t.Fatalf("Failed to initialize: %v", err)
 	}
 
+	// Register this node in etcd (required for self-alive check)
+	client := mgr.GetClient()
+	nodeKey := prefix + "/nodes/" + nodeAddr
+	_, err = client.Put(ctx, nodeKey, nodeAddr)
+	if err != nil {
+		t.Fatalf("Failed to register node in etcd: %v", err)
+	}
+
 	// Start watch to receive leader updates
 	err = cm.StartWatch(ctx)
 	if err != nil {
 		t.Fatalf("Failed to start watch: %v", err)
 	}
 	defer cm.StopWatch()
+
+	// Wait for watch to pick up the node registration
+	testutil.WaitFor(t, 5*time.Second, "node to be registered in cluster state", func() bool {
+		cm.mu.RLock()
+		defer cm.mu.RUnlock()
+		_, exists := cm.state.Nodes[nodeAddr]
+		return exists
+	})
 
 	// Try to become leader
 	err = cm.TryBecomeLeader(ctx)
@@ -86,7 +97,6 @@ func TestLeaderElection_NoLeaderExists(t *testing.T) {
 	}
 
 	// Verify the leader key is set in etcd
-	client := mgr.GetClient()
 	leaderKey := prefix + "/leader"
 	resp, err := client.Get(ctx, leaderKey)
 	if err != nil {
@@ -124,17 +134,6 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 	cm1 := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, node1Addr, testNumShards)
 	cm2 := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, node2Addr, testNumShards)
 
-	// Add both nodes to cluster state
-	cm1.mu.Lock()
-	cm1.state.Nodes[node1Addr] = true
-	cm1.state.Nodes[node2Addr] = true
-	cm1.mu.Unlock()
-
-	cm2.mu.Lock()
-	cm2.state.Nodes[node1Addr] = true
-	cm2.state.Nodes[node2Addr] = true
-	cm2.mu.Unlock()
-
 	ctx := context.Background()
 
 	// Initialize both
@@ -145,6 +144,19 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 	err = cm2.Initialize(ctx)
 	if err != nil {
 		t.Fatalf("Failed to initialize cm2: %v", err)
+	}
+
+	// Register both nodes in etcd (required for self-alive check)
+	client := mgr.GetClient()
+	node1Key := prefix + "/nodes/" + node1Addr
+	_, err = client.Put(ctx, node1Key, node1Addr)
+	if err != nil {
+		t.Fatalf("Failed to register node1 in etcd: %v", err)
+	}
+	node2Key := prefix + "/nodes/" + node2Addr
+	_, err = client.Put(ctx, node2Key, node2Addr)
+	if err != nil {
+		t.Fatalf("Failed to register node2 in etcd: %v", err)
 	}
 
 	// Start watches for both
@@ -159,6 +171,15 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 		t.Fatalf("Failed to start watch for cm2: %v", err)
 	}
 	defer cm2.StopWatch()
+
+	// Wait for watches to pick up the node registrations
+	testutil.WaitFor(t, 5*time.Second, "watches to pick up nodes", func() bool {
+		cm1.mu.RLock()
+		defer cm1.mu.RUnlock()
+		cm2.mu.RLock()
+		defer cm2.mu.RUnlock()
+		return len(cm1.state.Nodes) == 2 && len(cm2.state.Nodes) == 2
+	})
 
 	// Node 1 becomes leader first
 	err = cm1.TryBecomeLeader(ctx)

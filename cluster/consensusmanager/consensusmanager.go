@@ -820,11 +820,22 @@ func (cm *ConsensusManager) TryBecomeLeader(ctx context.Context) error {
 	currentLeader := cm.state.Leader
 	leaderAlive := cm.state.Nodes[currentLeader]
 	leaderModRevision := cm.state.LeaderModRevision
+	selfAlive := cm.state.Nodes[cm.localNodeAddress]
 	cm.mu.RUnlock()
 
 	// Leader is alive, do nothing
 	if currentLeader != "" && leaderAlive {
 		return nil
+	}
+
+	// Already the leader, do nothing
+	if currentLeader == cm.localNodeAddress {
+		return nil
+	}
+
+	// Don't attempt to become leader if we're not in the cluster ourselves
+	if !selfAlive {
+		return fmt.Errorf("not attempting to become leader: node %s is not in the cluster", cm.localNodeAddress)
 	}
 
 	client := cm.etcdManager.GetClient()
