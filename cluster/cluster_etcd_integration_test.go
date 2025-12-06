@@ -228,7 +228,7 @@ func TestClusterGetLeaderNode(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Wait for a leader to be elected (with new implementation, any node can become leader)
-	// Poll until we have a leader or timeout after 10 seconds
+	// Poll until we have a leader (20 attempts x 500ms = up to 10 seconds)
 	var electedLeader string
 	for attempts := 0; attempts < 20; attempts++ {
 		electedLeader = clusters[0].GetLeaderNode()
@@ -328,7 +328,7 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Wait for a leader to be elected (with new implementation, any node can become leader)
-	// Poll until we have a leader or timeout after 10 seconds
+	// Poll until we have a leader (20 attempts x 500ms = up to 10 seconds)
 	var initialLeader string
 	for attempts := 0; attempts < 20; attempts++ {
 		initialLeader = cluster1.GetLeaderNode()
