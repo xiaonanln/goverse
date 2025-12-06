@@ -636,10 +636,12 @@ func (cm *ConsensusManager) handleLeaderEvent(event *clientv3.Event) {
 	if event.Type == clientv3.EventTypeDelete {
 		cm.state.Leader = ""
 		cm.state.LeaderModRevision = 0
+		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Leader key deleted")
 	} else {
 		cm.state.Leader = string(event.Kv.Value)
 		cm.state.LeaderModRevision = event.Kv.ModRevision
+		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Leader updated to: %s", cm.state.Leader)
 	}
 	cm.notifyStateChanged()
@@ -1063,6 +1065,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 						CurrentNode: shardInfo.CurrentNode,
 						ModRevision: resp.Header.Revision,
 					}
+					cm.state.LastChange = time.Now()
 				}
 				cm.mu.Unlock()
 			}
