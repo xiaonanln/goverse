@@ -571,6 +571,106 @@ nodes:
 	}
 }
 
+func TestLoaderWithPerNodeAutoLoadObjects(t *testing.T) {
+	// Create a temp config file with both cluster and node-specific auto_load_objects
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+  
+  auto_load_objects:
+    - type: "ClusterManager"
+      id: "GlobalClusterMgr"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:50051"
+    advertise_addr: "localhost:50051"
+    auto_load_objects:
+      - type: "NodeService"
+        id: "Node1Service"
+      - type: "NodeCache"
+        id: "Node1Cache"
+        per_shard: true
+
+  - id: "node-2"
+    grpc_addr: "0.0.0.0:50052"
+    advertise_addr: "localhost:50052"
+    auto_load_objects:
+      - type: "NodeService"
+        id: "Node2Service"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Test node-1
+	fs1 := flag.NewFlagSet("test1", flag.ContinueOnError)
+	loader1 := NewLoader(fs1)
+	args1 := []string{
+		"-config", configPath,
+		"-node-id", "node-1",
+	}
+	cfg1, err := loader1.Load(args1)
+	if err != nil {
+		t.Fatalf("Load failed for node-1: %v", err)
+	}
+
+	// Verify node-1 gets cluster + node-specific auto-load objects
+	if len(cfg1.AutoLoadObjects) != 3 {
+		t.Fatalf("expected 3 auto-load objects for node-1, got %d", len(cfg1.AutoLoadObjects))
+	}
+	if cfg1.AutoLoadObjects[0].Type != "ClusterManager" {
+		t.Errorf("expected first object type ClusterManager, got %s", cfg1.AutoLoadObjects[0].Type)
+	}
+	if cfg1.AutoLoadObjects[1].Type != "NodeService" {
+		t.Errorf("expected second object type NodeService, got %s", cfg1.AutoLoadObjects[1].Type)
+	}
+	if cfg1.AutoLoadObjects[1].ID != "Node1Service" {
+		t.Errorf("expected Node1Service, got %s", cfg1.AutoLoadObjects[1].ID)
+	}
+	if cfg1.AutoLoadObjects[2].Type != "NodeCache" {
+		t.Errorf("expected third object type NodeCache, got %s", cfg1.AutoLoadObjects[2].Type)
+	}
+	if !cfg1.AutoLoadObjects[2].PerShard {
+		t.Error("expected Node1Cache to be per-shard")
+	}
+
+	// Test node-2
+	fs2 := flag.NewFlagSet("test2", flag.ContinueOnError)
+	loader2 := NewLoader(fs2)
+	args2 := []string{
+		"-config", configPath,
+		"-node-id", "node-2",
+	}
+	cfg2, err := loader2.Load(args2)
+	if err != nil {
+		t.Fatalf("Load failed for node-2: %v", err)
+	}
+
+	// Verify node-2 gets cluster + its own node-specific auto-load objects
+	if len(cfg2.AutoLoadObjects) != 2 {
+		t.Fatalf("expected 2 auto-load objects for node-2, got %d", len(cfg2.AutoLoadObjects))
+	}
+	if cfg2.AutoLoadObjects[0].Type != "ClusterManager" {
+		t.Errorf("expected first object type ClusterManager, got %s", cfg2.AutoLoadObjects[0].Type)
+	}
+	if cfg2.AutoLoadObjects[1].Type != "NodeService" {
+		t.Errorf("expected second object type NodeService, got %s", cfg2.AutoLoadObjects[1].Type)
+	}
+	if cfg2.AutoLoadObjects[1].ID != "Node2Service" {
+		t.Errorf("expected Node2Service, got %s", cfg2.AutoLoadObjects[1].ID)
+	}
+}
+
 func TestLoaderWithoutAutoLoadObjects(t *testing.T) {
 	// Create a temp config file without auto_load_objects
 	configContent := `

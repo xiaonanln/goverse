@@ -43,10 +43,11 @@ type PostgresConfig struct {
 
 // NodeConfig holds configuration for a single node
 type NodeConfig struct {
-	ID            string `yaml:"id"`
-	GRPCAddr      string `yaml:"grpc_addr"`
-	AdvertiseAddr string `yaml:"advertise_addr"`
-	HTTPAddr      string `yaml:"http_addr"`
+	ID              string                 `yaml:"id"`
+	GRPCAddr        string                 `yaml:"grpc_addr"`
+	AdvertiseAddr   string                 `yaml:"advertise_addr"`
+	HTTPAddr        string                 `yaml:"http_addr"`
+	AutoLoadObjects []AutoLoadObjectConfig `yaml:"auto_load_objects,omitempty"` // Optional: per-node auto-load objects
 }
 
 // GateConfig holds configuration for a single gate
@@ -137,6 +138,16 @@ func (c *Config) Validate() error {
 		}
 		if node.AdvertiseAddr == "" {
 			return fmt.Errorf("node %s: advertise_addr is required", node.ID)
+		}
+
+		// Validate per-node auto-load objects
+		for j, obj := range node.AutoLoadObjects {
+			if obj.Type == "" {
+				return fmt.Errorf("node %s: auto_load_objects[%d]: type is required", node.ID, j)
+			}
+			if obj.ID == "" {
+				return fmt.Errorf("node %s: auto_load_objects[%d]: id is required", node.ID, j)
+			}
 		}
 	}
 
@@ -241,6 +252,27 @@ func (c *Config) NewLifecycleValidator() (*LifecycleValidator, error) {
 }
 
 // GetAutoLoadObjects returns the list of objects to auto-load
+// This returns only cluster-level auto-load objects.
+// Use GetAutoLoadObjectsForNode to get both cluster and node-specific objects.
 func (c *Config) GetAutoLoadObjects() []AutoLoadObjectConfig {
 	return c.Cluster.AutoLoadObjects
+}
+
+// GetAutoLoadObjectsForNode returns the combined list of auto-load objects for a specific node.
+// It merges cluster-level auto-load objects with node-specific auto-load objects.
+// Returns an error if the node is not found.
+func (c *Config) GetAutoLoadObjectsForNode(nodeID string) ([]AutoLoadObjectConfig, error) {
+	nodeCfg, err := c.GetNodeByID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start with cluster-level auto-load objects
+	result := make([]AutoLoadObjectConfig, 0, len(c.Cluster.AutoLoadObjects)+len(nodeCfg.AutoLoadObjects))
+	result = append(result, c.Cluster.AutoLoadObjects...)
+	
+	// Add node-specific auto-load objects
+	result = append(result, nodeCfg.AutoLoadObjects...)
+	
+	return result, nil
 }
