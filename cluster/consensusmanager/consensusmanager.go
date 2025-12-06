@@ -55,47 +55,34 @@ func (si *ShardInfo) HasFlag(flag string) bool {
 	return false
 }
 
-// WithCurrentNode returns a copy with updated CurrentNode, preserving all other fields
-func (si ShardInfo) WithCurrentNode(node string) ShardInfo {
-	return ShardInfo{
-		TargetNode:  si.TargetNode,
-		CurrentNode: node,
-		ModRevision: si.ModRevision,
-		Flags:       si.Flags,
-	}
-}
-
-// WithTargetNode returns a copy with updated TargetNode, preserving all other fields
-func (si ShardInfo) WithTargetNode(node string) ShardInfo {
-	return ShardInfo{
-		TargetNode:  node,
-		CurrentNode: si.CurrentNode,
-		ModRevision: si.ModRevision,
-		Flags:       si.Flags,
-	}
-}
-
-// WithModRevision returns a copy with updated ModRevision, preserving all other fields
-func (si ShardInfo) WithModRevision(rev int64) ShardInfo {
-	return ShardInfo{
-		TargetNode:  si.TargetNode,
-		CurrentNode: si.CurrentNode,
-		ModRevision: rev,
-		Flags:       si.Flags,
-	}
-}
-
-// WithFlags returns a copy with updated Flags, preserving all other fields
-func (si ShardInfo) WithFlags(flags []string) ShardInfo {
+// Clone returns a deep copy of the ShardInfo
+func (si ShardInfo) Clone() ShardInfo {
 	// Create a defensive copy of the flags slice to prevent unintended mutations
-	flagsCopy := make([]string, len(flags))
-	copy(flagsCopy, flags)
+	var flagsCopy []string
+	if si.Flags != nil {
+		flagsCopy = make([]string, len(si.Flags))
+		copy(flagsCopy, si.Flags)
+	}
 	return ShardInfo{
 		TargetNode:  si.TargetNode,
 		CurrentNode: si.CurrentNode,
 		ModRevision: si.ModRevision,
 		Flags:       flagsCopy,
 	}
+}
+
+// WithCurrentNode returns a copy with updated CurrentNode, preserving all other fields
+func (si ShardInfo) WithCurrentNode(node string) ShardInfo {
+	cloned := si.Clone()
+	cloned.CurrentNode = node
+	return cloned
+}
+
+// WithTargetNode returns a copy with updated TargetNode, preserving all other fields
+func (si ShardInfo) WithTargetNode(node string) ShardInfo {
+	cloned := si.Clone()
+	cloned.TargetNode = node
+	return cloned
 }
 
 // ShardMapping represents the mapping of shards to nodes
