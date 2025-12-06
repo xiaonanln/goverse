@@ -719,3 +719,32 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 .stat-warning strong {
   color: #e65100;
 }
+
+/* Pin toggle button styles */
+.pin-toggle-btn {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 8px;
+  transition: background-color 0.2s;
+}
+
+.pin-toggle-btn.pin {
+  background: #9C27B0;
+  color: white;
+}
+
+.pin-toggle-btn.pin:hover {
+  background: #7B1FA2;
+}
+
+.pin-toggle-btn.unpin {
+  background: #757575;
+  color: white;
+}
+
+.pin-toggle-btn.unpin:hover {
+  background: #616161;
+}

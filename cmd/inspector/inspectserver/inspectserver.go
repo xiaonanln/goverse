@@ -10,7 +10,6 @@ import (
 	"net/http/pprof"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -197,6 +196,9 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 
 	// Shard move endpoint
 	mux.HandleFunc("/shards/move", s.handleShardMove)
+
+	// Shard pin endpoint
+	mux.HandleFunc("/shards/pin", s.handleShardPin)
 
 	// SSE endpoint for push-based updates
 	mux.HandleFunc("/events/stream", s.handleEventsStream)
@@ -401,11 +403,11 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 
 	// Parse shard mappings
 	type ShardInfo struct {
-		ShardID     int    `json:"shard_id"`
-		TargetNode  string `json:"target_node"`
-		CurrentNode string `json:"current_node"`
-		ObjectCount int    `json:"object_count"`
-		Flags       string `json:"flags,omitempty"`
+		ShardID     int      `json:"shard_id"`
+		TargetNode  string   `json:"target_node"`
+		CurrentNode string   `json:"current_node"`
+		ObjectCount int      `json:"object_count"`
+		Flags       []string `json:"flags,omitempty"`
 	}
 
 	shards := make([]ShardInfo, 0)
@@ -427,7 +429,7 @@ func (s *InspectorServer) handleShardMapping(w http.ResponseWriter, r *http.Requ
 				TargetNode:  shardInfo.TargetNode,
 				CurrentNode: shardInfo.CurrentNode,
 				ObjectCount: objectCountPerShard[shardID],
-				Flags:       strings.Join(shardInfo.Flags, ","),
+				Flags:       shardInfo.Flags,
 			})
 
 			if shardInfo.TargetNode != "" {
@@ -551,6 +553,91 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Failed to encode response: %v", err)
 	}
+}
+
+// handleShardPin handles POST /shards/pin for pinning/unpinning a shard
+func (s *InspectorServer) handleShardPin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.consensusManager == nil {
+		http.Error(w, "Consensus manager not available. Start inspector with --etcd-addr flag.", http.StatusServiceUnavailable)
+		return
+	}
+
+	type PinShardRequest struct {
+		ShardID int  `json:"shard_id"`
+		Pinned  bool `json:"pinned"`
+	}
+
+	var req PinShardRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Validate shard ID
+	if req.ShardID < 0 || req.ShardID >= s.consensusManager.GetNumShards() {
+		http.Error(w, fmt.Sprintf("Invalid shard ID: %d", req.ShardID), http.StatusBadRequest)
+		return
+	}
+
+	// Get current shard mapping
+	shardMapping := s.consensusManager.GetShardMapping()
+	if shardMapping == nil {
+		http.Error(w, "Shard mapping not available", http.StatusInternalServerError)
+		return
+	}
+
+	currentInfo, exists := shardMapping.Shards[req.ShardID]
+	if !exists {
+		http.Error(w, fmt.Sprintf("Shard %d not found in mapping", req.ShardID), http.StatusNotFound)
+		return
+	}
+
+	// Update flags - remove existing "pinned" flag first, then add if requested
+	var newFlags []string
+	for _, f := range currentInfo.Flags {
+		if f != "pinned" {
+			newFlags = append(newFlags, f)
+		}
+	}
+	if req.Pinned {
+		newFlags = append(newFlags, "pinned")
+	}
+
+	// Prepare update
+	updateShards := map[int]consensusmanager.ShardInfo{
+		req.ShardID: {
+			TargetNode:  currentInfo.TargetNode,
+			CurrentNode: currentInfo.CurrentNode,
+			ModRevision: currentInfo.ModRevision,
+			Flags:       newFlags,
+		},
+	}
+
+	// Store update
+	n, err := s.consensusManager.StoreShardMapping(r.Context(), updateShards)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update shard: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	action := "unpinned"
+	if req.Pinned {
+		action = "pinned"
+	}
+	log.Printf("Shard %d %s successfully", req.ShardID, action)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"updated":  n,
+		"shard_id": req.ShardID,
+		"pinned":   req.Pinned,
+	})
 }
 
 // broadcastShardUpdate sends a shard update event to all SSE clients

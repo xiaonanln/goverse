@@ -494,3 +494,76 @@ func TestPprofEndpoints(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleShardPin_NoConsensusManager tests that handleShardPin returns error when consensusManager is not initialized
+func TestHandleShardPin_NoConsensusManager(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	reqBody := `{"shard_id": 1, "pinned": true}`
+	req := httptest.NewRequest(http.MethodPost, "/shards/pin", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "Consensus manager not available") {
+		t.Fatalf("Expected error message about consensus manager, got: %s", body)
+	}
+}
+
+// TestHandleShardPin_MethodNotAllowed tests that non-POST requests are rejected
+func TestHandleShardPin_MethodNotAllowed(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/shards/pin", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405 for GET, got %d", rr.Code)
+	}
+}
+
+// TestHandleShardPin_InvalidRequest tests that invalid request body is rejected
+func TestHandleShardPin_InvalidRequest(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	reqBody := `{"invalid": "json"`
+	req := httptest.NewRequest(http.MethodPost, "/shards/pin", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Should fail because consensus manager is not available (checked before validation)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503 (consensus check happens first), got %d", rr.Code)
+	}
+}
