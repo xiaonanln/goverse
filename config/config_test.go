@@ -845,3 +845,141 @@ nodes:
 		t.Errorf("expected imbalance threshold 0 when not specified, got %f", cfg.Cluster.ImbalanceThreshold)
 	}
 }
+
+func TestAutoLoadObjectsConfig(t *testing.T) {
+	tests := []struct {
+		name           string
+		configContent  string
+		expectedCount  int
+		expectedFirst  AutoLoadObjectConfig
+		expectError    bool
+	}{
+		{
+			name: "with auto_load_objects",
+			configContent: `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+  
+  auto_load_objects:
+    - type: "MatchmakingService"
+      id: "GlobalMatchmaker"
+    
+    - type: "LeaderboardService"
+      id: "GlobalLeaderboard"
+    
+    - type: "AuctionHouse"
+      id: "MainAuction"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+gates: []
+`,
+			expectedCount: 3,
+			expectedFirst: AutoLoadObjectConfig{
+				Type: "MatchmakingService",
+				ID:   "GlobalMatchmaker",
+			},
+			expectError: false,
+		},
+		{
+			name: "without auto_load_objects",
+			configContent: `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+gates: []
+`,
+			expectedCount: 0,
+			expectError:   false,
+		},
+		{
+			name: "empty auto_load_objects",
+			configContent: `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+  
+  auto_load_objects: []
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+    http_addr: "0.0.0.0:8101"
+
+gates: []
+`,
+			expectedCount: 0,
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.yml")
+			if err := os.WriteFile(configPath, []byte(tt.configContent), 0600); err != nil {
+				t.Fatalf("failed to write config file: %v", err)
+			}
+
+			cfg, err := LoadConfig(configPath)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("LoadConfig failed: %v", err)
+			}
+
+			// Check auto-load objects count
+			autoLoadObjects := cfg.GetAutoLoadObjects()
+			if len(autoLoadObjects) != tt.expectedCount {
+				t.Errorf("expected %d auto-load objects, got %d", tt.expectedCount, len(autoLoadObjects))
+			}
+
+			// Check first object if expected
+			if tt.expectedCount > 0 && len(autoLoadObjects) > 0 {
+				first := autoLoadObjects[0]
+				if first.Type != tt.expectedFirst.Type {
+					t.Errorf("expected first object type %s, got %s", tt.expectedFirst.Type, first.Type)
+				}
+				if first.ID != tt.expectedFirst.ID {
+					t.Errorf("expected first object ID %s, got %s", tt.expectedFirst.ID, first.ID)
+				}
+			}
+		})
+	}
+}

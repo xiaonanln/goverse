@@ -43,6 +43,7 @@ type Cluster struct {
 	nodeConnections           *nodeconnections.NodeConnections
 	shardLock                 *shardlock.ShardLock
 	logger                    *logger.Logger
+	config                    Config        // cluster configuration
 	etcdAddress               string        // etcd server address (e.g., "localhost:2379")
 	etcdPrefix                string        // etcd key prefix for this cluster
 	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
@@ -101,6 +102,7 @@ func NewClusterWithNode(cfg Config, node *node.Node) (*Cluster, error) {
 		node:                      node,
 		logger:                    logger.NewLogger("Cluster"),
 		clusterReadyChan:          make(chan bool),
+		config:                    cfg,
 		etcdAddress:               cfg.EtcdAddress,
 		etcdPrefix:                cfg.EtcdPrefix,
 		minQuorum:                 cfg.MinQuorum,
@@ -127,6 +129,7 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 		gate:                      g,
 		logger:                    logger.NewLogger("Cluster"),
 		clusterReadyChan:          make(chan bool),
+		config:                    cfg,
 		etcdAddress:               cfg.EtcdAddress,
 		etcdPrefix:                cfg.EtcdPrefix,
 		minQuorum:                 cfg.MinQuorum,
@@ -1188,6 +1191,46 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 	err := c.consensusManager.ClaimShardsForNode(ctx)
 	if err != nil {
 		c.logger.Warnf("%s - Failed to claim shard ownership: %v", c, err)
+		return
+	}
+	
+	// Auto-load configured objects after claiming shards
+	c.loadAutoLoadObjects(ctx)
+}
+
+// loadAutoLoadObjects creates objects specified in the auto_load_objects config.
+// This should be called after the node has claimed its shards.
+func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
+	if len(c.config.AutoLoadObjects) == 0 {
+		return
+	}
+	
+	c.logger.Infof("Auto-loading %d configured objects", len(c.config.AutoLoadObjects))
+	
+	for _, cfg := range c.config.AutoLoadObjects {
+		// Check if this node owns the shard for this object
+		shardID := sharding.GetShardID(cfg.ID, c.numShards)
+		nodeAddr, err := c.GetNodeForShard(ctx, shardID)
+		if err != nil {
+			c.logger.Errorf("Failed to determine node for auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
+			continue
+		}
+		
+		localAddr := c.getAdvertiseAddr()
+		if nodeAddr != localAddr {
+			c.logger.Debugf("Skipping auto-load of %s (%s) - shard %d not owned by this node (owned by %s)", 
+				cfg.ID, cfg.Type, shardID, nodeAddr)
+			continue
+		}
+		
+		// Create or load the object locally
+		_, err = c.CreateObject(ctx, cfg.Type, cfg.ID)
+		if err != nil {
+			c.logger.Errorf("Failed to auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
+			continue
+		}
+		
+		c.logger.Infof("Auto-loaded object %s (%s)", cfg.ID, cfg.Type)
 	}
 }
 

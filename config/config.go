@@ -10,11 +10,18 @@ import (
 
 // ClusterConfig holds cluster-level configuration
 type ClusterConfig struct {
-	Shards                        int           `yaml:"shards"`
-	Provider                      string        `yaml:"provider"`
-	Etcd                          EtcdConfig    `yaml:"etcd"`
-	ImbalanceThreshold            float64       `yaml:"imbalance_threshold,omitempty"`
-	ClusterStateStabilityDuration time.Duration `yaml:"cluster_state_stability_duration,omitempty"`
+	Shards                        int                     `yaml:"shards"`
+	Provider                      string                  `yaml:"provider"`
+	Etcd                          EtcdConfig              `yaml:"etcd"`
+	ImbalanceThreshold            float64                 `yaml:"imbalance_threshold,omitempty"`
+	ClusterStateStabilityDuration time.Duration           `yaml:"cluster_state_stability_duration,omitempty"`
+	AutoLoadObjects               []AutoLoadObjectConfig  `yaml:"auto_load_objects,omitempty"`
+}
+
+// AutoLoadObjectConfig specifies an object to auto-load when a node starts
+type AutoLoadObjectConfig struct {
+	Type string `yaml:"type"` // Registered object type
+	ID   string `yaml:"id"`   // Full object ID
 }
 
 // EtcdConfig holds etcd-specific configuration
@@ -220,4 +227,9 @@ func (c *Config) NewLifecycleValidator() (*LifecycleValidator, error) {
 		return nil, nil
 	}
 	return NewLifecycleValidator(c.LifecycleRules)
+}
+
+// GetAutoLoadObjects returns the list of objects to auto-load
+func (c *Config) GetAutoLoadObjects() []AutoLoadObjectConfig {
+	return c.Cluster.AutoLoadObjects
 }
