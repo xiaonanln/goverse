@@ -146,4 +146,4 @@ The `Client` class is thread-safe. Multiple threads can call methods on the same
 
 ## License
 
-MIT License - see the LICENSE file for details.
+Apache-2.0 License - see the LICENSE file for details.

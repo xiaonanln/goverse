@@ -146,4 +146,4 @@ samples/tictactoe/
 
 ## License
 
-MIT License - see the root LICENSE file.
+Apache-2.0 License - see the root LICENSE file.

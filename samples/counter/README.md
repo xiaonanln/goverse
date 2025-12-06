@@ -158,4 +158,4 @@ All responses return base64-encoded protobuf:
 
 ## License
 
-MIT License - see the root LICENSE file.
+Apache-2.0 License - see the root LICENSE file.
