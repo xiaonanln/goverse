@@ -52,7 +52,7 @@ func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.Add
 		Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 		Size:          10,
 		Color:         "#1f77b4",
-		Type:          "object",
+		Type:          o.GetClass(),
 		GoverseNodeID: nodeAddress,
 		ShardID:       int(o.ShardId),
 	}
@@ -115,7 +115,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 			Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 			Size:          10,
 			Color:         "#1f77b4",
-			Type:          "object",
+			Type:          o.GetClass(),
 			GoverseNodeID: addr,
 			ShardID:       int(o.ShardId),
 		}
