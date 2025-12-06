@@ -508,7 +508,7 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 					value := fmt.Sprintf("%s,%s", unclaimedTargetNode, unclaimedTargetNode)
 					if len(shardInfo.Flags) > 0 {
 						for _, flag := range shardInfo.Flags {
-							value += "," + flag
+							value += ",f=" + flag
 						}
 					}
 
@@ -531,7 +531,7 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 					value := fmt.Sprintf("%s,", targetNode) // TargetNode set, CurrentNode empty
 					if len(shardInfo.Flags) > 0 {
 						for _, flag := range shardInfo.Flags {
-							value += "," + flag
+							value += ",f=" + flag
 						}
 					}
 

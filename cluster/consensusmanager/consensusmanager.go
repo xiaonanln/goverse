@@ -1064,6 +1064,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 						TargetNode:  shardInfo.TargetNode,
 						CurrentNode: shardInfo.CurrentNode,
 						ModRevision: resp.Header.Revision,
+						Flags:       shardInfo.Flags,
 					}
 					cm.state.LastChange = time.Now()
 				}
