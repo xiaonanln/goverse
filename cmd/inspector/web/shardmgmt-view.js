@@ -192,6 +192,8 @@ function renderShardManagementView(container) {
                 let shardTitle = ''
                 const objectCount = shard.object_count || 0
                 const objectText = objectCount === 1 ? 'object' : 'objects'
+                const isPinned = shard.flags && shard.flags.includes('pinned')
+                const pinIndicator = isPinned ? '📌 ' : ''
                 
                 // Calculate proportional size (scale 0.85 to 1.4 based on object count)
                 const sizeScale = getShardBadgeScale(objectCount, maxObjectCount)
@@ -207,12 +209,16 @@ function renderShardManagementView(container) {
                   shardTitle = `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
                 }
                 
+                if (isPinned) {
+                  shardTitle += ' (pinned)'
+                }
+                
                 // Add highlight class for recently moved shards
                 if (recentlyMovedShards.has(shard.shard_id)) {
                   shardClass += ' highlight'
                 }
                 
-                return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" style="${sizeStyle}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
+                return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" style="${sizeStyle}" title="${shardTitle}">${pinIndicator}#${shard.shard_id} (${objectCount} ${objectText})</span>`
               }).join('')}
             </div>
           ` : `
@@ -249,16 +255,21 @@ function renderUnassignedBox(unassignedShards, maxObjectCount) {
             ${unassignedShards.map(shard => {
               const objectCount = shard.object_count || 0
               const objectText = objectCount === 1 ? 'object' : 'objects'
-              const shardTitle = shard.target_node 
+              const isPinned = shard.flags && shard.flags.includes('pinned')
+              const pinIndicator = isPinned ? '📌 ' : ''
+              let shardTitle = shard.target_node 
                 ? `Shard #${shard.shard_id} (target: ${shard.target_node}) - ${objectCount} ${objectText}`
                 : `Shard #${shard.shard_id} - ${objectCount} ${objectText}`
+              if (isPinned) {
+                shardTitle += ' (pinned)'
+              }
               const shardClass = shard.target_node ? 'shard-badge migrating' : 'shard-badge unassigned'
               
               // Calculate proportional size
               const sizeScale = getShardBadgeScale(objectCount, maxObjectCount)
               const sizeStyle = `font-size: ${sizeScale}em; padding: ${3 * sizeScale}px ${6 * sizeScale}px;`
               
-              return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" style="${sizeStyle}" title="${shardTitle}">#${shard.shard_id} (${objectCount} ${objectText})</span>`
+              return `<span class="${shardClass}" data-shard-id="${shard.shard_id}" style="${sizeStyle}" title="${shardTitle}">${pinIndicator}#${shard.shard_id} (${objectCount} ${objectText})</span>`
             }).join('')}
           </div>
         ` : `
@@ -554,6 +565,21 @@ function showShardDetailsPanel(shard) {
   }
   html += `<div class="detail-value">${statusBadge}</div>`
   html += `</div>`
+  
+  // Pinned status
+  const isPinned = shard.flags && shard.flags.includes('pinned')
+  html += `<div class="detail-row">`
+  html += `<div class="detail-label">Pinned:</div>`
+  html += `<div class="detail-value">`
+  if (isPinned) {
+    html += `<span class="detail-badge" style="background: #9C27B0;">📌 Pinned</span>`
+    html += ` <button class="pin-toggle-btn unpin" onclick="toggleShardPin(${shard.shard_id}, false)">Unpin</button>`
+  } else {
+    html += `<span class="detail-badge" style="background: #607D8B;">Not Pinned</span>`
+    html += ` <button class="pin-toggle-btn pin" onclick="toggleShardPin(${shard.shard_id}, true)">Pin</button>`
+  }
+  html += `</div>`
+  html += `</div>`
   html += '</div>'
 
   // Objects in this shard (if we have object data)
@@ -599,4 +625,35 @@ function showShardDetailsPanel(shard) {
 
   content.innerHTML = html
   panel.classList.add('visible')
+}
+
+// Toggle pin status for a shard
+function toggleShardPin(shardId, pinned) {
+  fetch('/shards/pin', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      shard_id: shardId,
+      pinned: pinned
+    })
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.text().then(text => {
+        throw new Error(text || `HTTP error ${response.status}`)
+      })
+    }
+    return response.json()
+  })
+  .then(data => {
+    console.log(`Shard ${shardId} ${pinned ? 'pinned' : 'unpinned'} successfully:`, data)
+    // Refresh the view to show updated state
+    updateShardManagementView()
+  })
+  .catch(error => {
+    console.error(`Failed to ${pinned ? 'pin' : 'unpin'} shard:`, error)
+    alert(`Failed to ${pinned ? 'pin' : 'unpin'} shard: ${error.message}`)
+  })
 }
