@@ -34,14 +34,15 @@ type ServerConfig struct {
 	AdvertiseAddress          string
 	MetricsListenAddress      string // Optional: HTTP address for Prometheus metrics and pprof (e.g., ":9090")
 	EtcdAddress               string
-	EtcdPrefix                string                     // Optional: etcd key prefix for this cluster (default: "/goverse")
-	MinQuorum                 int                        // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
-	NodeStabilityDuration     time.Duration              // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
-	ShardMappingCheckInterval time.Duration              // Optional: how often to check if shard mapping needs updating (default: 5s)
-	NumShards                 int                        // Optional: number of shards in the cluster (default: 8192)
-	InspectorAddress          string                     // Optional: address of the inspector service (if empty, inspector is disabled)
-	AccessValidator           *config.AccessValidator    // Optional: access validator for node access control
-	LifecycleValidator        *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
+	EtcdPrefix                string                        // Optional: etcd key prefix for this cluster (default: "/goverse")
+	MinQuorum                 int                           // Optional: minimal number of nodes required for cluster to be considered stable (default: 1)
+	NodeStabilityDuration     time.Duration                 // Optional: duration to wait for cluster state to stabilize before updating shard mapping (default: 10s)
+	ShardMappingCheckInterval time.Duration                 // Optional: how often to check if shard mapping needs updating (default: 5s)
+	NumShards                 int                           // Optional: number of shards in the cluster (default: 8192)
+	InspectorAddress          string                        // Optional: address of the inspector service (if empty, inspector is disabled)
+	AccessValidator           *config.AccessValidator       // Optional: access validator for node access control
+	LifecycleValidator        *config.LifecycleValidator    // Optional: lifecycle validator for CREATE/DELETE control
+	AutoLoadObjects           []config.AutoLoadObjectConfig // Optional: objects to auto-load when node starts and claims shards
 }
 
 type Server struct {
@@ -96,6 +97,9 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	if config.NumShards > 0 {
 		clusterCfg.NumShards = config.NumShards
+	}
+	if len(config.AutoLoadObjects) > 0 {
+		clusterCfg.AutoLoadObjects = config.AutoLoadObjects
 	}
 
 	// Initialize cluster with etcd connection

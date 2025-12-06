@@ -113,6 +113,7 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 			NumShards:             cfg.GetNumShards(),
 			NodeStabilityDuration: cfg.GetClusterStateStabilityDuration(),
 			InspectorAddress:      cfg.GetInspectorAdvertiseAddress(),
+			AutoLoadObjects:       cfg.GetAutoLoadObjects(),
 		}, nil
 	}
 
