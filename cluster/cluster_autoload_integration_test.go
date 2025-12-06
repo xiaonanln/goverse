@@ -11,14 +11,15 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
-// TestObject is a simple test object for auto-load testing
+// TestAutoLoadObject is a simple test object for auto-load testing
 type TestAutoLoadObject struct {
 	object.BaseObject
 }
 
-func (o *TestAutoLoadObject) Init() {
-	o.BaseObject.Init()
-}
+func (o *TestAutoLoadObject) OnCreated() {}
+
+// Ensure TestAutoLoadObject implements Object interface
+var _ object.Object = (*TestAutoLoadObject)(nil)
 
 // TestClusterAutoLoadObjects_SingleNode verifies that auto-load objects are created
 // on a single node when it owns the shard
@@ -30,11 +31,6 @@ func TestClusterAutoLoadObjects_SingleNode(t *testing.T) {
 	
 	ctx := context.Background()
 	
-	// Register test object type
-	object.RegisterType("TestAutoLoadObject", func() object.Object {
-		return &TestAutoLoadObject{}
-	})
-	
 	// Get object IDs that map to specific shards for deterministic testing
 	obj1ID := testutil.GetObjectIDForShard(5, "AutoLoadObj1")
 	obj2ID := testutil.GetObjectIDForShard(10, "AutoLoadObj2")
@@ -42,6 +38,9 @@ func TestClusterAutoLoadObjects_SingleNode(t *testing.T) {
 	// Create a node
 	nodeAddr := "localhost:47500"
 	n := node.NewNode(nodeAddr, testutil.TestNumShards)
+	
+	// Register test object type
+	n.RegisterObjectType((*TestAutoLoadObject)(nil))
 	
 	// Start the node
 	err := n.Start(ctx)
@@ -117,11 +116,6 @@ func TestClusterAutoLoadObjects_MultiNode(t *testing.T) {
 	
 	ctx := context.Background()
 	
-	// Register test object type
-	object.RegisterType("TestAutoLoadObject2", func() object.Object {
-		return &TestAutoLoadObject{}
-	})
-	
 	// Get object IDs that map to specific shards
 	obj1ID := testutil.GetObjectIDForShard(5, "AutoLoadObj3")
 	obj2ID := testutil.GetObjectIDForShard(10, "AutoLoadObj4")
@@ -132,6 +126,10 @@ func TestClusterAutoLoadObjects_MultiNode(t *testing.T) {
 	
 	n1 := node.NewNode(node1Addr, testutil.TestNumShards)
 	n2 := node.NewNode(node2Addr, testutil.TestNumShards)
+	
+	// Register test object type on both nodes
+	n1.RegisterObjectType((*TestAutoLoadObject)(nil))
+	n2.RegisterObjectType((*TestAutoLoadObject)(nil))
 	
 	// Start nodes
 	err := n1.Start(ctx)
