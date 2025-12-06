@@ -505,3 +505,111 @@ nodes:
 		t.Errorf("expected NodeStabilityDuration 0 (default), got %v", cfg.NodeStabilityDuration)
 	}
 }
+
+func TestLoaderWithAutoLoadObjects(t *testing.T) {
+	// Create a temp config file with auto_load_objects
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+  
+  auto_load_objects:
+    - type: "ChatRoomMgr"
+      id: "ChatRoomMgr0"
+    - type: "GameManager"
+      id: "GameManager-Global"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:50051"
+    advertise_addr: "localhost:50051"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+		"-node-id", "node-1",
+	}
+
+	cfg, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify auto_load_objects is passed through correctly
+	if len(cfg.AutoLoadObjects) != 2 {
+		t.Fatalf("expected 2 auto-load objects, got %d", len(cfg.AutoLoadObjects))
+	}
+
+	// Check first object
+	if cfg.AutoLoadObjects[0].Type != "ChatRoomMgr" {
+		t.Errorf("expected first object type ChatRoomMgr, got %s", cfg.AutoLoadObjects[0].Type)
+	}
+	if cfg.AutoLoadObjects[0].ID != "ChatRoomMgr0" {
+		t.Errorf("expected first object ID ChatRoomMgr0, got %s", cfg.AutoLoadObjects[0].ID)
+	}
+
+	// Check second object
+	if cfg.AutoLoadObjects[1].Type != "GameManager" {
+		t.Errorf("expected second object type GameManager, got %s", cfg.AutoLoadObjects[1].Type)
+	}
+	if cfg.AutoLoadObjects[1].ID != "GameManager-Global" {
+		t.Errorf("expected second object ID GameManager-Global, got %s", cfg.AutoLoadObjects[1].ID)
+	}
+}
+
+func TestLoaderWithoutAutoLoadObjects(t *testing.T) {
+	// Create a temp config file without auto_load_objects
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:50051"
+    advertise_addr: "localhost:50051"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	args := []string{
+		"-config", configPath,
+		"-node-id", "node-1",
+	}
+
+	cfg, err := loader.Load(args)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// When not specified, AutoLoadObjects should be empty
+	if len(cfg.AutoLoadObjects) != 0 {
+		t.Errorf("expected 0 auto-load objects, got %d", len(cfg.AutoLoadObjects))
+	}
+}
