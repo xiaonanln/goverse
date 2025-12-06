@@ -161,7 +161,6 @@ See [Getting Started](docs/GET_STARTED.md) for detailed roadmap and contribution
 High-level objectives for future development:
 
 ### Core System Improvements
-- **Better leader election strategy** - Improve stability and reduce failover time during node transitions
 - **Shard rebalancing based on actual node load** - Dynamic rebalancing that considers CPU, memory, and object count
 - **Support different object call semantics** - Currently only best-effort; add at-least-once, exactly-once, and idempotent patterns
 - **Configuration hot reload** - Support runtime configuration updates without cluster restart for access control, lifecycle rules, and other policies
