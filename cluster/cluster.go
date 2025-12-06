@@ -1149,6 +1149,11 @@ func (c *Cluster) clusterManagementTick() {
 func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.clusterManagementCtx
 
+	// Try to become leader if no leader exists or current leader is dead
+	if err := c.consensusManager.TryBecomeLeader(ctx); err != nil {
+		c.logger.Warnf("%s - Failed to try become leader: %v", c, err)
+	}
+
 	// If leader made changes to cluster state, skip other operations this cycle
 	// to allow the cluster state to stabilize before proceeding. Always update
 	// shard metrics so monitoring reflects the latest assignment even during

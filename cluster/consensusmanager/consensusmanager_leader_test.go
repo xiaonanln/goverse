@@ -62,7 +62,7 @@ func TestLeaderElection_NoLeaderExists(t *testing.T) {
 	}
 
 	// Try to become leader
-	err = cm.tryBecomeLeader(ctx)
+	err = cm.TryBecomeLeader(ctx)
 	if err != nil {
 		t.Fatalf("Failed to become leader: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 	}
 
 	// Node 1 becomes leader first
-	err = cm1.tryBecomeLeader(ctx)
+	err = cm1.TryBecomeLeader(ctx)
 	if err != nil {
 		t.Fatalf("Failed for node1 to become leader: %v", err)
 	}
@@ -153,9 +153,9 @@ func TestLeaderElection_LeaderStaysStable(t *testing.T) {
 	}
 
 	// Node 2 tries to become leader (should fail because node1 is alive)
-	err = cm2.tryBecomeLeader(ctx)
+	err = cm2.TryBecomeLeader(ctx)
 	if err != nil {
-		t.Fatalf("tryBecomeLeader should not error: %v", err)
+		t.Fatalf("TryBecomeLeader should not error: %v", err)
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -235,7 +235,7 @@ func TestLeaderElection_NewLeaderWhenCurrentFails(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Node 1 becomes leader
-	err = cm1.tryBecomeLeader(ctx)
+	err = cm1.TryBecomeLeader(ctx)
 	if err != nil {
 		t.Fatalf("Failed for node1 to become leader: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestLeaderElection_NewLeaderWhenCurrentFails(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Node 2 tries to become leader (should succeed now)
-	err = cm2.tryBecomeLeader(ctx)
+	err = cm2.TryBecomeLeader(ctx)
 	if err != nil {
 		t.Fatalf("Failed for node2 to become leader: %v", err)
 	}
@@ -342,10 +342,10 @@ func TestLeaderElection_RaceCondition(t *testing.T) {
 	// Both nodes try to become leader simultaneously
 	done := make(chan error, 2)
 	go func() {
-		done <- cm1.tryBecomeLeader(ctx)
+		done <- cm1.TryBecomeLeader(ctx)
 	}()
 	go func() {
-		done <- cm2.tryBecomeLeader(ctx)
+		done <- cm2.TryBecomeLeader(ctx)
 	}()
 
 	// Wait for both attempts to complete
@@ -353,10 +353,10 @@ func TestLeaderElection_RaceCondition(t *testing.T) {
 	err2 := <-done
 
 	if err1 != nil {
-		t.Fatalf("tryBecomeLeader failed for cm1: %v", err1)
+		t.Fatalf("TryBecomeLeader failed for cm1: %v", err1)
 	}
 	if err2 != nil {
-		t.Fatalf("tryBecomeLeader failed for cm2: %v", err2)
+		t.Fatalf("TryBecomeLeader failed for cm2: %v", err2)
 	}
 
 	// Wait for state to propagate
@@ -461,74 +461,4 @@ func TestLeaderElection_WatchUpdatesState(t *testing.T) {
 	}
 }
 
-func TestLeaderElection_AutomaticLeaderElectionLoop(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
-	}
 
-	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
-	if err != nil {
-		t.Skipf("Skipping - etcd unavailable: %v", err)
-		return
-	}
-	defer mgr.Close()
-
-	err = mgr.Connect()
-	if err != nil {
-		t.Fatalf("Failed to connect to etcd: %v", err)
-	}
-
-	nodeAddr := "localhost:47001"
-	// Use shorter interval for faster test
-	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, nodeAddr, testNumShards)
-	cm.SetLeaderCheckInterval(500 * time.Millisecond)
-
-	ctx := context.Background()
-
-	// Initialize
-	err = cm.Initialize(ctx)
-	if err != nil {
-		t.Fatalf("Failed to initialize: %v", err)
-	}
-
-	// Register node in etcd
-	client := mgr.GetClient()
-	nodeKey := prefix + "/nodes/node1"
-	_, err = client.Put(ctx, nodeKey, nodeAddr)
-	if err != nil {
-		t.Fatalf("Failed to register node: %v", err)
-	}
-
-	// Start watch (this also starts leader election loop)
-	err = cm.StartWatch(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start watch: %v", err)
-	}
-	defer cm.StopWatch()
-
-	// Wait for watch to process node registration
-	time.Sleep(200 * time.Millisecond)
-
-	// Wait for leader election loop to run (should become leader within 1 second)
-	time.Sleep(1500 * time.Millisecond)
-
-	// Verify this node became leader automatically
-	leader := cm.GetLeaderNode()
-	if leader != nodeAddr {
-		t.Fatalf("Expected node %s to become leader automatically, got %s", nodeAddr, leader)
-	}
-
-	// Verify leader key is in etcd
-	leaderKey := prefix + "/leader"
-	resp, err := client.Get(ctx, leaderKey)
-	if err != nil {
-		t.Fatalf("Failed to get leader key: %v", err)
-	}
-	if len(resp.Kvs) == 0 {
-		t.Fatal("Leader key not found in etcd")
-	}
-	if string(resp.Kvs[0].Value) != nodeAddr {
-		t.Fatalf("Expected leader %s, got %s", nodeAddr, string(resp.Kvs[0].Value))
-	}
-}
