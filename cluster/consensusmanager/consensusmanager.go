@@ -87,11 +87,14 @@ func (si ShardInfo) WithModRevision(rev int64) ShardInfo {
 
 // WithFlags returns a copy with updated Flags, preserving all other fields
 func (si ShardInfo) WithFlags(flags []string) ShardInfo {
+	// Create a defensive copy of the flags slice to prevent unintended mutations
+	flagsCopy := make([]string, len(flags))
+	copy(flagsCopy, flags)
 	return ShardInfo{
 		TargetNode:  si.TargetNode,
 		CurrentNode: si.CurrentNode,
 		ModRevision: si.ModRevision,
-		Flags:       flags,
+		Flags:       flagsCopy,
 	}
 }
 
