@@ -270,9 +270,9 @@ func (c *Config) GetAutoLoadObjectsForNode(nodeID string) ([]AutoLoadObjectConfi
 	// Start with cluster-level auto-load objects
 	result := make([]AutoLoadObjectConfig, 0, len(c.Cluster.AutoLoadObjects)+len(nodeCfg.AutoLoadObjects))
 	result = append(result, c.Cluster.AutoLoadObjects...)
-	
+
 	// Add node-specific auto-load objects
 	result = append(result, nodeCfg.AutoLoadObjects...)
-	
+
 	return result, nil
 }
