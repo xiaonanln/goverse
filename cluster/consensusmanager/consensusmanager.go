@@ -636,14 +636,13 @@ func (cm *ConsensusManager) handleLeaderEvent(event *clientv3.Event) {
 	if event.Type == clientv3.EventTypeDelete {
 		cm.state.Leader = ""
 		cm.state.LeaderModRevision = 0
-		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Leader key deleted")
 	} else {
 		cm.state.Leader = string(event.Kv.Value)
 		cm.state.LeaderModRevision = event.Kv.ModRevision
-		cm.state.LastChange = time.Now()
 		cm.logger.Infof("Leader updated to: %s", cm.state.Leader)
 	}
+	cm.state.LastChange = time.Now()
 	cm.notifyStateChanged()
 }
 
@@ -852,6 +851,7 @@ func (cm *ConsensusManager) TryBecomeLeader(ctx context.Context) error {
 	defer cancel()
 
 	// Only write if key hasn't changed since we last saw it
+	cm.logger.Infof("Attempting to become leader (current leader: %s, alive: %v, mod_revision: %d)", currentLeader, leaderAlive, leaderModRevision)
 	txnResp, err := client.Txn(txnCtx).
 		If(clientv3.Compare(clientv3.ModRevision(leaderKey), "=", leaderModRevision)).
 		Then(clientv3.OpPut(leaderKey, cm.localNodeAddress)).
