@@ -1169,10 +1169,17 @@ func (c *Cluster) handleShardMappingCheck() {
 		return
 	}
 
+	// Node - Claim ownership of shards that belong to this node
 	c.claimShardOwnership(ctx)
+	// Node - Remove objects that no longer belong to this node
 	c.removeObjectsNotBelongingToThisNode(ctx)
+	// Node - Release ownership of shards that are no longer needed
 	c.releaseShardOwnership(ctx)
+	// Auto-load configured objects after claiming shards
+	c.loadAutoLoadObjects(ctx)
+	// Node and Gate - Update node connections
 	c.updateNodeConnections()
+	// Gate - Register with nodes
 	c.registerGateWithNodes(ctx)
 }
 
@@ -1193,20 +1200,22 @@ func (c *Cluster) claimShardOwnership(ctx context.Context) {
 		c.logger.Warnf("%s - Failed to claim shard ownership: %v", c, err)
 		return
 	}
-	
-	// Auto-load configured objects after claiming shards
-	c.loadAutoLoadObjects(ctx)
 }
 
 // loadAutoLoadObjects creates objects specified in the auto_load_objects config.
 // This should be called after the node has claimed its shards.
 func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
+	if c.isGate() {
+		// Gates don't host objects, so they don't need to auto-load objects
+		return
+	}
+
 	if len(c.config.AutoLoadObjects) == 0 {
 		return
 	}
-	
+
 	c.logger.Infof("Auto-loading %d configured objects", len(c.config.AutoLoadObjects))
-	
+
 	for _, cfg := range c.config.AutoLoadObjects {
 		// Check if this node owns the shard for this object
 		shardID := sharding.GetShardID(cfg.ID, c.numShards)
@@ -1215,21 +1224,19 @@ func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
 			c.logger.Errorf("Failed to determine node for auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
 			continue
 		}
-		
+
 		localAddr := c.getAdvertiseAddr()
 		if nodeAddr != localAddr {
-			c.logger.Debugf("Skipping auto-load of %s (%s) - shard %d not owned by this node (owned by %s)", 
-				cfg.ID, cfg.Type, shardID, nodeAddr)
 			continue
 		}
-		
+
 		// Create or load the object locally
 		_, err = c.CreateObject(ctx, cfg.Type, cfg.ID)
 		if err != nil {
 			c.logger.Errorf("Failed to auto-load object %s (%s): %v", cfg.ID, cfg.Type, err)
 			continue
 		}
-		
+
 		c.logger.Infof("Auto-loaded object %s (%s)", cfg.ID, cfg.Type)
 	}
 }
