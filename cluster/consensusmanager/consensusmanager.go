@@ -55,6 +55,46 @@ func (si *ShardInfo) HasFlag(flag string) bool {
 	return false
 }
 
+// WithCurrentNode returns a copy with updated CurrentNode, preserving all other fields
+func (si ShardInfo) WithCurrentNode(node string) ShardInfo {
+	return ShardInfo{
+		TargetNode:  si.TargetNode,
+		CurrentNode: node,
+		ModRevision: si.ModRevision,
+		Flags:       si.Flags,
+	}
+}
+
+// WithTargetNode returns a copy with updated TargetNode, preserving all other fields
+func (si ShardInfo) WithTargetNode(node string) ShardInfo {
+	return ShardInfo{
+		TargetNode:  node,
+		CurrentNode: si.CurrentNode,
+		ModRevision: si.ModRevision,
+		Flags:       si.Flags,
+	}
+}
+
+// WithModRevision returns a copy with updated ModRevision, preserving all other fields
+func (si ShardInfo) WithModRevision(rev int64) ShardInfo {
+	return ShardInfo{
+		TargetNode:  si.TargetNode,
+		CurrentNode: si.CurrentNode,
+		ModRevision: rev,
+		Flags:       si.Flags,
+	}
+}
+
+// WithFlags returns a copy with updated Flags, preserving all other fields
+func (si ShardInfo) WithFlags(flags []string) ShardInfo {
+	return ShardInfo{
+		TargetNode:  si.TargetNode,
+		CurrentNode: si.CurrentNode,
+		ModRevision: si.ModRevision,
+		Flags:       flags,
+	}
+}
+
 // ShardMapping represents the mapping of shards to nodes
 // Note: Nodes and Version fields have been moved to ClusterState in consensusmanager
 type ShardMapping struct {
@@ -1139,12 +1179,7 @@ func (cm *ConsensusManager) ClaimShardsForNode(ctx context.Context) error {
 	for shardID, shardInfo := range clusterState.ShardMapping.Shards {
 		// Claim shard if: TargetNode is this node AND (CurrentNode is empty or not alive)
 		if shardInfo.TargetNode == localNode && (shardInfo.CurrentNode == "" || !clusterState.HasNode(shardInfo.CurrentNode)) {
-			shardsToUpdate[shardID] = ShardInfo{
-				TargetNode:  shardInfo.TargetNode,
-				CurrentNode: localNode,
-				ModRevision: shardInfo.ModRevision,
-				Flags:       shardInfo.Flags, // Preserve flags
-			}
+			shardsToUpdate[shardID] = shardInfo.WithCurrentNode(localNode)
 		}
 	}
 
@@ -1211,12 +1246,7 @@ func (cm *ConsensusManager) calcReleaseShardsForNode(localNode string, localObje
 			shardInfo.TargetNode != "" &&
 			shardInfo.TargetNode != localNode &&
 			localObjectCount == 0 {
-			shardsToUpdate[shardID] = ShardInfo{
-				TargetNode:  shardInfo.TargetNode,
-				CurrentNode: "", // Clear CurrentNode to release ownership
-				ModRevision: shardInfo.ModRevision,
-				Flags:       shardInfo.Flags, // Preserve flags
-			}
+			shardsToUpdate[shardID] = shardInfo.WithCurrentNode("")
 		}
 	}
 
@@ -1335,13 +1365,7 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 				nodeIdx := shardID % len(nodes)
 				targetNode = nodes[nodeIdx]
 			}
-			newInfo := ShardInfo{
-				TargetNode:  targetNode,
-				CurrentNode: currentInfo.CurrentNode,
-				ModRevision: currentInfo.ModRevision,
-				Flags:       currentInfo.Flags, // Preserve flags
-			}
-			updateShards[shardID] = newInfo
+			updateShards[shardID] = currentInfo.WithTargetNode(targetNode)
 		}
 	}
 
@@ -1494,12 +1518,7 @@ func (cm *ConsensusManager) RebalanceShards(ctx context.Context) (bool, error) {
 		existingInfo := cm.state.ShardMapping.Shards[shardToMigrate]
 
 		// Add this shard to the batch
-		updateShards[shardToMigrate] = ShardInfo{
-			TargetNode:  minNode,
-			CurrentNode: existingInfo.CurrentNode,
-			ModRevision: existingInfo.ModRevision,
-			Flags:       existingInfo.Flags, // Preserve flags
-		}
+		updateShards[shardToMigrate] = existingInfo.WithTargetNode(minNode)
 
 		// Mark this shard as selected
 		selectedShards[shardToMigrate] = true

@@ -1688,3 +1688,188 @@ func TestRebalanceShards_AllPinnedNoRebalance(t *testing.T) {
 		}
 	}
 }
+
+func TestShardInfo_WithCurrentNode(t *testing.T) {
+	t.Parallel()
+
+	original := ShardInfo{
+		TargetNode:  "node1",
+		CurrentNode: "node2",
+		ModRevision: 123,
+		Flags:       []string{"pinned", "readonly"},
+	}
+
+	updated := original.WithCurrentNode("node3")
+
+	// Verify updated field
+	if updated.CurrentNode != "node3" {
+		t.Errorf("CurrentNode should be 'node3', got '%s'", updated.CurrentNode)
+	}
+
+	// Verify preserved fields
+	if updated.TargetNode != "node1" {
+		t.Errorf("TargetNode should be preserved as 'node1', got '%s'", updated.TargetNode)
+	}
+	if updated.ModRevision != 123 {
+		t.Errorf("ModRevision should be preserved as 123, got %d", updated.ModRevision)
+	}
+	if len(updated.Flags) != 2 || updated.Flags[0] != "pinned" || updated.Flags[1] != "readonly" {
+		t.Errorf("Flags should be preserved as ['pinned', 'readonly'], got %v", updated.Flags)
+	}
+
+	// Verify original is unchanged
+	if original.CurrentNode != "node2" {
+		t.Errorf("Original CurrentNode should remain 'node2', got '%s'", original.CurrentNode)
+	}
+}
+
+func TestShardInfo_WithTargetNode(t *testing.T) {
+	t.Parallel()
+
+	original := ShardInfo{
+		TargetNode:  "node1",
+		CurrentNode: "node2",
+		ModRevision: 123,
+		Flags:       []string{"pinned"},
+	}
+
+	updated := original.WithTargetNode("node3")
+
+	if updated.TargetNode != "node3" {
+		t.Errorf("TargetNode should be 'node3', got '%s'", updated.TargetNode)
+	}
+	if updated.CurrentNode != "node2" {
+		t.Errorf("CurrentNode should be preserved as 'node2', got '%s'", updated.CurrentNode)
+	}
+	if updated.ModRevision != 123 {
+		t.Errorf("ModRevision should be preserved as 123, got %d", updated.ModRevision)
+	}
+	if !updated.HasFlag("pinned") {
+		t.Error("Flags should be preserved")
+	}
+}
+
+func TestShardInfo_WithModRevision(t *testing.T) {
+	t.Parallel()
+
+	original := ShardInfo{
+		TargetNode:  "node1",
+		CurrentNode: "node2",
+		ModRevision: 123,
+		Flags:       []string{"pinned"},
+	}
+
+	updated := original.WithModRevision(456)
+
+	if updated.ModRevision != 456 {
+		t.Errorf("ModRevision should be 456, got %d", updated.ModRevision)
+	}
+	if updated.TargetNode != "node1" {
+		t.Errorf("TargetNode should be preserved")
+	}
+	if updated.CurrentNode != "node2" {
+		t.Errorf("CurrentNode should be preserved")
+	}
+	if !updated.HasFlag("pinned") {
+		t.Error("Flags should be preserved")
+	}
+}
+
+func TestShardInfo_WithFlags(t *testing.T) {
+	t.Parallel()
+
+	original := ShardInfo{
+		TargetNode:  "node1",
+		CurrentNode: "node2",
+		ModRevision: 123,
+		Flags:       []string{"pinned"},
+	}
+
+	updated := original.WithFlags([]string{"readonly"})
+
+	if len(updated.Flags) != 1 || updated.Flags[0] != "readonly" {
+		t.Errorf("Flags should be ['readonly'], got %v", updated.Flags)
+	}
+	if updated.TargetNode != "node1" {
+		t.Errorf("TargetNode should be preserved")
+	}
+	if updated.CurrentNode != "node2" {
+		t.Errorf("CurrentNode should be preserved")
+	}
+	if updated.ModRevision != 123 {
+		t.Errorf("ModRevision should be preserved")
+	}
+
+	// Verify original flags unchanged
+	if len(original.Flags) != 1 || original.Flags[0] != "pinned" {
+		t.Errorf("Original Flags should remain ['pinned'], got %v", original.Flags)
+	}
+}
+
+func TestClaimShardsForNode_PreservesFlags(t *testing.T) {
+	// This is an integration test that verifies the fix
+	// Setup a shard with pinned flag, claim it, verify flag is preserved
+	t.Parallel()
+
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	prefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", prefix)
+	if err != nil {
+		t.Skipf("etcd not available: %v", err)
+	}
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("etcd connection failed: %v", err)
+	}
+	defer mgr.Close()
+
+	thisNodeAddr := "localhost:47001"
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 10*time.Second, thisNodeAddr, testNumShards)
+
+	ctx := context.Background()
+
+	// Setup: shard with pinned flag, target is this node, current is empty
+	cm.mu.Lock()
+	cm.state.Nodes[thisNodeAddr] = true
+	cm.state.LastChange = time.Now().Add(-11 * time.Second)
+	cm.state.ShardMapping = &ShardMapping{
+		Shards: make(map[int]ShardInfo),
+	}
+	cm.state.ShardMapping.Shards[0] = ShardInfo{
+		TargetNode:  thisNodeAddr,
+		CurrentNode: "",
+		ModRevision: 0,
+		Flags:       []string{"pinned"},
+	}
+	cm.mu.Unlock()
+
+	// Claim the shard
+	err = cm.ClaimShardsForNode(ctx)
+	if err != nil {
+		t.Fatalf("ClaimShardsForNode failed: %v", err)
+	}
+
+	// Wait for update
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify flags preserved in etcd
+	client := mgr.GetClient()
+	resp, err := client.Get(ctx, prefix+"/shard/0")
+	if err != nil {
+		t.Fatalf("Failed to get shard: %v", err)
+	}
+	if len(resp.Kvs) == 0 {
+		t.Fatal("Shard should exist")
+	}
+
+	shardInfo := parseShardInfo(resp.Kvs[0])
+	if !shardInfo.HasFlag("pinned") {
+		t.Fatalf("Pinned flag should be preserved after claiming, got flags: %v", shardInfo.Flags)
+	}
+	if shardInfo.CurrentNode != thisNodeAddr {
+		t.Fatalf("CurrentNode should be %s, got %s", thisNodeAddr, shardInfo.CurrentNode)
+	}
+}
