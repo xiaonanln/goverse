@@ -18,15 +18,16 @@ Returns a map of node addresses to `NodeInfo` structs:
 
 ```go
 type NodeInfo struct {
-    Address             string
-    Configured          bool  // true if from config file
-    FoundInClusterState bool  // true if registered in etcd
+    Address    string
+    Configured bool  // true if from config file
+    IsAlive    bool  // true if registered in etcd
+    IsLeader   bool  // true if this is the cluster leader
 }
 
 nodesInfo := goverseapi.GetNodesInfo()
 for addr, info := range nodesInfo {
-    fmt.Printf("Node %s: Configured=%v, InCluster=%v\n",
-        addr, info.Configured, info.FoundInClusterState)
+    fmt.Printf("Node %s: Configured=%v, IsAlive=%v, IsLeader=%v\n",
+        addr, info.Configured, info.IsAlive, info.IsLeader)
 }
 ```
 
@@ -36,15 +37,15 @@ Returns a map of gate addresses to `GateInfo` structs:
 
 ```go
 type GateInfo struct {
-    Address             string
-    Configured          bool  // true if from config file
-    FoundInClusterState bool  // true if registered in etcd
+    Address    string
+    Configured bool  // true if from config file
+    IsAlive    bool  // true if registered in etcd
 }
 
 gatesInfo := goverseapi.GetGatesInfo()
 for addr, info := range gatesInfo {
-    fmt.Printf("Gate %s: Configured=%v, InCluster=%v\n",
-        addr, info.Configured, info.FoundInClusterState)
+    fmt.Printf("Gate %s: Configured=%v, IsAlive=%v\n",
+        addr, info.Configured, info.IsAlive)
 }
 ```
 
@@ -61,7 +62,7 @@ When starting nodes and gates with CLI flags only:
 
 When using a YAML config file:
 - Configured nodes/gates have `Configured = true`
-- `FoundInClusterState` indicates if they're actually running
+- `IsAlive` indicates if they're actually running
 - Both configured and dynamically discovered nodes/gates appear
 - Example: `go run main.go --config config.yaml --node-id node1`
 

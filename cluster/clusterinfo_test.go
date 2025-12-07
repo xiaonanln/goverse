@@ -81,12 +81,14 @@ func TestGetNodesInfo_NoConfig(t *testing.T) {
 		if info1.Configured {
 			t.Errorf("Node %s should not be configured (no config file)", nodeAddr1)
 		}
-		if !info1.FoundInClusterState {
+		if !info1.IsAlive {
 			t.Errorf("Node %s should be found in cluster state", nodeAddr1)
 		}
 		if info1.Address != nodeAddr1 {
 			t.Errorf("Node %s address mismatch: got %s", nodeAddr1, info1.Address)
 		}
+		// One of the nodes should be leader
+		t.Logf("Node %s IsLeader: %v", nodeAddr1, info1.IsLeader)
 	}
 
 	// Check node2
@@ -97,12 +99,26 @@ func TestGetNodesInfo_NoConfig(t *testing.T) {
 		if info2.Configured {
 			t.Errorf("Node %s should not be configured (no config file)", nodeAddr2)
 		}
-		if !info2.FoundInClusterState {
+		if !info2.IsAlive {
 			t.Errorf("Node %s should be found in cluster state", nodeAddr2)
 		}
 		if info2.Address != nodeAddr2 {
 			t.Errorf("Node %s address mismatch: got %s", nodeAddr2, info2.Address)
 		}
+		// One of the nodes should be leader
+		t.Logf("Node %s IsLeader: %v", nodeAddr2, info2.IsLeader)
+	}
+
+	// Verify exactly one node is leader
+	leaderCount := 0
+	if info1.IsLeader {
+		leaderCount++
+	}
+	if info2.IsLeader {
+		leaderCount++
+	}
+	if leaderCount != 1 {
+		t.Errorf("Expected exactly 1 leader, got %d", leaderCount)
 	}
 }
 
@@ -187,9 +203,10 @@ func TestGetNodesInfo_WithConfig(t *testing.T) {
 		if !info1.Configured {
 			t.Errorf("Node %s should be configured", nodeAddr1)
 		}
-		if !info1.FoundInClusterState {
+		if !info1.IsAlive {
 			t.Errorf("Node %s should be found in cluster state", nodeAddr1)
 		}
+		t.Logf("Node %s IsLeader: %v", nodeAddr1, info1.IsLeader)
 	}
 
 	// Check node2 (configured and active)
@@ -200,9 +217,10 @@ func TestGetNodesInfo_WithConfig(t *testing.T) {
 		if !info2.Configured {
 			t.Errorf("Node %s should be configured", nodeAddr2)
 		}
-		if !info2.FoundInClusterState {
+		if !info2.IsAlive {
 			t.Errorf("Node %s should be found in cluster state", nodeAddr2)
 		}
+		t.Logf("Node %s IsLeader: %v", nodeAddr2, info2.IsLeader)
 	}
 
 	// Check node3 (configured but not active)
@@ -213,9 +231,24 @@ func TestGetNodesInfo_WithConfig(t *testing.T) {
 		if !info3.Configured {
 			t.Errorf("Node %s should be configured", nodeAddr3)
 		}
-		if info3.FoundInClusterState {
+		if info3.IsAlive {
 			t.Errorf("Node %s should not be found in cluster state (not started)", nodeAddr3)
 		}
+		if info3.IsLeader {
+			t.Errorf("Node %s should not be leader (not started)", nodeAddr3)
+		}
+	}
+
+	// Verify exactly one active node is leader
+	leaderCount := 0
+	if info1.IsLeader {
+		leaderCount++
+	}
+	if info2.IsLeader {
+		leaderCount++
+	}
+	if leaderCount != 1 {
+		t.Errorf("Expected exactly 1 leader among active nodes, got %d", leaderCount)
 	}
 }
 
@@ -341,7 +374,7 @@ func TestGetGatesInfo_NoConfig(t *testing.T) {
 		if info1.Configured {
 			t.Errorf("Gate %s should not be configured (no config file)", gateAddr1)
 		}
-		if !info1.FoundInClusterState {
+		if !info1.IsAlive {
 			t.Errorf("Gate %s should be found in cluster state", gateAddr1)
 		}
 		if info1.Address != gateAddr1 {
@@ -357,7 +390,7 @@ func TestGetGatesInfo_NoConfig(t *testing.T) {
 		if info2.Configured {
 			t.Errorf("Gate %s should not be configured (no config file)", gateAddr2)
 		}
-		if !info2.FoundInClusterState {
+		if !info2.IsAlive {
 			t.Errorf("Gate %s should be found in cluster state", gateAddr2)
 		}
 		if info2.Address != gateAddr2 {
@@ -502,7 +535,7 @@ func TestGetGatesInfo_WithConfig(t *testing.T) {
 		if !info1.Configured {
 			t.Errorf("Gate %s should be configured", gateAddr1)
 		}
-		if !info1.FoundInClusterState {
+		if !info1.IsAlive {
 			t.Errorf("Gate %s should be found in cluster state", gateAddr1)
 		}
 	}
@@ -515,7 +548,7 @@ func TestGetGatesInfo_WithConfig(t *testing.T) {
 		if !info2.Configured {
 			t.Errorf("Gate %s should be configured", gateAddr2)
 		}
-		if !info2.FoundInClusterState {
+		if !info2.IsAlive {
 			t.Errorf("Gate %s should be found in cluster state", gateAddr2)
 		}
 	}
@@ -528,7 +561,7 @@ func TestGetGatesInfo_WithConfig(t *testing.T) {
 		if !info3.Configured {
 			t.Errorf("Gate %s should be configured", gateAddr3)
 		}
-		if info3.FoundInClusterState {
+		if info3.IsAlive {
 			t.Errorf("Gate %s should not be found in cluster state (not started)", gateAddr3)
 		}
 	}

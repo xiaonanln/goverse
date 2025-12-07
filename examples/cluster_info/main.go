@@ -13,13 +13,14 @@ func main() {
 	// Note: In a real application, you would start the server first using:
 	// server := goverseapi.NewServer()
 	// go server.Run(ctx)
-	
+
 	// This example assumes a server is already running in the cluster
 	// For demonstration purposes, we'll show the API usage patterns
-	
+
 	fmt.Println("Cluster Info Example")
-	fmt.Println("====================\n")
-	
+	fmt.Println("====================")
+	fmt.Println()
+
 	// Wait for cluster to be ready (with timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -33,7 +34,9 @@ func main() {
 		fmt.Println("1. Start etcd: docker run -d -p 2379:2379 quay.io/coreos/etcd:v3.5.0 ...")
 		fmt.Println("2. Start a node: go run cmd/node/main.go --listen :48000 --etcd localhost:2379")
 		fmt.Println("3. Then run this example again")
-		fmt.Println("\nShowing API usage below:\n")
+		fmt.Println()
+		fmt.Println("Showing API usage below:")
+		fmt.Println()
 	}
 
 	// Get nodes information
@@ -45,7 +48,8 @@ func main() {
 		for addr, info := range nodesInfo {
 			fmt.Printf("Node: %s\n", addr)
 			fmt.Printf("  Configured: %v (from config file)\n", info.Configured)
-			fmt.Printf("  Found in Cluster: %v (registered in etcd)\n", info.FoundInClusterState)
+			fmt.Printf("  IsAlive: %v (registered in etcd)\n", info.IsAlive)
+			fmt.Printf("  IsLeader: %v (cluster leader)\n", info.IsLeader)
 			fmt.Println()
 		}
 	}
@@ -59,7 +63,7 @@ func main() {
 		for addr, info := range gatesInfo {
 			fmt.Printf("Gate: %s\n", addr)
 			fmt.Printf("  Configured: %v (from config file)\n", info.Configured)
-			fmt.Printf("  Found in Cluster: %v (registered in etcd)\n", info.FoundInClusterState)
+			fmt.Printf("  Found in Cluster: %v (registered in etcd)\n", info.IsAlive)
 			fmt.Println()
 		}
 	}
@@ -70,13 +74,13 @@ func main() {
 	// Example: Check for configured but missing nodes
 	fmt.Println("=== Health Check ===")
 	for addr, info := range nodesInfo {
-		if info.Configured && !info.FoundInClusterState {
+		if info.Configured && !info.IsAlive {
 			fmt.Printf("WARNING: Configured node %s is not active in the cluster!\n", addr)
 		}
 	}
 
 	for addr, info := range gatesInfo {
-		if info.Configured && !info.FoundInClusterState {
+		if info.Configured && !info.IsAlive {
 			fmt.Printf("WARNING: Configured gate %s is not active in the cluster!\n", addr)
 		}
 	}

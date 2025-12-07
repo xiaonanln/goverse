@@ -195,14 +195,15 @@ type GateInfo = cluster.GateInfo
 // When using a config file, configured nodes will have Configured=true.
 // When using CLI flags only, all nodes will have Configured=false.
 //
-// All nodes currently active in the cluster (registered in etcd) will have FoundInClusterState=true.
+// All nodes currently active in the cluster (registered in etcd) will have IsAlive=true.
+// The leader node will have IsLeader=true.
 //
 // Example:
 //
 //	nodesInfo := goverseapi.GetNodesInfo()
 //	for addr, info := range nodesInfo {
-//	    fmt.Printf("Node %s: Configured=%v, InCluster=%v\n",
-//	        addr, info.Configured, info.FoundInClusterState)
+//	    fmt.Printf("Node %s: Configured=%v, IsAlive=%v, IsLeader=%v\n",
+//	        addr, info.Configured, info.IsAlive, info.IsLeader)
 //	}
 func GetNodesInfo() map[string]NodeInfo {
 	return cluster.This().GetNodesInfo()
@@ -214,14 +215,14 @@ func GetNodesInfo() map[string]NodeInfo {
 // When using a config file, configured gates will have Configured=true.
 // When using CLI flags only, all gates will have Configured=false.
 //
-// All gates currently active in the cluster (registered in etcd) will have FoundInClusterState=true.
+// All gates currently active in the cluster (registered in etcd) will have IsAlive=true.
 //
 // Example:
 //
 //	gatesInfo := goverseapi.GetGatesInfo()
 //	for addr, info := range gatesInfo {
-//	    fmt.Printf("Gate %s: Configured=%v, InCluster=%v\n",
-//	        addr, info.Configured, info.FoundInClusterState)
+//	    fmt.Printf("Gate %s: Configured=%v, IsAlive=%v\n",
+//	        addr, info.Configured, info.IsAlive)
 //	}
 func GetGatesInfo() map[string]GateInfo {
 	return cluster.This().GetGatesInfo()
