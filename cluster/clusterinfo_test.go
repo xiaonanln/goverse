@@ -319,8 +319,11 @@ func TestGetGatesInfo_NoConfig(t *testing.T) {
 		t.Fatalf("Failed to start gate cluster 2: %v", err)
 	}
 
-	// Wait for clusters to be ready
-	testutil.WaitForClustersReady(t, nodeCluster, gateCluster1, gateCluster2)
+	// Wait for node cluster to be ready (gates don't need full connection for this test)
+	testutil.WaitForClusterReady(t, nodeCluster)
+
+	// Give gates time to register in etcd
+	time.Sleep(2 * time.Second)
 
 	// Get gates info from node cluster
 	gatesInfo := nodeCluster.GetGatesInfo()
@@ -477,8 +480,11 @@ func TestGetGatesInfo_WithConfig(t *testing.T) {
 		t.Fatalf("Failed to start gate cluster 2: %v", err)
 	}
 
-	// Wait for clusters to be ready
-	testutil.WaitForClustersReady(t, nodeCluster, gateCluster1, gateCluster2)
+	// Wait for node cluster to be ready (gates don't need full connection for this test)
+	testutil.WaitForClusterReady(t, nodeCluster)
+
+	// Give gates time to register in etcd
+	time.Sleep(2 * time.Second)
 
 	// Get gates info from node cluster
 	gatesInfo := nodeCluster.GetGatesInfo()
