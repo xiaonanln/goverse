@@ -265,8 +265,9 @@ SELECT mark_stuck_requests_as_failed('5 minutes'::interval);
 
 ```go
 import (
+    "crypto/sha256"
     "database/sql"
-    "github.com/google/uuid"
+    "encoding/hex"
 )
 
 func SubmitRequest(ctx context.Context, db *sql.DB, 
@@ -406,6 +407,7 @@ func SubmitWithRetry(ctx context.Context, db *sql.DB,
     }
     
     // Check if we inserted a new row or hit a conflict
+    // Note: In production code, check the error from RowsAffected()
     rows, _ := result.RowsAffected()
     if rows == 0 {
         // Request already exists - check its status
