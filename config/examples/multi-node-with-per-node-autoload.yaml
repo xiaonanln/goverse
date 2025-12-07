@@ -1,11 +1,12 @@
 # GoVerse Multi-Node Configuration with Per-Node Auto-Load Objects
 #
 # This configuration demonstrates:
-# - Cluster-level auto-load objects (loaded on all nodes based on shard ownership)
-# - Node-specific auto-load objects (loaded only on specific nodes)
+# - Cluster-level auto-load objects (loaded on nodes based on shard ownership)
+# - Per-shard auto-load objects (one per shard, distributed across nodes)
+# - Per-node auto-load objects (one per node, using fixed-node ID format)
 #
-# Use case: Different nodes might need different initialization objects
-# For example, one node might be designated for matchmaking, another for leaderboards.
+# Use case: Per-node objects are useful for node-specific services like
+# metrics collection, health monitoring, or node-local caching.
 #
 # See docs/config-design.md for full schema documentation.
 
@@ -19,42 +20,42 @@ cluster:
       - "localhost:2379"
     prefix: "/goverse/dev"
   
-  # Cluster-level auto-load objects: created on all nodes based on shard ownership
+  # Cluster-level auto-load objects
   auto_load_objects:
     # Global singleton service - created on whichever node owns its shard
     - type: "GlobalMatchmaker"
       id: "MatchmakerService"
       per_shard: false
+      per_node: false
     
     # Per-shard service - one instance per shard, distributed across nodes
+    # Object ID format: shard#<shardID>/<baseName>
+    # Example: shard#0/ShardMgr, shard#1/ShardMgr, etc.
     - type: "ShardManager"
       id: "ShardMgr"
       per_shard: true
+    
+    # Per-node service - one instance per node, using fixed-node ID format
+    # Object ID format: <nodeAddress>/<baseName>
+    # Example: localhost:50051/NodeMetrics, localhost:50052/NodeMetrics, etc.
+    - type: "NodeMetricsCollector"
+      id: "NodeMetrics"
+      per_node: true
+    
+    # Another per-node service example
+    - type: "NodeHealthMonitor"
+      id: "NodeHealth"
+      per_node: true
 
 nodes:
-  # Node 1: General purpose node with standard services
   - id: "node-1"
     grpc_addr: "127.0.0.1:50051"
     advertise_addr: "127.0.0.1:50051"
     http_addr: "127.0.0.1:8081"
-    # Node-specific auto-load objects
-    auto_load_objects:
-      - type: "NodeMetricsCollector"
-        id: "Node1Metrics"
-      - type: "NodeHealthMonitor"
-        id: "Node1Health"
 
-  # Node 2: Specialized node for analytics and caching
   - id: "node-2"
     grpc_addr: "127.0.0.1:50052"
     advertise_addr: "127.0.0.1:50052"
     http_addr: "127.0.0.1:8082"
-    # Different node-specific auto-load objects
-    auto_load_objects:
-      - type: "AnalyticsService"
-        id: "Node2Analytics"
-      - type: "CacheManager"
-        id: "Node2Cache"
-        per_shard: true  # One cache manager per shard on this node
 
 gates: []
