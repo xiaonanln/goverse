@@ -182,3 +182,38 @@ func CreateObjectIDOnShard(shardID int) string {
 func CreateObjectIDOnNode(nodeAddress string) string {
 	return uniqueid.CreateObjectIDOnNode(nodeAddress)
 }
+
+// GetAutoLoadObjectIDsByType returns all object IDs for auto-load objects of the specified type.
+// This is useful when you need to interact with auto-load objects from your application code.
+//
+// For global objects, it returns a single ID.
+// For per-shard objects, it returns IDs in the format: shard#<N>/<baseName>
+// For per-node objects, it returns IDs in the format: <nodeAddr>/<baseName>
+//
+// Example:
+//
+//	// Get all IDs for "GameLobby" auto-load objects
+//	lobbyIDs := goverseapi.GetAutoLoadObjectIDsByType("GameLobby")
+//	for _, id := range lobbyIDs {
+//	    resp, _ := goverseapi.CallObject(ctx, "GameLobby", id, "GetStatus", nil)
+//	}
+func GetAutoLoadObjectIDsByType(objType string) []string {
+	return cluster.This().GetAutoLoadObjectIDsByType(objType)
+}
+
+// GetAutoLoadObjectIDs returns a map of object type to list of object IDs for all auto-load objects.
+// This provides a convenient way to discover all auto-load objects configured in the cluster.
+//
+// Example:
+//
+//	// Get all auto-load object IDs grouped by type
+//	allAutoLoadIDs := goverseapi.GetAutoLoadObjectIDs()
+//	for objType, ids := range allAutoLoadIDs {
+//	    fmt.Printf("Type: %s has %d objects\n", objType, len(ids))
+//	    for _, id := range ids {
+//	        // Process each object
+//	    }
+//	}
+func GetAutoLoadObjectIDs() map[string][]string {
+	return cluster.This().GetAutoLoadObjectIDs()
+}

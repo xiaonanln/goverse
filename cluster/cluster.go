@@ -1482,6 +1482,75 @@ func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 	return c.nodeConnections
 }
 
+// GetAutoLoadObjectIDsByType returns all object IDs for auto-load objects of the specified type.
+// For global objects, it returns a single ID.
+// For per-shard objects, it returns IDs in the format: shard#<N>/<baseName>
+// For per-node objects, it returns IDs in the format: <nodeAddr>/<baseName>
+//
+// This allows user code to discover and interact with auto-load objects at runtime.
+func (c *Cluster) GetAutoLoadObjectIDsByType(objType string) []string {
+	var result []string
+
+	for _, cfg := range c.config.AutoLoadObjects {
+		if cfg.Type != objType {
+			continue
+		}
+
+		if cfg.PerShard {
+			// Generate per-shard IDs for all shards
+			for shardID := 0; shardID < c.numShards; shardID++ {
+				objectID := fmt.Sprintf("shard#%d/%s", shardID, cfg.ID)
+				result = append(result, objectID)
+			}
+		} else if cfg.PerNode {
+			// Generate per-node IDs for all nodes
+			nodes := c.GetNodes()
+			for _, nodeAddr := range nodes {
+				objectID := fmt.Sprintf("%s/%s", nodeAddr, cfg.ID)
+				result = append(result, objectID)
+			}
+		} else {
+			// Global object - single ID
+			result = append(result, cfg.ID)
+		}
+	}
+
+	return result
+}
+
+// GetAutoLoadObjectIDs returns a map of object type to list of object IDs for all auto-load objects.
+// This provides a convenient way to discover all auto-load objects configured in the cluster.
+func (c *Cluster) GetAutoLoadObjectIDs() map[string][]string {
+	result := make(map[string][]string)
+
+	for _, cfg := range c.config.AutoLoadObjects {
+		var ids []string
+
+		if cfg.PerShard {
+			// Generate per-shard IDs for all shards
+			for shardID := 0; shardID < c.numShards; shardID++ {
+				objectID := fmt.Sprintf("shard#%d/%s", shardID, cfg.ID)
+				ids = append(ids, objectID)
+			}
+		} else if cfg.PerNode {
+			// Generate per-node IDs for all nodes
+			nodes := c.GetNodes()
+			for _, nodeAddr := range nodes {
+				objectID := fmt.Sprintf("%s/%s", nodeAddr, cfg.ID)
+				ids = append(ids, objectID)
+			}
+		} else {
+			// Global object - single ID
+			ids = append(ids, cfg.ID)
+		}
+
+		// Append to existing list if type already exists
+		result[cfg.Type] = append(result[cfg.Type], ids...)
+	}
+
+	return result
+}
+
 // registerGateWithNodes registers this gate with all nodes that haven't been registered yet
 // This is called periodically from the cluster management loop for gate clusters
 func (c *Cluster) registerGateWithNodes(ctx context.Context) {
