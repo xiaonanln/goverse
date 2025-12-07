@@ -49,6 +49,7 @@ persistence
 periodic_persistence
 custom_stability_duration
 minquorum
+demo-server
 .venv/
 *.log
 *.zip
