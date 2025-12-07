@@ -114,6 +114,7 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 			NodeStabilityDuration: cfg.GetClusterStateStabilityDuration(),
 			InspectorAddress:      cfg.GetInspectorAdvertiseAddress(),
 			AutoLoadObjects:       cfg.GetAutoLoadObjects(),
+			ConfigFile:            cfg, // Pass the loaded config file
 		}, nil
 	}
 
