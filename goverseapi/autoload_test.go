@@ -79,7 +79,7 @@ func TestGetAutoLoadObjectIDsByType_GlobalObject(t *testing.T) {
 	testutil.WaitForClusterReady(t, c)
 
 	// Test GetAutoLoadObjectIDsByType
-	ids := GetAutoLoadObjectIDsByType("TestAutoLoadObject")
+	ids := c.GetAutoLoadObjectIDsByType("TestAutoLoadObject")
 	if len(ids) != 2 {
 		t.Fatalf("Expected 2 IDs for TestAutoLoadObject, got %d: %v", len(ids), ids)
 	}
@@ -96,7 +96,7 @@ func TestGetAutoLoadObjectIDsByType_GlobalObject(t *testing.T) {
 	}
 
 	// Test with a different type
-	otherIDs := GetAutoLoadObjectIDsByType("OtherType")
+	otherIDs := c.GetAutoLoadObjectIDsByType("OtherType")
 	if len(otherIDs) != 1 {
 		t.Fatalf("Expected 1 ID for OtherType, got %d: %v", len(otherIDs), otherIDs)
 	}
@@ -105,7 +105,7 @@ func TestGetAutoLoadObjectIDsByType_GlobalObject(t *testing.T) {
 	}
 
 	// Test with non-existent type
-	nonExistentIDs := GetAutoLoadObjectIDsByType("NonExistentType")
+	nonExistentIDs := c.GetAutoLoadObjectIDsByType("NonExistentType")
 	if len(nonExistentIDs) != 0 {
 		t.Errorf("Expected 0 IDs for non-existent type, got %d: %v", len(nonExistentIDs), nonExistentIDs)
 	}
@@ -164,7 +164,7 @@ func TestGetAutoLoadObjectIDsByType_PerShardObject(t *testing.T) {
 	testutil.WaitForClusterReady(t, c)
 
 	// Test GetAutoLoadObjectIDsByType
-	ids := GetAutoLoadObjectIDsByType("TestAutoLoadObject")
+	ids := c.GetAutoLoadObjectIDsByType("TestAutoLoadObject")
 
 	// Should return one ID per shard
 	expectedCount := testutil.TestNumShards
@@ -274,8 +274,8 @@ func TestGetAutoLoadObjectIDsByType_PerNodeObject(t *testing.T) {
 	// Wait for clusters to be ready
 	testutil.WaitForClustersReady(t, c1, c2)
 
-	// Test GetAutoLoadObjectIDsByType - use cluster.This() which should be c2 (last set)
-	ids := GetAutoLoadObjectIDsByType("TestAutoLoadObject")
+	// Test GetAutoLoadObjectIDsByType - call directly on cluster to avoid cluster.This() issues in parallel tests
+	ids := c2.GetAutoLoadObjectIDsByType("TestAutoLoadObject")
 
 	// Should return one ID per node (2 nodes)
 	expectedCount := 2
@@ -354,8 +354,8 @@ func TestGetAutoLoadObjectIDs(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClusterReady(t, c)
 
-	// Test GetAutoLoadObjectIDs
-	allIDs := GetAutoLoadObjectIDs()
+	// Test GetAutoLoadObjectIDs - call directly on cluster to avoid cluster.This() issues in parallel tests
+	allIDs := c.GetAutoLoadObjectIDs()
 
 	// Should have 2 types
 	if len(allIDs) != 2 {
@@ -458,16 +458,16 @@ func TestGetAutoLoadObjectIDs_EmptyConfig(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClusterReady(t, c)
 
-	// Test GetAutoLoadObjectIDs
-	allIDs := GetAutoLoadObjectIDs()
+	// Test GetAutoLoadObjectIDs - call directly on cluster to avoid cluster.This() issues in parallel tests
+	allIDs := c.GetAutoLoadObjectIDs()
 
 	// Should return empty map
 	if len(allIDs) != 0 {
 		t.Errorf("Expected empty map, got %d types: %v", len(allIDs), allIDs)
 	}
 
-	// Test GetAutoLoadObjectIDsByType
-	ids := GetAutoLoadObjectIDsByType("TestAutoLoadObject")
+	// Test GetAutoLoadObjectIDsByType - call directly on cluster to avoid cluster.This() issues in parallel tests
+	ids := c.GetAutoLoadObjectIDsByType("TestAutoLoadObject")
 	if len(ids) != 0 {
 		t.Errorf("Expected empty slice, got %d IDs: %v", len(ids), ids)
 	}
@@ -527,8 +527,8 @@ func TestGetAutoLoadObjectIDsByType_MultipleOfSameType(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClusterReady(t, c)
 
-	// Test GetAutoLoadObjectIDsByType
-	ids := GetAutoLoadObjectIDsByType("TestAutoLoadObject")
+	// Test GetAutoLoadObjectIDsByType - call directly on cluster to avoid cluster.This() issues in parallel tests
+	ids := c.GetAutoLoadObjectIDsByType("TestAutoLoadObject")
 
 	// Should return all 3 IDs
 	if len(ids) != 3 {
@@ -546,8 +546,8 @@ func TestGetAutoLoadObjectIDsByType_MultipleOfSameType(t *testing.T) {
 		}
 	}
 
-	// Test GetAutoLoadObjectIDs
-	allIDs := GetAutoLoadObjectIDs()
+	// Test GetAutoLoadObjectIDs - call directly on cluster to avoid cluster.This() issues in parallel tests
+	allIDs := c.GetAutoLoadObjectIDs()
 	if len(allIDs) != 1 {
 		t.Fatalf("Expected 1 type, got %d", len(allIDs))
 	}
