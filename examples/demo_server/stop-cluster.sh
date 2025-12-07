@@ -80,7 +80,6 @@ main() {
         rm -f ".inspector-pid"
     fi
     
-    log_info ""
     log_info "All processes stopped"
 }
 

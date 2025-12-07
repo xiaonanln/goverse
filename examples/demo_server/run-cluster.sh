@@ -77,6 +77,7 @@ build_inspector() {
         log_info "Building inspector..."
         cd "$inspector_dir"
         if go build -o "$SCRIPT_DIR/goverse-inspector" main.go; then
+            chmod +x "$SCRIPT_DIR/goverse-inspector"
             log_info "Inspector built successfully"
         else
             log_warn "Failed to build inspector, will skip if not available"
@@ -92,6 +93,7 @@ build_gate() {
         log_info "Building gate..."
         cd "$gate_dir"
         if go build -o "$SCRIPT_DIR/goverse-gate" main.go; then
+            chmod +x "$SCRIPT_DIR/goverse-gate"
             log_info "Gate built successfully"
         else
             log_warn "Failed to build gate, will skip if not available"
@@ -120,13 +122,13 @@ start_gate() {
     
     # Try using locally built gate first, then check PATH
     local gate_cmd="$SCRIPT_DIR/goverse-gate"
-    if [ ! -x "$gate_cmd" ]; then
-        if command -v goverse-gate &> /dev/null; then
-            gate_cmd="goverse-gate"
-        else
-            log_warn "goverse-gate not found, skipping gate startup"
-            return
-        fi
+    if [ -f "$gate_cmd" ]; then
+        chmod +x "$gate_cmd" 2>/dev/null
+    elif command -v goverse-gate &> /dev/null; then
+        gate_cmd="goverse-gate"
+    else
+        log_warn "goverse-gate not found, skipping gate startup"
+        return
     fi
     
     "$gate_cmd" --config "$CONFIG_FILE" --node-id "$gate_id" \
@@ -143,13 +145,13 @@ start_inspector() {
     
     # Try using locally built inspector first, then check PATH
     local inspector_cmd="$SCRIPT_DIR/goverse-inspector"
-    if [ ! -x "$inspector_cmd" ]; then
-        if command -v goverse-inspector &> /dev/null; then
-            inspector_cmd="goverse-inspector"
-        else
-            log_warn "goverse-inspector not found, skipping inspector startup"
-            return
-        fi
+    if [ -f "$inspector_cmd" ]; then
+        chmod +x "$inspector_cmd" 2>/dev/null
+    elif command -v goverse-inspector &> /dev/null; then
+        inspector_cmd="goverse-inspector"
+    else
+        log_warn "goverse-inspector not found, skipping inspector startup"
+        return
     fi
     
     "$inspector_cmd" --config "$CONFIG_FILE" \
