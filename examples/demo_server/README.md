@@ -224,12 +224,25 @@ The `run-cluster.sh` script can be extended to demonstrate shard rebalancing:
 
 ## Testing
 
-To test the demo with a smaller shard count:
+The demo includes integration tests that verify the functionality of all object types.
+
+**Note**: Tests require etcd to be running on localhost:2379. If etcd is not available, tests will be skipped.
+
+```bash
+# Start etcd first
+docker run -d --name etcd-test -p 2379:2379 quay.io/coreos/etcd:latest \
+  /usr/local/bin/etcd --listen-client-urls http://0.0.0.0:2379 \
+  --advertise-client-urls http://localhost:2379
+
+# Run tests
+cd examples/demo_server
+go test -v -timeout 5m
+```
+
+Tests use 64 shards instead of 8192 for faster execution:
 
 ```go
-// In tests, use 64 shards instead of 8192
-cluster:
-  shards: 64
+NumShards: testutil.TestNumShards  // 64 shards in tests
 ```
 
 ## Cleanup
