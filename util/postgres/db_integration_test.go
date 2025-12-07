@@ -86,8 +86,6 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 	// Drop functions and tables first to ensure a clean state
 	// Drop functions before tables to avoid dependency issues
 	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS update_goverse_requests_timestamp CASCADE")
-	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS cleanup_expired_requests CASCADE")
-	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS mark_stuck_requests_as_failed CASCADE")
 	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_objects CASCADE")
 	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_requests CASCADE")
 
@@ -119,30 +117,18 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 		t.Fatalf("Expected 0 rows in new goverse_requests table, got %d", requestCount)
 	}
 
-	// Verify helper functions exist
+	// Verify trigger function exists
 	var funcExists bool
 	err = db.conn.QueryRowContext(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM pg_proc WHERE proname = 'cleanup_expired_requests'
+			SELECT 1 FROM pg_proc WHERE proname = 'update_goverse_requests_timestamp'
 		)
 	`).Scan(&funcExists)
 	if err != nil {
-		t.Fatalf("Failed to check for cleanup_expired_requests function: %v", err)
+		t.Fatalf("Failed to check for update_goverse_requests_timestamp function: %v", err)
 	}
 	if !funcExists {
-		t.Fatal("cleanup_expired_requests function was not created")
-	}
-
-	err = db.conn.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1 FROM pg_proc WHERE proname = 'mark_stuck_requests_as_failed'
-		)
-	`).Scan(&funcExists)
-	if err != nil {
-		t.Fatalf("Failed to check for mark_stuck_requests_as_failed function: %v", err)
-	}
-	if !funcExists {
-		t.Fatal("mark_stuck_requests_as_failed function was not created")
+		t.Fatal("update_goverse_requests_timestamp function was not created")
 	}
 
 	// Verify we can run InitSchema multiple times (idempotent)
