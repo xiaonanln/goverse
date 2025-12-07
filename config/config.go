@@ -21,7 +21,7 @@ type ClusterConfig struct {
 // AutoLoadObjectConfig specifies an object to auto-load when a node starts
 type AutoLoadObjectConfig struct {
 	Type     string `yaml:"type"`      // Registered object type
-	ID       string `yaml:"id"`        // Full object ID or base name for per-shard/per-node objects
+	ID       string `yaml:"id"`        // Full object ID (standard), or base name (per-shard: shard#N/<ID>, per-node: <addr>/<ID>)
 	PerShard bool   `yaml:"per_shard"` // If true, create one object per shard using fixed-shard IDs
 	PerNode  bool   `yaml:"per_node"`  // If true, create one object per node using fixed-node IDs
 }

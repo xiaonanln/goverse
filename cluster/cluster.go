@@ -1300,6 +1300,10 @@ func (c *Cluster) loadPerShardObject(ctx context.Context, cfg config.AutoLoadObj
 // loadPerNodeObject creates one object per node using fixed-node ID format
 func (c *Cluster) loadPerNodeObject(ctx context.Context, cfg config.AutoLoadObjectConfig) {
 	localAddr := c.getAdvertiseAddr()
+	if localAddr == "" {
+		c.logger.Errorf("Cannot create per-node object %s (%s): node address is empty", cfg.ID, cfg.Type)
+		return
+	}
 
 	// Generate fixed-node object ID: <nodeAddress>/<baseName>
 	objectID := fmt.Sprintf("%s/%s", localAddr, cfg.ID)
