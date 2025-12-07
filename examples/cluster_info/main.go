@@ -4,34 +4,36 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/xiaonanln/goverse/goverseapi"
 )
 
 func main() {
-	// Create and start a server (in a real application, this would be in main)
-	server := goverseapi.NewServer()
-
-	// Start the server in a goroutine
-	go func() {
-		if err := server.Start(); err != nil {
-			fmt.Printf("Server error: %v\n", err)
-			os.Exit(1)
-		}
-	}()
-
-	// Wait for cluster to be ready
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Note: In a real application, you would start the server first using:
+	// server := goverseapi.NewServer()
+	// go server.Run(ctx)
+	
+	// This example assumes a server is already running in the cluster
+	// For demonstration purposes, we'll show the API usage patterns
+	
+	fmt.Println("Cluster Info Example")
+	fmt.Println("====================\n")
+	
+	// Wait for cluster to be ready (with timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	select {
 	case <-goverseapi.ClusterReady():
-		fmt.Println("Cluster is ready!")
+		fmt.Println("✓ Cluster is ready!")
 	case <-ctx.Done():
-		fmt.Println("Timeout waiting for cluster to be ready")
-		return
+		fmt.Println("⚠ Cluster not ready (this is expected if no server is running)")
+		fmt.Println("\nTo run this example with a live cluster:")
+		fmt.Println("1. Start etcd: docker run -d -p 2379:2379 quay.io/coreos/etcd:v3.5.0 ...")
+		fmt.Println("2. Start a node: go run cmd/node/main.go --listen :48000 --etcd localhost:2379")
+		fmt.Println("3. Then run this example again")
+		fmt.Println("\nShowing API usage below:\n")
 	}
 
 	// Get nodes information
