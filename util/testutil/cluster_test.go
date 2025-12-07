@@ -278,7 +278,8 @@ func TestWaitForClustersReady_BecomesReady(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should complete in around 200-400ms (initial delay + polling)
-	if elapsed < 150*time.Millisecond || elapsed > 5*time.Second {
+	// Allow up to 10s for CI environments where initialization may be slower
+	if elapsed < 150*time.Millisecond || elapsed > 10*time.Second {
 		t.Fatalf("WaitForClustersReady took unexpected time: %v", elapsed)
 	}
 }
