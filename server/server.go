@@ -43,6 +43,7 @@ type ServerConfig struct {
 	AccessValidator           *config.AccessValidator       // Optional: access validator for node access control
 	LifecycleValidator        *config.LifecycleValidator    // Optional: lifecycle validator for CREATE/DELETE control
 	AutoLoadObjects           []config.AutoLoadObjectConfig // Optional: objects to auto-load when node starts and claims shards
+	ConfigFile                *config.Config                // Optional: loaded config file (if config file was used)
 }
 
 type Server struct {
@@ -100,6 +101,9 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	if len(config.AutoLoadObjects) > 0 {
 		clusterCfg.AutoLoadObjects = config.AutoLoadObjects
+	}
+	if config.ConfigFile != nil {
+		clusterCfg.ConfigFile = config.ConfigFile
 	}
 
 	// Initialize cluster with etcd connection

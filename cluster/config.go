@@ -40,6 +40,10 @@ type Config struct {
 
 	// AutoLoadObjects is the list of objects to automatically load when the node starts
 	AutoLoadObjects []config.AutoLoadObjectConfig
+
+	// ConfigFile is the loaded config file (if any)
+	// If nil, the cluster was started with CLI flags instead of a config file
+	ConfigFile *config.Config
 }
 
 // DefaultConfig returns a Config with production default values

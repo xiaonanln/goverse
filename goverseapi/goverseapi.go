@@ -182,3 +182,47 @@ func CreateObjectIDOnShard(shardID int) string {
 func CreateObjectIDOnNode(nodeAddress string) string {
 	return uniqueid.CreateObjectIDOnNode(nodeAddress)
 }
+
+// NodeInfo represents information about a node
+type NodeInfo = cluster.NodeInfo
+
+// GateInfo represents information about a gate
+type GateInfo = cluster.GateInfo
+
+// GetNodesInfo returns a map of node addresses to their information.
+// Keys are node addresses, values contain whether configured and whether found in cluster state.
+//
+// When using a config file, configured nodes will have Configured=true.
+// When using CLI flags only, all nodes will have Configured=false.
+//
+// All nodes currently active in the cluster (registered in etcd) will have FoundInClusterState=true.
+//
+// Example:
+//
+//	nodesInfo := goverseapi.GetNodesInfo()
+//	for addr, info := range nodesInfo {
+//	    fmt.Printf("Node %s: Configured=%v, InCluster=%v\n",
+//	        addr, info.Configured, info.FoundInClusterState)
+//	}
+func GetNodesInfo() map[string]NodeInfo {
+	return cluster.This().GetNodesInfo()
+}
+
+// GetGatesInfo returns a map of gate addresses to their information.
+// Keys are gate addresses, values contain whether configured and whether found in cluster state.
+//
+// When using a config file, configured gates will have Configured=true.
+// When using CLI flags only, all gates will have Configured=false.
+//
+// All gates currently active in the cluster (registered in etcd) will have FoundInClusterState=true.
+//
+// Example:
+//
+//	gatesInfo := goverseapi.GetGatesInfo()
+//	for addr, info := range gatesInfo {
+//	    fmt.Printf("Gate %s: Configured=%v, InCluster=%v\n",
+//	        addr, info.Configured, info.FoundInClusterState)
+//	}
+func GetGatesInfo() map[string]GateInfo {
+	return cluster.This().GetGatesInfo()
+}

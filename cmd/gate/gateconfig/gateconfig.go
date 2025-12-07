@@ -112,6 +112,7 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 			NumShards:                     cfg.GetNumShards(),
 			ClusterStateStabilityDuration: cfg.GetClusterStateStabilityDuration(),
 			InspectorAddress:              cfg.GetInspectorAdvertiseAddress(),
+			ConfigFile:                    cfg, // Pass the loaded config file
 		}, nil
 	}
 

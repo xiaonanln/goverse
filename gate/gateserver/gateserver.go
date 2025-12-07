@@ -38,6 +38,8 @@ type GateServerConfig struct {
 
 	AccessValidator    *config.AccessValidator    // Optional: access validator for client access control
 	LifecycleValidator *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
+
+	ConfigFile *config.Config // Optional: loaded config file (if config file was used)
 }
 
 // GateServer handles gRPC requests and delegates to the gate
@@ -82,6 +84,7 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		EtcdPrefix:                    config.EtcdPrefix,
 		NumShards:                     config.NumShards,
 		ClusterStateStabilityDuration: config.ClusterStateStabilityDuration,
+		ConfigFile:                    config.ConfigFile, // Pass the loaded config file
 	}
 	c, err := cluster.NewClusterWithGate(clusterCfg, gw)
 	if err != nil {
