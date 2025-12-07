@@ -1482,6 +1482,32 @@ func (c *Cluster) GetNodeConnections() *nodeconnections.NodeConnections {
 	return c.nodeConnections
 }
 
+// generateAutoLoadIDs generates object IDs for an auto-load configuration.
+// Helper function to avoid code duplication.
+func (c *Cluster) generateAutoLoadIDs(cfg config.AutoLoadObjectConfig) []string {
+	var ids []string
+
+	if cfg.PerShard {
+		// Generate per-shard IDs for all shards
+		for shardID := 0; shardID < c.numShards; shardID++ {
+			objectID := fmt.Sprintf("shard#%d/%s", shardID, cfg.ID)
+			ids = append(ids, objectID)
+		}
+	} else if cfg.PerNode {
+		// Generate per-node IDs for all nodes
+		nodes := c.GetNodes()
+		for _, nodeAddr := range nodes {
+			objectID := fmt.Sprintf("%s/%s", nodeAddr, cfg.ID)
+			ids = append(ids, objectID)
+		}
+	} else {
+		// Global object - single ID
+		ids = append(ids, cfg.ID)
+	}
+
+	return ids
+}
+
 // GetAutoLoadObjectIDsByType returns all object IDs for auto-load objects of the specified type.
 // For global objects, it returns a single ID.
 // For per-shard objects, it returns IDs in the format: shard#<N>/<baseName>
@@ -1495,24 +1521,7 @@ func (c *Cluster) GetAutoLoadObjectIDsByType(objType string) []string {
 		if cfg.Type != objType {
 			continue
 		}
-
-		if cfg.PerShard {
-			// Generate per-shard IDs for all shards
-			for shardID := 0; shardID < c.numShards; shardID++ {
-				objectID := fmt.Sprintf("shard#%d/%s", shardID, cfg.ID)
-				result = append(result, objectID)
-			}
-		} else if cfg.PerNode {
-			// Generate per-node IDs for all nodes
-			nodes := c.GetNodes()
-			for _, nodeAddr := range nodes {
-				objectID := fmt.Sprintf("%s/%s", nodeAddr, cfg.ID)
-				result = append(result, objectID)
-			}
-		} else {
-			// Global object - single ID
-			result = append(result, cfg.ID)
-		}
+		result = append(result, c.generateAutoLoadIDs(cfg)...)
 	}
 
 	return result
@@ -1524,26 +1533,7 @@ func (c *Cluster) GetAutoLoadObjectIDs() map[string][]string {
 	result := make(map[string][]string)
 
 	for _, cfg := range c.config.AutoLoadObjects {
-		var ids []string
-
-		if cfg.PerShard {
-			// Generate per-shard IDs for all shards
-			for shardID := 0; shardID < c.numShards; shardID++ {
-				objectID := fmt.Sprintf("shard#%d/%s", shardID, cfg.ID)
-				ids = append(ids, objectID)
-			}
-		} else if cfg.PerNode {
-			// Generate per-node IDs for all nodes
-			nodes := c.GetNodes()
-			for _, nodeAddr := range nodes {
-				objectID := fmt.Sprintf("%s/%s", nodeAddr, cfg.ID)
-				ids = append(ids, objectID)
-			}
-		} else {
-			// Global object - single ID
-			ids = append(ids, cfg.ID)
-		}
-
+		ids := c.generateAutoLoadIDs(cfg)
 		// Append to existing list if type already exists
 		result[cfg.Type] = append(result[cfg.Type], ids...)
 	}
