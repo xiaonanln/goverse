@@ -57,18 +57,18 @@ CREATE TABLE goverse_requests (
     processed_at TIMESTAMP, -- When processing completed (status = completed/failed)
     expires_at TIMESTAMP, -- Automatic cleanup time (optional, for TTL)
     
-    -- Constraints
+    -- Constraints to enforce data integrity
+    -- Ensure completed requests always have result data
     CONSTRAINT valid_completed_state CHECK (
-        (status = 'completed' AND result_data IS NOT NULL) OR
-        (status != 'completed')
+        status != 'completed' OR result_data IS NOT NULL
     ),
+    -- Ensure failed requests always have error message
     CONSTRAINT valid_failed_state CHECK (
-        (status = 'failed' AND error_message IS NOT NULL) OR
-        (status != 'failed')
+        status != 'failed' OR error_message IS NOT NULL
     ),
+    -- Ensure terminal states always have processed timestamp
     CONSTRAINT valid_processed_at CHECK (
-        (status IN ('completed', 'failed') AND processed_at IS NOT NULL) OR
-        (status NOT IN ('completed', 'failed'))
+        status NOT IN ('completed', 'failed') OR processed_at IS NOT NULL
     )
 );
 
