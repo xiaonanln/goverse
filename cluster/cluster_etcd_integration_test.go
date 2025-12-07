@@ -327,20 +327,12 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 	// Wait for all nodes to be registered and watches to sync
 	time.Sleep(1 * time.Second)
 
-	// Wait for a leader to be elected (with new implementation, any node can become leader)
-	// Poll until we have a leader (20 attempts x 500ms = up to 10 seconds)
+	// Wait for a leader to be elected
 	var initialLeader string
-	for attempts := 0; attempts < 20; attempts++ {
+	testutil.WaitFor(t, 10*time.Second, "leader to be elected", func() bool {
 		initialLeader = cluster1.GetLeaderNode()
-		if initialLeader != "" {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	if initialLeader == "" {
-		t.Fatalf("No leader was elected after waiting")
-	}
+		return initialLeader != ""
+	})
 
 	t.Logf("Initial leader: %s", initialLeader)
 
@@ -349,11 +341,13 @@ func TestClusterGetLeaderNode_DynamicChange(t *testing.T) {
 		t.Fatalf("Initial leader %s is not one of the expected nodes", initialLeader)
 	}
 
-	// Both clusters should agree on the leader
-	leader2 := cluster2.GetLeaderNode()
-	if initialLeader != leader2 {
-		t.Fatalf("Clusters disagree on leader: cluster1=%s, cluster2=%s", initialLeader, leader2)
-	}
+	// Wait for both clusters to agree on the leader
+	testutil.WaitFor(t, 5*time.Second, "both clusters to agree on leader", func() bool {
+		leader2 := cluster2.GetLeaderNode()
+		return leader2 != "" && leader2 == initialLeader
+	})
+
+	t.Logf("Both clusters agree on leader: %s", initialLeader)
 
 	// Stop the cluster that is currently the leader
 	var clusterToStop *Cluster
