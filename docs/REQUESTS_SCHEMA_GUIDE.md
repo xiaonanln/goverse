@@ -270,23 +270,36 @@ import (
 )
 
 func SubmitRequest(ctx context.Context, db *sql.DB, 
-    objectID, objectType, method string, 
+    callerID, objectID, objectType, method string, 
     requestData []byte) (string, error) {
     
-    requestID := uuid.New().String()
+    // Generate deterministic request_id for true idempotency
+    // This ensures the same operation from the same caller gets the same ID
+    requestID := generateDeterministicRequestID(callerID, objectID, method, requestData)
     expiresAt := time.Now().Add(24 * time.Hour)
     
-    // Track retry attempts by incrementing retry_count on conflict
+    // Use ON CONFLICT DO NOTHING to handle duplicate submissions
+    // This ensures idempotency - duplicate requests are silently ignored
     _, err := db.ExecContext(ctx, `
         INSERT INTO goverse_requests 
             (request_id, object_id, object_type, method_name, 
              request_data, expires_at)
         VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (request_id) DO UPDATE 
-        SET retry_count = goverse_requests.retry_count + 1
+        ON CONFLICT (request_id) DO NOTHING
     `, requestID, objectID, objectType, method, requestData, expiresAt)
     
     return requestID, err
+}
+
+// generateDeterministicRequestID creates a consistent request ID
+// Same input parameters always generate the same ID for idempotency
+func generateDeterministicRequestID(callerID, objectID, method string, data []byte) string {
+    h := sha256.New()
+    h.Write([]byte(callerID))
+    h.Write([]byte(objectID))
+    h.Write([]byte(method))
+    h.Write(data)
+    return hex.EncodeToString(h.Sum(nil))
 }
 ```
 
@@ -379,41 +392,53 @@ func SubmitWithRetry(ctx context.Context, db *sql.DB,
     requestID, objectID, objectType, method string,
     requestData []byte) error {
     
-    // Check if request already exists
-    var status string
-    var resultData []byte
-    var errorMsg string
+    // Use atomic INSERT with ON CONFLICT to handle race conditions
+    // This ensures only one request is created even with concurrent submissions
+    result, err := db.ExecContext(ctx, `
+        INSERT INTO goverse_requests 
+            (request_id, object_id, object_type, method_name, request_data)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (request_id) DO NOTHING
+    `, requestID, objectID, objectType, method, requestData)
     
-    err := db.QueryRowContext(ctx, `
-        SELECT status, result_data, error_message
-        FROM goverse_requests
-        WHERE request_id = $1
-    `, requestID).Scan(&status, &resultData, &errorMsg)
-    
-    if err == sql.ErrNoRows {
-        // New request - insert it
-        _, err = db.ExecContext(ctx, `
-            INSERT INTO goverse_requests 
-                (request_id, object_id, object_type, method_name, request_data)
-            VALUES ($1, $2, $3, $4, $5)
-        `, requestID, objectID, objectType, method, requestData)
+    if err != nil {
         return err
     }
     
-    // Request exists - handle based on status
-    switch status {
-    case "completed":
-        // Return cached result
-        return nil // or return resultData
-    case "failed":
-        // Could retry or return error
-        return fmt.Errorf("previous attempt failed: %s", errorMsg)
-    case "pending", "processing":
-        // Wait and retry
-        return ErrRequestInProgress
+    // Check if we inserted a new row or hit a conflict
+    rows, _ := result.RowsAffected()
+    if rows == 0 {
+        // Request already exists - check its status
+        var status string
+        var resultData []byte
+        var errorMsg string
+        
+        err := db.QueryRowContext(ctx, `
+            SELECT status, result_data, error_message
+            FROM goverse_requests
+            WHERE request_id = $1
+        `, requestID).Scan(&status, &resultData, &errorMsg)
+        
+        if err != nil {
+            return err
+        }
+        
+        // Handle based on current status
+        switch status {
+        case "completed":
+            // Return cached result (success)
+            return nil // or return resultData
+        case "failed":
+            // Could retry by incrementing retry_count or return error
+            return fmt.Errorf("previous attempt failed: %s", errorMsg)
+        case "pending", "processing":
+            // Still being processed - wait and retry
+            return ErrRequestInProgress
+        }
     }
     
-    return err
+    // New request was inserted successfully
+    return nil
 }
 ```
 
