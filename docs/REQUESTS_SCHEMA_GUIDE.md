@@ -276,12 +276,14 @@ func SubmitRequest(ctx context.Context, db *sql.DB,
     requestID := uuid.New().String()
     expiresAt := time.Now().Add(24 * time.Hour)
     
+    // Track retry attempts by incrementing retry_count on conflict
     _, err := db.ExecContext(ctx, `
         INSERT INTO goverse_requests 
             (request_id, object_id, object_type, method_name, 
              request_data, expires_at)
         VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (request_id) DO NOTHING
+        ON CONFLICT (request_id) DO UPDATE 
+        SET retry_count = goverse_requests.retry_count + 1
     `, requestID, objectID, objectType, method, requestData, expiresAt)
     
     return requestID, err
@@ -294,12 +296,12 @@ func SubmitRequest(ctx context.Context, db *sql.DB,
 func ProcessRequest(ctx context.Context, db *sql.DB, 
     requestID, nodeID string) error {
     
-    // 1. Claim the request
+    // 1. Atomically claim the request (prevents race condition)
+    // Only update if status is 'pending' to ensure only one node processes
     result, err := db.ExecContext(ctx, `
         UPDATE goverse_requests
         SET status = 'processing',
-            node_id = $2,
-            updated_at = CURRENT_TIMESTAMP
+            node_id = $2
         WHERE request_id = $1 
           AND status = 'pending'
     `, requestID, nodeID)
@@ -327,13 +329,16 @@ func ProcessRequest(ctx context.Context, db *sql.DB,
     resultData, err := ExecuteMethod(objectID, objectType, methodName, requestData)
     
     // 4. Update with result or error
+    // Only update if still in 'processing' state and node_id matches (prevents unauthorized updates)
     if err != nil {
         _, err = db.ExecContext(ctx, `
             UPDATE goverse_requests
             SET status = 'failed',
                 error_message = $2,
                 processed_at = CURRENT_TIMESTAMP
-            WHERE request_id = $1 AND node_id = $3
+            WHERE request_id = $1 
+              AND node_id = $3 
+              AND status = 'processing'
         `, requestID, err.Error(), nodeID)
     } else {
         _, err = db.ExecContext(ctx, `
@@ -341,7 +346,9 @@ func ProcessRequest(ctx context.Context, db *sql.DB,
             SET status = 'completed',
                 result_data = $2,
                 processed_at = CURRENT_TIMESTAMP
-            WHERE request_id = $1 AND node_id = $3
+            WHERE request_id = $1 
+              AND node_id = $3 
+              AND status = 'processing'
         `, requestID, resultData, nodeID)
     }
     

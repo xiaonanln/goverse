@@ -131,6 +131,7 @@ $$ LANGUAGE plpgsql;
 
 -- Example function to mark stuck requests as failed
 -- Should be called periodically to recover from node failures
+-- Note: updated_at is automatically updated by the trigger, no need to set it manually
 CREATE OR REPLACE FUNCTION mark_stuck_requests_as_failed(
     stuck_duration INTERVAL DEFAULT '5 minutes'
 )
@@ -141,8 +142,7 @@ BEGIN
     UPDATE goverse_requests
     SET status = 'failed',
         error_message = 'Request stuck in processing state (node may have crashed)',
-        processed_at = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
+        processed_at = CURRENT_TIMESTAMP
     WHERE status = 'processing' 
       AND updated_at < (CURRENT_TIMESTAMP - stuck_duration);
     
