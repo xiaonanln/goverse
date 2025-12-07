@@ -1228,6 +1228,9 @@ func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
 		if cfg.PerShard {
 			// Create one object per shard using fixed-shard ID format
 			c.loadPerShardObject(ctx, cfg)
+		} else if cfg.PerNode {
+			// Create one object per node using fixed-node ID format
+			c.loadPerNodeObject(ctx, cfg)
 		} else {
 			// Create a single object with the specified ID
 			c.loadSingleObject(ctx, cfg)
@@ -1292,6 +1295,23 @@ func (c *Cluster) loadPerShardObject(ctx context.Context, cfg config.AutoLoadObj
 	}
 
 	c.logger.Infof("Auto-loaded %d per-shard objects of type %s (base name: %s)", loadedCount, cfg.Type, cfg.ID)
+}
+
+// loadPerNodeObject creates one object per node using fixed-node ID format
+func (c *Cluster) loadPerNodeObject(ctx context.Context, cfg config.AutoLoadObjectConfig) {
+	localAddr := c.getAdvertiseAddr()
+
+	// Generate fixed-node object ID: <nodeAddress>/<baseName>
+	objectID := fmt.Sprintf("%s/%s", localAddr, cfg.ID)
+
+	// Create or load the object locally
+	_, err := c.CreateObject(ctx, cfg.Type, objectID)
+	if err != nil {
+		c.logger.Errorf("Failed to auto-load per-node object %s (%s): %v", objectID, cfg.Type, err)
+		return
+	}
+
+	c.logger.Infof("Auto-loaded per-node object %s (%s)", objectID, cfg.Type)
 }
 
 // releaseShardOwnership releases ownership of shards when:

@@ -1143,7 +1143,7 @@ gates: []
 	}
 }
 
-func TestPerNodeAutoLoadObjects(t *testing.T) {
+func TestAutoLoadObjectsPerNodeConfig(t *testing.T) {
 	configContent := `
 version: 1
 
@@ -1156,28 +1156,19 @@ cluster:
     prefix: "/goverse"
   
   auto_load_objects:
-    - type: "GlobalManager"
-      id: "ClusterWideManager"
+    - type: "NodeManager"
+      id: "PerNodeManager"
+      per_node: true
+    
+    - type: "GlobalService"
+      id: "SingletonService"
+      per_node: false
 
 nodes:
   - id: "node-1"
     grpc_addr: "0.0.0.0:9101"
     advertise_addr: "node-1.local:9101"
     http_addr: "0.0.0.0:8101"
-    auto_load_objects:
-      - type: "NodeSpecificService"
-        id: "Node1Service"
-      - type: "NodeSpecificCache"
-        id: "Node1Cache"
-        per_shard: true
-
-  - id: "node-2"
-    grpc_addr: "0.0.0.0:9102"
-    advertise_addr: "node-2.local:9102"
-    http_addr: "0.0.0.0:8102"
-    auto_load_objects:
-      - type: "NodeSpecificService"
-        id: "Node2Service"
 
 gates: []
 `
@@ -1192,161 +1183,70 @@ gates: []
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	// Test cluster-level auto-load objects
-	clusterObjects := cfg.GetAutoLoadObjects()
-	if len(clusterObjects) != 1 {
-		t.Errorf("expected 1 cluster auto-load object, got %d", len(clusterObjects))
-	}
-	if len(clusterObjects) > 0 && clusterObjects[0].Type != "GlobalManager" {
-		t.Errorf("expected GlobalManager, got %s", clusterObjects[0].Type)
+	// Check auto-load objects
+	autoLoadObjects := cfg.GetAutoLoadObjects()
+	if len(autoLoadObjects) != 2 {
+		t.Errorf("expected 2 auto-load objects, got %d", len(autoLoadObjects))
 	}
 
-	// Test node-1 auto-load objects (should include cluster + node-specific)
-	node1Objects, err := cfg.GetAutoLoadObjectsForNode("node-1")
-	if err != nil {
-		t.Fatalf("GetAutoLoadObjectsForNode failed for node-1: %v", err)
+	// Check first object (per-node)
+	if autoLoadObjects[0].Type != "NodeManager" {
+		t.Errorf("expected first object type NodeManager, got %s", autoLoadObjects[0].Type)
 	}
-	if len(node1Objects) != 3 {
-		t.Errorf("expected 3 auto-load objects for node-1, got %d", len(node1Objects))
+	if autoLoadObjects[0].ID != "PerNodeManager" {
+		t.Errorf("expected first object ID PerNodeManager, got %s", autoLoadObjects[0].ID)
 	}
-	// First should be cluster-level
-	if node1Objects[0].Type != "GlobalManager" {
-		t.Errorf("expected first object to be GlobalManager, got %s", node1Objects[0].Type)
-	}
-	// Second should be node-specific
-	if node1Objects[1].Type != "NodeSpecificService" {
-		t.Errorf("expected second object to be NodeSpecificService, got %s", node1Objects[1].Type)
-	}
-	if node1Objects[1].ID != "Node1Service" {
-		t.Errorf("expected Node1Service, got %s", node1Objects[1].ID)
-	}
-	// Third should be per-shard node-specific
-	if node1Objects[2].Type != "NodeSpecificCache" {
-		t.Errorf("expected third object to be NodeSpecificCache, got %s", node1Objects[2].Type)
-	}
-	if !node1Objects[2].PerShard {
-		t.Error("expected Node1Cache to be per-shard")
+	if !autoLoadObjects[0].PerNode {
+		t.Error("expected first object to have per_node=true")
 	}
 
-	// Test node-2 auto-load objects
-	node2Objects, err := cfg.GetAutoLoadObjectsForNode("node-2")
-	if err != nil {
-		t.Fatalf("GetAutoLoadObjectsForNode failed for node-2: %v", err)
+	// Check second object (single)
+	if autoLoadObjects[1].Type != "GlobalService" {
+		t.Errorf("expected second object type GlobalService, got %s", autoLoadObjects[1].Type)
 	}
-	if len(node2Objects) != 2 {
-		t.Errorf("expected 2 auto-load objects for node-2, got %d", len(node2Objects))
+	if autoLoadObjects[1].ID != "SingletonService" {
+		t.Errorf("expected second object ID SingletonService, got %s", autoLoadObjects[1].ID)
 	}
-	// First should be cluster-level
-	if node2Objects[0].Type != "GlobalManager" {
-		t.Errorf("expected first object to be GlobalManager, got %s", node2Objects[0].Type)
-	}
-	// Second should be node-specific
-	if node2Objects[1].Type != "NodeSpecificService" {
-		t.Errorf("expected second object to be NodeSpecificService, got %s", node2Objects[1].Type)
-	}
-	if node2Objects[1].ID != "Node2Service" {
-		t.Errorf("expected Node2Service, got %s", node2Objects[1].ID)
-	}
-
-	// Test with non-existent node
-	_, err = cfg.GetAutoLoadObjectsForNode("non-existent")
-	if err == nil {
-		t.Error("expected error for non-existent node, got nil")
+	if autoLoadObjects[1].PerNode {
+		t.Error("expected second object to have per_node=false")
 	}
 }
 
-func TestPerNodeAutoLoadObjectsValidation(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      string
-		expectError bool
-		errorText   string
-	}{
-		{
-			name: "missing type in node auto-load",
-			config: `
+func TestAutoLoadObjectsPerShardAndPerNodeValidation(t *testing.T) {
+	configContent := `
 version: 1
+
 cluster:
   shards: 8192
   provider: "etcd"
   etcd:
-    endpoints: ["127.0.0.1:2379"]
+    endpoints:
+      - "127.0.0.1:2379"
     prefix: "/goverse"
+  
+  auto_load_objects:
+    - type: "InvalidObject"
+      id: "BothFlags"
+      per_shard: true
+      per_node: true
+
 nodes:
   - id: "node-1"
     grpc_addr: "0.0.0.0:9101"
     advertise_addr: "node-1.local:9101"
-    auto_load_objects:
-      - id: "SomeID"
+
 gates: []
-`,
-			expectError: true,
-			errorText:   "type is required",
-		},
-		{
-			name: "missing id in node auto-load",
-			config: `
-version: 1
-cluster:
-  shards: 8192
-  provider: "etcd"
-  etcd:
-    endpoints: ["127.0.0.1:2379"]
-    prefix: "/goverse"
-nodes:
-  - id: "node-1"
-    grpc_addr: "0.0.0.0:9101"
-    advertise_addr: "node-1.local:9101"
-    auto_load_objects:
-      - type: "SomeType"
-gates: []
-`,
-			expectError: true,
-			errorText:   "id is required",
-		},
-		{
-			name: "valid node auto-load",
-			config: `
-version: 1
-cluster:
-  shards: 8192
-  provider: "etcd"
-  etcd:
-    endpoints: ["127.0.0.1:2379"]
-    prefix: "/goverse"
-nodes:
-  - id: "node-1"
-    grpc_addr: "0.0.0.0:9101"
-    advertise_addr: "node-1.local:9101"
-    auto_load_objects:
-      - type: "SomeType"
-        id: "SomeID"
-gates: []
-`,
-			expectError: false,
-		},
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			configPath := filepath.Join(tmpDir, "config.yml")
-			if err := os.WriteFile(configPath, []byte(tt.config), 0600); err != nil {
-				t.Fatalf("failed to write config file: %v", err)
-			}
-
-			_, err := LoadConfig(configPath)
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error containing %q, got nil", tt.errorText)
-				} else if !strings.Contains(err.Error(), tt.errorText) {
-					t.Errorf("expected error containing %q, got %v", tt.errorText, err)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
-		})
+	_, err := LoadConfig(configPath)
+	if err == nil {
+		t.Error("expected error when both per_shard and per_node are true, got nil")
+	} else if !strings.Contains(err.Error(), "per_shard and per_node cannot both be true") {
+		t.Errorf("expected error about conflicting flags, got: %v", err)
 	}
 }

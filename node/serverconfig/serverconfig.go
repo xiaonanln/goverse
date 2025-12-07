@@ -104,12 +104,6 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 			advertiseAddr = nodeCfg.GRPCAddr
 		}
 
-		// Get auto-load objects for this specific node (combines cluster and node-level)
-		autoLoadObjects, err := cfg.GetAutoLoadObjectsForNode(*l.nodeID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get auto-load objects for node: %w", err)
-		}
-
 		return &server.ServerConfig{
 			ListenAddress:         listenAddr,
 			AdvertiseAddress:      advertiseAddr,
@@ -119,7 +113,7 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 			NumShards:             cfg.GetNumShards(),
 			NodeStabilityDuration: cfg.GetClusterStateStabilityDuration(),
 			InspectorAddress:      cfg.GetInspectorAdvertiseAddress(),
-			AutoLoadObjects:       autoLoadObjects,
+			AutoLoadObjects:       cfg.GetAutoLoadObjects(),
 		}, nil
 	}
 
