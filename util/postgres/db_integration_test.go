@@ -83,12 +83,13 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Drop tables and functions first to ensure a clean state
-	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_objects CASCADE")
-	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_requests CASCADE")
+	// Drop functions and tables first to ensure a clean state
+	// Drop functions before tables to avoid dependency issues
 	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS update_goverse_requests_timestamp CASCADE")
 	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS cleanup_expired_requests CASCADE")
 	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS mark_stuck_requests_as_failed CASCADE")
+	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_objects CASCADE")
+	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_requests CASCADE")
 
 	// Initialize schema
 	err = db.InitSchema(ctx)

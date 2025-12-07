@@ -79,8 +79,7 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		request_data BYTEA NOT NULL,
 		result_data BYTEA,
 		error_message TEXT,
-		status VARCHAR(50) NOT NULL DEFAULT 'pending' 
-			CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+		status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
 		node_id VARCHAR(255),
 		caller_object_id VARCHAR(255),
 		caller_client_id VARCHAR(255),
@@ -124,6 +123,8 @@ func (db *DB) InitSchema(ctx context.Context) error {
 	$$ LANGUAGE plpgsql;
 
 	-- Trigger to update timestamp on row updates
+	-- Note: PostgreSQL doesn't support CREATE OR REPLACE for triggers, so we use DROP IF EXISTS
+	-- This ensures the trigger is created correctly even if InitSchema is called multiple times
 	DROP TRIGGER IF EXISTS trigger_update_goverse_requests_timestamp ON goverse_requests;
 	CREATE TRIGGER trigger_update_goverse_requests_timestamp
 		BEFORE UPDATE ON goverse_requests
