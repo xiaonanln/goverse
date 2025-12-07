@@ -33,8 +33,17 @@ func WaitFor(t testing.TB, timeout time.Duration, message string, condition func
 		return
 	}
 
+	if timeout <= 200*time.Millisecond {
+		timeout = 200 * time.Millisecond
+	}
+
+	tickInterval := timeout / 10
+	if tickInterval < 200*time.Millisecond {
+		tickInterval = 200 * time.Millisecond
+	}
+
 	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
 	checkCount := 1
