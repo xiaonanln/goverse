@@ -132,6 +132,8 @@ $$ LANGUAGE plpgsql;
 -- Example function to mark stuck requests as failed
 -- Should be called periodically to recover from node failures
 -- Note: updated_at is automatically updated by the trigger, no need to set it manually
+-- Note: Default stuck_duration of 5 minutes is a starting point - adjust based on your workload
+--       For longer-running operations, increase this value to avoid false positives
 CREATE OR REPLACE FUNCTION mark_stuck_requests_as_failed(
     stuck_duration INTERVAL DEFAULT '5 minutes'
 )
