@@ -226,6 +226,8 @@ func GetNodesInfo() map[string]NodeInfo {
 //	}
 func GetGatesInfo() map[string]GateInfo {
 	return cluster.This().GetGatesInfo()
+}
+
 // GetAutoLoadObjectIDsByType returns all object IDs for auto-load objects of the specified type.
 // This is useful when you need to interact with auto-load objects from your application code.
 //
