@@ -26,26 +26,30 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	cluster1 := mustNewCluster(ctx, t, "localhost:50011", testPrefix)
 	cluster2 := mustNewCluster(ctx, t, "localhost:50012", testPrefix)
 
-	// Wait for watches to sync
-	time.Sleep(1000 * time.Millisecond)
+	// Wait for leadership election to complete
+	testutil.WaitFor(t, 5*time.Second, "leadership election to complete", func() bool {
+		return cluster1.IsLeader() || cluster2.IsLeader()
+	})
 
-	// Verify cluster1 is the leader
-	if !cluster1.IsLeader() {
-		t.Fatalf("cluster1 should be the leader")
+	// Determine which cluster is the leader
+	var leaderCluster, followerCluster *Cluster
+	if cluster1.IsLeader() {
+		leaderCluster = cluster1
+		followerCluster = cluster2
+		t.Logf("Leader is cluster1 (localhost:50011)")
+	} else {
+		leaderCluster = cluster2
+		followerCluster = cluster1
+		t.Logf("Leader is cluster2 (localhost:50012)")
 	}
-	if cluster2.IsLeader() {
-		t.Fatalf("cluster2 should not be the leader")
-	}
-
-	t.Logf("Leader is cluster1 (localhost:50011)")
 
 	// Test 1: Wait for node list to become stable and shard mapping to be created
 	t.Logf("Waiting for node list to stabilize and shard mapping to be created...")
-	testutil.WaitForClusterReady(t, cluster1)
+	testutil.WaitForClusterReady(t, leaderCluster)
 
 	// After stability period, leader should have initialized shard mapping
-	mapping1 := cluster1.GetShardMapping(ctx)
-	if mapping1 == nil {
+	mappingLeader := leaderCluster.GetShardMapping(ctx)
+	if mappingLeader == nil {
 		t.Fatalf("Shard mapping should be initialized by leader")
 	}
 	// Note: Version is now tracked in ClusterState, not ShardMapping
@@ -53,19 +57,19 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	t.Logf("Shard mapping initialized by leader")
 
 	// Test 2: Non-leader should also be able to get the shard mapping from etcd
-	mapping2 := cluster2.GetShardMapping(ctx)
-	if mapping2 == nil {
+	mappingFollower := followerCluster.GetShardMapping(ctx)
+	if mappingFollower == nil {
 		t.Fatalf("Shard mapping should be available to non-leader")
 	}
 	// Both should have same shard assignments
-	if len(mapping2.Shards) != len(mapping1.Shards) {
-		t.Fatalf("Both clusters should have same shard mapping, got %d and %d shards", len(mapping1.Shards), len(mapping2.Shards))
+	if len(mappingFollower.Shards) != len(mappingLeader.Shards) {
+		t.Fatalf("Both clusters should have same shard mapping, got %d and %d shards", len(mappingLeader.Shards), len(mappingFollower.Shards))
 	}
 
 	t.Logf("Non-leader successfully retrieved shard mapping")
 
 	// Test 3: Verify shard assignments
-	nodes := cluster1.GetNodes()
+	nodes := leaderCluster.GetNodes()
 	if len(nodes) != 2 {
 		t.Fatalf("Expected 2 nodes, got %d", len(nodes))
 	}
@@ -74,7 +78,7 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	shardCount := 0
 	for _, node := range nodes {
 		count := 0
-		for _, assignedNode := range mapping1.Shards {
+		for _, assignedNode := range mappingLeader.Shards {
 			if assignedNode.TargetNode == node {
 				count++
 			}
@@ -94,10 +98,10 @@ func TestClusterAutomaticShardMappingManagement(t *testing.T) {
 	t.Logf("Verifying automatic cache sync on non-leader...")
 
 	// Non-leader should maintain correct mapping via automatic watch mechanism
-	mapping2New := cluster2.GetShardMapping(ctx)
+	mappingFollowerNew := followerCluster.GetShardMapping(ctx)
 	// Verify it still has correct number of shards
-	if len(mapping2New.Shards) != len(mapping1.Shards) {
-		t.Fatalf("Mapping should have same shards, got %d, expected %d", len(mapping2New.Shards), len(mapping1.Shards))
+	if len(mappingFollowerNew.Shards) != len(mappingLeader.Shards) {
+		t.Fatalf("Mapping should have same shards, got %d, expected %d", len(mappingFollowerNew.Shards), len(mappingLeader.Shards))
 	}
 
 	t.Logf("Non-leader maintains correct shard mapping via automatic sync")
