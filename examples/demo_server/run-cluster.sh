@@ -140,9 +140,7 @@ build_demo() {
     log_section "Building Demo Server"
     
     cd "$SCRIPT_DIR"
-    go build -o demo-server main.go
-    
-    if [ $? -eq 0 ]; then
+    if go build -o demo-server main.go; then
         log_info "Demo server built successfully"
     else
         log_error "Failed to build demo server"

@@ -55,7 +55,11 @@ type ShardMonitor struct {
 func (s *ShardMonitor) OnCreated() {
 	// Extract shard ID from object ID (format: shard#N/ShardMonitor)
 	id := s.Id()
-	fmt.Sscanf(id, "shard#%d/", &s.shardID)
+	n, err := fmt.Sscanf(id, "shard#%d/", &s.shardID)
+	if err != nil || n != 1 {
+		s.Logger.Warnf("Failed to parse shard ID from object ID %s: %v", id, err)
+		s.shardID = -1 // Invalid shard ID
+	}
 	s.Logger.Infof("ShardMonitor created for shard %d", s.shardID)
 }
 
@@ -132,12 +136,12 @@ func (n *NodeMonitor) createCounters() {
 		// Try to create the object - creation is idempotent
 		_, err := goverseapi.CreateObject(ctx, "SimpleCounter", counterID)
 		if err != nil {
-			// Object likely already exists or shard not owned by this node
+			// Object may already exist or shard may not be owned by this node
+			// Both cases are expected and don't require logging at this frequency
 			continue
-		} else {
-			created++
-			n.Logger.Infof("Created counter %s (shard %d)", counterID, shardID)
 		}
+		created++
+		n.Logger.Infof("Created counter %s (shard %d)", counterID, shardID)
 	}
 	
 	if created > 0 {
