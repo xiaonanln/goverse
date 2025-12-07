@@ -308,22 +308,13 @@ func TestMultipleGatesRegisterToSameNodes(t *testing.T) {
 	}
 	defer gate2Cluster.Stop(ctx)
 
-	// Wait for registration
-	time.Sleep(3 * time.Second)
-
-	// Verify both gates registered with both nodes
-	if !hasGateConnection(node1, gate1Addr) {
-		t.Errorf("Node1 should have gate1 %s registered", gate1Addr)
-	}
-	if !hasGateConnection(node1, gate2Addr) {
-		t.Errorf("Node1 should have gate2 %s registered", gate2Addr)
-	}
-	if !hasGateConnection(node2, gate1Addr) {
-		t.Errorf("Node2 should have gate1 %s registered", gate1Addr)
-	}
-	if !hasGateConnection(node2, gate2Addr) {
-		t.Errorf("Node2 should have gate2 %s registered", gate2Addr)
-	}
+	// Wait for both gates to register with both nodes
+	testutil.WaitFor(t, 10*time.Second, "both gates to register with both nodes", func() bool {
+		return hasGateConnection(node1, gate1Addr) &&
+			hasGateConnection(node1, gate2Addr) &&
+			hasGateConnection(node2, gate1Addr) &&
+			hasGateConnection(node2, gate2Addr)
+	})
 
 	t.Logf("Both gates successfully registered with both nodes")
 }

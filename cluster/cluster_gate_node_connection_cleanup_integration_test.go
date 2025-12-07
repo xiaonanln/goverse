@@ -212,15 +212,9 @@ func TestGateNodeConnectionCleanupWithMultipleGates(t *testing.T) {
 	t.Logf("Started gate 2 at %s", gate2Addr)
 
 	// Wait for both gates to register
-	time.Sleep(3 * time.Second)
-
-	// Verify both gates are registered
-	if !hasGateConnection(nodeCluster, gate1Addr) {
-		t.Fatalf("Node should have gate 1 %s registered", gate1Addr)
-	}
-	if !hasGateConnection(nodeCluster, gate2Addr) {
-		t.Fatalf("Node should have gate 2 %s registered", gate2Addr)
-	}
+	testutil.WaitFor(t, 10*time.Second, "both gates to register with node", func() bool {
+		return hasGateConnection(nodeCluster, gate1Addr) && hasGateConnection(nodeCluster, gate2Addr)
+	})
 	t.Logf("✓ Both gates registered on node")
 
 	initialGateCount := getGateConnectionCount(nodeCluster)
