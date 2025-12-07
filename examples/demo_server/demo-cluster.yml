@@ -1,0 +1,79 @@
+# GoVerse Demo Server Configuration
+# 
+# Demonstrates sharding features with:
+# - Per-shard auto-load objects (ShardMonitor)
+# - Simulated per-node objects (NodeMonitor with multiple IDs)
+# - Global singleton (GlobalMonitor)
+# - Normal distributed objects (SimpleCounter)
+
+version: 1
+
+cluster:
+  # Number of shards in the cluster
+  shards: 8192
+
+  # Cluster metadata provider
+  provider: "etcd"
+
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse-demo"
+
+  # Auto-load objects when nodes start
+  auto_load_objects:
+    # GlobalMonitor: Single global object for overall stats
+    - type: "GlobalMonitor"
+      id: "GlobalMonitor"
+      per_shard: false
+
+    # ShardMonitor: One object per shard to track shard-specific stats
+    - type: "ShardMonitor"
+      id: "ShardMonitor"
+      per_shard: true
+
+    # NodeMonitor: Simulated per-node objects via multiple entries
+    # Each node will get one NodeMonitor by using IDs that hash to different shards
+    - type: "NodeMonitor"
+      id: "NodeMonitor-1"
+      per_shard: false
+
+    - type: "NodeMonitor"
+      id: "NodeMonitor-2"
+      per_shard: false
+
+    - type: "NodeMonitor"
+      id: "NodeMonitor-3"
+      per_shard: false
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:47001"
+    advertise_addr: "localhost:47001"
+    http_addr: "0.0.0.0:48001"
+
+  - id: "node-2"
+    grpc_addr: "0.0.0.0:47002"
+    advertise_addr: "localhost:47002"
+    http_addr: "0.0.0.0:48002"
+
+  - id: "node-3"
+    grpc_addr: "0.0.0.0:47003"
+    advertise_addr: "localhost:47003"
+    http_addr: "0.0.0.0:48003"
+
+gates:
+  - id: "gate-1"
+    grpc_addr: "0.0.0.0:47101"
+    advertise_addr: "localhost:47101"
+    http_addr: "0.0.0.0:48101"
+
+  - id: "gate-2"
+    grpc_addr: "0.0.0.0:47102"
+    advertise_addr: "localhost:47102"
+    http_addr: "0.0.0.0:48102"
+
+inspector:
+  grpc_addr: "0.0.0.0:47200"
+  http_addr: "0.0.0.0:48200"
+  advertise_addr: "localhost:47200"
