@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  stress-test:
+  chat-stress-test:
     runs-on: ubuntu-latest
     
     steps:
@@ -25,32 +25,80 @@ jobs:
         with:
           enable-postgres: 'false'
       
-      - name: Create coverage directory
-        run: mkdir -p /tmp/coverage
+      - name: Install PyYAML
+        run: python3 -m pip install pyyaml
       
-      - name: Run stress test for 5 minutes with coverage
+      - name: Create coverage directory
+        run: mkdir -p /tmp/coverage-chat
+      
+      - name: Run chat stress test for 5 minutes with coverage
         env:
-          GOCOVERDIR: /tmp/coverage
+          GOCOVERDIR: /tmp/coverage-chat
           ENABLE_COVERAGE: "true"
         run: |
           python3 tests/samples/chat/stress/stress_test.py --duration 300
       
       - name: Convert coverage data to text format
         run: |
-          # We collect runtime coverage under a single directory (/tmp/coverage),
+          # We collect runtime coverage under a single directory (/tmp/coverage-chat),
           # so we can convert it directly without a merge step.
-          if [ -d /tmp/coverage ]; then
-            go tool covdata textfmt -i=/tmp/coverage -o=coverage-stress.out
+          if [ -d /tmp/coverage-chat ]; then
+            go tool covdata textfmt -i=/tmp/coverage-chat -o=coverage-chat-stress.out
           else
-            echo "No coverage data found at /tmp/coverage"; exit 0;
+            echo "No coverage data found at /tmp/coverage-chat"; exit 0;
           fi
 
       - name: Upload coverage to Codecov
-        if: ${{ hashFiles('coverage-stress.out') != '' }}
+        if: ${{ hashFiles('coverage-chat-stress.out') != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage-stress.out
-          flags: stress-integration
-          name: stress-integration
+          files: ./coverage-chat-stress.out
+          flags: stress-chat
+          name: stress-chat
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  demo-stress-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+        with:
+          enable-postgres: 'false'
+      
+      - name: Install PyYAML
+        run: python3 -m pip install pyyaml
+      
+      - name: Create coverage directory
+        run: mkdir -p /tmp/coverage-demo
+      
+      - name: Run demo server stress test for 5 minutes with coverage
+        env:
+          GOCOVERDIR: /tmp/coverage-demo
+          ENABLE_COVERAGE: "true"
+        run: |
+          python3 examples/demo_server/stress_test_demo.py --duration 300 --clients 10
+      
+      - name: Convert coverage data to text format
+        run: |
+          # We collect runtime coverage under a single directory (/tmp/coverage-demo),
+          # so we can convert it directly without a merge step.
+          if [ -d /tmp/coverage-demo ]; then
+            go tool covdata textfmt -i=/tmp/coverage-demo -o=coverage-demo-stress.out
+          else
+            echo "No coverage data found at /tmp/coverage-demo"; exit 0;
+          fi
+
+      - name: Upload coverage to Codecov
+        if: ${{ hashFiles('coverage-demo-stress.out') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-demo-stress.out
+          flags: stress-demo
+          name: stress-demo
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
