@@ -1154,7 +1154,7 @@ func (c *Cluster) handleShardMappingCheck() {
 	ctx := c.clusterManagementCtx
 
 	// Try to become leader if no leader exists or current leader is dead
-	if err := c.consensusManager.TryBecomeLeader(ctx); err != nil {
+	if err := c.tryBecomeLeader(); err != nil {
 		c.logger.Warnf("%s - Failed to try become leader: %v", c, err)
 	}
 
@@ -1182,6 +1182,13 @@ func (c *Cluster) handleShardMappingCheck() {
 	c.updateNodeConnections()
 	// Gate - Register with nodes
 	c.registerGateWithNodes(ctx)
+}
+
+func (c *Cluster) tryBecomeLeader() error {
+	if !c.isNode() {
+		return nil
+	}
+	return c.consensusManager.TryBecomeLeader(c.clusterManagementCtx)
 }
 
 func (c *Cluster) updateMetrics() {
