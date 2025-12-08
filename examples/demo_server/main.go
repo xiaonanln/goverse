@@ -7,7 +7,8 @@
 // - GlobalMonitor: Global singleton for overall stats
 //
 // Usage:
-//   go run main.go --config demo-cluster.yml --node-id node-1
+//
+//	go run main.go --config demo-cluster.yml --node-id node-1
 package main
 
 import (
@@ -90,15 +91,15 @@ func (n *NodeMonitor) OnCreated() {
 	n.nodeID = n.Id()
 	n.creationInterval = 15 * time.Second
 	n.stopCh = make(chan struct{})
-	
+
 	// Initialize counter names (Counter-001 to Counter-100)
 	n.counterNames = make([]string, 100)
 	for i := 0; i < 100; i++ {
 		n.counterNames[i] = fmt.Sprintf("Counter-%03d", i+1)
 	}
-	
+
 	n.Logger.Infof("NodeMonitor %s created, will periodically create counters", n.nodeID)
-	
+
 	// Start background goroutine to create counters
 	go n.periodicCounterCreation()
 }
@@ -106,11 +107,11 @@ func (n *NodeMonitor) OnCreated() {
 func (n *NodeMonitor) periodicCounterCreation() {
 	ticker := time.NewTicker(n.creationInterval)
 	defer ticker.Stop()
-	
+
 	// Do initial creation after a short delay
 	time.Sleep(5 * time.Second)
 	n.createCounters()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -124,15 +125,15 @@ func (n *NodeMonitor) periodicCounterCreation() {
 func (n *NodeMonitor) createCounters() {
 	ctx := context.Background()
 	created := 0
-	
+
 	n.Logger.Infof("NodeMonitor %s: Scanning counter list for objects to create...", n.nodeID)
-	
+
 	// For each counter name, try to create it
 	// The counter will be distributed to appropriate shards based on hash
 	for _, counterName := range n.counterNames {
 		counterID := fmt.Sprintf("SimpleCounter-%s", counterName)
 		shardID := sharding.GetShardID(counterID, sharding.NumShards)
-		
+
 		// Try to create the object - creation is idempotent
 		_, err := goverseapi.CreateObject(ctx, "SimpleCounter", counterID)
 		if err != nil {
@@ -143,7 +144,7 @@ func (n *NodeMonitor) createCounters() {
 		created++
 		n.Logger.Infof("Created counter %s (shard %d)", counterID, shardID)
 	}
-	
+
 	if created > 0 {
 		n.Logger.Infof("NodeMonitor %s: Created %d new counters", n.nodeID, created)
 	}
@@ -167,7 +168,7 @@ func (g *GlobalMonitor) OnCreated() {
 	g.startTime = time.Now()
 	g.stopCh = make(chan struct{})
 	g.Logger.Infof("GlobalMonitor created at %s", g.startTime.Format(time.RFC3339))
-	
+
 	// Start periodic logging
 	go g.periodicLogging()
 }
@@ -175,7 +176,7 @@ func (g *GlobalMonitor) OnCreated() {
 func (g *GlobalMonitor) periodicLogging() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -190,7 +191,7 @@ func (g *GlobalMonitor) logGlobalStats() {
 	g.mu.Lock()
 	uptime := time.Since(g.startTime)
 	g.mu.Unlock()
-	
+
 	g.Logger.Infof("Global Stats: Uptime=%v", uptime.Round(time.Second))
 }
 
@@ -202,15 +203,15 @@ func (g *GlobalMonitor) GetUptime(ctx context.Context) (string, error) {
 }
 
 func main() {
-	// Register object types
+	// Create server (uses command-line flags or config file)
+	server := goverseapi.NewServer()
+
+	// Register object types after server is created
 	goverseapi.RegisterObjectType((*SimpleCounter)(nil))
 	goverseapi.RegisterObjectType((*ShardMonitor)(nil))
 	goverseapi.RegisterObjectType((*NodeMonitor)(nil))
 	goverseapi.RegisterObjectType((*GlobalMonitor)(nil))
 
-	// Create and run server (uses command-line flags or config file)
-	server := goverseapi.NewServer()
-	
 	// Wait for cluster to be ready
 	go func() {
 		<-goverseapi.ClusterReady()
