@@ -1,5 +1,12 @@
 # GoVerse
 
+## Bootstrap Video
+
+<video controls width="640" height="480">
+  <source src="assets/videos/bootstrap.mp4" type="video/mp4">
+  Your browser does not support the video tag. Please use a modern browser to view this video.
+</video>
+
 > ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
 [![Go Tests](https://github.com/xiaonanln/goverse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/goverse/actions/workflows/test.yml)
