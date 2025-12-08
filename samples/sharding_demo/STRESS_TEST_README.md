@@ -125,7 +125,7 @@ TOTAL: Actions: 1234, Errors: 5, Creates: 246, Increments: 617, Gets: 371
 ## File Structure
 
 ```
-examples/demo_server/
+samples/sharding_demo/
 ├── main.go                    # Demo server implementation
 ├── demo-cluster.yml           # Production cluster config
 ├── stress_config_demo.yml     # Stress test config
@@ -148,7 +148,7 @@ The script automatically cleans up all processes on exit (normal or Ctrl+C):
 Manual cleanup (if needed):
 ```bash
 # Kill any remaining processes
-pkill -f demo_server
+pkill -f sharding_demo
 pkill -f goverse-gate
 pkill -f inspector
 
@@ -180,7 +180,7 @@ Error: listen tcp 0.0.0.0:9211: bind: address already in use
 ```
 
 **Solution**: 
-- Stop any existing demo server processes: `pkill -f demo_server`
+- Stop any existing demo server processes: `pkill -f sharding_demo`
 - Or edit `stress_config_demo.yml` to use different ports
 
 ### Build Failures

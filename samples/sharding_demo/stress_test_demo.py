@@ -47,15 +47,15 @@ def find_repo_root():
     for parent in [current] + list(current.parents):
         if (parent / 'go.mod').exists():
             return parent
-    # Fallback to relative path if go.mod not found (examples/demo_server/ -> repo root)
-    return Path(__file__).parent.parent.resolve()
+    # Fallback to relative path if go.mod not found (samples/sharding_demo/ -> repo root)
+    return Path(__file__).parent.parent.parent.resolve()
 
 REPO_ROOT = find_repo_root()
 sys.path.insert(0, str(REPO_ROOT))
 
-# Expose the demo_server directory on sys.path for helper modules
-DEMO_SERVER_DIR = Path(__file__).parent.resolve()
-sys.path.insert(0, str(DEMO_SERVER_DIR))
+# Expose the sharding_demo directory on sys.path for helper modules
+SHARDING_DEMO_DIR = Path(__file__).parent.resolve()
+sys.path.insert(0, str(SHARDING_DEMO_DIR))
 
 # Expose the samples directory for shared modules
 SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
