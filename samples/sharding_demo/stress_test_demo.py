@@ -443,16 +443,14 @@ Examples:
             server.start()
             demo_servers.append(server)
         
-        # Give servers time to start
-        print(f"\nWaiting for all demo servers to start...")
-        time.sleep(8)
-        
         # Verify all demo servers are ready
         for server in demo_servers:
             if not server.wait_for_ready(timeout=20):
                 print(f"❌ {server.name} failed to start")
                 return 1
         
+        time.sleep(5)  # Extra wait to ensure all servers are fully initialized
+
         # Start gateways
         print("\n" + "=" * 80)
         print(f"STARTING {num_gates} GATEWAYS")

@@ -3,7 +3,7 @@
 ## Bootstrap Video
 
 <video controls width="640" height="480">
-  <source src="assets/videos/bootstrap.mp4" type="video/mp4">
+  <source src="assets/videos/cluster-bootstrap.mp4" type="video/mp4">
   Your browser does not support the video tag. Please use a modern browser to view this video.
 </video>
 

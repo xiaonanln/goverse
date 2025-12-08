@@ -126,7 +126,7 @@ class DemoServer:
                 return False
             time.sleep(0.5)
             # Check if enough time has passed for initialization
-            if time.time() - start > 3:
+            if time.time() - start > 1:
                 print(f"✅ {self.name} is ready")
                 return True
         
