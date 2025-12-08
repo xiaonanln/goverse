@@ -339,6 +339,7 @@ Examples:
   %(prog)s --clients 20              # Run with 20 clients
   %(prog)s --duration 60             # Run for 60 seconds
   %(prog)s --clients 5 --duration 300  # 5 clients, 5 minutes
+  %(prog)s --nodes 3 --gates 2       # Run with 3 nodes and 2 gates
         """
     )
     parser.add_argument('--clients', type=int, default=10,
@@ -347,11 +348,17 @@ Examples:
                        help='Test duration in seconds (default: 7200 = 2 hours)')
     parser.add_argument('--stats-interval', type=int, default=300,
                        help='Interval for printing statistics in seconds (default: 300 = 5 minutes)')
+    parser.add_argument('--nodes', type=int, default=10,
+                       help='Number of demo server nodes (default: 10)')
+    parser.add_argument('--gates', type=int, default=7,
+                       help='Number of gateways (default: 7)')
     args = parser.parse_args()
     
     num_clients = args.clients
     duration_seconds = args.duration
     stats_interval = args.stats_interval
+    num_nodes = args.nodes
+    num_gates = args.gates
     
     # Use the already-computed REPO_ROOT
     os.chdir(REPO_ROOT)
@@ -360,6 +367,8 @@ Examples:
     print("=" * 80)
     print(f"Goverse Demo Server Stress Test")
     print("=" * 80)
+    print(f"Nodes: {num_nodes}")
+    print(f"Gates: {num_gates}")
     print(f"Clients: {num_clients}")
     print(f"Duration: {duration_seconds} seconds ({duration_seconds / 60:.1f} minutes)")
     print(f"Stats interval: {stats_interval} seconds ({stats_interval / 60:.1f} minutes)")
@@ -419,12 +428,12 @@ Examples:
             print("❌ Inspector failed to start")
             return 1
         
-        # Start 10 demo servers
+        # Start demo servers
         print("\n" + "=" * 80)
-        print("STARTING DEMO SERVERS")
+        print(f"STARTING {num_nodes} DEMO SERVERS")
         print("=" * 80)
-        node_ids = [f"stress-demo-node-{i+1}" for i in range(10)]
-        for i in range(10):
+        node_ids = [f"stress-demo-node-{i+1}" for i in range(num_nodes)]
+        for i in range(num_nodes):
             server = DemoServer(
                 server_index=i,
                 config_file=str(config_file),
@@ -443,12 +452,12 @@ Examples:
                 print(f"❌ {server.name} failed to start")
                 return 1
         
-        # Start 7 gateways
+        # Start gateways
         print("\n" + "=" * 80)
-        print("STARTING GATEWAYS")
+        print(f"STARTING {num_gates} GATEWAYS")
         print("=" * 80)
-        gate_ids = [f"stress-demo-gate-{i+1}" for i in range(7)]
-        for i in range(7):
+        gate_ids = [f"stress-demo-gate-{i+1}" for i in range(num_gates)]
+        for i in range(num_gates):
             gateway = Gateway(
                 config_file=str(config_file),
                 gate_id=gate_ids[i]
