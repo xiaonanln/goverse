@@ -161,6 +161,15 @@ function connectSSE() {
     }
   })
 
+  eventSource.addEventListener('object_call', (event) => {
+    const data = JSON.parse(event.data)
+    console.log('SSE object_call:', data)
+    if (data.object_id && data.method) {
+      // Show call popup animation on the object node
+      showCallPopup(data.object_id, data.method, data.object_class)
+    }
+  })
+
   eventSource.addEventListener('shard_update', (event) => {
     console.log('SSE shard_update received', event)
     

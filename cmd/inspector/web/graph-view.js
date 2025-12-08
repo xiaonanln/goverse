@@ -830,3 +830,72 @@ function updateGraphIncremental() {
   // Use very low alpha to minimize disruption
   simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()
 }
+
+// Show call popup animation on an object node
+function showCallPopup(objectId, method, objectClass) {
+  // Only show popups if graph view is active
+  if (!document.getElementById('graph-view').classList.contains('active')) {
+    return
+  }
+
+  // Check if graph is initialized
+  if (!g || !simulation) {
+    return
+  }
+
+  // Find the node in the simulation
+  const node = simulation.nodes().find(n => n.id === objectId)
+  if (!node || node.nodeType !== NODE_TYPE_OBJECT) {
+    return
+  }
+
+  // Create popup element
+  const popup = document.createElement('div')
+  popup.className = 'call-popup'
+  popup.textContent = method
+  
+  // Add to container
+  const container = document.getElementById('graph-container')
+  const svgElement = container.querySelector('svg')
+  if (svgElement) {
+    // Position relative to the SVG coordinate system
+    // Get the current transform on the g element
+    let scale = 1
+    let translateX = 0
+    let translateY = 0
+    
+    try {
+      const gNode = g.node()
+      if (gNode && gNode.transform && gNode.transform.baseVal) {
+        const transform = gNode.transform.baseVal.consolidate()
+        if (transform) {
+          const matrix = transform.matrix
+          scale = matrix.a
+          translateX = matrix.e
+          translateY = matrix.f
+        }
+      }
+    } catch (e) {
+      // Ignore transform errors and use default values
+      console.debug('Could not get graph transform:', e)
+    }
+    
+    // Calculate screen position
+    const screenX = node.x * scale + translateX
+    const screenY = node.y * scale + translateY
+    
+    popup.style.left = `${screenX}px`
+    popup.style.top = `${screenY - 20}px`
+    container.appendChild(popup)
+    
+    // Remove after animation completes
+    setTimeout(() => {
+      // Use remove() with fallback for older browsers
+      if (popup.remove) {
+        popup.remove()
+      } else if (popup.parentNode) {
+        popup.parentNode.removeChild(popup)
+      }
+    }, CALL_POPUP_DURATION)
+  }
+}

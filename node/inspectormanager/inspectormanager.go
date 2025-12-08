@@ -231,6 +231,33 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 	}
 }
 
+// NotifyObjectCall notifies the Inspector that an object method was called.
+// If the inspector is disabled (empty address), this is a no-op.
+// Call reporting is enabled by default with no config flag required.
+func (im *InspectorManager) NotifyObjectCall(objectID, objectType, method string) {
+	// If inspector is disabled, skip all work
+	if im.inspectorAddress == "" {
+		return
+	}
+
+	// Get client without holding lock
+	im.mu.RLock()
+	shouldNotify := im.connected && im.client != nil
+	im.mu.RUnlock()
+
+	// If connected, send the notification in background
+	if shouldNotify {
+		// Use just the objectID as the task key - this ensures serialization per object
+		// while still allowing concurrent processing for different objects.
+		// Multiple method calls on the same object will be queued, which is acceptable
+		// since call reporting is a best-effort notification mechanism.
+		// Note: InspectorManager is per-node, so objectID is already scoped to this node's context.
+		taskpool.SubmitByKey(objectID, func(ctx context.Context) {
+			im.reportObjectCall(ctx, objectID, objectType, method)
+		})
+	}
+}
+
 // connectLocked attempts to connect to the Inspector service.
 // Must be called with im.mu held.
 func (im *InspectorManager) connectLocked() error {
@@ -437,6 +464,36 @@ func (im *InspectorManager) removeObject(ctx context.Context, objectID string) {
 	}
 
 	im.logger.Debugf("Removed object %s from inspector", objectID)
+}
+
+// reportObjectCall sends a ReportObjectCall RPC to the Inspector without holding a lock.
+// This method is safe to call from background goroutines.
+func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, objectType, method string) {
+	im.mu.RLock()
+	client := im.client
+	im.mu.RUnlock()
+
+	if client == nil {
+		return
+	}
+
+	req := &inspector_pb.ReportObjectCallRequest{
+		ObjectId:    objectID,
+		ObjectClass: objectType,
+		Method:      method,
+		NodeAddress: im.address,
+	}
+
+	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := client.ReportObjectCall(rpcCtx, req)
+	if err != nil {
+		im.logger.Debugf("Failed to report object call %s.%s to inspector: %v", objectID, method, err)
+		return
+	}
+
+	im.logger.Debugf("Reported object call %s.%s to inspector", objectID, method)
 }
 
 // UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.

@@ -21,6 +21,7 @@ Usage:
     python3 stress_test_demo.py --clients 5 --duration 300  # 5 clients, 5 minutes
 """
 
+from io import StringIO
 import os
 import sys
 import time
@@ -208,7 +209,8 @@ class StressTestClient:
                     self.known_counters.append(counter_id)
                     
         except Exception as e:
-            print(f"⚠️  Client {self.client_id} failed to create counter: {e}")
+            if self.running:
+                print(f"⚠️  Client {self.client_id} failed to create counter: {e}")
             raise
     
     def _increment_counter(self):
@@ -237,7 +239,8 @@ class StressTestClient:
             print(f"[Client {self.client_id}] Incremented counter: {counter_id}")
             
         except Exception as e:
-            print(f"⚠️  Client {self.client_id} failed to increment counter: {e}")
+            if self.running:
+                print(f"⚠️  Client {self.client_id} failed to increment counter: {e}")
             raise
     
     def _get_counter_value(self):
@@ -266,7 +269,8 @@ class StressTestClient:
             print(f"[Client {self.client_id}] Got value for counter: {counter_id}")
             
         except Exception as e:
-            print(f"⚠️  Client {self.client_id} failed to get counter value: {e}")
+            if self.running:
+                print(f"⚠️  Client {self.client_id} failed to get counter value: {e}")
             raise
     
     def stop(self):
@@ -296,11 +300,11 @@ class StressTestClient:
         }
 
 
-def print_stats(clients: List[StressTestClient]):
+def print_stats(clients: List[StressTestClient], file=sys.stdout):
     """Print statistics for all clients."""
-    print("\n" + "=" * 80)
-    print("CLIENT STATISTICS")
-    print("=" * 80)
+    print("\n" + "=" * 80, file=file)
+    print("CLIENT STATISTICS", file=file)
+    print("=" * 80, file=file)
     
     total_actions = 0
     total_errors = 0
@@ -315,18 +319,17 @@ def print_stats(clients: List[StressTestClient]):
               f"Errors: {stats['error_count']:4d} | "
               f"Creates: {stats['create_count']:4d} | "
               f"Increments: {stats['increment_count']:4d} | "
-              f"Gets: {stats['get_count']:4d}")
+              f"Gets: {stats['get_count']:4d}", file=file)
         total_actions += stats['action_count']
         total_errors += stats['error_count']
         total_creates += stats['create_count']
         total_increments += stats['increment_count']
         total_gets += stats['get_count']
-    
-    print("-" * 80)
-    print(f"TOTAL: Actions: {total_actions}, Errors: {total_errors}, "
-          f"Creates: {total_creates}, Increments: {total_increments}, Gets: {total_gets}")
-    print("=" * 80 + "\n")
 
+    print("-" * 80, file=file)
+    print(f"TOTAL: Actions: {total_actions}, Errors: {total_errors}, "
+          f"Creates: {total_creates}, Increments: {total_increments}, Gets: {total_gets}", file=file)
+    print("=" * 80 + "\n", file=file)
 
 def main():
     """Main stress test execution."""
@@ -382,6 +385,8 @@ Examples:
     gateways = []
     clients = []
     
+    final_stats = StringIO()
+
     try:
         # Add go bin to PATH using subprocess for safety
         import subprocess
@@ -521,13 +526,13 @@ Examples:
         print("\n" + "=" * 80)
         print("STRESS TEST COMPLETED")
         print("=" * 80)
-        print_stats(clients)
+        print_stats(clients, file=final_stats)
         
         return 0
         
     except KeyboardInterrupt:
         print("\n\n⚠️  Test interrupted by user")
-        print_stats(clients)
+        print_stats(clients, file=final_stats)
         return 1
         
     except Exception as e:
@@ -572,7 +577,7 @@ Examples:
                 print(f"⚠️  Error stopping inspector: {e}")
         
         print("✅ Cleanup complete")
-
+        print(final_stats.getvalue())
 
 if __name__ == '__main__':
     sys.exit(main())
