@@ -23,6 +23,11 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 )
 
+const (
+	// callSimulationInterval is the interval between simulated object calls
+	callSimulationInterval = 1500 * time.Millisecond
+)
+
 func main() {
 	httpAddr := flag.String("http-addr", ":8080", "HTTP server address")
 	grpcAddr := flag.String("grpc-addr", ":8081", "gRPC server address (for API)")
@@ -555,7 +560,7 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 
 // simulateObjectCalls simulates periodic object method calls for demonstration
 func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph) {
-	ticker := time.NewTicker(1500 * time.Millisecond) // Call every 1.5 seconds
+	ticker := time.NewTicker(callSimulationInterval)
 	defer ticker.Stop()
 
 	methods := []string{"GetValue", "Update", "Process", "Sync", "Execute", "Query"}

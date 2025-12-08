@@ -11,6 +11,7 @@ const SIMULATION_ALPHA_FULL = 0.3      // Alpha for full graph updates
 const SIMULATION_ALPHA_INCREMENTAL = 0.1 // Alpha for incremental updates (lower = less disruption)
 const SSE_RECONNECT_DELAY = 3000       // SSE reconnect delay in milliseconds
 const NEW_OBJECT_HIGHLIGHT_DURATION = 3000 // Duration to highlight new objects in milliseconds
+const CALL_POPUP_DURATION = 1500       // Duration for call popup animation in milliseconds
 
 // Pie chart dimensions
 const PIE_CHART_SIZE = 200

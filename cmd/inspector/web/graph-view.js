@@ -896,6 +896,6 @@ function showCallPopup(objectId, method, objectClass) {
       } else if (popup.parentNode) {
         popup.parentNode.removeChild(popup)
       }
-    }, 1500)
+    }, CALL_POPUP_DURATION)
   }
 }

@@ -770,6 +770,7 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 }
 
 /* Call popup animation styles */
+/* Duration matches CALL_POPUP_DURATION constant in constants.js (1500ms) */
 .call-popup {
   position: absolute;
   background: rgba(76, 175, 80, 0.95);
