@@ -247,8 +247,11 @@ func (im *InspectorManager) NotifyObjectCall(objectID, objectType, method string
 
 	// If connected, send the notification in background
 	if shouldNotify {
-		// Use a combined key to allow multiple calls to be processed concurrently
-		taskpool.SubmitByKey(objectID+":"+method, func(ctx context.Context) {
+		// Use just the objectID as the task key - this ensures serialization per object
+		// while still allowing concurrent processing for different objects.
+		// Multiple method calls on the same object will be queued, which is acceptable
+		// since call reporting is a best-effort notification mechanism.
+		taskpool.SubmitByKey(objectID, func(ctx context.Context) {
 			im.reportObjectCall(ctx, objectID, objectType, method)
 		})
 	}

@@ -838,6 +838,11 @@ function showCallPopup(objectId, method, objectClass) {
     return
   }
 
+  // Check if graph is initialized
+  if (!g || !simulation) {
+    return
+  }
+
   // Find the node in the simulation
   const node = simulation.nodes().find(n => n.id === objectId)
   if (!node || node.nodeType !== NODE_TYPE_OBJECT) {
@@ -851,8 +856,8 @@ function showCallPopup(objectId, method, objectClass) {
   
   // Add to container
   const container = document.getElementById('graph-container')
-  const svg = container.querySelector('svg')
-  if (svg) {
+  const svgElement = container.querySelector('svg')
+  if (svgElement) {
     // Position relative to the SVG coordinate system
     // Get the current transform on the g element
     const transform = g.node().transform.baseVal.consolidate()
@@ -877,9 +882,7 @@ function showCallPopup(objectId, method, objectClass) {
     
     // Remove after animation completes
     setTimeout(() => {
-      if (popup.parentNode) {
-        popup.parentNode.removeChild(popup)
-      }
+      popup.remove()
     }, 1500)
   }
 }
