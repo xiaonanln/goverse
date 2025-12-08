@@ -17,11 +17,11 @@ The demo includes four types of objects:
    - Created automatically when nodes claim their shards
    - Object ID format: `shard#N/ShardMonitor`
 
-3. **NodeMonitor** - Simulated per-node objects
-   - One NodeMonitor per node (simulated via multiple auto-load entries with different IDs)
+3. **NodeMonitor** - Per-node objects
+   - One NodeMonitor per node (using `per_node: true` flag)
    - Aggregates stats from ShardMonitors on the node
    - Periodically scans the counter list and creates counters that hash to shards owned by its node
-   - Object IDs: `NodeMonitor-1`, `NodeMonitor-2`, `NodeMonitor-3`
+   - Object IDs are generated per node (e.g., `NodeMonitor-node-1`, `NodeMonitor-node-2`)
 
 4. **GlobalMonitor** - Global singleton auto-load object
    - Single instance for the entire cluster
@@ -66,7 +66,7 @@ The demo uses a YAML configuration file (`demo-cluster.yml`) that defines:
 - Auto-load objects:
   - 1 GlobalMonitor (singleton)
   - Per-shard ShardMonitors
-  - 10 NodeMonitors (simulated per-node)
+  - 10 NodeMonitors (one per node)
 
 ## Running the Demo
 
@@ -197,14 +197,11 @@ The demo demonstrates three auto-load patterns:
      per_shard: true
    ```
 
-3. **Simulated per-node** (NodeMonitor)
+3. **Per-node** (NodeMonitor)
    ```yaml
    - type: "NodeMonitor"
-     id: "NodeMonitor-1"  # Each ID hashes to a different shard
-   - type: "NodeMonitor"
-     id: "NodeMonitor-2"
-   - type: "NodeMonitor"
-     id: "NodeMonitor-3"
+     id: "NodeMonitor"
+     per_node: true  # Creates one object per node
    ```
 
 ### Shard Migration (Future Enhancement)

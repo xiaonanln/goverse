@@ -2,7 +2,7 @@
 # 
 # Demonstrates sharding features with:
 # - Per-shard auto-load objects (ShardMonitor)
-# - Simulated per-node objects (NodeMonitor with multiple IDs)
+# - Per-node objects (NodeMonitor with per_node flag)
 # - Global singleton (GlobalMonitor)
 # - Normal distributed objects (SimpleCounter)
 
@@ -25,54 +25,16 @@ cluster:
     # GlobalMonitor: Single global object for overall stats
     - type: "GlobalMonitor"
       id: "GlobalMonitor"
-      per_shard: false
 
     # ShardMonitor: One object per shard to track shard-specific stats
     - type: "ShardMonitor"
       id: "ShardMonitor"
       per_shard: true
 
-    # NodeMonitor: Simulated per-node objects via multiple entries
-    # Each node will get one NodeMonitor by using IDs that hash to different shards
+    # NodeMonitor: One per node using per_node flag
     - type: "NodeMonitor"
-      id: "NodeMonitor-1"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-2"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-3"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-4"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-5"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-6"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-7"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-8"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-9"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-10"
-      per_shard: false
+      id: "NodeMonitor"
+      per_node: true
 
 nodes:
   - id: "node-1"
