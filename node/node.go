@@ -303,16 +303,22 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	methodType := methodValue.Type()
-	if methodType.NumIn() != 2 ||
-		!methodType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) ||
+	if methodType.NumIn() != 2 {
+		callErr = fmt.Errorf("method %s has invalid number of arguments (expected: 2, got: %d)", method, methodType.NumIn())
+		return nil, callErr
+	}
+	if !methodType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) ||
 		!isConcreteProtoMessage(methodType.In(1)) {
 		callErr = fmt.Errorf("method %s has invalid argument types (expected: context.Context, *Message; got: %s, %s)", method, methodType.In(0), methodType.In(1))
 		return nil, callErr
 	}
 
 	// Check method return types: (proto.Message, error)
-	if methodType.NumOut() != 2 ||
-		!isConcreteProtoMessage(methodType.Out(0)) ||
+	if methodType.NumOut() != 2 {
+		callErr = fmt.Errorf("method %s has invalid number of return values (expected: 2, got: %d)", method, methodType.NumOut())
+		return nil, callErr
+	}
+	if !isConcreteProtoMessage(methodType.Out(0)) ||
 		!methodType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
 		callErr = fmt.Errorf("method %s has invalid return types (expected: *Message, error; got: %s, %s)", method, methodType.Out(0), methodType.Out(1))
 		return nil, callErr

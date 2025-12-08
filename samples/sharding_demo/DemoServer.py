@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-# Repo root (examples/demo_server/DemoServer.py -> repo root)
+# Repo root (samples/sharding_demo/DemoServer.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 # Expose the samples directory for shared modules like BinaryHelper
@@ -66,7 +66,7 @@ class DemoServer:
         
         # Build binary if needed
         if build_if_needed and not os.path.exists(self.binary_path):
-            if not BinaryHelper.build_binary('./examples/demo_server/', self.binary_path, 'demo server'):
+            if not BinaryHelper.build_binary('./samples/sharding_demo/', self.binary_path, 'demo server'):
                 raise RuntimeError(f"Failed to build demo server binary at {self.binary_path}")
     
     def start(self) -> None:

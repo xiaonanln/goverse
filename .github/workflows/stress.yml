@@ -81,7 +81,7 @@ jobs:
           GOCOVERDIR: /tmp/coverage-demo
           ENABLE_COVERAGE: "true"
         run: |
-          python3 examples/demo_server/stress_test_demo.py --duration 300 --clients 10
+          python3 samples/sharding_demo/stress_test_demo.py --duration 300 --clients 10
       
       - name: Convert coverage data to text format
         run: |

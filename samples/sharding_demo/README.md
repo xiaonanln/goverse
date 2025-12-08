@@ -227,7 +227,7 @@ docker run -d --name etcd-test -p 2379:2379 quay.io/coreos/etcd:latest \
   --advertise-client-urls http://localhost:2379
 
 # Run tests
-cd examples/demo_server
+cd samples/sharding_demo
 go test -v -timeout 5m
 ```
 
