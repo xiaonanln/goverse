@@ -72,6 +72,9 @@ from Gateway import Gateway
 # Import Python client
 from client.goverseclient_python.client import Client, ClientOptions
 
+# Import protobuf messages for sharding_demo
+from samples.sharding_demo.proto import sharding_demo_pb2
+
 # Constants for test configuration
 ACTION_WEIGHT_INCREMENT = 0.5   # 50% probability to increment counter
 ACTION_WEIGHT_GET = 0.3         # 30% probability to get counter value
@@ -221,14 +224,12 @@ class StressTestClient:
             # Pick a random counter
             counter_id = random.choice(self.known_counters)
             
-            # Call the Increment method
-            # Note: The actual method call will depend on the protobuf definitions
-            # For now, we'll use call_object with None request (methods that take no params)
+            # Call the Increment method with proper protobuf request
             response = self.client.call_object(
                 object_type="SimpleCounter",
                 object_id=counter_id,
                 method="Increment",
-                request=None,
+                request=sharding_demo_pb2.IncrementRequest(),
                 timeout=5.0
             )
             
@@ -252,12 +253,12 @@ class StressTestClient:
             # Pick a random counter
             counter_id = random.choice(self.known_counters)
             
-            # Call the GetValue method
+            # Call the GetValue method with proper protobuf request
             response = self.client.call_object(
                 object_type="SimpleCounter",
                 object_id=counter_id,
                 method="GetValue",
-                request=None,
+                request=sharding_demo_pb2.GetValueRequest(),
                 timeout=5.0
             )
             
