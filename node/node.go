@@ -351,6 +351,9 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		return nil, callErr
 	}
 
+	// Report successful call to inspector (enabled by default, no config flag)
+	node.inspectorManager.NotifyObjectCall(id, typ, method)
+
 	node.logger.Infof("Response type: %T, value: %+v", resp.Interface(), resp.Interface())
 	return resp.Interface().(proto.Message), nil
 }

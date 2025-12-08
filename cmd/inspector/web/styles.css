@@ -768,3 +768,34 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 .pin-toggle-btn.unpin:hover {
   background: #616161;
 }
+
+/* Call popup animation styles */
+.call-popup {
+  position: absolute;
+  background: rgba(76, 175, 80, 0.95);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  animation: callPopupFloat 1.5s ease-out forwards;
+}
+
+@keyframes callPopupFloat {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  20% {
+    transform: translateY(-5px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-40px) scale(0.8);
+    opacity: 0;
+  }
+}

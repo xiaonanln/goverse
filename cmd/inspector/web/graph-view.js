@@ -830,3 +830,58 @@ function updateGraphIncremental() {
   // Use very low alpha to minimize disruption
   simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()
 }
+
+// Show call popup animation on an object node
+function showCallPopup(objectId, method, objectClass) {
+  // Only show popups if graph view is active
+  if (!document.getElementById('graph-view').classList.contains('active')) {
+    return
+  }
+
+  // Find the node in the simulation
+  const node = simulation.nodes().find(n => n.id === objectId)
+  if (!node || node.nodeType !== NODE_TYPE_OBJECT) {
+    return
+  }
+
+  // Create popup element
+  const popup = document.createElement('div')
+  popup.className = 'call-popup'
+  popup.textContent = method
+  popup.style.left = `${node.x}px`
+  popup.style.top = `${node.y - 20}px`
+  
+  // Add to container
+  const container = document.getElementById('graph-container')
+  const svg = container.querySelector('svg')
+  if (svg) {
+    // Position relative to the SVG coordinate system
+    // Get the current transform on the g element
+    const transform = g.node().transform.baseVal.consolidate()
+    let scale = 1
+    let translateX = 0
+    let translateY = 0
+    
+    if (transform) {
+      const matrix = transform.matrix
+      scale = matrix.a
+      translateX = matrix.e
+      translateY = matrix.f
+    }
+    
+    // Calculate screen position
+    const screenX = node.x * scale + translateX
+    const screenY = node.y * scale + translateY
+    
+    popup.style.left = `${screenX}px`
+    popup.style.top = `${screenY - 20}px`
+    container.appendChild(popup)
+    
+    // Remove after animation completes
+    setTimeout(() => {
+      if (popup.parentNode) {
+        popup.parentNode.removeChild(popup)
+      }
+    }, 1500)
+  }
+}

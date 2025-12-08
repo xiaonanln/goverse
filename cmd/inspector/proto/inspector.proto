@@ -64,6 +64,13 @@ message UpdateGateClientsRequest {
   int32 clients = 2; // Updated number of registered clients connected to this gate
 }
 
+message ReportObjectCallRequest {
+  string object_id = 1;       // ID of the object being called
+  string object_class = 2;    // Type/class of the object
+  string method = 3;          // Method name being called
+  string node_address = 4;    // Node address where the call occurred
+}
+
 service InspectorService {
   rpc AddOrUpdateObject(AddOrUpdateObjectRequest) returns (Empty);
   rpc RemoveObject(RemoveObjectRequest) returns (Empty);
@@ -74,5 +81,6 @@ service InspectorService {
   rpc UpdateGateClients(UpdateGateClientsRequest) returns (Empty);
   rpc RegisterGate(RegisterGateRequest) returns (RegisterGateResponse);
   rpc UnregisterGate(UnregisterGateRequest) returns (Empty);
+  rpc ReportObjectCall(ReportObjectCallRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);
 }

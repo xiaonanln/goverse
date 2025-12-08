@@ -20,17 +20,21 @@ const (
 	EventObjectAdded   EventType = "object_added"
 	EventObjectUpdated EventType = "object_updated"
 	EventObjectRemoved EventType = "object_removed"
+	EventObjectCall    EventType = "object_call"
 )
 
 // GraphEvent represents a change event in the graph
 type GraphEvent struct {
-	Type     EventType             `json:"type"`
-	Node     *models.GoverseNode   `json:"node,omitempty"`
-	Gate     *models.GoverseGate   `json:"gate,omitempty"`
-	Object   *models.GoverseObject `json:"object,omitempty"`
-	ObjectID string                `json:"object_id,omitempty"`
-	NodeID   string                `json:"node_id,omitempty"`
-	GateID   string                `json:"gate_id,omitempty"`
+	Type        EventType             `json:"type"`
+	Node        *models.GoverseNode   `json:"node,omitempty"`
+	Gate        *models.GoverseGate   `json:"gate,omitempty"`
+	Object      *models.GoverseObject `json:"object,omitempty"`
+	ObjectID    string                `json:"object_id,omitempty"`
+	NodeID      string                `json:"node_id,omitempty"`
+	GateID      string                `json:"gate_id,omitempty"`
+	Method      string                `json:"method,omitempty"`       // For object_call events
+	ObjectClass string                `json:"object_class,omitempty"` // For object_call events
+	NodeAddress string                `json:"node_address,omitempty"` // For object_call events
 }
 
 // Observer is an interface for receiving graph change events
@@ -379,4 +383,18 @@ func (pg *GoverseGraph) UpdateNodeRegisteredGates(nodeID string, registeredGates
 		Type: EventNodeUpdated,
 		Node: &node,
 	})
+}
+
+// BroadcastObjectCall broadcasts an object call event to all observers.
+// This does not modify any state in the graph, it only sends a notification.
+func (pg *GoverseGraph) BroadcastObjectCall(objectID, objectClass, method, nodeAddress string) {
+// No need to acquire lock since we're not modifying state
+// Just broadcast the event to observers
+pg.notifyObservers(GraphEvent{
+Type:        EventObjectCall,
+ObjectID:    objectID,
+ObjectClass: objectClass,
+Method:      method,
+NodeAddress: nodeAddress,
+})
 }

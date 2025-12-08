@@ -243,3 +243,27 @@ func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb
 
 	return &inspector_pb.Empty{}, nil
 }
+
+// ReportObjectCall handles object call reports from nodes.
+func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.ReportObjectCallRequest) (*inspector_pb.Empty, error) {
+	objectID := req.GetObjectId()
+	if objectID == "" {
+		return &inspector_pb.Empty{}, nil
+	}
+
+	objectClass := req.GetObjectClass()
+	method := req.GetMethod()
+	nodeAddress := req.GetNodeAddress()
+
+	// Check if the node is registered
+	if !i.pg.IsNodeRegistered(nodeAddress) {
+		// Silently ignore calls from unregistered nodes (may occur during startup/shutdown)
+		return &inspector_pb.Empty{}, nil
+	}
+
+	// Broadcast the call event
+	i.pg.BroadcastObjectCall(objectID, objectClass, method, nodeAddress)
+	
+	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s", objectID, objectClass, method, nodeAddress)
+	return &inspector_pb.Empty{}, nil
+}
