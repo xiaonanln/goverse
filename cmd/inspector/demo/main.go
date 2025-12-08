@@ -100,6 +100,9 @@ func main() {
 	// Start background goroutine to simulate shard migrations
 	ctx, cancel := context.WithCancel(context.Background())
 	go simulateShardMigrations(ctx, server, *etcdAddr, *etcdPrefix)
+	
+	// Start background goroutine to simulate object calls
+	go simulateObjectCalls(ctx, pg)
 
 	// Wait for shutdown signal
 	<-sigChan
@@ -548,4 +551,36 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 			}
 		}
 	}
+}
+
+// simulateObjectCalls simulates periodic object method calls for demonstration
+func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph) {
+ticker := time.NewTicker(1500 * time.Millisecond) // Call every 1.5 seconds
+defer ticker.Stop()
+
+methods := []string{"GetValue", "Update", "Process", "Sync", "Execute", "Query"}
+
+for {
+select {
+case <-ctx.Done():
+return
+case <-ticker.C:
+// Get all objects
+objects := pg.GetObjects()
+if len(objects) == 0 {
+continue
+}
+
+// Pick a random object
+obj := objects[rand.Intn(len(objects))]
+
+// Pick a random method
+method := methods[rand.Intn(len(methods))]
+
+// Broadcast the call event
+pg.BroadcastObjectCall(obj.ID, obj.Type, method, obj.GoverseNodeID)
+
+log.Printf("[Demo] Simulated call: %s.%s on node %s", obj.ID, method, obj.GoverseNodeID)
+}
+}
 }
