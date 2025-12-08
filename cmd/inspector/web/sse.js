@@ -117,8 +117,9 @@ function connectSSE() {
         // Schedule removal of highlight marker after duration
         setTimeout(() => {
           newObjectsMap.delete(data.object.id)
-          // Trigger a subtle update to remove highlight styling
-          if (document.getElementById('graph-view').classList.contains('active')) {
+          // Trigger a subtle update to remove highlight styling (only if object still exists and view is active)
+          if (document.getElementById('graph-view').classList.contains('active') && 
+              graphData.goverse_objects.some(o => o.id === data.object.id)) {
             updateGraphIncremental()
           }
         }, NEW_OBJECT_HIGHLIGHT_DURATION)
@@ -139,7 +140,7 @@ function connectSSE() {
     if (data.object) {
       upsertObject(data.object)
       // No need to restart simulation for updates
-      // Note: Highlight status is preserved in newObjectsMap if object was recently added
+      // Note: Highlight status is preserved in newObjectsMap if object was recently added (within 3 seconds)
     }
   })
 
