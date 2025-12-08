@@ -388,13 +388,13 @@ func (pg *GoverseGraph) UpdateNodeRegisteredGates(nodeID string, registeredGates
 // BroadcastObjectCall broadcasts an object call event to all observers.
 // This does not modify any state in the graph, it only sends a notification.
 func (pg *GoverseGraph) BroadcastObjectCall(objectID, objectClass, method, nodeAddress string) {
-// No need to acquire lock since we're not modifying state
-// Just broadcast the event to observers
-pg.notifyObservers(GraphEvent{
-Type:        EventObjectCall,
-ObjectID:    objectID,
-ObjectClass: objectClass,
-Method:      method,
-NodeAddress: nodeAddress,
-})
+	// No need to acquire lock since we're not modifying state
+	// Just broadcast the event to observers
+	pg.notifyObservers(GraphEvent{
+		Type:        EventObjectCall,
+		ObjectID:    objectID,
+		ObjectClass: objectClass,
+		Method:      method,
+		NodeAddress: nodeAddress,
+	})
 }
