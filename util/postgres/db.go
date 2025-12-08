@@ -72,6 +72,7 @@ func (db *DB) InitSchema(ctx context.Context) error {
 
 	-- Requests table for exactly-once semantics in inter-object calls
 	CREATE TABLE IF NOT EXISTS goverse_requests (
+		-- Auto-incrementing integer ID for ordering and reference
 		id BIGSERIAL UNIQUE,
 		request_id VARCHAR(255) PRIMARY KEY,
 		object_id VARCHAR(255) NOT NULL,

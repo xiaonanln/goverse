@@ -12,6 +12,9 @@
 -- - result_data and error_message are populated based on final status
 
 CREATE TABLE goverse_requests (
+    -- Auto-incrementing integer ID for ordering and reference
+    id BIGSERIAL UNIQUE,
+    
     -- Unique identifier for the request (client-generated for idempotency)
     request_id VARCHAR(255) PRIMARY KEY,
     
