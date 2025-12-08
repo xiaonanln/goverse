@@ -1,12 +1,6 @@
 # GoVerse
 
-## Bootstrap Video
 
-[![Watch cluster bootstrap demo](https://img.youtube.com/vi/-B8OXXI4hCY/0.jpg)](https://youtu.be/-B8OXXI4hCY)
-
-*Click the image above to watch the cluster bootstrap demonstration*
-
-> ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
 [![Go Tests](https://github.com/xiaonanln/goverse/actions/workflows/test.yml/badge.svg)](https://github.com/xiaonanln/goverse/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/xiaonanln/goverse/branch/main/graph/badge.svg)](https://codecov.io/gh/xiaonanln/goverse)
@@ -15,7 +9,14 @@ GoVerse is a distributed object runtime for Go, inspired by Orleans.
 It provides virtual actors, automatic placement, lifecycle management, and streaming RPCs.  
 Designed for building fault-tolerant backend services and large-scale real-time systems.
 
+> ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
+
 ---
+## Cluster Bootstrap Demo
+
+[![Watch cluster bootstrap demo](https://img.youtube.com/vi/-B8OXXI4hCY/0.jpg)](https://youtu.be/-B8OXXI4hCY)
+
+*Click above to watch the cluster bootstrap demonstration visualized by GoVerse Inspector*
 
 ## Key Features
 
