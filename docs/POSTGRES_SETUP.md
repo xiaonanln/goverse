@@ -45,17 +45,33 @@ GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;
 \q
 ```
 
-### 3. Verify Connection
+### 3. Initialize Database Schema
 
-Test that you can connect to the database:
+Use the `pgadmin` tool to initialize the database schema:
 
 ```bash
+# Initialize using command-line flags
+go run ./cmd/pgadmin --host localhost --user goverse --password goverse --database goverse init
+
+# Or use a configuration file
+go run ./cmd/pgadmin --config config.yml init
+```
+
+The tool will create all required tables and indexes. See [cmd/pgadmin/README.md](../cmd/pgadmin/README.md) for more details.
+
+### 4. Verify Connection
+
+Test the database connection and schema:
+
+```bash
+# Using pgadmin tool (recommended)
+go run ./cmd/pgadmin --host localhost --user goverse --password goverse --database goverse verify
+
+# Or use psql directly
 psql -h localhost -U goverse -d goverse -c "SELECT version();"
 ```
 
-You should see the PostgreSQL version information.
-
-### 4. Run the Example
+### 5. Run the Example
 
 ```bash
 cd examples/persistence
@@ -244,6 +260,38 @@ loadedUser := &UserProfile{}
 loadedUser.OnInit(loadedUser, "user-123", nil)
 err = object.LoadObject(ctx, provider, loadedUser, "user-123")
 ```
+
+## Managing the Database
+
+### Using the pgadmin Tool
+
+GoVerse includes a `pgadmin` command-line tool for database management tasks:
+
+#### Initialize Schema
+```bash
+go run ./cmd/pgadmin --config config.yml init
+```
+
+#### Verify Connection and Schema
+```bash
+go run ./cmd/pgadmin --config config.yml verify
+```
+
+#### Check Database Status
+```bash
+go run ./cmd/pgadmin --config config.yml status
+```
+
+This shows connection status, table row counts, database size, and more.
+
+#### Reset Schema (Warning: Deletes All Data)
+```bash
+go run ./cmd/pgadmin --config config.yml reset
+```
+
+This will prompt for confirmation before dropping and recreating all tables.
+
+For complete documentation, see [cmd/pgadmin/README.md](../cmd/pgadmin/README.md).
 
 ## Production Considerations
 
