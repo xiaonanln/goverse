@@ -848,8 +848,6 @@ function showCallPopup(objectId, method, objectClass) {
   const popup = document.createElement('div')
   popup.className = 'call-popup'
   popup.textContent = method
-  popup.style.left = `${node.x}px`
-  popup.style.top = `${node.y - 20}px`
   
   // Add to container
   const container = document.getElementById('graph-container')
