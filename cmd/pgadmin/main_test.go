@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/xiaonanln/goverse/util/postgres"
@@ -36,13 +37,25 @@ func TestTableExists(t *testing.T) {
 		return
 	}
 
-	// Test with a known system table
-	exists, err := tableExists(ctx, db, "pg_class")
+	// Create a temporary test table in the public schema
+	testTableName := "test_table_exists_12345"
+	_, err = db.Connection().ExecContext(ctx, 
+		fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (id INT)", testTableName))
+	if err != nil {
+		t.Fatalf("Failed to create test table: %v", err)
+	}
+	defer func() {
+		// Clean up test table
+		db.Connection().ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", testTableName))
+	}()
+
+	// Test with the created table
+	exists, err := tableExists(ctx, db, testTableName)
 	if err != nil {
 		t.Fatalf("tableExists failed: %v", err)
 	}
 	if !exists {
-		t.Error("expected pg_class table to exist")
+		t.Errorf("expected %s table to exist", testTableName)
 	}
 
 	// Test with a non-existent table
