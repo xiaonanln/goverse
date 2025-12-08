@@ -12,11 +12,6 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 > ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
 ---
-## Cluster Bootstrap Demo
-
-[![Watch cluster bootstrap demo](https://img.youtube.com/vi/-B8OXXI4hCY/0.jpg)](https://youtu.be/-B8OXXI4hCY)
-
-*Click above to watch the cluster bootstrap demonstration visualized by GoVerse Inspector*
 
 ## Key Features
 
@@ -29,7 +24,11 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 - Automatic rebalancing & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics and pprof profiling
-- Inspector UI for visualizing object topology
+- Inspector UI for visualizing object topology ([demo video](https://youtu.be/-B8OXXI4hCY))
+
+    [![Watch cluster bootstrap demo](https://img.youtube.com/vi/-B8OXXI4hCY/0.jpg)](https://youtu.be/-B8OXXI4hCY)
+
+    *Click above to watch the cluster bootstrap demonstration visualized by GoVerse Inspector*
 
 ---
 
