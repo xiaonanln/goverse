@@ -49,12 +49,14 @@ function initGraph() {
     .force('link', d3.forceLink().id(d => d.id)
       .distance(d => {
         if (d.type === 'object-shard') return 30
+        if (d.type === 'object-node') return 50
         if (d.type === 'shard-node') return 80
         if (d.type === 'node-node' || d.type === 'gate-node') return 150
         return 100
       })
       .strength(d => {
         if (d.type === 'object-shard') return 2
+        if (d.type === 'object-node') return 1.5
         if (d.type === 'gate-node') return 0.1
         return 1
       }))
@@ -193,8 +195,8 @@ function buildGraphNodesAndLinks() {
     nodes.push(node)
     nodeMap.set(obj.id, node)
 
-    // Track which nodes have objects for each shard
-    if (obj.shard_id !== undefined && obj.goverse_node_id) {
+    // Track which nodes have objects for each shard (skip fixed-node objects with shard_id = -1)
+    if (obj.shard_id !== undefined && obj.shard_id !== -1 && obj.goverse_node_id) {
       if (!shardToNodes.has(obj.shard_id)) {
         shardToNodes.set(obj.shard_id, new Set())
       }
@@ -205,7 +207,15 @@ function buildGraphNodesAndLinks() {
   // Create shard nodes and object-to-shard links
   const shardNodeMap = new Map()
   graphData.goverse_objects.forEach(obj => {
-    if (obj.shard_id !== undefined) {
+    // Fixed-node objects (shard_id = -1) should link directly to their node
+    if (obj.shard_id === -1 && obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
+      links.push({
+        source: obj.id,
+        target: obj.goverse_node_id,
+        type: 'object-node',
+        color: '#00BCD4' // Cyan for fixed-node object-to-node
+      })
+    } else if (obj.shard_id !== undefined && obj.shard_id !== -1) {
       const shardId = `shard-${obj.shard_id}`
       
       // Create shard node if not exists
@@ -536,8 +546,8 @@ function updateGraphIncremental() {
     nodes.push(node)
     nodeMap.set(obj.id, node)
 
-    // Track which nodes have objects for each shard
-    if (obj.shard_id !== undefined && obj.goverse_node_id) {
+    // Track which nodes have objects for each shard (skip fixed-node objects with shard_id = -1)
+    if (obj.shard_id !== undefined && obj.shard_id !== -1 && obj.goverse_node_id) {
       if (!shardToNodes.has(obj.shard_id)) {
         shardToNodes.set(obj.shard_id, new Set())
       }
@@ -548,7 +558,15 @@ function updateGraphIncremental() {
   // Create shard nodes and object-to-shard links
   const shardNodeMap = new Map()
   graphData.goverse_objects.forEach(obj => {
-    if (obj.shard_id !== undefined) {
+    // Fixed-node objects (shard_id = -1) should link directly to their node
+    if (obj.shard_id === -1 && obj.goverse_node_id && nodeMap.has(obj.goverse_node_id)) {
+      links.push({
+        source: obj.id,
+        target: obj.goverse_node_id,
+        type: 'object-node',
+        color: '#00BCD4' // Cyan for fixed-node object-to-node
+      })
+    } else if (obj.shard_id !== undefined && obj.shard_id !== -1) {
       const shardId = `shard-${obj.shard_id}`
       
       // Create shard node if not exists

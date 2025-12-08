@@ -18,6 +18,7 @@ import (
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/objectid"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -496,7 +497,12 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	obj.OnCreated()
 
 	// Notify inspector manager with shard ID
+	// Fixed-node objects don't belong to any shard, use -1 to indicate this
 	shardID := node.GetShardID(id)
+	parsed, err := objectid.ParseObjectID(id)
+	if err == nil && parsed.IsFixedNodeFormat() {
+		shardID = -1
+	}
 	node.inspectorManager.NotifyObjectAdded(id, typ, shardID)
 
 	return nil
