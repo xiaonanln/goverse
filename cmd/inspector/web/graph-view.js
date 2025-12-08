@@ -860,16 +860,24 @@ function showCallPopup(objectId, method, objectClass) {
   if (svgElement) {
     // Position relative to the SVG coordinate system
     // Get the current transform on the g element
-    const transform = g.node().transform.baseVal.consolidate()
     let scale = 1
     let translateX = 0
     let translateY = 0
     
-    if (transform) {
-      const matrix = transform.matrix
-      scale = matrix.a
-      translateX = matrix.e
-      translateY = matrix.f
+    try {
+      const gNode = g.node()
+      if (gNode && gNode.transform && gNode.transform.baseVal) {
+        const transform = gNode.transform.baseVal.consolidate()
+        if (transform) {
+          const matrix = transform.matrix
+          scale = matrix.a
+          translateX = matrix.e
+          translateY = matrix.f
+        }
+      }
+    } catch (e) {
+      // Ignore transform errors and use default values
+      console.debug('Could not get graph transform:', e)
     }
     
     // Calculate screen position
@@ -882,7 +890,12 @@ function showCallPopup(objectId, method, objectClass) {
     
     // Remove after animation completes
     setTimeout(() => {
-      popup.remove()
+      // Use remove() with fallback for older browsers
+      if (popup.remove) {
+        popup.remove()
+      } else if (popup.parentNode) {
+        popup.parentNode.removeChild(popup)
+      }
     }, 1500)
   }
 }

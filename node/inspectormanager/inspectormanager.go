@@ -251,6 +251,7 @@ func (im *InspectorManager) NotifyObjectCall(objectID, objectType, method string
 		// while still allowing concurrent processing for different objects.
 		// Multiple method calls on the same object will be queued, which is acceptable
 		// since call reporting is a best-effort notification mechanism.
+		// Note: InspectorManager is per-node, so objectID is already scoped to this node's context.
 		taskpool.SubmitByKey(objectID, func(ctx context.Context) {
 			im.reportObjectCall(ctx, objectID, objectType, method)
 		})
