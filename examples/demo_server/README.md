@@ -343,6 +343,24 @@ cd /path/to/goverse
 go build ./...
 ```
 
+## Stress Testing
+
+A comprehensive stress testing script is available to test the demo server under load:
+
+```bash
+cd examples/demo_server
+python3 stress_test_demo.py --clients 10 --duration 300
+```
+
+The stress test:
+- Starts a 3-node cluster with 2 gates and 1 inspector
+- Runs configurable number of concurrent clients
+- Performs random operations (create, increment, get counters)
+- Tracks and reports statistics in real-time
+- Handles graceful cleanup on exit
+
+See [STRESS_TEST_README.md](STRESS_TEST_README.md) for detailed documentation.
+
 ## Next Steps
 
 - Add metrics collection to ShardMonitor
