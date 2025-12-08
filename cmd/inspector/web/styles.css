@@ -175,7 +175,6 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 .graph-node.new-object rect,
 .graph-node.new-object polygon {
   animation: new-object-pulse 1.5s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(255, 193, 7, 0.8));
 }
 
 @keyframes new-object-pulse {

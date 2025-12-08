@@ -139,6 +139,7 @@ function connectSSE() {
     if (data.object) {
       upsertObject(data.object)
       // No need to restart simulation for updates
+      // Note: Highlight status is preserved in newObjectsMap if object was recently added
     }
   })
 
@@ -147,6 +148,8 @@ function connectSSE() {
     console.log('SSE object_removed:', data)
     if (data.object_id) {
       graphData.goverse_objects = graphData.goverse_objects.filter(o => o.id !== data.object_id)
+      // Clean up highlight tracking for removed objects
+      newObjectsMap.delete(data.object_id)
       updateGraphIncremental()
       if (document.getElementById('shard-view').classList.contains('active')) {
         updateShardView()
