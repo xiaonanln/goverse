@@ -2,10 +2,9 @@
 
 ## Bootstrap Video
 
-<video controls width="640" height="480">
-  <source src="assets/videos/cluster-bootstrap.mp4" type="video/mp4">
-  Your browser does not support the video tag. Please use a modern browser to view this video.
-</video>
+[![Watch cluster bootstrap demo](https://img.youtube.com/vi/-B8OXXI4hCY/0.jpg)](https://youtu.be/-B8OXXI4hCY)
+
+*Click the image above to watch the cluster bootstrap demonstration*
 
 > ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
 
