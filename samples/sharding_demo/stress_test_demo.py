@@ -572,6 +572,12 @@ Examples:
                 print(f"⚠️  Error stopping inspector: {e}")
         
         print("✅ Cleanup complete")
+        
+        # Print final statistics
+        print("\n" + "=" * 80)
+        print("FINAL STATISTICS")
+        print("=" * 80)
+        print_stats(clients)
 
 
 if __name__ == '__main__':
