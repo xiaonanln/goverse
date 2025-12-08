@@ -7,6 +7,12 @@ import (
 	"github.com/xiaonanln/goverse/util/postgres"
 )
 
+// cleanupSchema removes all tables and functions for testing
+func cleanupSchema(ctx context.Context, db *postgres.DB) error {
+	_, err := db.Connection().ExecContext(ctx, dropSchemaSQL)
+	return err
+}
+
 func TestTableExists(t *testing.T) {
 	config := &postgres.Config{
 		Host:     "localhost",
@@ -106,13 +112,7 @@ func TestInitSchema(t *testing.T) {
 	}
 
 	// Clean up first
-	dropSQL := `
-		DROP TABLE IF EXISTS goverse_requests CASCADE;
-		DROP TABLE IF EXISTS goverse_objects CASCADE;
-		DROP FUNCTION IF EXISTS update_goverse_requests_timestamp() CASCADE;
-	`
-	_, err = db.Connection().ExecContext(ctx, dropSQL)
-	if err != nil {
+	if err := cleanupSchema(ctx, db); err != nil {
 		t.Fatalf("Failed to clean up: %v", err)
 	}
 
@@ -122,7 +122,6 @@ func TestInitSchema(t *testing.T) {
 	}
 
 	// Verify tables exist
-	tables := []string{"goverse_objects", "goverse_requests"}
 	for _, table := range tables {
 		exists, err := tableExists(ctx, db, table)
 		if err != nil {
@@ -134,11 +133,6 @@ func TestInitSchema(t *testing.T) {
 	}
 
 	// Verify indexes exist
-	indexes := map[string][]string{
-		"goverse_objects":  {"idx_goverse_objects_type", "idx_goverse_objects_updated_at"},
-		"goverse_requests": {"idx_goverse_requests_object_status"},
-	}
-
 	for table, idxList := range indexes {
 		for _, idx := range idxList {
 			exists, err := indexExists(ctx, db, table, idx)
@@ -152,8 +146,7 @@ func TestInitSchema(t *testing.T) {
 	}
 
 	// Clean up
-	_, err = db.Connection().ExecContext(ctx, dropSQL)
-	if err != nil {
+	if err := cleanupSchema(ctx, db); err != nil {
 		t.Logf("Warning: Failed to clean up after test: %v", err)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -17,6 +18,28 @@ const (
 	commandVerify = "verify"
 	commandReset  = "reset"
 	commandStatus = "status"
+)
+
+// Schema constants - must match postgres.DB.InitSchema()
+const (
+	tableObjects  = "goverse_objects"
+	tableRequests = "goverse_requests"
+	dropSchemaSQL = `
+		DROP TABLE IF EXISTS goverse_requests CASCADE;
+		DROP TABLE IF EXISTS goverse_objects CASCADE;
+		DROP FUNCTION IF EXISTS update_goverse_requests_timestamp() CASCADE;
+	`
+)
+
+var (
+	// Tables to manage
+	tables = []string{tableObjects, tableRequests}
+
+	// Indexes per table
+	indexes = map[string][]string{
+		tableObjects:  {"idx_goverse_objects_type", "idx_goverse_objects_updated_at"},
+		tableRequests: {"idx_goverse_requests_object_status"},
+	}
 )
 
 func main() {
@@ -157,7 +180,6 @@ func initSchema(ctx context.Context, config *postgres.Config) error {
 	fmt.Println("✓ Schema initialized successfully")
 
 	// Verify tables were created
-	tables := []string{"goverse_objects", "goverse_requests"}
 	for _, table := range tables {
 		exists, err := tableExists(ctx, db, table)
 		if err != nil {
@@ -192,7 +214,6 @@ func verifyDatabase(ctx context.Context, config *postgres.Config) error {
 	fmt.Println("✓ Connection successful")
 
 	// Check tables
-	tables := []string{"goverse_objects", "goverse_requests"}
 	allTablesExist := true
 	for _, table := range tables {
 		exists, err := tableExists(ctx, db, table)
@@ -213,11 +234,6 @@ func verifyDatabase(ctx context.Context, config *postgres.Config) error {
 	}
 
 	// Check indexes
-	indexes := map[string][]string{
-		"goverse_objects":  {"idx_goverse_objects_type", "idx_goverse_objects_updated_at"},
-		"goverse_requests": {"idx_goverse_requests_object_status"},
-	}
-
 	for table, idxList := range indexes {
 		for _, idx := range idxList {
 			exists, err := indexExists(ctx, db, table, idx)
@@ -240,9 +256,12 @@ func resetSchema(ctx context.Context, config *postgres.Config) error {
 	fmt.Println("WARNING: This will delete all data in the database!")
 	fmt.Print("Are you sure you want to continue? (yes/no): ")
 
-	var response string
-	fmt.Scanln(&response)
-	response = strings.ToLower(strings.TrimSpace(response))
+	// Use bufio.Scanner for safe input handling
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return fmt.Errorf("failed to read input")
+	}
+	response := strings.ToLower(strings.TrimSpace(scanner.Text()))
 
 	if response != "yes" {
 		fmt.Println("Operation cancelled.")
@@ -265,12 +284,7 @@ func resetSchema(ctx context.Context, config *postgres.Config) error {
 	}
 
 	// Drop tables
-	dropSQL := `
-		DROP TABLE IF EXISTS goverse_requests CASCADE;
-		DROP TABLE IF EXISTS goverse_objects CASCADE;
-		DROP FUNCTION IF EXISTS update_goverse_requests_timestamp() CASCADE;
-	`
-	_, err = db.Connection().ExecContext(ctx, dropSQL)
+	_, err = db.Connection().ExecContext(ctx, dropSchemaSQL)
 	if err != nil {
 		return fmt.Errorf("failed to drop tables: %w", err)
 	}
@@ -324,7 +338,6 @@ func showStatus(ctx context.Context, config *postgres.Config) error {
 	fmt.Println("Tables:")
 	fmt.Println("-------")
 
-	tables := []string{"goverse_objects", "goverse_requests"}
 	for _, table := range tables {
 		exists, err := tableExists(ctx, db, table)
 		if err != nil {
@@ -337,9 +350,10 @@ func showStatus(ctx context.Context, config *postgres.Config) error {
 		}
 
 		// Get row count
+		// Note: table names are from a fixed whitelist (tables const), not user input
 		var count int64
-		err = db.Connection().QueryRowContext(ctx,
-			fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
+		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
+		err = db.Connection().QueryRowContext(ctx, query).Scan(&count)
 		if err != nil {
 			fmt.Printf("  %s: ✓ (exists, unable to count rows)\n", table)
 		} else {
