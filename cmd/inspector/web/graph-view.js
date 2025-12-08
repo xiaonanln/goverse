@@ -6,6 +6,11 @@ let svg = null
 let g = null
 let zoom = null
 
+// Helper function to apply highlighting to new objects
+function applyNewObjectHighlighting(nodeSelection) {
+  nodeSelection.classed('new-object', d => d.nodeType === NODE_TYPE_OBJECT && isNewObject(d.id))
+}
+
 // Initialize D3 graph for Objects View
 function initGraph() {
   const container = document.getElementById('graph-container')
@@ -444,8 +449,7 @@ function updateGraph() {
   })
 
   // Apply highlighting class to new objects
-  nodeEnter.merge(nodeSelection)
-    .classed('new-object', d => d.nodeType === NODE_TYPE_OBJECT && isNewObject(d.id))
+  applyNewObjectHighlighting(nodeEnter.merge(nodeSelection))
 
   // Update labels
   const labelSelection = g.select('.labels')
@@ -807,8 +811,7 @@ function updateGraphIncremental() {
   })
 
   // Apply highlighting class to new objects
-  nodeEnter.merge(nodeSelection)
-    .classed('new-object', d => d.nodeType === NODE_TYPE_OBJECT && isNewObject(d.id))
+  applyNewObjectHighlighting(nodeEnter.merge(nodeSelection))
 
   // Update labels
   const labelSelection = g.select('.labels')
