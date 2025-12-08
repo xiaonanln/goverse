@@ -91,7 +91,7 @@ class DemoServer:
         print(f"Starting {self.name} (node_id: {self.node_id}, port: {self.listen_port})...")
         self.process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
+            stdout=None,
             stderr=subprocess.STDOUT,
             env=env,
             text=True,
@@ -147,6 +147,7 @@ class DemoServer:
         except subprocess.TimeoutExpired:
             # Force kill if graceful shutdown fails
             print(f"⚠️  {self.name} did not stop gracefully, force killing...")
+            time.sleep(300)
             self.process.kill()
             self.process.wait()
         except Exception as e:
