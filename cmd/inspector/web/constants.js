@@ -10,6 +10,7 @@ const NODE_TYPE_OBJECT = 'object'
 const SIMULATION_ALPHA_FULL = 0.3      // Alpha for full graph updates
 const SIMULATION_ALPHA_INCREMENTAL = 0.1 // Alpha for incremental updates (lower = less disruption)
 const SSE_RECONNECT_DELAY = 3000       // SSE reconnect delay in milliseconds
+const NEW_OBJECT_HIGHLIGHT_DURATION = 3000 // Duration to highlight new objects in milliseconds
 
 // Pie chart dimensions
 const PIE_CHART_SIZE = 200
@@ -44,6 +45,9 @@ function stringToColor(str) {
 // Application state
 const graphData = { goverse_nodes: [], goverse_gates: [], goverse_objects: [] }
 
+// Track newly added objects for highlighting
+const newObjectsMap = new Map() // objectId -> timestamp when added
+
 // Helper function to upsert a node in the goverse_nodes array
 function upsertNode(node) {
   const existingIdx = graphData.goverse_nodes.findIndex(n => n.id === node.id)
@@ -67,11 +71,20 @@ function upsertGate(gate) {
 // Helper function to upsert an object in the goverse_objects array
 function upsertObject(obj) {
   const existingIdx = graphData.goverse_objects.findIndex(o => o.id === obj.id)
+  const isNew = existingIdx < 0
   if (existingIdx >= 0) {
     graphData.goverse_objects[existingIdx] = obj
   } else {
     graphData.goverse_objects.push(obj)
   }
+  return isNew
+}
+
+// Helper function to check if an object is newly added (within highlight duration)
+function isNewObject(objectId) {
+  const timestamp = newObjectsMap.get(objectId)
+  if (!timestamp) return false
+  return (Date.now() - timestamp) < NEW_OBJECT_HIGHLIGHT_DURATION
 }
 
 // Utility functions for node rendering

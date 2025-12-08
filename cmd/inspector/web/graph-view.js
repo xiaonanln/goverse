@@ -443,6 +443,10 @@ function updateGraph() {
     }
   })
 
+  // Apply highlighting class to new objects
+  nodeEnter.merge(nodeSelection)
+    .classed('new-object', d => d.nodeType === NODE_TYPE_OBJECT && isNewObject(d.id))
+
   // Update labels
   const labelSelection = g.select('.labels')
     .selectAll('.node-label')
@@ -801,6 +805,10 @@ function updateGraphIncremental() {
       el.select('circle').attr('fill', getNodeColor(d))
     }
   })
+
+  // Apply highlighting class to new objects
+  nodeEnter.merge(nodeSelection)
+    .classed('new-object', d => d.nodeType === NODE_TYPE_OBJECT && isNewObject(d.id))
 
   // Update labels
   const labelSelection = g.select('.labels')

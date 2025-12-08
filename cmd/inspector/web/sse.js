@@ -110,7 +110,19 @@ function connectSSE() {
     const data = JSON.parse(event.data)
     console.log('SSE object_added:', data)
     if (data.object) {
-      upsertObject(data.object)
+      const isNew = upsertObject(data.object)
+      if (isNew) {
+        // Mark object as newly added with current timestamp
+        newObjectsMap.set(data.object.id, Date.now())
+        // Schedule removal of highlight marker after duration
+        setTimeout(() => {
+          newObjectsMap.delete(data.object.id)
+          // Trigger a subtle update to remove highlight styling
+          if (document.getElementById('graph-view').classList.contains('active')) {
+            updateGraphIncremental()
+          }
+        }, NEW_OBJECT_HIGHLIGHT_DURATION)
+      }
       updateGraphIncremental()
       if (document.getElementById('shard-view').classList.contains('active')) {
         updateShardView()
