@@ -1,0 +1,120 @@
+# GoVerse Demo Server Stress Test Configuration
+# 
+# This configuration sets up a test environment with:
+# - 1 inspector
+# - 10 demo server nodes
+# - 7 gates for client connections
+#
+# This file is used by stress_test_demo.py to start the cluster
+
+version: 1
+
+inspector:
+  # Inspector provides HTTP/gRPC interface for cluster monitoring
+  http_addr: "0.0.0.0:8090"
+  grpc_addr: "0.0.0.0:8091"
+  advertise_addr: "localhost:8091"
+
+cluster:
+  # Use fewer shards for testing to speed up operations
+  shards: 64
+  
+  # Auto-load objects when nodes start and claim their shards
+  auto_load_objects:
+    # GlobalMonitor: Single global object for overall stats
+    - type: "GlobalMonitor"
+      id: "GlobalMonitor"
+    
+    # ShardMonitor: One object per shard to track shard-specific stats
+    - type: "ShardMonitor"
+      id: "ShardMonitor"
+      per_shard: true
+    
+    # NodeMonitor: One per node using per_node flag
+    - type: "NodeMonitor"
+      id: "NodeMonitor"
+      per_node: true
+
+  # Cluster metadata / consensus provider
+  provider: "etcd"
+  
+  etcd:
+    # Etcd endpoints (can be overridden by environment)
+    endpoints:
+      - "127.0.0.1:2379"
+    
+    # Etcd key prefix for this test cluster
+    prefix: "/goverse/demo-stress-test"
+
+nodes:
+  - id: "stress-demo-node-1"
+    grpc_addr: "0.0.0.0:9211"
+    advertise_addr: "localhost:9211"
+    http_addr: "0.0.0.0:8211"
+  
+  - id: "stress-demo-node-2"
+    grpc_addr: "0.0.0.0:9212"
+    advertise_addr: "localhost:9212"
+    http_addr: "0.0.0.0:8212"
+  
+  - id: "stress-demo-node-3"
+    grpc_addr: "0.0.0.0:9213"
+    advertise_addr: "localhost:9213"
+    http_addr: "0.0.0.0:8213"
+  
+  - id: "stress-demo-node-4"
+    grpc_addr: "0.0.0.0:9214"
+    advertise_addr: "localhost:9214"
+    http_addr: "0.0.0.0:8214"
+  
+  - id: "stress-demo-node-5"
+    grpc_addr: "0.0.0.0:9215"
+    advertise_addr: "localhost:9215"
+    http_addr: "0.0.0.0:8215"
+  
+  - id: "stress-demo-node-6"
+    grpc_addr: "0.0.0.0:9216"
+    advertise_addr: "localhost:9216"
+    http_addr: "0.0.0.0:8216"
+  
+  - id: "stress-demo-node-7"
+    grpc_addr: "0.0.0.0:9217"
+    advertise_addr: "localhost:9217"
+    http_addr: "0.0.0.0:8217"
+  
+  - id: "stress-demo-node-8"
+    grpc_addr: "0.0.0.0:9218"
+    advertise_addr: "localhost:9218"
+    http_addr: "0.0.0.0:8218"
+  
+  - id: "stress-demo-node-9"
+    grpc_addr: "0.0.0.0:9219"
+    advertise_addr: "localhost:9219"
+    http_addr: "0.0.0.0:8219"
+  
+  - id: "stress-demo-node-10"
+    grpc_addr: "0.0.0.0:9220"
+    advertise_addr: "localhost:9220"
+    http_addr: "0.0.0.0:8220"
+
+gates:
+  - id: "stress-demo-gate-1"
+    grpc_addr: "0.0.0.0:10111"
+  
+  - id: "stress-demo-gate-2"
+    grpc_addr: "0.0.0.0:10112"
+  
+  - id: "stress-demo-gate-3"
+    grpc_addr: "0.0.0.0:10113"
+  
+  - id: "stress-demo-gate-4"
+    grpc_addr: "0.0.0.0:10114"
+  
+  - id: "stress-demo-gate-5"
+    grpc_addr: "0.0.0.0:10115"
+  
+  - id: "stress-demo-gate-6"
+    grpc_addr: "0.0.0.0:10116"
+  
+  - id: "stress-demo-gate-7"
+    grpc_addr: "0.0.0.0:10117"
