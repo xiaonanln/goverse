@@ -110,7 +110,18 @@ jobs:
             exit 1
           fi
       
+      - name: Build demo_server
+        run: |
+          echo "Building demo_server..."
+          go build -o demo_server.out ./examples/demo_server
+          if [ -f "./demo_server.out" ]; then
+            echo "✅ Demo server binary built successfully"
+          else
+            echo "❌ Demo server binary not found"
+            exit 1
+          fi
+      
       - name: List all build artifacts
         run: |
           echo "Build completed! Generated binaries:"
-          ls -la inspector* gate* server* client* tictactoe* 2>/dev/null || echo "No binaries found matching pattern"
+          ls -la inspector* gate* server* client* tictactoe* demo_server* 2>/dev/null || echo "No binaries found matching pattern"
