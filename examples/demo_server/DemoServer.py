@@ -23,17 +23,15 @@ class DemoServer:
     
     process: subprocess.Popen | None
     
-    def __init__(self, server_index=0, listen_port=None, 
-                 binary_path=None, config_file=None, node_id=None,
-                 build_if_needed=True):
+    def __init__(self, server_index=0, binary_path=None, config_file=None, 
+                 node_id=None, build_if_needed=True):
         """Initialize and optionally build the demo server.
         
         Args:
             server_index: Index of this server (for naming)
-            listen_port: Server listen port (default: dynamically allocated, ignored if config_file is provided)
             binary_path: Path to demo server binary (defaults to /tmp/demo_server)
-            config_file: Path to YAML config file (if provided, ports are read from config)
-            node_id: Node ID when using config file (required if config_file is provided)
+            config_file: Path to YAML config file (required)
+            node_id: Node ID from config file (required)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.server_index = server_index
@@ -41,25 +39,27 @@ class DemoServer:
         self.config_file = config_file
         self.node_id = node_id
         
-        # If config file is provided, parse ports from it
-        if config_file and node_id:
-            import yaml
-            with open(config_file, 'r') as f:
-                config = yaml.safe_load(f)
-            # Find the node configuration by node_id
-            node_config = None
-            for node in config.get('nodes', []):
-                if node.get('id') == node_id:
-                    node_config = node
-                    break
-            if not node_config:
-                raise ValueError(f"Node ID '{node_id}' not found in config file")
-            
-            # Parse listen port from grpc_addr
-            grpc_addr = node_config.get('grpc_addr', '0.0.0.0:9211')
-            self.listen_port = int(grpc_addr.split(':')[1]) if ':' in grpc_addr else 9211
-        else:
-            self.listen_port = listen_port if listen_port is not None else get_free_port()
+        # Config file and node_id are required
+        if not config_file or not node_id:
+            raise ValueError("config_file and node_id are required")
+        
+        # Parse ports from config file
+        import yaml
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Find the node configuration by node_id
+        node_config = None
+        for node in config.get('nodes', []):
+            if node.get('id') == node_id:
+                node_config = node
+                break
+        if not node_config:
+            raise ValueError(f"Node ID '{node_id}' not found in config file")
+        
+        # Parse listen port from grpc_addr
+        grpc_addr = node_config.get('grpc_addr', '0.0.0.0:9211')
+        self.listen_port = int(grpc_addr.split(':')[1]) if ':' in grpc_addr else 9211
         
         self.process = None
         self.name = f"Demo Server {server_index + 1}"
@@ -75,13 +75,8 @@ class DemoServer:
             print(f"⚠️  {self.name} is already running")
             return
 
-        # Build command line arguments
-        if self.config_file:
-            if not self.node_id:
-                raise ValueError("node_id is required when config_file is specified")
-            cmd = [self.binary_path, '--config', self.config_file, '--node-id', self.node_id]
-        else:
-            cmd = [self.binary_path, '--listen', f"0.0.0.0:{self.listen_port}"]
+        # Build command line arguments (always use config file)
+        cmd = [self.binary_path, '--config', self.config_file, '--node-id', self.node_id]
 
         # Check if coverage is enabled
         cov_dir = os.environ.get('GOCOVERDIR', '').strip()

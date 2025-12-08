@@ -2,8 +2,8 @@
 # 
 # This configuration sets up a test environment with:
 # - 1 inspector
-# - 3 demo server nodes
-# - 2 gates for client connections
+# - 10 demo server nodes
+# - 7 gates for client connections
 #
 # This file is used by stress_test_demo.py to start the cluster
 
@@ -61,6 +61,41 @@ nodes:
     grpc_addr: "0.0.0.0:9213"
     advertise_addr: "localhost:9213"
     http_addr: "0.0.0.0:8213"
+  
+  - id: "stress-demo-node-4"
+    grpc_addr: "0.0.0.0:9214"
+    advertise_addr: "localhost:9214"
+    http_addr: "0.0.0.0:8214"
+  
+  - id: "stress-demo-node-5"
+    grpc_addr: "0.0.0.0:9215"
+    advertise_addr: "localhost:9215"
+    http_addr: "0.0.0.0:8215"
+  
+  - id: "stress-demo-node-6"
+    grpc_addr: "0.0.0.0:9216"
+    advertise_addr: "localhost:9216"
+    http_addr: "0.0.0.0:8216"
+  
+  - id: "stress-demo-node-7"
+    grpc_addr: "0.0.0.0:9217"
+    advertise_addr: "localhost:9217"
+    http_addr: "0.0.0.0:8217"
+  
+  - id: "stress-demo-node-8"
+    grpc_addr: "0.0.0.0:9218"
+    advertise_addr: "localhost:9218"
+    http_addr: "0.0.0.0:8218"
+  
+  - id: "stress-demo-node-9"
+    grpc_addr: "0.0.0.0:9219"
+    advertise_addr: "localhost:9219"
+    http_addr: "0.0.0.0:8219"
+  
+  - id: "stress-demo-node-10"
+    grpc_addr: "0.0.0.0:9220"
+    advertise_addr: "localhost:9220"
+    http_addr: "0.0.0.0:8220"
 
 gates:
   - id: "stress-demo-gate-1"
@@ -68,3 +103,18 @@ gates:
   
   - id: "stress-demo-gate-2"
     grpc_addr: "0.0.0.0:10112"
+  
+  - id: "stress-demo-gate-3"
+    grpc_addr: "0.0.0.0:10113"
+  
+  - id: "stress-demo-gate-4"
+    grpc_addr: "0.0.0.0:10114"
+  
+  - id: "stress-demo-gate-5"
+    grpc_addr: "0.0.0.0:10115"
+  
+  - id: "stress-demo-gate-6"
+    grpc_addr: "0.0.0.0:10116"
+  
+  - id: "stress-demo-gate-7"
+    grpc_addr: "0.0.0.0:10117"

@@ -77,13 +77,13 @@ python3 stress_test_demo.py --clients 5 --duration 300 --stats-interval 30
 The stress test uses `stress_config_demo.yml` which defines:
 
 - **Inspector**: Port 8091 (gRPC), Port 8090 (HTTP)
-- **3 Nodes**: Ports 9211-9213 (gRPC), 8211-8213 (HTTP)
-- **2 Gates**: Ports 10111-10112 (gRPC)
+- **10 Nodes**: Ports 9211-9220 (gRPC), 8211-8220 (HTTP)
+- **7 Gates**: Ports 10111-10117 (gRPC)
 - **64 Shards**: Reduced from production (8192) for faster testing
 - **Auto-load Objects**:
   - `GlobalMonitor`: Single global instance
   - `ShardMonitor`: One per shard (64 total)
-  - `NodeMonitor`: One per node (3 total)
+  - `NodeMonitor`: One per node (10 total)
 
 ## Client Operations
 
@@ -231,8 +231,8 @@ This stress test is modeled after `tests/samples/chat/stress/stress_test.py` wit
 | **State** | Current room | Known counter IDs |
 | **Auto-load** | ChatRoomMgr | GlobalMonitor, ShardMonitor, NodeMonitor |
 | **Shards** | 64 | 64 |
-| **Nodes** | 3 | 3 |
-| **Gates** | 2 | 2 |
+| **Nodes** | 3 | 10 |
+| **Gates** | 2 | 7 |
 
 ## Advanced Usage
 

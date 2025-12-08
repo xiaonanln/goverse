@@ -4,8 +4,8 @@ Stress test for Goverse demo server.
 
 This script:
 1. Starts the inspector
-2. Starts 3 demo server nodes
-3. Starts 2 gateways
+2. Starts 10 demo server nodes
+3. Starts 7 gateways
 4. Runs configurable number of clients that randomly:
    - Create SimpleCounter objects
    - Increment counter values
@@ -419,12 +419,12 @@ Examples:
             print("❌ Inspector failed to start")
             return 1
         
-        # Start 3 demo servers
+        # Start 10 demo servers
         print("\n" + "=" * 80)
         print("STARTING DEMO SERVERS")
         print("=" * 80)
-        node_ids = ["stress-demo-node-1", "stress-demo-node-2", "stress-demo-node-3"]
-        for i in range(3):
+        node_ids = [f"stress-demo-node-{i+1}" for i in range(10)]
+        for i in range(10):
             server = DemoServer(
                 server_index=i,
                 config_file=str(config_file),
@@ -443,12 +443,12 @@ Examples:
                 print(f"❌ {server.name} failed to start")
                 return 1
         
-        # Start 2 gateways
+        # Start 7 gateways
         print("\n" + "=" * 80)
         print("STARTING GATEWAYS")
         print("=" * 80)
-        gate_ids = ["stress-demo-gate-1", "stress-demo-gate-2"]
-        for i in range(2):
+        gate_ids = [f"stress-demo-gate-{i+1}" for i in range(7)]
+        for i in range(7):
             gateway = Gateway(
                 config_file=str(config_file),
                 gate_id=gate_ids[i]
