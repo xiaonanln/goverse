@@ -20,7 +20,9 @@ const (
 	commandStatus = "status"
 )
 
-// Schema constants - must match postgres.DB.InitSchema()
+// Schema constants - MUST be kept in sync with util/postgres/db.go:InitSchema()
+// These constants define the database schema managed by this tool.
+// When adding new tables or indexes, update both InitSchema() and these constants.
 const (
 	tableObjects  = "goverse_objects"
 	tableRequests = "goverse_requests"
@@ -350,7 +352,11 @@ func showStatus(ctx context.Context, config *postgres.Config) error {
 		}
 
 		// Get row count
-		// Note: table names are from a fixed whitelist (tables const), not user input
+		// Validate table name is in whitelist before using in query
+		if !isValidTableName(table) {
+			fmt.Printf("  %s: ✗ (invalid table name)\n", table)
+			continue
+		}
 		var count int64
 		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
 		err = db.Connection().QueryRowContext(ctx, query).Scan(&count)
@@ -373,6 +379,16 @@ func showStatus(ctx context.Context, config *postgres.Config) error {
 }
 
 // Helper functions
+
+// isValidTableName checks if a table name is in our whitelist
+func isValidTableName(tableName string) bool {
+	for _, validTable := range tables {
+		if tableName == validTable {
+			return true
+		}
+	}
+	return false
+}
 
 func tableExists(ctx context.Context, db *postgres.DB, tableName string) (bool, error) {
 	var exists bool
