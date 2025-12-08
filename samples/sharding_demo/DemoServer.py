@@ -92,7 +92,7 @@ class DemoServer:
         self.process = subprocess.Popen(
             cmd,
             stdout=None,
-            stderr=subprocess.STDOUT,
+            stderr=None,
             env=env,
             text=True,
             bufsize=1

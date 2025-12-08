@@ -208,7 +208,8 @@ class StressTestClient:
                     self.known_counters.append(counter_id)
                     
         except Exception as e:
-            print(f"⚠️  Client {self.client_id} failed to create counter: {e}")
+            if self.running:
+                print(f"⚠️  Client {self.client_id} failed to create counter: {e}")
             raise
     
     def _increment_counter(self):
@@ -237,7 +238,8 @@ class StressTestClient:
             print(f"[Client {self.client_id}] Incremented counter: {counter_id}")
             
         except Exception as e:
-            print(f"⚠️  Client {self.client_id} failed to increment counter: {e}")
+            if self.running:
+                print(f"⚠️  Client {self.client_id} failed to increment counter: {e}")
             raise
     
     def _get_counter_value(self):
@@ -266,7 +268,8 @@ class StressTestClient:
             print(f"[Client {self.client_id}] Got value for counter: {counter_id}")
             
         except Exception as e:
-            print(f"⚠️  Client {self.client_id} failed to get counter value: {e}")
+            if self.running:
+                print(f"⚠️  Client {self.client_id} failed to get counter value: {e}")
             raise
     
     def stop(self):
@@ -321,7 +324,7 @@ def print_stats(clients: List[StressTestClient]):
         total_creates += stats['create_count']
         total_increments += stats['increment_count']
         total_gets += stats['get_count']
-    
+
     print("-" * 80)
     print(f"TOTAL: Actions: {total_actions}, Errors: {total_errors}, "
           f"Creates: {total_creates}, Increments: {total_increments}, Gets: {total_gets}")
