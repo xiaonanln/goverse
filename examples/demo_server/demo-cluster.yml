@@ -2,7 +2,7 @@
 # 
 # Demonstrates sharding features with:
 # - Per-shard auto-load objects (ShardMonitor)
-# - Simulated per-node objects (NodeMonitor with multiple IDs)
+# - Per-node objects (NodeMonitor with per_node flag)
 # - Global singleton (GlobalMonitor)
 # - Normal distributed objects (SimpleCounter)
 
@@ -25,26 +25,16 @@ cluster:
     # GlobalMonitor: Single global object for overall stats
     - type: "GlobalMonitor"
       id: "GlobalMonitor"
-      per_shard: false
 
     # ShardMonitor: One object per shard to track shard-specific stats
     - type: "ShardMonitor"
       id: "ShardMonitor"
       per_shard: true
 
-    # NodeMonitor: Simulated per-node objects via multiple entries
-    # Each node will get one NodeMonitor by using IDs that hash to different shards
+    # NodeMonitor: One per node using per_node flag
     - type: "NodeMonitor"
-      id: "NodeMonitor-1"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-2"
-      per_shard: false
-
-    - type: "NodeMonitor"
-      id: "NodeMonitor-3"
-      per_shard: false
+      id: "NodeMonitor"
+      per_node: true
 
 nodes:
   - id: "node-1"
@@ -62,6 +52,41 @@ nodes:
     advertise_addr: "localhost:47003"
     http_addr: "0.0.0.0:48003"
 
+  - id: "node-4"
+    grpc_addr: "0.0.0.0:47004"
+    advertise_addr: "localhost:47004"
+    http_addr: "0.0.0.0:48004"
+
+  - id: "node-5"
+    grpc_addr: "0.0.0.0:47005"
+    advertise_addr: "localhost:47005"
+    http_addr: "0.0.0.0:48005"
+
+  - id: "node-6"
+    grpc_addr: "0.0.0.0:47006"
+    advertise_addr: "localhost:47006"
+    http_addr: "0.0.0.0:48006"
+
+  - id: "node-7"
+    grpc_addr: "0.0.0.0:47007"
+    advertise_addr: "localhost:47007"
+    http_addr: "0.0.0.0:48007"
+
+  - id: "node-8"
+    grpc_addr: "0.0.0.0:47008"
+    advertise_addr: "localhost:47008"
+    http_addr: "0.0.0.0:48008"
+
+  - id: "node-9"
+    grpc_addr: "0.0.0.0:47009"
+    advertise_addr: "localhost:47009"
+    http_addr: "0.0.0.0:48009"
+
+  - id: "node-10"
+    grpc_addr: "0.0.0.0:47010"
+    advertise_addr: "localhost:47010"
+    http_addr: "0.0.0.0:48010"
+
 gates:
   - id: "gate-1"
     grpc_addr: "0.0.0.0:47101"
@@ -72,6 +97,21 @@ gates:
     grpc_addr: "0.0.0.0:47102"
     advertise_addr: "localhost:47102"
     http_addr: "0.0.0.0:48102"
+
+  - id: "gate-3"
+    grpc_addr: "0.0.0.0:47103"
+    advertise_addr: "localhost:47103"
+    http_addr: "0.0.0.0:48103"
+
+  - id: "gate-4"
+    grpc_addr: "0.0.0.0:47104"
+    advertise_addr: "localhost:47104"
+    http_addr: "0.0.0.0:48104"
+
+  - id: "gate-5"
+    grpc_addr: "0.0.0.0:47105"
+    advertise_addr: "localhost:47105"
+    http_addr: "0.0.0.0:48105"
 
 inspector:
   grpc_addr: "0.0.0.0:47200"

@@ -1,2 +1,14 @@
 # Demo server binary
 demo-server
+
+# Built binaries
+goverse-gate
+goverse-inspector
+
+# Log files
+*.log
+
+# PID files
+.node-pids
+.gate-pids
+.inspector-pid

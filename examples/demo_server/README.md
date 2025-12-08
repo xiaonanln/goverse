@@ -17,11 +17,11 @@ The demo includes four types of objects:
    - Created automatically when nodes claim their shards
    - Object ID format: `shard#N/ShardMonitor`
 
-3. **NodeMonitor** - Simulated per-node objects
-   - One NodeMonitor per node (simulated via multiple auto-load entries with different IDs)
+3. **NodeMonitor** - Per-node objects
+   - One NodeMonitor per node (using `per_node: true` flag)
    - Aggregates stats from ShardMonitors on the node
    - Periodically scans the counter list and creates counters that hash to shards owned by its node
-   - Object IDs: `NodeMonitor-1`, `NodeMonitor-2`, `NodeMonitor-3`
+   - Object IDs are generated per node (e.g., `NodeMonitor-node-1`, `NodeMonitor-node-2`)
 
 4. **GlobalMonitor** - Global singleton auto-load object
    - Single instance for the entire cluster
@@ -60,13 +60,13 @@ The demo includes four types of objects:
 
 The demo uses a YAML configuration file (`demo-cluster.yml`) that defines:
 
-- 3 nodes (localhost:47001-47003)
-- 2 gates (localhost:47101-47102)
+- 10 nodes (localhost:47001-47010)
+- 5 gates (localhost:47101-47105)
 - 1 inspector (localhost:48200)
 - Auto-load objects:
   - 1 GlobalMonitor (singleton)
   - Per-shard ShardMonitors
-  - 3 NodeMonitors (simulated per-node)
+  - 10 NodeMonitors (one per node)
 
 ## Running the Demo
 
@@ -97,34 +97,32 @@ The demo uses a YAML configuration file (`demo-cluster.yml`) that defines:
 ```
 
 This script will:
-1. Check if etcd is running (start it if needed)
-2. Build the demo server
-3. Start 3 node servers
-4. Start 2 gate servers (if goverse-gate is available)
-5. Start the inspector (if goverse-inspector is available)
+1. Check if etcd is running (must be started separately)
+2. Build the demo server, gate, and inspector
+3. Start the inspector
+4. Start 10 node servers
+5. Start 5 gate servers (if goverse-gate is available)
+6. Exit after all components are started
+
+Use `./stop-cluster.sh` to stop all processes
 
 ### Manual Start (Alternative)
 
-You can also start components manually:
+You can also start components manually (example with first few):
 
 ```bash
-# Terminal 1: Start node 1
-go run main.go --config demo-cluster.yml --node-id node-1
-
-# Terminal 2: Start node 2
-go run main.go --config demo-cluster.yml --node-id node-2
-
-# Terminal 3: Start node 3
-go run main.go --config demo-cluster.yml --node-id node-3
-
-# Terminal 4: Start gate 1 (if available)
-goverse-gate --config demo-cluster.yml --node-id gate-1
-
-# Terminal 5: Start gate 2 (if available)
-goverse-gate --config demo-cluster.yml --node-id gate-2
-
-# Terminal 6: Start inspector (if available)
+# Terminal 1: Start inspector
 goverse-inspector --config demo-cluster.yml
+
+# Terminal 2-11: Start nodes 1-10
+go run main.go --config demo-cluster.yml --node-id node-1
+go run main.go --config demo-cluster.yml --node-id node-2
+# ... node-3 through node-10
+
+# Terminal 12-16: Start gates 1-5 (if available)
+goverse-gate --config demo-cluster.yml --node-id gate-1
+goverse-gate --config demo-cluster.yml --node-id gate-2
+# ... gate-3 through gate-5
 ```
 
 ## Observing the Demo
@@ -132,12 +130,9 @@ goverse-inspector --config demo-cluster.yml
 ### Log Files
 
 When using `run-cluster.sh`, logs are written to:
-- `/tmp/demo-node-1.log`
-- `/tmp/demo-node-2.log`
-- `/tmp/demo-node-3.log`
-- `/tmp/demo-gate-1.log`
-- `/tmp/demo-gate-2.log`
-- `/tmp/demo-inspector.log`
+- `node.log` - All 10 node servers
+- `gate.log` - All 5 gate servers
+- `inspector.log` - Inspector
 
 ### What to Look For
 
@@ -202,14 +197,11 @@ The demo demonstrates three auto-load patterns:
      per_shard: true
    ```
 
-3. **Simulated per-node** (NodeMonitor)
+3. **Per-node** (NodeMonitor)
    ```yaml
    - type: "NodeMonitor"
-     id: "NodeMonitor-1"  # Each ID hashes to a different shard
-   - type: "NodeMonitor"
-     id: "NodeMonitor-2"
-   - type: "NodeMonitor"
-     id: "NodeMonitor-3"
+     id: "NodeMonitor"
+     per_node: true  # Creates one object per node
    ```
 
 ### Shard Migration (Future Enhancement)
@@ -247,21 +239,26 @@ NumShards: testutil.TestNumShards  // 64 shards in tests
 
 ## Cleanup
 
-Press `Ctrl+C` to stop all processes when using `run-cluster.sh`. The script will:
-1. Kill all node, gate, and inspector processes
-2. Clean up etcd data (if started by the script)
-3. Remove log files
+Use the stop script to stop all processes:
 
-Manual cleanup:
+```bash
+./stop-cluster.sh
+```
+
+This will:
+1. Kill all node processes
+2. Kill all gate processes
+3. Kill the inspector process
+
+Manual cleanup (alternative):
 ```bash
 # Stop all demo processes
 pkill -f demo-server
 pkill -f goverse-gate
 pkill -f goverse-inspector
 
-# Clean up etcd data (if desired)
-rm -rf /tmp/etcd-demo-data
-rm /tmp/demo-*.log
+# Clean up log files
+rm -f node.log gate.log inspector.log
 ```
 
 ## Implementation Notes
