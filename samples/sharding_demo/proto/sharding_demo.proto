@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package sharding_demo;
+
+option go_package = "github.com/xiaonanln/goverse/samples/sharding_demo/proto;sharding_demo_pb";
+
+// Request/Response messages for SimpleCounter
+
+message IncrementRequest {
+  // Empty - no parameters needed
+}
+
+message IncrementResponse {
+  int64 value = 1;  // Current counter value after increment
+}
+
+message GetValueRequest {
+  // Empty - no parameters needed
+}
+
+message GetValueResponse {
+  int64 value = 1;  // Current counter value
+}
+
+// Request/Response messages for ShardMonitor
+
+message UpdateObjectCountRequest {
+  int32 count = 1;  // Object count to set
+}
+
+message UpdateObjectCountResponse {
+  // Empty - no return value needed
+}
+
+message GetStatsRequest {
+  // Empty - no parameters needed
+}
+
+message GetStatsResponse {
+  int32 shard_id = 1;     // Shard ID
+  int32 object_count = 2;  // Object count for this shard
+}
+
+// Request/Response messages for NodeMonitor
+
+message GetNodeStatsRequest {
+  // Empty - no parameters needed
+}
+
+message GetNodeStatsResponse {
+  string status = 1;  // Status message
+}
+
+// Request/Response messages for GlobalMonitor
+
+message GetUptimeRequest {
+  // Empty - no parameters needed
+}
+
+message GetUptimeResponse {
+  string uptime = 1;  // Uptime duration as string
+}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/goverseapi"
+	pb "github.com/xiaonanln/goverse/samples/sharding_demo/proto"
 )
 
 // SimpleCounter is a basic counter object that demonstrates normal object distribution
@@ -32,17 +33,17 @@ func (c *SimpleCounter) OnCreated() {
 	c.Logger.Infof("SimpleCounter %s created", c.Id())
 }
 
-func (c *SimpleCounter) Increment(ctx context.Context) (int64, error) {
+func (c *SimpleCounter) Increment(ctx context.Context, req *pb.IncrementRequest) (*pb.IncrementResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.value++
-	return c.value, nil
+	return &pb.IncrementResponse{Value: c.value}, nil
 }
 
-func (c *SimpleCounter) GetValue(ctx context.Context) (int64, error) {
+func (c *SimpleCounter) GetValue(ctx context.Context, req *pb.GetValueRequest) (*pb.GetValueResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.value, nil
+	return &pb.GetValueResponse{Value: c.value}, nil
 }
 
 // ShardMonitor tracks statistics for a specific shard (per-shard auto-load object)
@@ -64,17 +65,17 @@ func (s *ShardMonitor) OnCreated() {
 	s.Logger.Infof("ShardMonitor created for shard %d", s.shardID)
 }
 
-func (s *ShardMonitor) UpdateObjectCount(ctx context.Context, count int) error {
+func (s *ShardMonitor) UpdateObjectCount(ctx context.Context, req *pb.UpdateObjectCountRequest) (*pb.UpdateObjectCountResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.objectCount = count
-	return nil
+	s.objectCount = int(req.Count)
+	return &pb.UpdateObjectCountResponse{}, nil
 }
 
-func (s *ShardMonitor) GetStats(ctx context.Context) (int, int, error) {
+func (s *ShardMonitor) GetStats(ctx context.Context, req *pb.GetStatsRequest) (*pb.GetStatsResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.shardID, s.objectCount, nil
+	return &pb.GetStatsResponse{ShardId: int32(s.shardID), ObjectCount: int32(s.objectCount)}, nil
 }
 
 // NodeMonitor aggregates statistics and creates counters (simulated per-node via multiple auto-load entries)
@@ -150,10 +151,10 @@ func (n *NodeMonitor) createCounters() {
 	}
 }
 
-func (n *NodeMonitor) GetStats(ctx context.Context) (string, error) {
+func (n *NodeMonitor) GetStats(ctx context.Context, req *pb.GetNodeStatsRequest) (*pb.GetNodeStatsResponse, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return fmt.Sprintf("NodeMonitor %s active", n.nodeID), nil
+	return &pb.GetNodeStatsResponse{Status: fmt.Sprintf("NodeMonitor %s active", n.nodeID)}, nil
 }
 
 // GlobalMonitor provides global statistics and logging (singleton auto-load)
@@ -195,11 +196,11 @@ func (g *GlobalMonitor) logGlobalStats() {
 	g.Logger.Infof("Global Stats: Uptime=%v", uptime.Round(time.Second))
 }
 
-func (g *GlobalMonitor) GetUptime(ctx context.Context) (string, error) {
+func (g *GlobalMonitor) GetUptime(ctx context.Context, req *pb.GetUptimeRequest) (*pb.GetUptimeResponse, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	uptime := time.Since(g.startTime)
-	return uptime.String(), nil
+	return &pb.GetUptimeResponse{Uptime: uptime.String()}, nil
 }
 
 func main() {
