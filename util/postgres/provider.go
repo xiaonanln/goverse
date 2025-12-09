@@ -42,13 +42,13 @@ func (p *PostgresPersistenceProvider) InsertOrGetReliableCall(ctx context.Contex
 }
 
 // UpdateReliableCallStatus updates the status and result of a reliable call
-func (p *PostgresPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error {
-	return p.db.UpdateReliableCallStatus(ctx, id, status, resultData, errorMessage)
+func (p *PostgresPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, seq int64, status string, resultData []byte, errorMessage string) error {
+	return p.db.UpdateReliableCallStatus(ctx, seq, status, resultData, errorMessage)
 }
 
 // GetPendingReliableCalls retrieves pending reliable calls for an object
-func (p *PostgresPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*object.ReliableCall, error) {
-	return p.db.GetPendingReliableCalls(ctx, objectID, nextRcid)
+func (p *PostgresPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*object.ReliableCall, error) {
+	return p.db.GetPendingReliableCalls(ctx, objectID, nextRcseq)
 }
 
 // GetReliableCall retrieves a reliable call by its request ID

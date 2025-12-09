@@ -491,8 +491,8 @@ func TestInsertOrGetReliableCall_Integration(t *testing.T) {
 		t.Fatalf("InsertOrGetReliableCall() first call failed: %v", err)
 	}
 
-	if rc1.RequestID != requestID {
-		t.Fatalf("RequestID = %s, want %s", rc1.RequestID, requestID)
+	if rc1.CallID != requestID {
+		t.Fatalf("CallID = %s, want %s", rc1.CallID, requestID)
 	}
 	if rc1.ObjectID != objectID {
 		t.Fatalf("ObjectID = %s, want %s", rc1.ObjectID, objectID)
@@ -507,8 +507,8 @@ func TestInsertOrGetReliableCall_Integration(t *testing.T) {
 		t.Fatalf("InsertOrGetReliableCall() second call failed: %v", err)
 	}
 
-	if rc2.ID != rc1.ID {
-		t.Fatalf("Second call returned different ID: %d, want %d", rc2.ID, rc1.ID)
+	if rc2.Seq != rc1.Seq {
+		t.Fatalf("Second call returned different Seq: %d, want %d", rc2.Seq, rc1.Seq)
 	}
 }
 
@@ -541,7 +541,7 @@ func TestUpdateReliableCallStatus_Integration(t *testing.T) {
 
 	// Update status to completed
 	resultData := []byte("result-data")
-	err = db.UpdateReliableCallStatus(ctx, rc.ID, "completed", resultData, "")
+	err = db.UpdateReliableCallStatus(ctx, rc.Seq, "completed", resultData, "")
 	if err != nil {
 		t.Fatalf("UpdateReliableCallStatus() failed: %v", err)
 	}
@@ -599,12 +599,12 @@ func TestGetPendingReliableCalls_Integration(t *testing.T) {
 	}
 
 	// Update one to completed
-	err = db.UpdateReliableCallStatus(ctx, rc2.ID, "completed", []byte("result"), "")
+	err = db.UpdateReliableCallStatus(ctx, rc2.Seq, "completed", []byte("result"), "")
 	if err != nil {
 		t.Fatalf("UpdateReliableCallStatus() failed: %v", err)
 	}
 
-	// Get pending calls with nextRcid = 0
+	// Get pending calls with nextRcseq = 0
 	pending, err := db.GetPendingReliableCalls(ctx, objectID, 0)
 	if err != nil {
 		t.Fatalf("GetPendingReliableCalls() failed: %v", err)
@@ -615,24 +615,24 @@ func TestGetPendingReliableCalls_Integration(t *testing.T) {
 	}
 
 	// Verify order and content
-	if pending[0].ID != rc1.ID {
-		t.Fatalf("First pending call ID = %d, want %d", pending[0].ID, rc1.ID)
+	if pending[0].Seq != rc1.Seq {
+		t.Fatalf("First pending call Seq = %d, want %d", pending[0].Seq, rc1.Seq)
 	}
-	if pending[1].ID != rc3.ID {
-		t.Fatalf("Second pending call ID = %d, want %d", pending[1].ID, rc3.ID)
+	if pending[1].Seq != rc3.Seq {
+		t.Fatalf("Second pending call Seq = %d, want %d", pending[1].Seq, rc3.Seq)
 	}
 
-	// Get pending calls with nextRcid = rc1.ID (should only return rc3)
-	pending2, err := db.GetPendingReliableCalls(ctx, objectID, rc1.ID)
+	// Get pending calls with nextRcseq = rc1.Seq (should only return rc3)
+	pending2, err := db.GetPendingReliableCalls(ctx, objectID, rc1.Seq)
 	if err != nil {
-		t.Fatalf("GetPendingReliableCalls() with nextRcid failed: %v", err)
+		t.Fatalf("GetPendingReliableCalls() with nextRcseq failed: %v", err)
 	}
 
 	if len(pending2) != 1 {
-		t.Fatalf("GetPendingReliableCalls() with nextRcid returned %d calls, want 1", len(pending2))
+		t.Fatalf("GetPendingReliableCalls() with nextRcseq returned %d calls, want 1", len(pending2))
 	}
-	if pending2[0].ID != rc3.ID {
-		t.Fatalf("Pending call ID = %d, want %d", pending2[0].ID, rc3.ID)
+	if pending2[0].Seq != rc3.Seq {
+		t.Fatalf("Pending call Seq = %d, want %d", pending2[0].Seq, rc3.Seq)
 	}
 }
 
@@ -674,11 +674,11 @@ func TestGetReliableCall_Integration(t *testing.T) {
 		t.Fatalf("GetReliableCall() failed: %v", err)
 	}
 
-	if retrieved.ID != inserted.ID {
-		t.Fatalf("ID = %d, want %d", retrieved.ID, inserted.ID)
+	if retrieved.Seq != inserted.Seq {
+		t.Fatalf("Seq = %d, want %d", retrieved.Seq, inserted.Seq)
 	}
-	if retrieved.RequestID != requestID {
-		t.Fatalf("RequestID = %s, want %s", retrieved.RequestID, requestID)
+	if retrieved.CallID != requestID {
+		t.Fatalf("CallID = %s, want %s", retrieved.CallID, requestID)
 	}
 	if retrieved.ObjectID != objectID {
 		t.Fatalf("ObjectID = %s, want %s", retrieved.ObjectID, objectID)

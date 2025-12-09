@@ -50,11 +50,11 @@ func (m *MockPersistenceProvider) InsertOrGetReliableCall(ctx context.Context, r
 	return nil, ErrObjectNotFound
 }
 
-func (m *MockPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error {
+func (m *MockPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, seq int64, status string, resultData []byte, errorMessage string) error {
 	return ErrObjectNotFound
 }
 
-func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*ReliableCall, error) {
+func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*ReliableCall, error) {
 	return nil, nil
 }
 
