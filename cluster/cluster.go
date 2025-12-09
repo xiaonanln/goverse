@@ -614,22 +614,78 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	return resp.Response, nil
 }
 
+// GenerateRequestID generates a deterministic request ID for use with ReliableCallObjectWithID
+// This allows users to control request IDs for exactly-once semantics
+// The ID is deterministic based on object ID, method, type, and request content
+func (c *Cluster) GenerateRequestID(objType string, id string, method string, request proto.Message) (string, error) {
+	// Marshal the request to Any for storage
+	var requestAny *anypb.Any
+	var err error
+	if request != nil {
+		requestAny, err = anypb.New(request)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal request to Any: %w", err)
+		}
+	}
+
+	// Marshal the Any to bytes for hashing
+	var requestData []byte
+	if requestAny != nil {
+		requestData, err = proto.Marshal(requestAny)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal request: %w", err)
+		}
+	}
+
+	// Generate a deterministic request ID based on call parameters
+	// Format: {objectID}:{method}:{type}:{requestHash}
+	requestIDBase := fmt.Sprintf("%s:%s:%s", id, method, objType)
+	if requestData != nil {
+		// Include request content hash for deterministic ID
+		requestIDBase = fmt.Sprintf("%s:%x", requestIDBase, requestData)
+	}
+	// Use UUID v5 (name-based) for deterministic yet unique IDs
+	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // DNS namespace UUID
+	requestID := uuid.NewSHA1(namespace, []byte(requestIDBase)).String()
+	
+	return requestID, nil
+}
+
 // ReliableCallObject implements exactly-once semantics for inter-node calls using a queue-based model
-// It uses the goverse_requests table for deduplication and sequential processing
+// It generates a deterministic request ID internally and calls ReliableCallObjectWithID
+// For more control over request IDs, use GenerateRequestID and ReliableCallObjectWithID
 func (c *Cluster) ReliableCallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+	// Generate request ID
+	requestID, err := c.GenerateRequestID(objType, id, method, request)
+	if err != nil {
+		return nil, err
+	}
+	
+	return c.ReliableCallObjectWithID(ctx, requestID, objType, id, method, request)
+}
+
+// ReliableCallObjectWithID implements exactly-once semantics with an explicit request ID
+// Use GenerateRequestID to create the request ID, or provide your own unique ID
+// The same request ID will always return the same result (deduplication)
+func (c *Cluster) ReliableCallObjectWithID(ctx context.Context, requestID string, objType string, id string, method string, request proto.Message) (proto.Message, error) {
 	// Get the database from the node's persistence provider
 	if !c.isNode() {
-		return nil, fmt.Errorf("ReliableCallObject can only be called from node clusters")
+		return nil, fmt.Errorf("ReliableCallObjectWithID can only be called from node clusters")
 	}
 
 	dbInterface := c.node.GetPostgresDB()
 	if dbInterface == nil {
-		return nil, fmt.Errorf("PostgreSQL database not configured - ReliableCallObject requires postgres persistence provider")
+		return nil, fmt.Errorf("PostgreSQL database not configured - ReliableCallObjectWithID requires postgres persistence provider")
 	}
 
 	db, ok := dbInterface.(*postgres.DB)
 	if !ok {
 		return nil, fmt.Errorf("persistence provider does not provide PostgreSQL database")
+	}
+
+	// Validate request ID
+	if requestID == "" {
+		return nil, fmt.Errorf("request_id cannot be empty")
 	}
 
 	// Marshal the request to Any for storage
@@ -650,19 +706,6 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, objType string, id str
 			return nil, fmt.Errorf("failed to marshal request: %w", err)
 		}
 	}
-
-	// Generate a deterministic request ID based on call parameters
-	// This ensures deduplication of identical calls
-	// Format: {objectID}:{method}:{requestHash}
-	requestIDBase := fmt.Sprintf("%s:%s:%s", id, method, objType)
-	if requestData != nil {
-		// Include request content hash for deterministic ID
-		requestIDBase = fmt.Sprintf("%s:%x", requestIDBase, requestData)
-	}
-	// Use UUID v5 (name-based) for deterministic yet unique IDs
-	// Using a namespace UUID to avoid collisions
-	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // DNS namespace UUID
-	requestID := uuid.NewSHA1(namespace, []byte(requestIDBase)).String()
 
 	// Check if this exact request already exists
 	existingReq, err := db.GetRequest(ctx, requestID)

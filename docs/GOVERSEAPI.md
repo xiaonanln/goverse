@@ -261,6 +261,103 @@ log.Printf("New value: %d", result.GetValue())
 
 ---
 
+### ReliableCallObject (Exactly-Once Semantics)
+
+```go
+func ReliableCallObject(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error)
+```
+
+Invokes a method with **exactly-once semantics**. The same request will be processed only once, even if retried multiple times. Request ID is generated deterministically based on the call parameters.
+
+```go
+req := &TransferRequest{
+    FromAccount: "acc-123",
+    ToAccount:   "acc-456",
+    Amount:      100.00,
+}
+resp, err := goverseapi.ReliableCallObject(ctx, "BankAccount", "acc-123", "Transfer", req)
+if err != nil {
+    log.Printf("Transfer failed: %v", err)
+    return
+}
+```
+
+**Requirements:**
+- PostgreSQL persistence provider must be configured
+- `InitSchema()` must be called on the database
+
+**Use Cases:**
+- Bank transfers, payment processing
+- Order creation, inventory updates
+- Any state-changing operation that must not be duplicated
+
+---
+
+### GenerateRequestID
+
+```go
+func GenerateRequestID(objType, id string, method string, request proto.Message) (string, error)
+```
+
+Generates a deterministic request ID for use with `ReliableCallObjectWithID`. This allows you to control when the request ID is generated and reuse it across multiple attempts.
+
+```go
+// Generate request ID first
+requestID, err := goverseapi.GenerateRequestID("BankAccount", "acc-123", "Transfer", req)
+if err != nil {
+    return err
+}
+
+// Use the same request ID for multiple attempts
+for attempt := 0; attempt < 3; attempt++ {
+    resp, err := goverseapi.ReliableCallObjectWithID(ctx, requestID, "BankAccount", "acc-123", "Transfer", req)
+    if err == nil {
+        break // Success
+    }
+    time.Sleep(time.Second)
+}
+```
+
+**Returns:**
+- Deterministic UUID (same parameters = same ID)
+- Error if marshaling fails
+
+---
+
+### ReliableCallObjectWithID
+
+```go
+func ReliableCallObjectWithID(ctx context.Context, requestID string, objType, id string, method string, request proto.Message) (proto.Message, error)
+```
+
+Invokes a method with an explicit request ID. Use this when you need full control over the request ID, such as:
+- Coordinating retries across process restarts
+- Using your own request ID format
+- Logging/tracing with a specific ID
+
+```go
+// Option 1: Generate deterministic ID
+requestID, err := goverseapi.GenerateRequestID("BankAccount", "acc-123", "Transfer", req)
+if err != nil {
+    return err
+}
+
+// Option 2: Use your own ID (must be unique for this operation)
+// requestID := fmt.Sprintf("transfer-%s-%d", userID, timestamp)
+
+resp, err := goverseapi.ReliableCallObjectWithID(ctx, requestID, "BankAccount", "acc-123", "Transfer", req)
+```
+
+**Parameters:**
+- `requestID`: Unique identifier for this request (used for deduplication)
+- Other parameters same as `CallObject`
+
+**Important:** The same `requestID` will always return the same result. Choose your ID strategy carefully:
+- Use `GenerateRequestID` for deterministic deduplication based on parameters
+- Use custom IDs when you need external coordination or specific ID formats
+
+---
+
 ## Push Messaging
 
 ### PushMessageToClient
