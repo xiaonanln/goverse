@@ -92,6 +92,22 @@ func (m *MockPersistenceProvider) GetStorageCount() int {
 	return len(m.storage)
 }
 
+func (m *MockPersistenceProvider) InsertOrGetReliableCall(ctx context.Context, requestID string, objectID string, objectType string, methodName string, requestData []byte) (*object.ReliableCall, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*object.ReliableCall, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*object.ReliableCall, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 // TestPersistentObject for testing
 type TestPersistentObject struct {
 	object.BaseObject

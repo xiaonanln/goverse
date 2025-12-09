@@ -46,6 +46,22 @@ func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID str
 	return nil
 }
 
+func (m *MockPersistenceProvider) InsertOrGetReliableCall(ctx context.Context, requestID string, objectID string, objectType string, methodName string, requestData []byte) (*ReliableCall, error) {
+	return nil, ErrObjectNotFound
+}
+
+func (m *MockPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error {
+	return ErrObjectNotFound
+}
+
+func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*ReliableCall, error) {
+	return nil, nil
+}
+
+func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*ReliableCall, error) {
+	return nil, ErrObjectNotFound
+}
+
 // TestPersistentObject is a test implementation of a persistent object
 // It demonstrates the correct thread-safe implementation pattern
 type TestPersistentObject struct {

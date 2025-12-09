@@ -458,3 +458,259 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 		t.Fatal("Object should not exist after delete")
 	}
 }
+
+func TestInsertOrGetReliableCall_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	config := skipIfNoPostgres(t)
+
+	db, err := NewDB(config)
+	if err != nil {
+		t.Fatalf("NewDB() failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+	defer cleanupTestTable(t, db)
+
+	requestID := "test-req-123"
+	objectID := "test-obj-123"
+	objectType := "TestType"
+	methodName := "TestMethod"
+	requestData := []byte("test-data")
+
+	// First call should insert
+	rc1, err := db.InsertOrGetReliableCall(ctx, requestID, objectID, objectType, methodName, requestData)
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() first call failed: %v", err)
+	}
+
+	if rc1.RequestID != requestID {
+		t.Fatalf("RequestID = %s, want %s", rc1.RequestID, requestID)
+	}
+	if rc1.ObjectID != objectID {
+		t.Fatalf("ObjectID = %s, want %s", rc1.ObjectID, objectID)
+	}
+	if rc1.Status != "pending" {
+		t.Fatalf("Status = %s, want pending", rc1.Status)
+	}
+
+	// Second call with same requestID should return existing
+	rc2, err := db.InsertOrGetReliableCall(ctx, requestID, objectID, objectType, methodName, requestData)
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() second call failed: %v", err)
+	}
+
+	if rc2.ID != rc1.ID {
+		t.Fatalf("Second call returned different ID: %d, want %d", rc2.ID, rc1.ID)
+	}
+}
+
+func TestUpdateReliableCallStatus_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	config := skipIfNoPostgres(t)
+
+	db, err := NewDB(config)
+	if err != nil {
+		t.Fatalf("NewDB() failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+	defer cleanupTestTable(t, db)
+
+	// Create a reliable call
+	requestID := "test-req-update"
+	rc, err := db.InsertOrGetReliableCall(ctx, requestID, "obj-1", "TestType", "Method", []byte("data"))
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() failed: %v", err)
+	}
+
+	// Update status to completed
+	resultData := []byte("result-data")
+	err = db.UpdateReliableCallStatus(ctx, rc.ID, "completed", resultData, "")
+	if err != nil {
+		t.Fatalf("UpdateReliableCallStatus() failed: %v", err)
+	}
+
+	// Verify update
+	updated, err := db.GetReliableCall(ctx, requestID)
+	if err != nil {
+		t.Fatalf("GetReliableCall() failed: %v", err)
+	}
+
+	if updated.Status != "completed" {
+		t.Fatalf("Status = %s, want completed", updated.Status)
+	}
+	if string(updated.ResultData) != string(resultData) {
+		t.Fatalf("ResultData = %s, want %s", string(updated.ResultData), string(resultData))
+	}
+}
+
+func TestGetPendingReliableCalls_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	config := skipIfNoPostgres(t)
+
+	db, err := NewDB(config)
+	if err != nil {
+		t.Fatalf("NewDB() failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+	defer cleanupTestTable(t, db)
+
+	objectID := "test-obj-pending"
+
+	// Insert multiple calls
+	rc1, err := db.InsertOrGetReliableCall(ctx, "req-1", objectID, "Type", "Method", []byte("data1"))
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() req-1 failed: %v", err)
+	}
+
+	rc2, err := db.InsertOrGetReliableCall(ctx, "req-2", objectID, "Type", "Method", []byte("data2"))
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() req-2 failed: %v", err)
+	}
+
+	rc3, err := db.InsertOrGetReliableCall(ctx, "req-3", objectID, "Type", "Method", []byte("data3"))
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() req-3 failed: %v", err)
+	}
+
+	// Update one to completed
+	err = db.UpdateReliableCallStatus(ctx, rc2.ID, "completed", []byte("result"), "")
+	if err != nil {
+		t.Fatalf("UpdateReliableCallStatus() failed: %v", err)
+	}
+
+	// Get pending calls with nextRcid = 0
+	pending, err := db.GetPendingReliableCalls(ctx, objectID, 0)
+	if err != nil {
+		t.Fatalf("GetPendingReliableCalls() failed: %v", err)
+	}
+
+	if len(pending) != 2 {
+		t.Fatalf("GetPendingReliableCalls() returned %d calls, want 2", len(pending))
+	}
+
+	// Verify order and content
+	if pending[0].ID != rc1.ID {
+		t.Fatalf("First pending call ID = %d, want %d", pending[0].ID, rc1.ID)
+	}
+	if pending[1].ID != rc3.ID {
+		t.Fatalf("Second pending call ID = %d, want %d", pending[1].ID, rc3.ID)
+	}
+
+	// Get pending calls with nextRcid = rc1.ID (should only return rc3)
+	pending2, err := db.GetPendingReliableCalls(ctx, objectID, rc1.ID)
+	if err != nil {
+		t.Fatalf("GetPendingReliableCalls() with nextRcid failed: %v", err)
+	}
+
+	if len(pending2) != 1 {
+		t.Fatalf("GetPendingReliableCalls() with nextRcid returned %d calls, want 1", len(pending2))
+	}
+	if pending2[0].ID != rc3.ID {
+		t.Fatalf("Pending call ID = %d, want %d", pending2[0].ID, rc3.ID)
+	}
+}
+
+func TestGetReliableCall_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	config := skipIfNoPostgres(t)
+
+	db, err := NewDB(config)
+	if err != nil {
+		t.Fatalf("NewDB() failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+	defer cleanupTestTable(t, db)
+
+	requestID := "test-req-get"
+	objectID := "test-obj-get"
+	objectType := "TestType"
+	methodName := "TestMethod"
+	requestData := []byte("test-data")
+
+	// Insert a call
+	inserted, err := db.InsertOrGetReliableCall(ctx, requestID, objectID, objectType, methodName, requestData)
+	if err != nil {
+		t.Fatalf("InsertOrGetReliableCall() failed: %v", err)
+	}
+
+	// Get by request ID
+	retrieved, err := db.GetReliableCall(ctx, requestID)
+	if err != nil {
+		t.Fatalf("GetReliableCall() failed: %v", err)
+	}
+
+	if retrieved.ID != inserted.ID {
+		t.Fatalf("ID = %d, want %d", retrieved.ID, inserted.ID)
+	}
+	if retrieved.RequestID != requestID {
+		t.Fatalf("RequestID = %s, want %s", retrieved.RequestID, requestID)
+	}
+	if retrieved.ObjectID != objectID {
+		t.Fatalf("ObjectID = %s, want %s", retrieved.ObjectID, objectID)
+	}
+	if string(retrieved.RequestData) != string(requestData) {
+		t.Fatalf("RequestData = %s, want %s", string(retrieved.RequestData), string(requestData))
+	}
+}
+
+func TestGetReliableCall_NotFound_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	config := skipIfNoPostgres(t)
+
+	db, err := NewDB(config)
+	if err != nil {
+		t.Fatalf("NewDB() failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+	defer cleanupTestTable(t, db)
+
+	// Try to get non-existent call
+	_, err = db.GetReliableCall(ctx, "non-existent-req")
+	if err == nil {
+		t.Fatal("GetReliableCall() should return error for non-existent request")
+	}
+}
