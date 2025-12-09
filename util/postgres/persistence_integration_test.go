@@ -31,7 +31,7 @@ func TestSaveObject_Integration(t *testing.T) {
 	objectType := "TestType"
 	data := []byte(`{"name": "test", "value": 42}`)
 
-	err = db.SaveObject(ctx, objectID, objectType, data)
+	err = db.SaveObject(ctx, objectID, objectType, data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() failed: %v", err)
 	}
@@ -71,26 +71,29 @@ func TestSaveObject_Update_Integration(t *testing.T) {
 
 	// Save initial version
 	data1 := []byte(`{"version": 1}`)
-	err = db.SaveObject(ctx, objectID, objectType, data1)
+	err = db.SaveObject(ctx, objectID, objectType, data1, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() initial save failed: %v", err)
 	}
 
 	// Update with new data
 	data2 := []byte(`{"version": 2}`)
-	err = db.SaveObject(ctx, objectID, objectType, data2)
+	err = db.SaveObject(ctx, objectID, objectType, data2, 5)
 	if err != nil {
 		t.Fatalf("SaveObject() update failed: %v", err)
 	}
 
 	// Load and verify updated data
-	loadedData, err := db.LoadObject(ctx, objectID)
+	loadedData, nextRcid, err := db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("LoadObject() failed: %v", err)
 	}
 
 	if string(loadedData) != string(data2) {
 		t.Fatalf("LoadObject() returned %s, want %s", string(loadedData), string(data2))
+	}
+	if nextRcid != 5 {
+		t.Fatalf("LoadObject() returned next_rcid=%d, want 5", nextRcid)
 	}
 }
 
@@ -119,13 +122,13 @@ func TestLoadObject_Integration(t *testing.T) {
 	data := []byte(`{"key": "value"}`)
 
 	// Save object first
-	err = db.SaveObject(ctx, objectID, objectType, data)
+	err = db.SaveObject(ctx, objectID, objectType, data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() failed: %v", err)
 	}
 
 	// Load object
-	loadedData, err := db.LoadObject(ctx, objectID)
+	loadedData, _, err := db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("LoadObject() failed: %v", err)
 	}
@@ -156,7 +159,7 @@ func TestLoadObject_NotFound_Integration(t *testing.T) {
 	defer cleanupTestTable(t, db)
 
 	// Try to load non-existent object
-	_, err = db.LoadObject(ctx, "non-existent-id")
+	_, _, err = db.LoadObject(ctx, "non-existent-id")
 	if err == nil {
 		t.Fatal("LoadObject() should return error for non-existent object")
 	}
@@ -187,7 +190,7 @@ func TestDeleteObject_Integration(t *testing.T) {
 	data := []byte(`{"key": "value"}`)
 
 	// Save object
-	err = db.SaveObject(ctx, objectID, objectType, data)
+	err = db.SaveObject(ctx, objectID, objectType, data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() failed: %v", err)
 	}
@@ -269,7 +272,7 @@ func TestObjectExists_Integration(t *testing.T) {
 	}
 
 	// Save object
-	err = db.SaveObject(ctx, objectID, objectType, data)
+	err = db.SaveObject(ctx, objectID, objectType, data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() failed: %v", err)
 	}
@@ -317,14 +320,14 @@ func TestListObjectsByType_Integration(t *testing.T) {
 	}
 
 	for _, obj := range objects {
-		err = db.SaveObject(ctx, obj.id, objectType, obj.data)
+		err = db.SaveObject(ctx, obj.id, objectType, obj.data, 0)
 		if err != nil {
 			t.Fatalf("SaveObject(%s) failed: %v", obj.id, err)
 		}
 	}
 
 	// Save an object of a different type
-	err = db.SaveObject(ctx, "other-obj", "OtherType", []byte(`{}`))
+	err = db.SaveObject(ctx, "other-obj", "OtherType", []byte(`{}`), 0)
 	if err != nil {
 		t.Fatalf("SaveObject(other-obj) failed: %v", err)
 	}
@@ -405,33 +408,39 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 	updatedData := []byte(`{"status": "updated"}`)
 
 	// 1. Create
-	err = db.SaveObject(ctx, objectID, objectType, initialData)
+	err = db.SaveObject(ctx, objectID, objectType, initialData, 0)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
 	// 2. Read
-	data, err := db.LoadObject(ctx, objectID)
+	data, nextRcid, err := db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if string(data) != string(initialData) {
 		t.Fatalf("Read returned %s, want %s", string(data), string(initialData))
 	}
+	if nextRcid != 0 {
+		t.Fatalf("Read returned next_rcid=%d, want 0", nextRcid)
+	}
 
 	// 3. Update
-	err = db.SaveObject(ctx, objectID, objectType, updatedData)
+	err = db.SaveObject(ctx, objectID, objectType, updatedData, 10)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
 	// 4. Verify update
-	data, err = db.LoadObject(ctx, objectID)
+	data, nextRcid, err = db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("Read after update failed: %v", err)
 	}
 	if string(data) != string(updatedData) {
 		t.Fatalf("Read after update returned %s, want %s", string(data), string(updatedData))
+	}
+	if nextRcid != 10 {
+		t.Fatalf("Read after update returned next_rcid=%d, want 10", nextRcid)
 	}
 
 	// 5. List
