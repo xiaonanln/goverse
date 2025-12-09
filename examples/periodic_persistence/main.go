@@ -63,22 +63,22 @@ func (c *Counter) FromData(data proto.Message) error {
 // MockPersistenceProvider for this example (in production, use PostgreSQL)
 type MockPersistenceProvider struct {
 	storage   map[string][]byte
-	nextRcids map[string]int64
+	nextRcseqs map[string]int64
 	saveCount int
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
 		storage:   make(map[string][]byte),
-		nextRcids: make(map[string]int64),
+		nextRcseqs: make(map[string]int64),
 	}
 }
 
-func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcid int64) error {
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcseq int64) error {
 	m.storage[objectID] = data
-	m.nextRcids[objectID] = nextRcid
+	m.nextRcseqs[objectID] = nextRcseq
 	m.saveCount++
-	fmt.Printf("  ✓ Saved %s (type: %s) - %d bytes, next_rcid=%d\n", objectID, objectType, len(data), nextRcid)
+	fmt.Printf("  ✓ Saved %s (type: %s) - %d bytes, next_rcseq=%d\n", objectID, objectType, len(data), nextRcseq)
 	return nil
 }
 
@@ -87,8 +87,8 @@ func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID strin
 	if !ok {
 		return nil, 0, fmt.Errorf("object not found: %s", objectID)
 	}
-	nextRcid := m.nextRcids[objectID]
-	return data, nextRcid, nil
+	nextRcseq := m.nextRcseqs[objectID]
+	return data, nextRcseq, nil
 }
 
 func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {

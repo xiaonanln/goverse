@@ -15,7 +15,7 @@ import (
 // MockPersistenceProvider for testing
 type MockPersistenceProvider struct {
 	storage    map[string][]byte
-	nextRcids  map[string]int64
+	nextRcseqs  map[string]int64
 	mu         sync.Mutex
 	saveCount  int
 	SaveErr    error
@@ -25,11 +25,11 @@ type MockPersistenceProvider struct {
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
 		storage:   make(map[string][]byte),
-		nextRcids: make(map[string]int64),
+		nextRcseqs: make(map[string]int64),
 	}
 }
 
-func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcid int64) error {
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcseq int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -37,7 +37,7 @@ func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, obje
 		return m.SaveErr
 	}
 	m.storage[objectID] = data
-	m.nextRcids[objectID] = nextRcid
+	m.nextRcseqs[objectID] = nextRcseq
 	m.saveCount++
 	return nil
 }
@@ -53,8 +53,8 @@ func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID strin
 	if !ok {
 		return nil, 0, nil
 	}
-	nextRcid := m.nextRcids[objectID]
-	return data, nextRcid, nil
+	nextRcseq := m.nextRcseqs[objectID]
+	return data, nextRcseq, nil
 }
 
 func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {

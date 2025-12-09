@@ -5,64 +5,64 @@ import (
 	"testing"
 )
 
-func TestNextRcid_DefaultValue(t *testing.T) {
+func TestNextRcseq_DefaultValue(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id")
 
-	// Verify default next_rcid is 0
-	if obj.GetNextRcid() != 0 {
-		t.Fatalf("GetNextRcid() = %d; want 0", obj.GetNextRcid())
+	// Verify default next_rcseq is 0
+	if obj.GetNextRcseq() != 0 {
+		t.Fatalf("GetNextRcseq() = %d; want 0", obj.GetNextRcseq())
 	}
 }
 
-func TestNextRcid_SetAndGet(t *testing.T) {
+func TestNextRcseq_SetAndGet(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id")
 
-	// Set next_rcid
-	obj.SetNextRcid(42)
+	// Set next_rcseq
+	obj.SetNextRcseq(42)
 
 	// Verify it was set correctly
-	if obj.GetNextRcid() != 42 {
-		t.Fatalf("GetNextRcid() = %d; want 42", obj.GetNextRcid())
+	if obj.GetNextRcseq() != 42 {
+		t.Fatalf("GetNextRcseq() = %d; want 42", obj.GetNextRcseq())
 	}
 
-	// Update next_rcid
-	obj.SetNextRcid(100)
+	// Update next_rcseq
+	obj.SetNextRcseq(100)
 
 	// Verify it was updated
-	if obj.GetNextRcid() != 100 {
-		t.Fatalf("GetNextRcid() = %d; want 100", obj.GetNextRcid())
+	if obj.GetNextRcseq() != 100 {
+		t.Fatalf("GetNextRcseq() = %d; want 100", obj.GetNextRcseq())
 	}
 }
 
-func TestNextRcid_Persistence(t *testing.T) {
+func TestNextRcseq_Persistence(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	ctx := context.Background()
 
-	// Create and save object with next_rcid
+	// Create and save object with next_rcseq
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id")
 	obj.CustomData = "test-data"
-	obj.SetNextRcid(123)
+	obj.SetNextRcseq(123)
 
 	data, err := obj.ToData()
 	if err != nil {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcid())
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcseq())
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
 
-	// Verify next_rcid was saved
-	savedNextRcid, ok := provider.nextRcids["test-id"]
+	// Verify next_rcseq was saved
+	savedNextRcseq, ok := provider.nextRcseqs["test-id"]
 	if !ok {
-		t.Fatal("next_rcid was not saved")
+		t.Fatal("next_rcseq was not saved")
 	}
-	if savedNextRcid != 123 {
-		t.Fatalf("Saved next_rcid = %d; want 123", savedNextRcid)
+	if savedNextRcseq != 123 {
+		t.Fatalf("Saved next_rcseq = %d; want 123", savedNextRcseq)
 	}
 
 	// Load object
@@ -74,14 +74,14 @@ func TestNextRcid_Persistence(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	nextRcid, err := LoadObject(ctx, provider, "test-id", loadedData)
+	nextRcseq, err := LoadObject(ctx, provider, "test-id", loadedData)
 	if err != nil {
 		t.Fatalf("LoadObject() returned error: %v", err)
 	}
 
-	// Verify next_rcid was loaded correctly
-	if nextRcid != 123 {
-		t.Fatalf("Loaded next_rcid = %d; want 123", nextRcid)
+	// Verify next_rcseq was loaded correctly
+	if nextRcseq != 123 {
+		t.Fatalf("Loaded next_rcseq = %d; want 123", nextRcseq)
 	}
 
 	// Restore object state
@@ -90,19 +90,19 @@ func TestNextRcid_Persistence(t *testing.T) {
 		t.Fatalf("FromData() returned error: %v", err)
 	}
 
-	// Set the loaded next_rcid on the object
-	loadedObj.SetNextRcid(nextRcid)
+	// Set the loaded next_rcseq on the object
+	loadedObj.SetNextRcseq(nextRcseq)
 
-	// Verify object state and next_rcid
+	// Verify object state and next_rcseq
 	if loadedObj.CustomData != "test-data" {
 		t.Fatalf("CustomData = %s; want test-data", loadedObj.CustomData)
 	}
-	if loadedObj.GetNextRcid() != 123 {
-		t.Fatalf("GetNextRcid() = %d; want 123", loadedObj.GetNextRcid())
+	if loadedObj.GetNextRcseq() != 123 {
+		t.Fatalf("GetNextRcseq() = %d; want 123", loadedObj.GetNextRcseq())
 	}
 }
 
-func TestNextRcid_UpdatePersistence(t *testing.T) {
+func TestNextRcseq_UpdatePersistence(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	ctx := context.Background()
 
@@ -110,33 +110,33 @@ func TestNextRcid_UpdatePersistence(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "test-id")
 	obj.CustomData = "initial"
-	obj.SetNextRcid(10)
+	obj.SetNextRcseq(10)
 
 	data, err := obj.ToData()
 	if err != nil {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcid())
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcseq())
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
 
-	// Update object and next_rcid
+	// Update object and next_rcseq
 	obj.CustomData = "updated"
-	obj.SetNextRcid(20)
+	obj.SetNextRcseq(20)
 
 	data, err = obj.ToData()
 	if err != nil {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcid())
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcseq())
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
 
-	// Load and verify updated next_rcid
+	// Load and verify updated next_rcseq
 	loadedObj := &TestPersistentObject{}
 	loadedObj.OnInit(loadedObj, "test-id")
 
@@ -145,13 +145,13 @@ func TestNextRcid_UpdatePersistence(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	nextRcid, err := LoadObject(ctx, provider, "test-id", loadedData)
+	nextRcseq, err := LoadObject(ctx, provider, "test-id", loadedData)
 	if err != nil {
 		t.Fatalf("LoadObject() returned error: %v", err)
 	}
 
-	if nextRcid != 20 {
-		t.Fatalf("Loaded next_rcid = %d; want 20", nextRcid)
+	if nextRcseq != 20 {
+		t.Fatalf("Loaded next_rcseq = %d; want 20", nextRcseq)
 	}
 
 	err = loadedObj.FromData(loadedData)
@@ -164,7 +164,7 @@ func TestNextRcid_UpdatePersistence(t *testing.T) {
 	}
 }
 
-func TestNextRcid_LoadObjectNotFound(t *testing.T) {
+func TestNextRcseq_LoadObjectNotFound(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	ctx := context.Background()
 
@@ -176,26 +176,26 @@ func TestNextRcid_LoadObjectNotFound(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	nextRcid, err := LoadObject(ctx, provider, "nonexistent-id", data)
+	nextRcseq, err := LoadObject(ctx, provider, "nonexistent-id", data)
 	if err == nil {
 		t.Fatal("LoadObject() should return error for nonexistent object")
 	}
 
-	// Verify next_rcid is 0 when object not found
-	if nextRcid != 0 {
-		t.Fatalf("next_rcid = %d; want 0 for nonexistent object", nextRcid)
+	// Verify next_rcseq is 0 when object not found
+	if nextRcseq != 0 {
+		t.Fatalf("next_rcseq = %d; want 0 for nonexistent object", nextRcseq)
 	}
 }
 
-func TestNextRcid_MultipleObjects(t *testing.T) {
+func TestNextRcseq_MultipleObjects(t *testing.T) {
 	provider := NewMockPersistenceProvider()
 	ctx := context.Background()
 
-	// Create and save multiple objects with different next_rcid values
+	// Create and save multiple objects with different next_rcseq values
 	objects := []struct {
 		id       string
 		data     string
-		nextRcid int64
+		nextRcseq int64
 	}{
 		{"obj-1", "data-1", 100},
 		{"obj-2", "data-2", 200},
@@ -206,14 +206,14 @@ func TestNextRcid_MultipleObjects(t *testing.T) {
 		obj := &TestPersistentObject{}
 		obj.OnInit(obj, tc.id)
 		obj.CustomData = tc.data
-		obj.SetNextRcid(tc.nextRcid)
+		obj.SetNextRcseq(tc.nextRcseq)
 
 		data, err := obj.ToData()
 		if err != nil {
 			t.Fatalf("ToData() returned error for %s: %v", tc.id, err)
 		}
 
-		err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcid())
+		err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, obj.GetNextRcseq())
 		if err != nil {
 			t.Fatalf("SaveObject() returned error for %s: %v", tc.id, err)
 		}
@@ -229,13 +229,13 @@ func TestNextRcid_MultipleObjects(t *testing.T) {
 			t.Fatalf("ToData() returned error for %s: %v", tc.id, err)
 		}
 
-		nextRcid, err := LoadObject(ctx, provider, tc.id, data)
+		nextRcseq, err := LoadObject(ctx, provider, tc.id, data)
 		if err != nil {
 			t.Fatalf("LoadObject() returned error for %s: %v", tc.id, err)
 		}
 
-		if nextRcid != tc.nextRcid {
-			t.Fatalf("Object %s: next_rcid = %d; want %d", tc.id, nextRcid, tc.nextRcid)
+		if nextRcseq != tc.nextRcseq {
+			t.Fatalf("Object %s: next_rcseq = %d; want %d", tc.id, nextRcseq, tc.nextRcseq)
 		}
 
 		err = obj.FromData(data)

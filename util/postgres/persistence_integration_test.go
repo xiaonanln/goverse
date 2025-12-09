@@ -84,7 +84,7 @@ func TestSaveObject_Update_Integration(t *testing.T) {
 	}
 
 	// Load and verify updated data
-	loadedData, nextRcid, err := db.LoadObject(ctx, objectID)
+	loadedData, nextRcseq, err := db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("LoadObject() failed: %v", err)
 	}
@@ -92,8 +92,8 @@ func TestSaveObject_Update_Integration(t *testing.T) {
 	if string(loadedData) != string(data2) {
 		t.Fatalf("LoadObject() returned %s, want %s", string(loadedData), string(data2))
 	}
-	if nextRcid != 5 {
-		t.Fatalf("LoadObject() returned next_rcid=%d, want 5", nextRcid)
+	if nextRcseq != 5 {
+		t.Fatalf("LoadObject() returned next_rcseq=%d, want 5", nextRcseq)
 	}
 }
 
@@ -414,15 +414,15 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 	}
 
 	// 2. Read
-	data, nextRcid, err := db.LoadObject(ctx, objectID)
+	data, nextRcseq, err := db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if string(data) != string(initialData) {
 		t.Fatalf("Read returned %s, want %s", string(data), string(initialData))
 	}
-	if nextRcid != 0 {
-		t.Fatalf("Read returned next_rcid=%d, want 0", nextRcid)
+	if nextRcseq != 0 {
+		t.Fatalf("Read returned next_rcseq=%d, want 0", nextRcseq)
 	}
 
 	// 3. Update
@@ -432,15 +432,15 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 	}
 
 	// 4. Verify update
-	data, nextRcid, err = db.LoadObject(ctx, objectID)
+	data, nextRcseq, err = db.LoadObject(ctx, objectID)
 	if err != nil {
 		t.Fatalf("Read after update failed: %v", err)
 	}
 	if string(data) != string(updatedData) {
 		t.Fatalf("Read after update returned %s, want %s", string(data), string(updatedData))
 	}
-	if nextRcid != 10 {
-		t.Fatalf("Read after update returned next_rcid=%d, want 10", nextRcid)
+	if nextRcseq != 10 {
+		t.Fatalf("Read after update returned next_rcseq=%d, want 10", nextRcseq)
 	}
 
 	// 5. List

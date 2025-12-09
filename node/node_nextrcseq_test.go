@@ -33,7 +33,7 @@ func (t *PersistentTestObject) FromData(data proto.Message) error {
 	return nil
 }
 
-func TestNode_NextRcid_DefaultValue(t *testing.T) {
+func TestNode_NextRcseq_DefaultValue(t *testing.T) {
 	ctx := context.Background()
 	node := NewNode("localhost:47000", testNumShards)
 
@@ -55,13 +55,13 @@ func TestNode_NextRcid_DefaultValue(t *testing.T) {
 		t.Fatal("Object was not created")
 	}
 
-	// Verify default next_rcid is 0
-	if obj.GetNextRcid() != 0 {
-		t.Fatalf("GetNextRcid() = %d; want 0", obj.GetNextRcid())
+	// Verify default next_rcseq is 0
+	if obj.GetNextRcseq() != 0 {
+		t.Fatalf("GetNextRcseq() = %d; want 0", obj.GetNextRcseq())
 	}
 }
 
-func TestNode_NextRcid_PersistenceNewObject(t *testing.T) {
+func TestNode_NextRcseq_PersistenceNewObject(t *testing.T) {
 	ctx := context.Background()
 	node := NewNode("localhost:47000", testNumShards)
 	provider := NewMockPersistenceProvider()
@@ -76,7 +76,7 @@ func TestNode_NextRcid_PersistenceNewObject(t *testing.T) {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
-	// Get object and set next_rcid
+	// Get object and set next_rcseq
 	node.objectsMu.RLock()
 	obj, exists := node.objects["test-obj-1"]
 	node.objectsMu.RUnlock()
@@ -85,24 +85,24 @@ func TestNode_NextRcid_PersistenceNewObject(t *testing.T) {
 		t.Fatal("Object was not created")
 	}
 
-	obj.SetNextRcid(42)
+	obj.SetNextRcseq(42)
 
 	// Save all objects
 	if err := node.SaveAllObjects(ctx); err != nil {
 		t.Fatalf("Failed to save objects: %v", err)
 	}
 
-	// Verify next_rcid was saved
-	savedNextRcid, ok := provider.nextRcids["test-obj-1"]
+	// Verify next_rcseq was saved
+	savedNextRcseq, ok := provider.nextRcseqs["test-obj-1"]
 	if !ok {
-		t.Fatal("next_rcid was not saved")
+		t.Fatal("next_rcseq was not saved")
 	}
-	if savedNextRcid != 42 {
-		t.Fatalf("Saved next_rcid = %d; want 42", savedNextRcid)
+	if savedNextRcseq != 42 {
+		t.Fatalf("Saved next_rcseq = %d; want 42", savedNextRcseq)
 	}
 }
 
-func TestNode_NextRcid_LoadFromPersistence(t *testing.T) {
+func TestNode_NextRcseq_LoadFromPersistence(t *testing.T) {
 	ctx := context.Background()
 	provider := NewMockPersistenceProvider()
 
@@ -143,17 +143,17 @@ func TestNode_NextRcid_LoadFromPersistence(t *testing.T) {
 		t.Fatal("Object was not created")
 	}
 
-	// Verify next_rcid was loaded
-	if obj.GetNextRcid() != 123 {
-		t.Fatalf("GetNextRcid() = %d; want 123", obj.GetNextRcid())
+	// Verify next_rcseq was loaded
+	if obj.GetNextRcseq() != 123 {
+		t.Fatalf("GetNextRcseq() = %d; want 123", obj.GetNextRcseq())
 	}
 }
 
-func TestNode_NextRcid_UpdateAndReload(t *testing.T) {
+func TestNode_NextRcseq_UpdateAndReload(t *testing.T) {
 	ctx := context.Background()
 	provider := NewMockPersistenceProvider()
 
-	// Create and save object with initial next_rcid
+	// Create and save object with initial next_rcseq
 	node1 := NewNode("localhost:47000", testNumShards)
 	node1.SetPersistenceProvider(provider)
 
@@ -168,7 +168,7 @@ func TestNode_NextRcid_UpdateAndReload(t *testing.T) {
 	obj1, _ := node1.objects["test-obj-1"]
 	node1.objectsMu.RUnlock()
 
-	obj1.SetNextRcid(100)
+	obj1.SetNextRcseq(100)
 
 	if err := node1.SaveAllObjects(ctx); err != nil {
 		t.Fatalf("Failed to save objects: %v", err)
@@ -189,13 +189,13 @@ func TestNode_NextRcid_UpdateAndReload(t *testing.T) {
 	obj2, _ := node2.objects["test-obj-1"]
 	node2.objectsMu.RUnlock()
 
-	// Verify next_rcid was restored
-	if obj2.GetNextRcid() != 100 {
-		t.Fatalf("GetNextRcid() = %d; want 100", obj2.GetNextRcid())
+	// Verify next_rcseq was restored
+	if obj2.GetNextRcseq() != 100 {
+		t.Fatalf("GetNextRcseq() = %d; want 100", obj2.GetNextRcseq())
 	}
 
-	// Update next_rcid on node2 and save
-	obj2.SetNextRcid(200)
+	// Update next_rcseq on node2 and save
+	obj2.SetNextRcseq(200)
 
 	if err := node2.SaveAllObjects(ctx); err != nil {
 		t.Fatalf("Failed to save objects: %v", err)
@@ -216,12 +216,12 @@ func TestNode_NextRcid_UpdateAndReload(t *testing.T) {
 	obj3, _ := node3.objects["test-obj-1"]
 	node3.objectsMu.RUnlock()
 
-	if obj3.GetNextRcid() != 200 {
-		t.Fatalf("GetNextRcid() = %d; want 200", obj3.GetNextRcid())
+	if obj3.GetNextRcseq() != 200 {
+		t.Fatalf("GetNextRcseq() = %d; want 200", obj3.GetNextRcseq())
 	}
 }
 
-func TestNode_NextRcid_PeriodicPersistence(t *testing.T) {
+func TestNode_NextRcseq_PeriodicPersistence(t *testing.T) {
 	ctx := context.Background()
 	provider := NewMockPersistenceProvider()
 
@@ -242,37 +242,37 @@ func TestNode_NextRcid_PeriodicPersistence(t *testing.T) {
 		t.Fatalf("Failed to create object: %v", err)
 	}
 
-	// Get object and set next_rcid
+	// Get object and set next_rcseq
 	node.objectsMu.RLock()
 	obj, _ := node.objects["test-obj-1"]
 	node.objectsMu.RUnlock()
 
-	obj.SetNextRcid(50)
+	obj.SetNextRcseq(50)
 
 	// Wait for periodic persistence to run
 	time.Sleep(300 * time.Millisecond)
 
-	// Verify next_rcid was saved by periodic persistence
-	savedNextRcid, ok := provider.nextRcids["test-obj-1"]
+	// Verify next_rcseq was saved by periodic persistence
+	savedNextRcseq, ok := provider.nextRcseqs["test-obj-1"]
 	if !ok {
-		t.Fatal("next_rcid was not saved by periodic persistence")
+		t.Fatal("next_rcseq was not saved by periodic persistence")
 	}
-	if savedNextRcid != 50 {
-		t.Fatalf("Saved next_rcid = %d; want 50", savedNextRcid)
+	if savedNextRcseq != 50 {
+		t.Fatalf("Saved next_rcseq = %d; want 50", savedNextRcseq)
 	}
 
-	// Update next_rcid
-	obj.SetNextRcid(75)
+	// Update next_rcseq
+	obj.SetNextRcseq(75)
 
 	// Wait for another periodic persistence cycle
 	time.Sleep(300 * time.Millisecond)
 
-	// Verify updated next_rcid was saved
-	savedNextRcid, ok = provider.nextRcids["test-obj-1"]
+	// Verify updated next_rcseq was saved
+	savedNextRcseq, ok = provider.nextRcseqs["test-obj-1"]
 	if !ok {
-		t.Fatal("next_rcid was not saved by periodic persistence")
+		t.Fatal("next_rcseq was not saved by periodic persistence")
 	}
-	if savedNextRcid != 75 {
-		t.Fatalf("Saved next_rcid = %d; want 75", savedNextRcid)
+	if savedNextRcseq != 75 {
+		t.Fatalf("Saved next_rcseq = %d; want 75", savedNextRcseq)
 	}
 }
