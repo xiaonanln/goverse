@@ -70,11 +70,11 @@ func (db *DB) InitSchema(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_goverse_objects_type ON goverse_objects(object_type);
 	CREATE INDEX IF NOT EXISTS idx_goverse_objects_updated_at ON goverse_objects(updated_at);
 
-	-- Requests table for exactly-once semantics in inter-object calls
-	CREATE TABLE IF NOT EXISTS goverse_requests (
-		-- Auto-incrementing integer ID for ordering and reference
-		id BIGSERIAL UNIQUE,
-		request_id VARCHAR(255) PRIMARY KEY,
+	-- Reliable calls table for exactly-once semantics in inter-object calls
+	CREATE TABLE IF NOT EXISTS goverse_reliable_calls (
+		-- Auto-incrementing integer sequence for ordering and reference
+		seq BIGSERIAL UNIQUE,
+		call_id VARCHAR(255) PRIMARY KEY,
 		object_id VARCHAR(255) NOT NULL,
 		object_type VARCHAR(255) NOT NULL,
 		method_name VARCHAR(255) NOT NULL,
@@ -92,11 +92,11 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		)
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_goverse_requests_object_status 
-		ON goverse_requests(object_id, status);
+	CREATE INDEX IF NOT EXISTS idx_goverse_reliable_calls_object_status 
+		ON goverse_reliable_calls(object_id, status);
 
 	-- Trigger function to automatically update updated_at timestamp
-	CREATE OR REPLACE FUNCTION update_goverse_requests_timestamp()
+	CREATE OR REPLACE FUNCTION update_goverse_reliable_calls_timestamp()
 	RETURNS TRIGGER AS $$
 	BEGIN
 		NEW.updated_at = CURRENT_TIMESTAMP;
@@ -107,11 +107,11 @@ func (db *DB) InitSchema(ctx context.Context) error {
 	-- Trigger to update timestamp on row updates
 	-- Note: PostgreSQL doesn't support CREATE OR REPLACE for triggers, so we use DROP IF EXISTS
 	-- This ensures the trigger is created correctly even if InitSchema is called multiple times
-	DROP TRIGGER IF EXISTS trigger_update_goverse_requests_timestamp ON goverse_requests;
-	CREATE TRIGGER trigger_update_goverse_requests_timestamp
-		BEFORE UPDATE ON goverse_requests
+	DROP TRIGGER IF EXISTS trigger_update_goverse_reliable_calls_timestamp ON goverse_reliable_calls;
+	CREATE TRIGGER trigger_update_goverse_reliable_calls_timestamp
+		BEFORE UPDATE ON goverse_reliable_calls
 		FOR EACH ROW
-		EXECUTE FUNCTION update_goverse_requests_timestamp();
+		EXECUTE FUNCTION update_goverse_reliable_calls_timestamp();
 	`
 
 	_, err := db.conn.ExecContext(ctx, schema)

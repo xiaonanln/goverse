@@ -160,7 +160,7 @@ func (db *DB) ListObjectsByType(ctx context.Context, objectType string) ([]*Obje
 // Uses INSERT ... ON CONFLICT to ensure atomicity and handle duplicates
 func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, objectID string, objectType string, methodName string, requestData []byte) (*object.ReliableCall, error) {
 	if requestID == "" {
-		return nil, fmt.Errorf("request_id cannot be empty")
+		return nil, fmt.Errorf("call_id cannot be empty")
 	}
 	if objectID == "" {
 		return nil, fmt.Errorf("object_id cannot be empty")
@@ -173,10 +173,10 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 	}
 
 	query := `
-		INSERT INTO goverse_requests (request_id, object_id, object_type, method_name, request_data, status, created_at, updated_at)
+		INSERT INTO goverse_reliable_calls (call_id, object_id, object_type, method_name, request_data, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, 'pending', $6, $6)
-		ON CONFLICT (request_id) DO NOTHING
-		RETURNING id, request_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
+		ON CONFLICT (call_id) DO NOTHING
+		RETURNING seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
 	`
 
 	now := time.Now()
@@ -185,8 +185,8 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 	var errorMessage sql.NullString
 
 	err := db.conn.QueryRowContext(ctx, query, requestID, objectID, objectType, methodName, requestData, now).Scan(
-		&rc.ID,
-		&rc.RequestID,
+		&rc.Seq,
+		&rc.CallID,
 		&rc.ObjectID,
 		&rc.ObjectType,
 		&rc.MethodName,
@@ -219,16 +219,16 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 // UpdateReliableCallStatus updates the status and result of a reliable call
 func (db *DB) UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error {
 	if id <= 0 {
-		return fmt.Errorf("id must be positive")
+		return fmt.Errorf("seq must be positive")
 	}
 	if status == "" {
 		return fmt.Errorf("status cannot be empty")
 	}
 
 	query := `
-		UPDATE goverse_requests
+		UPDATE goverse_reliable_calls
 		SET status = $1, result_data = $2, error_message = $3
-		WHERE id = $4
+		WHERE seq = $4
 	`
 
 	result, err := db.conn.ExecContext(ctx, query, status, resultData, errorMessage, id)
@@ -248,21 +248,21 @@ func (db *DB) UpdateReliableCallStatus(ctx context.Context, id int64, status str
 	return nil
 }
 
-// GetPendingReliableCalls retrieves pending reliable calls for an object, ordered by id
-// Only returns calls with id > nextRcid to support incremental processing
-func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*object.ReliableCall, error) {
+// GetPendingReliableCalls retrieves pending reliable calls for an object, ordered by seq
+// Only returns calls with seq > nextRcseq to support incremental processing
+func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*object.ReliableCall, error) {
 	if objectID == "" {
 		return nil, fmt.Errorf("object_id cannot be empty")
 	}
 
 	query := `
-		SELECT id, request_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
-		FROM goverse_requests
-		WHERE object_id = $1 AND id > $2 AND status = 'pending'
-		ORDER BY id ASC
+		SELECT seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
+		FROM goverse_reliable_calls
+		WHERE object_id = $1 AND seq > $2 AND status = 'pending'
+		ORDER BY seq ASC
 	`
 
-	rows, err := db.conn.QueryContext(ctx, query, objectID, nextRcid)
+	rows, err := db.conn.QueryContext(ctx, query, objectID, nextRcseq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending reliable calls: %w", err)
 	}
@@ -275,8 +275,8 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 		var errorMessage sql.NullString
 
 		err := rows.Scan(
-			&rc.ID,
-			&rc.RequestID,
+			&rc.Seq,
+			&rc.CallID,
 			&rc.ObjectID,
 			&rc.ObjectType,
 			&rc.MethodName,
@@ -311,13 +311,13 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 // GetReliableCall retrieves a reliable call by its request ID
 func (db *DB) GetReliableCall(ctx context.Context, requestID string) (*object.ReliableCall, error) {
 	if requestID == "" {
-		return nil, fmt.Errorf("request_id cannot be empty")
+		return nil, fmt.Errorf("call_id cannot be empty")
 	}
 
 	query := `
-		SELECT id, request_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
-		FROM goverse_requests
-		WHERE request_id = $1
+		SELECT seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
+		FROM goverse_reliable_calls
+		WHERE call_id = $1
 	`
 
 	var rc object.ReliableCall
@@ -325,8 +325,8 @@ func (db *DB) GetReliableCall(ctx context.Context, requestID string) (*object.Re
 	var errorMessage sql.NullString
 
 	err := db.conn.QueryRowContext(ctx, query, requestID).Scan(
-		&rc.ID,
-		&rc.RequestID,
+		&rc.Seq,
+		&rc.CallID,
 		&rc.ObjectID,
 		&rc.ObjectType,
 		&rc.MethodName,

@@ -96,7 +96,7 @@ func TestInsertOrGetReliableCall_Validation(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name:        "empty request_id",
+			name:        "empty call_id",
 			requestID:   "",
 			objectID:    "obj-123",
 			objectType:  "TestType",
@@ -148,23 +148,23 @@ func TestUpdateReliableCallStatus_Validation(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		id           int64
+		seq          int64
 		status       string
 		resultData   []byte
 		errorMessage string
 		wantErr      bool
 	}{
 		{
-			name:         "zero id",
-			id:           0,
+			name:         "zero seq",
+			seq:          0,
 			status:       "completed",
 			resultData:   []byte("result"),
 			errorMessage: "",
 			wantErr:      true,
 		},
 		{
-			name:         "negative id",
-			id:           -1,
+			name:         "negative seq",
+			seq:          -1,
 			status:       "completed",
 			resultData:   []byte("result"),
 			errorMessage: "",
@@ -172,7 +172,7 @@ func TestUpdateReliableCallStatus_Validation(t *testing.T) {
 		},
 		{
 			name:         "empty status",
-			id:           1,
+			seq:          1,
 			status:       "",
 			resultData:   []byte("result"),
 			errorMessage: "",
@@ -182,7 +182,7 @@ func TestUpdateReliableCallStatus_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := db.UpdateReliableCallStatus(context.Background(), tt.id, tt.status, tt.resultData, tt.errorMessage)
+			err := db.UpdateReliableCallStatus(context.Background(), tt.seq, tt.status, tt.resultData, tt.errorMessage)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("UpdateReliableCallStatus() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -204,10 +204,10 @@ func TestGetPendingReliableCalls_Validation(t *testing.T) {
 func TestGetReliableCall_Validation(t *testing.T) {
 	db := &DB{}
 
-	t.Run("empty request_id", func(t *testing.T) {
+	t.Run("empty call_id", func(t *testing.T) {
 		_, err := db.GetReliableCall(context.Background(), "")
 		if err == nil {
-			t.Fatal("GetReliableCall() should return error for empty request_id")
+			t.Fatal("GetReliableCall() should return error for empty call_id")
 		}
 	})
 }

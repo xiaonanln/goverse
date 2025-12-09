@@ -96,11 +96,11 @@ func (m *MockPersistenceProvider) InsertOrGetReliableCall(ctx context.Context, r
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error {
+func (m *MockPersistenceProvider) UpdateReliableCallStatus(ctx context.Context, seq int64, status string, resultData []byte, errorMessage string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*object.ReliableCall, error) {
+func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*object.ReliableCall, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

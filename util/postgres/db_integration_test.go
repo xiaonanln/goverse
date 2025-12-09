@@ -35,7 +35,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
-// cleanupTestTable removes all test data from the goverse_objects and goverse_requests tables
+// cleanupTestTable removes all test data from the goverse_objects and goverse_reliable_calls tables
 func cleanupTestTable(t *testing.T, db *DB) {
 	t.Helper()
 	ctx := context.Background()
@@ -43,9 +43,9 @@ func cleanupTestTable(t *testing.T, db *DB) {
 	if err != nil {
 		t.Logf("Warning: failed to cleanup goverse_objects table: %v", err)
 	}
-	_, err = db.conn.ExecContext(ctx, "DELETE FROM goverse_requests")
+	_, err = db.conn.ExecContext(ctx, "DELETE FROM goverse_reliable_calls")
 	if err != nil {
-		t.Logf("Warning: failed to cleanup goverse_requests table: %v", err)
+		t.Logf("Warning: failed to cleanup goverse_reliable_calls table: %v", err)
 	}
 }
 
@@ -85,9 +85,9 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 
 	// Drop functions and tables first to ensure a clean state
 	// Drop functions before tables to avoid dependency issues
-	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS update_goverse_requests_timestamp CASCADE")
+	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS update_goverse_reliable_calls_timestamp CASCADE")
 	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_objects CASCADE")
-	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_requests CASCADE")
+	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_reliable_calls CASCADE")
 
 	// Initialize schema
 	err = db.InitSchema(ctx)
@@ -106,29 +106,29 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 		t.Fatalf("Expected 0 rows in new goverse_objects table, got %d", objectCount)
 	}
 
-	// Verify goverse_requests table exists by querying it
+	// Verify goverse_reliable_calls table exists by querying it
 	var requestCount int
-	err = db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM goverse_requests").Scan(&requestCount)
+	err = db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM goverse_reliable_calls").Scan(&requestCount)
 	if err != nil {
-		t.Fatalf("Failed to query goverse_requests table: %v", err)
+		t.Fatalf("Failed to query goverse_reliable_calls table: %v", err)
 	}
 
 	if requestCount != 0 {
-		t.Fatalf("Expected 0 rows in new goverse_requests table, got %d", requestCount)
+		t.Fatalf("Expected 0 rows in new goverse_reliable_calls table, got %d", requestCount)
 	}
 
 	// Verify trigger function exists
 	var funcExists bool
 	err = db.conn.QueryRowContext(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM pg_proc WHERE proname = 'update_goverse_requests_timestamp'
+			SELECT 1 FROM pg_proc WHERE proname = 'update_goverse_reliable_calls_timestamp'
 		)
 	`).Scan(&funcExists)
 	if err != nil {
-		t.Fatalf("Failed to check for update_goverse_requests_timestamp function: %v", err)
+		t.Fatalf("Failed to check for update_goverse_reliable_calls_timestamp function: %v", err)
 	}
 	if !funcExists {
-		t.Fatal("update_goverse_requests_timestamp function was not created")
+		t.Fatal("update_goverse_reliable_calls_timestamp function was not created")
 	}
 
 	// Verify we can run InitSchema multiple times (idempotent)

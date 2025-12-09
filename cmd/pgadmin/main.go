@@ -24,23 +24,23 @@ const (
 // These constants define the database schema managed by this tool.
 // When adding new tables or indexes, update both InitSchema() and these constants.
 const (
-	tableObjects  = "goverse_objects"
-	tableRequests = "goverse_requests"
-	dropSchemaSQL = `
-		DROP TABLE IF EXISTS goverse_requests CASCADE;
+	tableObjects       = "goverse_objects"
+	tableReliableCalls = "goverse_reliable_calls"
+	dropSchemaSQL      = `
+		DROP TABLE IF EXISTS goverse_reliable_calls CASCADE;
 		DROP TABLE IF EXISTS goverse_objects CASCADE;
-		DROP FUNCTION IF EXISTS update_goverse_requests_timestamp() CASCADE;
+		DROP FUNCTION IF EXISTS update_goverse_reliable_calls_timestamp() CASCADE;
 	`
 )
 
 var (
 	// Tables to manage
-	tables = []string{tableObjects, tableRequests}
+	tables = []string{tableObjects, tableReliableCalls}
 
 	// Indexes per table
 	indexes = map[string][]string{
-		tableObjects:  {"idx_goverse_objects_type", "idx_goverse_objects_updated_at"},
-		tableRequests: {"idx_goverse_requests_object_status"},
+		tableObjects:       {"idx_goverse_objects_type", "idx_goverse_objects_updated_at"},
+		tableReliableCalls: {"idx_goverse_reliable_calls_object_status"},
 	}
 )
 

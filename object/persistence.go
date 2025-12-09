@@ -11,8 +11,8 @@ import (
 
 // ReliableCall represents a tracked remote call for exactly-once semantics
 type ReliableCall struct {
-	ID          int64
-	RequestID   string
+	Seq       int64
+	CallID    string
 	ObjectID    string
 	ObjectType  string
 	MethodName  string
@@ -33,8 +33,8 @@ type PersistenceProvider interface {
 
 	// ReliableCall methods for exactly-once semantics
 	InsertOrGetReliableCall(ctx context.Context, requestID string, objectID string, objectType string, methodName string, requestData []byte) (*ReliableCall, error)
-	UpdateReliableCallStatus(ctx context.Context, id int64, status string, resultData []byte, errorMessage string) error
-	GetPendingReliableCalls(ctx context.Context, objectID string, nextRcid int64) ([]*ReliableCall, error)
+	UpdateReliableCallStatus(ctx context.Context, seq int64, status string, resultData []byte, errorMessage string) error
+	GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*ReliableCall, error)
 	GetReliableCall(ctx context.Context, requestID string) (*ReliableCall, error)
 }
 
