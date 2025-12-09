@@ -3,6 +3,7 @@ package object
 import (
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/xiaonanln/goverse/util/logger"
@@ -70,7 +71,7 @@ type BaseObject struct {
 	self         Object
 	id           string
 	creationTime time.Time
-	nextRcseq    int64
+	nextRcseq    atomic.Int64
 	Logger       *logger.Logger
 }
 
@@ -115,10 +116,10 @@ func (base *BaseObject) FromData(data proto.Message) error {
 
 // GetNextRcseq returns the next reliable call sequence number for this object
 func (base *BaseObject) GetNextRcseq() int64 {
-	return base.nextRcseq
+	return base.nextRcseq.Load()
 }
 
 // SetNextRcseq sets the next reliable call sequence number for this object
 func (base *BaseObject) SetNextRcseq(rcseq int64) {
-	base.nextRcseq = rcseq
+	base.nextRcseq.Store(rcseq)
 }
