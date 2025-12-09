@@ -114,9 +114,7 @@ func (db *DB) UpdateRequestStatus(ctx context.Context, requestID string, status 
 	}
 
 	// Validate status-specific requirements
-	if status == RequestStatusCompleted && resultData == nil {
-		return fmt.Errorf("result_data is required for completed status")
-	}
+	// Note: nil resultData is allowed for completed status (represents nil response)
 	if status == RequestStatusFailed && errorMessage == "" {
 		return fmt.Errorf("error_message is required for failed status")
 	}

@@ -52,19 +52,21 @@ func (node *Node) ProcessPendingRequestsWithDB(ctx context.Context, objectID str
 		}
 
 		// Unmarshal the request data
+		// The request data is stored as a marshaled anypb.Any
 		var requestProto proto.Message
 		if len(req.RequestData) > 0 {
 			requestAny := &anypb.Any{}
 			if err := proto.Unmarshal(req.RequestData, requestAny); err != nil {
-				node.logger.Errorf("Failed to unmarshal request %s: %v", req.RequestID, err)
+				node.logger.Errorf("Failed to unmarshal request Any for %s: %v", req.RequestID, err)
 				// Mark as failed
 				_ = db.UpdateRequestStatus(ctx, req.RequestID, postgres.RequestStatusFailed, nil, fmt.Sprintf("failed to unmarshal request: %v", err))
 				continue
 			}
 
+			// Unmarshal the Any to get the actual request proto
 			requestProto, err = requestAny.UnmarshalNew()
 			if err != nil {
-				node.logger.Errorf("Failed to unmarshal request proto %s: %v", req.RequestID, err)
+				node.logger.Errorf("Failed to unmarshal request proto from Any for %s: %v", req.RequestID, err)
 				// Mark as failed
 				_ = db.UpdateRequestStatus(ctx, req.RequestID, postgres.RequestStatusFailed, nil, fmt.Sprintf("failed to unmarshal request proto: %v", err))
 				continue

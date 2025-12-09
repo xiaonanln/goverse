@@ -632,18 +632,37 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, objType string, id str
 		return nil, fmt.Errorf("persistence provider does not provide PostgreSQL database")
 	}
 
-	// Generate a unique request ID
-	requestID := uuid.New().String()
-
-	// Marshal the request to bytes for storage
-	var requestData []byte
+	// Marshal the request to Any for storage
+	var requestAny *anypb.Any
 	var err error
 	if request != nil {
-		requestData, err = proto.Marshal(request)
+		requestAny, err = anypb.New(request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request to Any: %w", err)
+		}
+	}
+
+	// Marshal the Any to bytes for storage
+	var requestData []byte
+	if requestAny != nil {
+		requestData, err = proto.Marshal(requestAny)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal request: %w", err)
 		}
 	}
+
+	// Generate a deterministic request ID based on call parameters
+	// This ensures deduplication of identical calls
+	// Format: {objectID}:{method}:{requestHash}
+	requestIDBase := fmt.Sprintf("%s:%s:%s", id, method, objType)
+	if requestData != nil {
+		// Include request content hash for deterministic ID
+		requestIDBase = fmt.Sprintf("%s:%x", requestIDBase, requestData)
+	}
+	// Use UUID v5 (name-based) for deterministic yet unique IDs
+	// Using a namespace UUID to avoid collisions
+	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // DNS namespace UUID
+	requestID := uuid.NewSHA1(namespace, []byte(requestIDBase)).String()
 
 	// Check if this exact request already exists
 	existingReq, err := db.GetRequest(ctx, requestID)
@@ -743,8 +762,12 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, objType string, id str
 
 		_, err = client.TriggerPendingCalls(ctx, triggerReq)
 		if err != nil {
-			c.logger.Warnf("%s - Failed to trigger pending calls on node %s: %v (will be retried)", c, nodeAddr, err)
-			// Don't fail the entire call if trigger fails - the request is in the DB and will be processed eventually
+			c.logger.Warnf("%s - Failed to trigger pending calls on node %s: %v", c, nodeAddr, err)
+			// Don't fail the entire call if trigger fails - the request is in the DB
+			// and will be processed when:
+			// 1. Another ReliableCallObject is made for this object
+			// 2. A manual trigger is sent
+			// 3. Future enhancement: background worker polls for pending requests
 		}
 	}
 
