@@ -640,7 +640,7 @@ func TestNode_CreateObject_LoadsFromPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get object data: %v", err)
 	}
-	err = object.SaveObject(ctx, provider, savedObj.Id(), savedObj.Type(), data)
+	err = object.SaveObject(ctx, provider, savedObj.Id(), savedObj.Type(), data, 0)
 	if err != nil {
 		t.Fatalf("Failed to save object: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestNode_CreateObject_LoadsFromPersistence_NewNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get object data: %v", err)
 	}
-	err = object.SaveObject(ctx, provider, savedObj.Id(), savedObj.Type(), data)
+	err = object.SaveObject(ctx, provider, savedObj.Id(), savedObj.Type(), data, 0)
 	if err != nil {
 		t.Fatalf("Failed to save object: %v", err)
 	}
