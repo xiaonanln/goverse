@@ -185,8 +185,8 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 	var errorMessage sql.NullString
 
 	err := db.conn.QueryRowContext(ctx, query, requestID, objectID, objectType, methodName, requestData, now).Scan(
-		&rc.ID,
-		&rc.RequestID,
+		&rc.Seq,
+		&rc.CallID,
 		&rc.ObjectID,
 		&rc.ObjectType,
 		&rc.MethodName,
@@ -275,8 +275,8 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 		var errorMessage sql.NullString
 
 		err := rows.Scan(
-			&rc.ID,
-			&rc.RequestID,
+			&rc.Seq,
+			&rc.CallID,
 			&rc.ObjectID,
 			&rc.ObjectType,
 			&rc.MethodName,
@@ -325,8 +325,8 @@ func (db *DB) GetReliableCall(ctx context.Context, requestID string) (*object.Re
 	var errorMessage sql.NullString
 
 	err := db.conn.QueryRowContext(ctx, query, requestID).Scan(
-		&rc.ID,
-		&rc.RequestID,
+		&rc.Seq,
+		&rc.CallID,
 		&rc.ObjectID,
 		&rc.ObjectType,
 		&rc.MethodName,
