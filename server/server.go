@@ -19,7 +19,6 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
-	"github.com/xiaonanln/goverse/util/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -510,20 +509,10 @@ func (server *Server) TriggerPendingCalls(ctx context.Context, req *goverse_pb.T
 		return nil, err
 	}
 
-	// Get the database from the node's persistence provider
-	dbInterface := server.Node.GetPostgresDB()
-	if dbInterface == nil {
-		return nil, fmt.Errorf("PostgreSQL database not configured - TriggerPendingCalls requires postgres persistence provider")
-	}
-
-	db, ok := dbInterface.(*postgres.DB)
-	if !ok {
-		return nil, fmt.Errorf("persistence provider does not provide PostgreSQL database")
-	}
-
-	// Process pending requests asynchronously
+	// Process pending requests asynchronously with server context
+	// The node will handle checking if request tracking is supported
 	go func() {
-		if err := server.Node.ProcessPendingRequestsWithDB(context.Background(), objectID, db); err != nil {
+		if err := server.Node.ProcessPendingRequests(server.ctx, objectID); err != nil {
 			server.logger.Errorf("Failed to process pending requests for object %s: %v", objectID, err)
 		}
 	}()

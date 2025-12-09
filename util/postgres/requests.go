@@ -33,6 +33,77 @@ type RequestData struct {
 	UpdatedAt    time.Time
 }
 
+// InsertOrGetRequest atomically inserts a new request or returns the existing one
+// This ensures exactly-once semantics by using INSERT ... ON CONFLICT
+// Returns the request data and a boolean indicating if it was newly inserted
+func (db *DB) InsertOrGetRequest(ctx context.Context, requestID, objectID, objectType, methodName string, requestData []byte) (*RequestData, bool, error) {
+	if requestID == "" {
+		return nil, false, fmt.Errorf("request_id cannot be empty")
+	}
+	if objectID == "" {
+		return nil, false, fmt.Errorf("object_id cannot be empty")
+	}
+	if objectType == "" {
+		return nil, false, fmt.Errorf("object_type cannot be empty")
+	}
+	if methodName == "" {
+		return nil, false, fmt.Errorf("method_name cannot be empty")
+	}
+	if requestData == nil {
+		requestData = []byte{}
+	}
+
+	// Use INSERT ... ON CONFLICT DO NOTHING to atomically insert or skip
+	// Then SELECT to get the request (either newly inserted or existing)
+	query := `
+		WITH inserted AS (
+			INSERT INTO goverse_requests (request_id, object_id, object_type, method_name, request_data, status)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (request_id) DO NOTHING
+			RETURNING id, request_id, object_id, object_type, method_name, request_data, 
+			          result_data, error_message, status, created_at, updated_at, true as is_new
+		)
+		SELECT 
+			COALESCE(i.id, e.id) as id,
+			COALESCE(i.request_id, e.request_id) as request_id,
+			COALESCE(i.object_id, e.object_id) as object_id,
+			COALESCE(i.object_type, e.object_type) as object_type,
+			COALESCE(i.method_name, e.method_name) as method_name,
+			COALESCE(i.request_data, e.request_data) as request_data,
+			COALESCE(i.result_data, e.result_data) as result_data,
+			COALESCE(i.error_message, e.error_message) as error_message,
+			COALESCE(i.status, e.status) as status,
+			COALESCE(i.created_at, e.created_at) as created_at,
+			COALESCE(i.updated_at, e.updated_at) as updated_at,
+			COALESCE(i.is_new, false) as is_new
+		FROM (SELECT true) dummy
+		LEFT JOIN inserted i ON true
+		LEFT JOIN goverse_requests e ON e.request_id = $1
+	`
+
+	var req RequestData
+	var isNew bool
+	err := db.conn.QueryRowContext(ctx, query, requestID, objectID, objectType, methodName, requestData, RequestStatusPending).Scan(
+		&req.ID,
+		&req.RequestID,
+		&req.ObjectID,
+		&req.ObjectType,
+		&req.MethodName,
+		&req.RequestData,
+		&req.ResultData,
+		&req.ErrorMessage,
+		&req.Status,
+		&req.CreatedAt,
+		&req.UpdatedAt,
+		&isNew,
+	)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to insert or get request: %w", err)
+	}
+
+	return &req, isNew, nil
+}
+
 // InsertRequest inserts a new request into the database
 // Returns the auto-generated ID and any error
 func (db *DB) InsertRequest(ctx context.Context, requestID, objectID, objectType, methodName string, requestData []byte) (int64, error) {

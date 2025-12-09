@@ -78,49 +78,30 @@ func CallObject(ctx context.Context, objType, id string, method string, request 
 	return cluster.This().CallObject(ctx, objType, id, method, request)
 }
 
-// GenerateRequestID generates a deterministic request ID for use with ReliableCallObjectWithID
-// This allows users to control request IDs for exactly-once semantics
-// The ID is deterministic based on object ID, method, type, and request content
+// GenerateRequestID generates a unique UUID to use as request ID for ReliableCallObject
+// This allows users to generate request IDs in advance for exactly-once semantics
 //
 // Example:
 //
-//	requestID, err := goverseapi.GenerateRequestID("MyObject", objID, "MyMethod", request)
-//	if err != nil {
-//	    return err
-//	}
-//	response, err := goverseapi.ReliableCallObjectWithID(ctx, requestID, "MyObject", objID, "MyMethod", request)
-func GenerateRequestID(objType, id string, method string, request proto.Message) (string, error) {
-	return cluster.This().GenerateRequestID(objType, id, method, request)
+//	requestID := goverseapi.GenerateRequestID()
+//	response, err := goverseapi.ReliableCallObject(ctx, requestID, "MyObject", objID, "MyMethod", request)
+func GenerateRequestID() string {
+	return cluster.This().GenerateRequestID()
 }
 
 // ReliableCallObject implements exactly-once semantics for inter-node calls
 // It uses the goverse_requests table for deduplication and sequential processing
 // Requires PostgreSQL persistence provider to be configured
 //
-// This function generates a deterministic request ID internally.
-// For more control, use GenerateRequestID and ReliableCallObjectWithID instead.
+// The requestID parameter must be unique for each distinct request.
+// Use GenerateRequestID() to create a unique UUID, or provide your own.
 //
 // Example:
 //
-//	response, err := goverseapi.ReliableCallObject(ctx, "MyObject", objID, "MyMethod", request)
-func ReliableCallObject(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error) {
-	return cluster.This().ReliableCallObject(ctx, objType, id, method, request)
-}
-
-// ReliableCallObjectWithID implements exactly-once semantics with an explicit request ID
-// Use GenerateRequestID to create the request ID, or provide your own unique ID
-// The same request ID will always return the same result (deduplication)
-// Requires PostgreSQL persistence provider to be configured
-//
-// Example:
-//
-//	requestID, err := goverseapi.GenerateRequestID("MyObject", objID, "MyMethod", request)
-//	if err != nil {
-//	    return err
-//	}
-//	response, err := goverseapi.ReliableCallObjectWithID(ctx, requestID, "MyObject", objID, "MyMethod", request)
-func ReliableCallObjectWithID(ctx context.Context, requestID string, objType, id string, method string, request proto.Message) (proto.Message, error) {
-	return cluster.This().ReliableCallObjectWithID(ctx, requestID, objType, id, method, request)
+//	requestID := goverseapi.GenerateRequestID()
+//	response, err := goverseapi.ReliableCallObject(ctx, requestID, "MyObject", objID, "MyMethod", request)
+func ReliableCallObject(ctx context.Context, requestID string, objType, id string, method string, request proto.Message) (proto.Message, error) {
+	return cluster.This().ReliableCallObject(ctx, requestID, objType, id, method, request)
 }
 
 // PushMessageToClient sends a message to a client via the gate connection

@@ -9,25 +9,33 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+// processPendingRequestsImpl implements ProcessPendingRequests with postgres DB
+// This is called from node.go to avoid import cycles
+func (node *Node) processPendingRequestsImpl(ctx context.Context, objectID string, dbInterface interface{}) error {
+	db, ok := dbInterface.(*postgres.DB)
+	if !ok {
+		return fmt.Errorf("invalid database interface")
+	}
+	return node.ProcessPendingRequestsWithDB(ctx, objectID, db)
+}
+
 // ProcessPendingRequestsWithDB processes all pending requests for an object sequentially
 // using the provided postgres database connection
 func (node *Node) ProcessPendingRequestsWithDB(ctx context.Context, objectID string, db *postgres.DB) error {
 	node.logger.Infof("Processing pending requests for object %s", objectID)
 
-	// Get all pending requests for this object, ordered by ID
-	requests, err := db.GetPendingRequests(ctx, objectID)
-	if err != nil {
-		return fmt.Errorf("failed to get pending requests: %w", err)
+	// Get the object to ensure it exists
+	node.objectsMu.RLock()
+	_, exists := node.objects[objectID]
+	node.objectsMu.RUnlock()
+
+	if !exists {
+		node.logger.Warnf("Object %s not found, cannot process pending requests", objectID)
+		return fmt.Errorf("object %s not found", objectID)
 	}
 
-	if len(requests) == 0 {
-		node.logger.Infof("No pending requests for object %s", objectID)
-		return nil
-	}
-
-	node.logger.Infof("Found %d pending requests for object %s", len(requests), objectID)
-
-	// Get the last processed ID to skip already executed calls
+	// Get lastProcessedID from the database
+	// TODO: Store lastProcessedID on the object itself for better performance
 	lastProcessedID, err := db.GetLastProcessedID(ctx, objectID)
 	if err != nil {
 		return fmt.Errorf("failed to get last processed ID: %w", err)
@@ -35,15 +43,30 @@ func (node *Node) ProcessPendingRequestsWithDB(ctx context.Context, objectID str
 
 	node.logger.Infof("Last processed ID for object %s: %d", objectID, lastProcessedID)
 
+	// Get pending requests after the last processed ID
+	requests, err := db.GetPendingRequests(ctx, objectID)
+	if err != nil {
+		return fmt.Errorf("failed to get pending requests: %w", err)
+	}
+
+	// Filter requests with ID > lastProcessedID
+	var filteredRequests []*postgres.RequestData
+	for _, req := range requests {
+		if req.ID > lastProcessedID {
+			filteredRequests = append(filteredRequests, req)
+		}
+	}
+
+	if len(filteredRequests) == 0 {
+		node.logger.Infof("No new pending requests for object %s after ID %d", objectID, lastProcessedID)
+		return nil
+	}
+
+	node.logger.Infof("Found %d pending requests for object %s", len(filteredRequests), objectID)
+
 	// Process each request sequentially
 	processedCount := 0
-	for _, req := range requests {
-		// Skip requests that have already been processed
-		if req.ID <= lastProcessedID {
-			node.logger.Infof("Skipping already processed request %s (ID: %d)", req.RequestID, req.ID)
-			continue
-		}
-
+	for _, req := range filteredRequests {
 		// Update status to processing
 		err = db.UpdateRequestStatus(ctx, req.RequestID, postgres.RequestStatusProcessing, nil, "")
 		if err != nil {

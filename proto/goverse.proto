@@ -30,7 +30,6 @@ message CallObjectRequest {
   string type = 3;
   google.protobuf.Any request = 4;
   string client_id = 5; // Optional: client ID if the call originated from a client via gate
-  string request_id = 6; // Optional: unique request ID for exactly-once semantics
 }
 
 message CallObjectResponse {

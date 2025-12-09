@@ -824,16 +824,24 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 // ProcessPendingRequests processes all pending requests for an object sequentially
 // This is called when a TriggerPendingCalls RPC is received or locally
 func (node *Node) ProcessPendingRequests(ctx context.Context, objectID string) error {
-	// Get the database
+	// Get the database from persistence provider
 	dbInterface := node.GetPostgresDB()
 	if dbInterface == nil {
-		return fmt.Errorf("PostgreSQL database not configured")
+		return fmt.Errorf("request tracking not configured - requires postgres persistence provider")
 	}
 
-	// Type assert to postgres.DB - this is safe because GetPostgresDB already checks the type
-	// We need to import postgres package for this
-	// The actual implementation is in requests.go which handles the postgres dependency
-	return fmt.Errorf("ProcessPendingRequests must be called through ProcessPendingRequestsWithDB")
+	// Type assert to postgres.DB to call ProcessPendingRequestsWithDB
+	// This is defined in requests.go where postgres types are available
+	type dbGetter interface {
+		Connection() interface{}
+	}
+	
+	if _, ok := dbInterface.(dbGetter); ok {
+		// Call implementation - defined in requests.go to avoid import cycle
+		return node.processPendingRequestsImpl(ctx, objectID, dbInterface)
+	}
+	
+	return fmt.Errorf("persistence provider does not support request tracking")
 }
 
 // GetPostgresDB returns the PostgreSQL database connection if available

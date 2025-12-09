@@ -614,60 +614,16 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	return resp.Response, nil
 }
 
-// GenerateRequestID generates a deterministic request ID for use with ReliableCallObjectWithID
-// This allows users to control request IDs for exactly-once semantics
-// The ID is deterministic based on object ID, method, type, and request content
-func (c *Cluster) GenerateRequestID(objType string, id string, method string, request proto.Message) (string, error) {
-	// Marshal the request to Any for storage
-	var requestAny *anypb.Any
-	var err error
-	if request != nil {
-		requestAny, err = anypb.New(request)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal request to Any: %w", err)
-		}
-	}
-
-	// Marshal the Any to bytes for hashing
-	var requestData []byte
-	if requestAny != nil {
-		requestData, err = proto.Marshal(requestAny)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal request: %w", err)
-		}
-	}
-
-	// Generate a deterministic request ID based on call parameters
-	// Format: {objectID}:{method}:{type}:{requestHash}
-	requestIDBase := fmt.Sprintf("%s:%s:%s", id, method, objType)
-	if requestData != nil {
-		// Include request content hash for deterministic ID
-		requestIDBase = fmt.Sprintf("%s:%x", requestIDBase, requestData)
-	}
-	// Use UUID v5 (name-based) for deterministic yet unique IDs
-	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // DNS namespace UUID
-	requestID := uuid.NewSHA1(namespace, []byte(requestIDBase)).String()
-	
-	return requestID, nil
+// GenerateRequestID generates a unique UUID to use as request ID for ReliableCallObject
+// This allows users to generate request IDs in advance for exactly-once semantics
+func (c *Cluster) GenerateRequestID() string {
+	return uuid.New().String()
 }
 
 // ReliableCallObject implements exactly-once semantics for inter-node calls using a queue-based model
-// It generates a deterministic request ID internally and calls ReliableCallObjectWithID
-// For more control over request IDs, use GenerateRequestID and ReliableCallObjectWithID
-func (c *Cluster) ReliableCallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
-	// Generate request ID
-	requestID, err := c.GenerateRequestID(objType, id, method, request)
-	if err != nil {
-		return nil, err
-	}
-	
-	return c.ReliableCallObjectWithID(ctx, requestID, objType, id, method, request)
-}
-
-// ReliableCallObjectWithID implements exactly-once semantics with an explicit request ID
-// Use GenerateRequestID to create the request ID, or provide your own unique ID
-// The same request ID will always return the same result (deduplication)
-func (c *Cluster) ReliableCallObjectWithID(ctx context.Context, requestID string, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+// It uses the goverse_requests table for deduplication and sequential processing
+// The requestID parameter must be unique for each distinct request
+func (c *Cluster) ReliableCallObject(ctx context.Context, requestID string, objType string, id string, method string, request proto.Message) (proto.Message, error) {
 	// Get the database from the node's persistence provider
 	if !c.isNode() {
 		return nil, fmt.Errorf("ReliableCallObjectWithID can only be called from node clusters")
@@ -707,14 +663,14 @@ func (c *Cluster) ReliableCallObjectWithID(ctx context.Context, requestID string
 		}
 	}
 
-	// Check if this exact request already exists
-	existingReq, err := db.GetRequest(ctx, requestID)
+	// Atomically insert or get the request
+	existingReq, isNew, err := db.InsertOrGetRequest(ctx, requestID, id, objType, method, requestData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing request: %w", err)
+		return nil, fmt.Errorf("failed to insert or get request: %w", err)
 	}
 
-	// If request exists and is completed, return cached result
-	if existingReq != nil && existingReq.Status == postgres.RequestStatusCompleted {
+	// If request is already completed or failed, return immediately
+	if existingReq.Status == postgres.RequestStatusCompleted {
 		c.logger.Infof("%s - Request %s already completed, returning cached result", c, requestID)
 		
 		// Unmarshal the cached result
@@ -722,7 +678,6 @@ func (c *Cluster) ReliableCallObjectWithID(ctx context.Context, requestID string
 			return nil, nil
 		}
 
-		// We need to know the response type to unmarshal - for now, return as Any
 		responseAny := &anypb.Any{}
 		if err := proto.Unmarshal(existingReq.ResultData, responseAny); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal cached result: %w", err)
@@ -736,43 +691,15 @@ func (c *Cluster) ReliableCallObjectWithID(ctx context.Context, requestID string
 		return response, nil
 	}
 
-	// If request exists and is pending/processing, wait for completion
-	if existingReq != nil && (existingReq.Status == postgres.RequestStatusPending || existingReq.Status == postgres.RequestStatusProcessing) {
-		c.logger.Infof("%s - Request %s is pending/processing, waiting for completion", c, requestID)
-		
-		// Wait for the request to complete
-		completedReq, err := db.WaitForRequestCompletion(ctx, requestID, 100*time.Millisecond, 30*time.Second)
-		if err != nil {
-			return nil, fmt.Errorf("failed to wait for request completion: %w", err)
-		}
-
-		if completedReq.Status == postgres.RequestStatusFailed {
-			return nil, fmt.Errorf("request failed: %s", completedReq.ErrorMessage)
-		}
-
-		// Unmarshal the result
-		if completedReq.ResultData == nil {
-			return nil, nil
-		}
-
-		responseAny := &anypb.Any{}
-		if err := proto.Unmarshal(completedReq.ResultData, responseAny); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal result: %w", err)
-		}
-
-		response, err := responseAny.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-		}
-
-		return response, nil
+	if existingReq.Status == postgres.RequestStatusFailed {
+		c.logger.Infof("%s - Request %s already failed, returning error", c, requestID)
+		return nil, fmt.Errorf("request failed: %s", existingReq.ErrorMessage)
 	}
 
-	// Request doesn't exist, insert it as pending
-	c.logger.Infof("%s - Inserting new request %s for object %s.%s", c, requestID, id, method)
-	_, err = db.InsertRequest(ctx, requestID, id, objType, method, requestData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to insert request: %w", err)
+	if isNew {
+		c.logger.Infof("%s - Inserted new request %s for object %s.%s", c, requestID, id, method)
+	} else {
+		c.logger.Infof("%s - Request %s already exists with status %s, waiting for completion", c, requestID, existingReq.Status)
 	}
 
 	// Determine which node hosts this object
@@ -786,9 +713,10 @@ func (c *Cluster) ReliableCallObjectWithID(ctx context.Context, requestID string
 	
 	// Check if the object is on this node
 	if nodeAddr == c.getAdvertiseAddr() {
-		// Process locally
+		// Process locally - use a detached context so processing continues even if caller cancels
 		go func() {
-			if err := c.node.ProcessPendingRequestsWithDB(context.Background(), id, db); err != nil {
+			processingCtx := context.Background()
+			if err := c.node.ProcessPendingRequestsWithDB(processingCtx, id, db); err != nil {
 				c.logger.Errorf("%s - Failed to process pending requests for object %s: %v", c, id, err)
 			}
 		}()
