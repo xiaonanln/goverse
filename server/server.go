@@ -493,3 +493,32 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 		}
 	}
 }
+
+// TriggerPendingCalls triggers processing of pending requests for an object
+// This implements exactly-once semantics for inter-node calls
+func (server *Server) TriggerPendingCalls(ctx context.Context, req *goverse_pb.TriggerPendingCallsRequest) (*goverse_pb.TriggerPendingCallsResponse, error) {
+	server.logRPC("TriggerPendingCalls", req)
+
+	objectID := req.GetObjectId()
+	if objectID == "" {
+		return nil, fmt.Errorf("object_id must be specified in TriggerPendingCalls request")
+	}
+
+	// Validate that this object should be on this node
+	if err := server.validateObjectShardOwnership(ctx, objectID); err != nil {
+		return nil, err
+	}
+
+	// Process pending requests asynchronously with server context
+	// The node will handle checking if request tracking is supported
+	go func() {
+		if err := server.Node.ProcessPendingRequests(server.ctx, objectID); err != nil {
+			server.logger.Errorf("Failed to process pending requests for object %s: %v", objectID, err)
+		}
+	}()
+
+	// Return immediately - processing happens asynchronously
+	return &goverse_pb.TriggerPendingCallsResponse{
+		ProcessedCount: 0, // We don't know the count yet since it's async
+	}, nil
+}

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/nodeconnections"
@@ -19,6 +20,7 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/postgres"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -610,6 +612,163 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	}
 
 	return resp.Response, nil
+}
+
+// GenerateRequestID generates a unique UUID to use as request ID for ReliableCallObject
+// This allows users to generate request IDs in advance for exactly-once semantics
+func (c *Cluster) GenerateRequestID() string {
+	return uuid.New().String()
+}
+
+// ReliableCallObject implements exactly-once semantics for inter-node calls using a queue-based model
+// It uses the goverse_requests table for deduplication and sequential processing
+// The requestID parameter must be unique for each distinct request
+func (c *Cluster) ReliableCallObject(ctx context.Context, requestID string, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+	// Get the database from the node's persistence provider
+	if !c.isNode() {
+		return nil, fmt.Errorf("ReliableCallObjectWithID can only be called from node clusters")
+	}
+
+	dbInterface := c.node.GetPostgresDB()
+	if dbInterface == nil {
+		return nil, fmt.Errorf("PostgreSQL database not configured - ReliableCallObjectWithID requires postgres persistence provider")
+	}
+
+	db, ok := dbInterface.(*postgres.DB)
+	if !ok {
+		return nil, fmt.Errorf("persistence provider does not provide PostgreSQL database")
+	}
+
+	// Validate request ID
+	if requestID == "" {
+		return nil, fmt.Errorf("request_id cannot be empty")
+	}
+
+	// Marshal the request to Any for storage
+	var requestAny *anypb.Any
+	var err error
+	if request != nil {
+		requestAny, err = anypb.New(request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request to Any: %w", err)
+		}
+	}
+
+	// Marshal the Any to bytes for storage
+	var requestData []byte
+	if requestAny != nil {
+		requestData, err = proto.Marshal(requestAny)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request: %w", err)
+		}
+	}
+
+	// Atomically insert or get the request
+	existingReq, isNew, err := db.InsertOrGetRequest(ctx, requestID, id, objType, method, requestData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert or get request: %w", err)
+	}
+
+	// If request is already completed or failed, return immediately
+	if existingReq.Status == postgres.RequestStatusCompleted {
+		c.logger.Infof("%s - Request %s already completed, returning cached result", c, requestID)
+		
+		// Unmarshal the cached result
+		if existingReq.ResultData == nil {
+			return nil, nil
+		}
+
+		responseAny := &anypb.Any{}
+		if err := proto.Unmarshal(existingReq.ResultData, responseAny); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal cached result: %w", err)
+		}
+
+		response, err := responseAny.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal cached response: %w", err)
+		}
+
+		return response, nil
+	}
+
+	if existingReq.Status == postgres.RequestStatusFailed {
+		c.logger.Infof("%s - Request %s already failed, returning error", c, requestID)
+		return nil, fmt.Errorf("request failed: %s", existingReq.ErrorMessage)
+	}
+
+	if isNew {
+		c.logger.Infof("%s - Inserted new request %s for object %s.%s", c, requestID, id, method)
+	} else {
+		c.logger.Infof("%s - Request %s already exists with status %s, waiting for completion", c, requestID, existingReq.Status)
+	}
+
+	// Determine which node hosts this object
+	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("cannot determine node for object %s: %w", id, err)
+	}
+
+	// Send trigger to the target node to process pending calls
+	c.logger.Infof("%s - Sending trigger to node %s for object %s", c, nodeAddr, id)
+	
+	// Check if the object is on this node
+	if nodeAddr == c.getAdvertiseAddr() {
+		// Process locally - use a detached context so processing continues even if caller cancels
+		go func() {
+			processingCtx := context.Background()
+			if err := c.node.ProcessPendingRequestsWithDB(processingCtx, id, db); err != nil {
+				c.logger.Errorf("%s - Failed to process pending requests for object %s: %v", c, id, err)
+			}
+		}()
+	} else {
+		// Send gRPC trigger to remote node
+		client, err := c.nodeConnections.GetConnection(nodeAddr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
+		}
+
+		triggerReq := &goverse_pb.TriggerPendingCallsRequest{
+			ObjectId: id,
+		}
+
+		_, err = client.TriggerPendingCalls(ctx, triggerReq)
+		if err != nil {
+			c.logger.Warnf("%s - Failed to trigger pending calls on node %s: %v", c, nodeAddr, err)
+			// Don't fail the entire call if trigger fails - the request is in the DB
+			// and will be processed when:
+			// 1. Another ReliableCallObject is made for this object
+			// 2. A manual trigger is sent
+			// 3. Future enhancement: background worker polls for pending requests
+		}
+	}
+
+	// Wait for the request to complete
+	c.logger.Infof("%s - Waiting for request %s to complete", c, requestID)
+	completedReq, err := db.WaitForRequestCompletion(ctx, requestID, 100*time.Millisecond, 30*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wait for request completion: %w", err)
+	}
+
+	if completedReq.Status == postgres.RequestStatusFailed {
+		return nil, fmt.Errorf("request failed: %s", completedReq.ErrorMessage)
+	}
+
+	// Unmarshal the result
+	if completedReq.ResultData == nil {
+		return nil, nil
+	}
+
+	responseAny := &anypb.Any{}
+	if err := proto.Unmarshal(completedReq.ResultData, responseAny); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal result: %w", err)
+	}
+
+	response, err := responseAny.UnmarshalNew()
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return response, nil
 }
 
 // CreateObject creates a distributed object on the appropriate node based on sharding

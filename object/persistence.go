@@ -16,6 +16,24 @@ type PersistenceProvider interface {
 	DeleteObject(ctx context.Context, objectID string) error
 }
 
+// RequestTrackingProvider is an optional interface for persistence providers
+// that support exactly-once semantics through request tracking
+// Implementations should provide atomic insert-or-get operations
+type RequestTrackingProvider interface {
+	// InsertOrGetRequest atomically inserts a new request or returns the existing one
+	// Returns the request data, a boolean indicating if it was newly inserted, and any error
+	InsertOrGetRequest(ctx context.Context, requestID, objectID, objectType, methodName string, requestData []byte) (interface{}, bool, error)
+	
+	// UpdateRequestStatus updates the status of a request
+	UpdateRequestStatus(ctx context.Context, requestID string, status interface{}, resultData []byte, errorMessage string) error
+	
+	// WaitForRequestCompletion polls for a request to complete
+	WaitForRequestCompletion(ctx context.Context, requestID string, pollInterval, timeout interface{}) (interface{}, error)
+	
+	// GetPendingRequests retrieves pending requests for an object after a given ID
+	GetPendingRequests(ctx context.Context, objectID string, afterID int64) (interface{}, error)
+}
+
 // SaveObject saves object data using the provided persistence provider
 // The caller should call obj.ToData() to get the proto.Message before calling this function
 func SaveObject(ctx context.Context, provider PersistenceProvider, objectID, objectType string, data proto.Message) error {

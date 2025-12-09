@@ -261,6 +261,77 @@ log.Printf("New value: %d", result.GetValue())
 
 ---
 
+### ReliableCallObject (Exactly-Once Semantics)
+
+```go
+func ReliableCallObject(ctx context.Context, requestID string, objType, id string, method string, request proto.Message) (proto.Message, error)
+```
+
+Invokes a method with **exactly-once semantics**. The same request ID will be processed only once, even if retried multiple times.
+
+```go
+// Generate a unique request ID
+requestID := goverseapi.GenerateRequestID()
+
+req := &TransferRequest{
+    FromAccount: "acc-123",
+    ToAccount:   "acc-456",
+    Amount:      100.00,
+}
+
+resp, err := goverseapi.ReliableCallObject(ctx, requestID, "BankAccount", "acc-123", "Transfer", req)
+if err != nil {
+    log.Printf("Transfer failed: %v", err)
+    return
+}
+```
+
+**Parameters:**
+- `requestID`: Unique identifier for this request (use `GenerateRequestID()` or your own UUID)
+- Other parameters same as `CallObject`
+
+**Requirements:**
+- PostgreSQL persistence provider must be configured
+- `InitSchema()` must be called on the database
+
+**Use Cases:**
+- Bank transfers, payment processing
+- Order creation, inventory updates
+- Any state-changing operation that must not be duplicated
+
+**Retry Example:**
+```go
+requestID := goverseapi.GenerateRequestID()
+
+for attempt := 0; attempt < 3; attempt++ {
+    resp, err := goverseapi.ReliableCallObject(ctx, requestID, "BankAccount", "acc-123", "Transfer", req)
+    if err == nil {
+        break // Success
+    }
+    time.Sleep(time.Second)
+}
+```
+
+---
+
+### GenerateRequestID
+
+```go
+func GenerateRequestID() string
+```
+
+Generates a unique UUID to use as request ID for `ReliableCallObject`.
+
+```go
+requestID := goverseapi.GenerateRequestID()
+resp, err := goverseapi.ReliableCallObject(ctx, requestID, "BankAccount", "acc-123", "Transfer", req)
+```
+
+**Returns:**
+- A unique UUID string
+
+---
+
 ## Push Messaging
 
 ### PushMessageToClient

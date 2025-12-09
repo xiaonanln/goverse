@@ -15,6 +15,7 @@ service Goverse {
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
   rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
   rpc RegisterGate (RegisterGateRequest) returns (stream GateMessage);
+  rpc TriggerPendingCalls (TriggerPendingCallsRequest) returns (TriggerPendingCallsResponse);
 }
 
 message StatusResponse {
@@ -89,6 +90,14 @@ message GateMessage {
     RegisterGateResponse register_gate_response = 1;
     ClientMessageEnvelope client_message = 2;
   }
+}
+
+message TriggerPendingCallsRequest {
+  string object_id = 1; // Object ID to process pending calls for
+}
+
+message TriggerPendingCallsResponse {
+  int32 processed_count = 1; // Number of pending calls processed
 }
 
 message Empty {}

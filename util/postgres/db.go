@@ -84,9 +84,6 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		CONSTRAINT valid_completed_state CHECK (
-			status != 'completed' OR result_data IS NOT NULL
-		),
 		CONSTRAINT valid_failed_state CHECK (
 			status != 'failed' OR error_message IS NOT NULL
 		)
