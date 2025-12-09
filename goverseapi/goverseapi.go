@@ -78,6 +78,13 @@ func CallObject(ctx context.Context, objType, id string, method string, request 
 	return cluster.This().CallObject(ctx, objType, id, method, request)
 }
 
+// ReliableCallObject implements exactly-once semantics for inter-node calls
+// It uses the goverse_requests table for deduplication and sequential processing
+// Requires PostgreSQL persistence provider to be configured
+func ReliableCallObject(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error) {
+	return cluster.This().ReliableCallObject(ctx, objType, id, method, request)
+}
+
 // PushMessageToClient sends a message to a client via the gate connection
 // This allows distributed objects to push notifications/messages to connected clients
 // The client ID has the format: gateAddress/uniqueId (e.g., "localhost:7001/abc123")

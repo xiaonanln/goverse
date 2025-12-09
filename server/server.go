@@ -19,6 +19,7 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -492,4 +493,43 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 			}
 		}
 	}
+}
+
+// TriggerPendingCalls triggers processing of pending requests for an object
+// This implements exactly-once semantics for inter-node calls
+func (server *Server) TriggerPendingCalls(ctx context.Context, req *goverse_pb.TriggerPendingCallsRequest) (*goverse_pb.TriggerPendingCallsResponse, error) {
+	server.logRPC("TriggerPendingCalls", req)
+
+	objectID := req.GetObjectId()
+	if objectID == "" {
+		return nil, fmt.Errorf("object_id must be specified in TriggerPendingCalls request")
+	}
+
+	// Validate that this object should be on this node
+	if err := server.validateObjectShardOwnership(ctx, objectID); err != nil {
+		return nil, err
+	}
+
+	// Get the database from the node's persistence provider
+	dbInterface := server.Node.GetPostgresDB()
+	if dbInterface == nil {
+		return nil, fmt.Errorf("PostgreSQL database not configured - TriggerPendingCalls requires postgres persistence provider")
+	}
+
+	db, ok := dbInterface.(*postgres.DB)
+	if !ok {
+		return nil, fmt.Errorf("persistence provider does not provide PostgreSQL database")
+	}
+
+	// Process pending requests asynchronously
+	go func() {
+		if err := server.Node.ProcessPendingRequestsWithDB(context.Background(), objectID, db); err != nil {
+			server.logger.Errorf("Failed to process pending requests for object %s: %v", objectID, err)
+		}
+	}()
+
+	// Return immediately - processing happens asynchronously
+	return &goverse_pb.TriggerPendingCallsResponse{
+		ProcessedCount: 0, // We don't know the count yet since it's async
+	}, nil
 }

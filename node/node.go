@@ -820,3 +820,42 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 
 	return nil
 }
+
+// ProcessPendingRequests processes all pending requests for an object sequentially
+// This is called when a TriggerPendingCalls RPC is received or locally
+func (node *Node) ProcessPendingRequests(ctx context.Context, objectID string) error {
+	// Get the database
+	dbInterface := node.GetPostgresDB()
+	if dbInterface == nil {
+		return fmt.Errorf("PostgreSQL database not configured")
+	}
+
+	// Type assert to postgres.DB - this is safe because GetPostgresDB already checks the type
+	// We need to import postgres package for this
+	// The actual implementation is in requests.go which handles the postgres dependency
+	return fmt.Errorf("ProcessPendingRequests must be called through ProcessPendingRequestsWithDB")
+}
+
+// GetPostgresDB returns the PostgreSQL database connection if available
+// Returns nil if no postgres persistence provider is configured
+func (node *Node) GetPostgresDB() interface{} {
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider == nil {
+		return nil
+	}
+
+	// Type assertion to check if this is a PostgresPersistenceProvider
+	// We use interface{} to avoid circular import with postgres package
+	type dbGetter interface {
+		GetDB() interface{}
+	}
+
+	if getter, ok := provider.(dbGetter); ok {
+		return getter.GetDB()
+	}
+
+	return nil
+}

@@ -3,6 +3,7 @@ module github.com/xiaonanln/goverse
 go 1.24.5
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/prometheus/client_golang v1.23.2
 	go.etcd.io/etcd/api/v3 v3.6.6

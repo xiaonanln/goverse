@@ -35,3 +35,9 @@ func (p *PostgresPersistenceProvider) LoadObject(ctx context.Context, objectID s
 func (p *PostgresPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {
 	return p.db.DeleteObject(ctx, objectID)
 }
+
+// GetDB returns the underlying database connection
+// This is useful for accessing request tracking functionality
+func (p *PostgresPersistenceProvider) GetDB() *DB {
+	return p.db
+}
