@@ -1,0 +1,78 @@
+name: Tools
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  pgadmin:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+        with:
+          enable-etcd: 'false'
+          enable-postgres: 'true'
+      
+      - name: Build pgadmin
+        run: |
+          echo "Building pgadmin..."
+          go build -o pgadmin.out ./cmd/pgadmin
+          if [ -f "./pgadmin.out" ]; then
+            echo "✅ pgadmin binary built successfully"
+          else
+            echo "❌ pgadmin binary not found"
+            exit 1
+          fi
+      
+      - name: Test pgadmin help
+        run: |
+          echo "Testing pgadmin --help..."
+          ./pgadmin.out --help
+          echo "✅ pgadmin help command works"
+      
+      - name: Test pgadmin init command
+        run: |
+          echo "Testing pgadmin init..."
+          ./pgadmin.out --host localhost --port 5432 --user postgres --password postgres --database goverse init
+          echo "✅ pgadmin init command completed"
+        env:
+          PGPASSWORD: postgres
+      
+      - name: Test pgadmin verify command
+        run: |
+          echo "Testing pgadmin verify..."
+          ./pgadmin.out --host localhost --port 5432 --user postgres --password postgres --database goverse verify
+          echo "✅ pgadmin verify command completed"
+        env:
+          PGPASSWORD: postgres
+      
+      - name: Test pgadmin status command
+        run: |
+          echo "Testing pgadmin status..."
+          ./pgadmin.out --host localhost --port 5432 --user postgres --password postgres --database goverse status
+          echo "✅ pgadmin status command completed"
+        env:
+          PGPASSWORD: postgres
+      
+      - name: Run pgadmin tests
+        run: |
+          echo "Running pgadmin tests..."
+          go test -v ./cmd/pgadmin/
+          echo "✅ pgadmin tests passed"
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: goverse

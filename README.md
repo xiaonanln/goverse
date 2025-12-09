@@ -124,6 +124,34 @@ go get github.com/xiaonanln/goverse
 
 ---
 
+## Command-Line Tools
+
+GoVerse includes several command-line tools for cluster management:
+
+- **pgadmin** - PostgreSQL database management (init schema, verify connection, etc.)
+  ```bash
+  go run ./cmd/pgadmin --config config.yml init
+  ```
+  See [cmd/pgadmin/README.md](cmd/pgadmin/README.md) for details
+
+- **gate** - Start a gate server for client connections
+  ```bash
+  go run ./cmd/gate --config config.yml --gate-id gate-1
+  ```
+
+- **inspector** - Start the cluster visualization web UI
+  ```bash
+  go run ./cmd/inspector
+  ```
+  See [docs/INSPECTOR.md](docs/INSPECTOR.md) for details
+
+- **configgen** - Generate configuration files for clusters
+  ```bash
+  go run ./cmd/configgen --nodes 3 --gates 2 config.yml
+  ```
+
+---
+
 ## Documentation
 
 Full documentation:
@@ -132,6 +160,7 @@ Full documentation:
 - [Object Model & Architecture](docs/GET_STARTED.md#core-concepts) - Understanding virtual actors
 - [Cluster Configuration](docs/CONFIGURATION.md) - YAML config and cluster settings
 - [Object Persistence](docs/PERSISTENCE_IMPLEMENTATION.md) - PostgreSQL integration
+- [PostgreSQL Setup](docs/POSTGRES_SETUP.md) - Database setup and configuration
 - [Push Messaging](docs/PUSH_MESSAGING.md) - Real-time server-to-client delivery
 - [HTTP Gate API](docs/design/HTTP_GATE.md) - REST/HTTP endpoints for clients
 - [Object Access Control](docs/design/OBJECT_ACCESS_CONTROL.md) - Access rules and security
