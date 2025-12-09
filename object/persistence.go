@@ -27,8 +27,8 @@ type ReliableCall struct {
 // PersistenceProvider is an interface for saving and loading objects
 // Implementations can use different storage backends (PostgreSQL, Redis, etc.)
 type PersistenceProvider interface {
-	SaveObject(ctx context.Context, objectID, objectType string, data []byte) error
-	LoadObject(ctx context.Context, objectID string) ([]byte, error)
+	SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcid int64) error
+	LoadObject(ctx context.Context, objectID string) (data []byte, nextRcid int64, err error)
 	DeleteObject(ctx context.Context, objectID string) error
 
 	// ReliableCall methods for exactly-once semantics
@@ -40,40 +40,41 @@ type PersistenceProvider interface {
 
 // SaveObject saves object data using the provided persistence provider
 // The caller should call obj.ToData() to get the proto.Message before calling this function
-func SaveObject(ctx context.Context, provider PersistenceProvider, objectID, objectType string, data proto.Message) error {
+func SaveObject(ctx context.Context, provider PersistenceProvider, objectID, objectType string, data proto.Message, nextRcid int64) error {
 	// Convert proto.Message to JSON bytes using protojson
 	jsonData, err := protojson.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal proto message to JSON: %w", err)
 	}
 
-	return provider.SaveObject(ctx, objectID, objectType, jsonData)
+	return provider.SaveObject(ctx, objectID, objectType, jsonData, nextRcid)
 }
 
 // ErrObjectNotFound is returned when an object is not found in persistence storage
 var ErrObjectNotFound = fmt.Errorf("object not found in persistence storage")
 
 // LoadObject loads object data from the provided persistence provider
-// Returns the data as proto.Message. The caller should create a proto.Message instance
-// to unmarshal into, then call obj.FromData() to restore the object state
-func LoadObject(ctx context.Context, provider PersistenceProvider, objectID string, protoMsg proto.Message) error {
-	jsonData, err := provider.LoadObject(ctx, objectID)
+// Returns the data as proto.Message and the next_rcid value.
+// The caller should create a proto.Message instance to unmarshal into,
+// then call obj.FromData() to restore the object state
+func LoadObject(ctx context.Context, provider PersistenceProvider, objectID string, protoMsg proto.Message) (nextRcid int64, err error) {
+	jsonData, nextRcid, err := provider.LoadObject(ctx, objectID)
 	if err != nil {
-		return fmt.Errorf("failed to load object data: %w", err)
+		return 0, fmt.Errorf("failed to load object data: %w", err)
 	}
 
-	// If no data was found (provider returned nil, nil), return ErrObjectNotFound
+	// If no data was found (provider returned nil, 0, nil), return ErrObjectNotFound
 	if jsonData == nil {
-		return ErrObjectNotFound
+		return 0, ErrObjectNotFound
 	}
 
 	// Unmarshal JSON to proto.Message
 	err = protojson.Unmarshal(jsonData, protoMsg)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal JSON to proto message: %w", err)
+		return 0, fmt.Errorf("failed to unmarshal JSON to proto message: %w", err)
 	}
 
-	return nil
+	return nextRcid, nil
 }
 
 // MarshalProtoToJSON is a utility function to marshal proto.Message to JSON

@@ -55,6 +55,12 @@ type Object interface {
 	// Returns:
 	//   - error: Deserialization error, or nil for non-persistent objects
 	FromData(data proto.Message) error
+
+	// GetNextRcid returns the next reliable call ID for this object
+	GetNextRcid() int64
+
+	// SetNextRcid sets the next reliable call ID for this object
+	SetNextRcid(rcid int64)
 }
 
 // ErrNotPersistent is returned when an object type does not support persistence.
@@ -64,6 +70,7 @@ type BaseObject struct {
 	self         Object
 	id           string
 	creationTime time.Time
+	nextRcid     int64
 	Logger       *logger.Logger
 }
 
@@ -104,4 +111,14 @@ func (base *BaseObject) ToData() (proto.Message, error) {
 // Returns an error indicating this object type is not persistent
 func (base *BaseObject) FromData(data proto.Message) error {
 	return nil
+}
+
+// GetNextRcid returns the next reliable call ID for this object
+func (base *BaseObject) GetNextRcid() int64 {
+	return base.nextRcid
+}
+
+// SetNextRcid sets the next reliable call ID for this object
+func (base *BaseObject) SetNextRcid(rcid int64) {
+	base.nextRcid = rcid
 }

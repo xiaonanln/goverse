@@ -22,12 +22,12 @@ func NewPostgresPersistenceProvider(db *DB) *PostgresPersistenceProvider {
 }
 
 // SaveObject saves an object to the PostgreSQL database
-func (p *PostgresPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
-	return p.db.SaveObject(ctx, objectID, objectType, data)
+func (p *PostgresPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcid int64) error {
+	return p.db.SaveObject(ctx, objectID, objectType, data, nextRcid)
 }
 
 // LoadObject loads an object from the PostgreSQL database
-func (p *PostgresPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+func (p *PostgresPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, int64, error) {
 	return p.db.LoadObject(ctx, objectID)
 }
 

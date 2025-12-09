@@ -14,20 +14,22 @@ import (
 
 // MockPersistenceProvider for testing
 type MockPersistenceProvider struct {
-	storage   map[string][]byte
-	mu        sync.Mutex
-	saveCount int
-	SaveErr   error
-	LoadErr   error
+	storage    map[string][]byte
+	nextRcids  map[string]int64
+	mu         sync.Mutex
+	saveCount  int
+	SaveErr    error
+	LoadErr    error
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage: make(map[string][]byte),
+		storage:   make(map[string][]byte),
+		nextRcids: make(map[string]int64),
 	}
 }
 
-func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcid int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -35,22 +37,24 @@ func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, obje
 		return m.SaveErr
 	}
 	m.storage[objectID] = data
+	m.nextRcids[objectID] = nextRcid
 	m.saveCount++
 	return nil
 }
 
-func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.LoadErr != nil {
-		return nil, m.LoadErr
+		return nil, 0, m.LoadErr
 	}
 	data, ok := m.storage[objectID]
 	if !ok {
-		return nil, nil
+		return nil, 0, nil
 	}
-	return data, nil
+	nextRcid := m.nextRcids[objectID]
+	return data, nextRcid, nil
 }
 
 func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {

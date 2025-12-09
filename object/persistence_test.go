@@ -11,34 +11,38 @@ import (
 
 // MockPersistenceProvider is a mock implementation for testing
 type MockPersistenceProvider struct {
-	storage map[string][]byte
-	SaveErr error
-	LoadErr error
+	storage   map[string][]byte
+	nextRcids map[string]int64
+	SaveErr   error
+	LoadErr   error
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage: make(map[string][]byte),
+		storage:   make(map[string][]byte),
+		nextRcids: make(map[string]int64),
 	}
 }
 
-func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcid int64) error {
 	if m.SaveErr != nil {
 		return m.SaveErr
 	}
 	m.storage[objectID] = data
+	m.nextRcids[objectID] = nextRcid
 	return nil
 }
 
-func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, int64, error) {
 	if m.LoadErr != nil {
-		return nil, m.LoadErr
+		return nil, 0, m.LoadErr
 	}
 	data, ok := m.storage[objectID]
 	if !ok {
-		return nil, nil
+		return nil, 0, nil
 	}
-	return data, nil
+	nextRcid := m.nextRcids[objectID]
+	return data, nextRcid, nil
 }
 
 func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {
@@ -184,7 +188,7 @@ func TestSaveObject_Persistent(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
@@ -231,7 +235,7 @@ func TestLoadObject(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
@@ -246,7 +250,7 @@ func TestLoadObject(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = LoadObject(ctx, provider, "test-id", loadedData)
+	_, err = LoadObject(ctx, provider, "test-id", loadedData)
 	if err != nil {
 		t.Fatalf("LoadObject() returned error: %v", err)
 	}
