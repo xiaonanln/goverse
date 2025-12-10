@@ -15,7 +15,7 @@ import (
 // MockPersistenceProvider for testing
 type MockPersistenceProvider struct {
 	storage    map[string][]byte
-	nextRcseqs  map[string]int64
+	nextRcseqs map[string]int64
 	mu         sync.Mutex
 	saveCount  int
 	SaveErr    error
@@ -24,7 +24,7 @@ type MockPersistenceProvider struct {
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage:   make(map[string][]byte),
+		storage:    make(map[string][]byte),
 		nextRcseqs: make(map[string]int64),
 	}
 }
@@ -110,6 +110,13 @@ func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, o
 
 func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*object.ReliableCall, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockPersistenceProvider) GetStoredNextRcseq(objectID string) (int64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	nextRcseq, ok := m.nextRcseqs[objectID]
+	return nextRcseq, ok
 }
 
 // TestPersistentObject for testing

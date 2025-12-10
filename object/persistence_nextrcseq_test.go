@@ -57,7 +57,7 @@ func TestNextRcseq_Persistence(t *testing.T) {
 	}
 
 	// Verify next_rcseq was saved
-	savedNextRcseq, ok := provider.nextRcseqs["test-id"]
+	savedNextRcseq, ok := provider.GetStoredNextRcseq("test-id")
 	if !ok {
 		t.Fatal("next_rcseq was not saved")
 	}

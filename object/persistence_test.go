@@ -11,20 +11,24 @@ import (
 
 // MockPersistenceProvider is a mock implementation for testing
 type MockPersistenceProvider struct {
-	storage   map[string][]byte
+	storage    map[string][]byte
 	nextRcseqs map[string]int64
-	SaveErr   error
-	LoadErr   error
+	mu         sync.Mutex
+	SaveErr    error
+	LoadErr    error
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage:   make(map[string][]byte),
+		storage:    make(map[string][]byte),
 		nextRcseqs: make(map[string]int64),
 	}
 }
 
 func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcseq int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.SaveErr != nil {
 		return m.SaveErr
 	}
@@ -34,6 +38,9 @@ func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, obje
 }
 
 func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.LoadErr != nil {
 		return nil, 0, m.LoadErr
 	}
@@ -46,6 +53,8 @@ func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID strin
 }
 
 func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.storage, objectID)
 	return nil
 }
@@ -64,6 +73,13 @@ func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, o
 
 func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*ReliableCall, error) {
 	return nil, ErrObjectNotFound
+}
+
+func (m *MockPersistenceProvider) GetStoredNextRcseq(objectID string) (int64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	nextRcseq, ok := m.nextRcseqs[objectID]
+	return nextRcseq, ok
 }
 
 // TestPersistentObject is a test implementation of a persistent object

@@ -93,7 +93,7 @@ func TestNode_NextRcseq_PersistenceNewObject(t *testing.T) {
 	}
 
 	// Verify next_rcseq was saved
-	savedNextRcseq, ok := provider.nextRcseqs["test-obj-1"]
+	savedNextRcseq, ok := provider.GetStoredNextRcseq("test-obj-1")
 	if !ok {
 		t.Fatal("next_rcseq was not saved")
 	}
@@ -253,7 +253,7 @@ func TestNode_NextRcseq_PeriodicPersistence(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	// Verify next_rcseq was saved by periodic persistence
-	savedNextRcseq, ok := provider.nextRcseqs["test-obj-1"]
+	savedNextRcseq, ok := provider.GetStoredNextRcseq("test-obj-1")
 	if !ok {
 		t.Fatal("next_rcseq was not saved by periodic persistence")
 	}
@@ -268,7 +268,7 @@ func TestNode_NextRcseq_PeriodicPersistence(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	// Verify updated next_rcseq was saved
-	savedNextRcseq, ok = provider.nextRcseqs["test-obj-1"]
+	savedNextRcseq, ok = provider.GetStoredNextRcseq("test-obj-1")
 	if !ok {
 		t.Fatal("next_rcseq was not saved by periodic persistence")
 	}
