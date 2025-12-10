@@ -15,6 +15,7 @@ service Goverse {
   rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
   rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
   rpc RegisterGate (RegisterGateRequest) returns (stream GateMessage);
+  rpc ReliableCallObject (ReliableCallObjectRequest) returns (ReliableCallObjectResponse);
 }
 
 message StatusResponse {
@@ -89,6 +90,17 @@ message GateMessage {
     RegisterGateResponse register_gate_response = 1;
     ClientMessageEnvelope client_message = 2;
   }
+}
+
+message ReliableCallObjectRequest {
+  string call_id = 1;      // Unique identifier for deduplication
+  string object_type = 2;  // Type of the target object
+  string object_id = 3;    // ID of the target object
+}
+
+message ReliableCallObjectResponse {
+  bytes result_data = 1;   // Serialized result data (populated on success)
+  string error = 2;        // Error message (populated on failure)
 }
 
 message Empty {}
