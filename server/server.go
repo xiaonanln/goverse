@@ -493,3 +493,35 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 		}
 	}
 }
+
+func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.ReliableCallObjectRequest) (*goverse_pb.ReliableCallObjectResponse, error) {
+	server.logRPC("ReliableCallObject", req)
+
+	// Validate request parameters
+	if req.GetCallId() == "" {
+		return nil, fmt.Errorf("call_id must be specified in ReliableCallObject request")
+	}
+	if req.GetObjectType() == "" {
+		return nil, fmt.Errorf("object_type must be specified in ReliableCallObject request")
+	}
+	if req.GetObjectId() == "" {
+		return nil, fmt.Errorf("object_id must be specified in ReliableCallObject request")
+	}
+
+	// Validate that this object should be on this node
+	if err := server.validateObjectShardOwnership(ctx, req.GetObjectId()); err != nil {
+		return nil, err
+	}
+
+	// Route to node handler
+	resultData, err := server.Node.ReliableCallObject(ctx, req.GetCallId(), req.GetObjectType(), req.GetObjectId())
+	if err != nil {
+		return nil, err
+	}
+
+	response := &goverse_pb.ReliableCallObjectResponse{
+		ResultData: resultData,
+		Error:      "",
+	}
+	return response, nil
+}
