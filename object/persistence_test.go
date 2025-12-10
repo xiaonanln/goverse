@@ -11,37 +11,50 @@ import (
 
 // MockPersistenceProvider is a mock implementation for testing
 type MockPersistenceProvider struct {
-	storage map[string][]byte
-	SaveErr error
-	LoadErr error
+	storage    map[string][]byte
+	nextRcseqs map[string]int64
+	mu         sync.Mutex
+	SaveErr    error
+	LoadErr    error
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage: make(map[string][]byte),
+		storage:    make(map[string][]byte),
+		nextRcseqs: make(map[string]int64),
 	}
 }
 
-func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
+func (m *MockPersistenceProvider) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcseq int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.SaveErr != nil {
 		return m.SaveErr
 	}
 	m.storage[objectID] = data
+	m.nextRcseqs[objectID] = nextRcseq
 	return nil
 }
 
-func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+func (m *MockPersistenceProvider) LoadObject(ctx context.Context, objectID string) ([]byte, int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.LoadErr != nil {
-		return nil, m.LoadErr
+		return nil, 0, m.LoadErr
 	}
 	data, ok := m.storage[objectID]
 	if !ok {
-		return nil, nil
+		return nil, 0, nil
 	}
-	return data, nil
+	nextRcseq := m.nextRcseqs[objectID]
+	return data, nextRcseq, nil
 }
 
 func (m *MockPersistenceProvider) DeleteObject(ctx context.Context, objectID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.storage, objectID)
 	return nil
 }
@@ -60,6 +73,13 @@ func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, o
 
 func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*ReliableCall, error) {
 	return nil, ErrObjectNotFound
+}
+
+func (m *MockPersistenceProvider) GetStoredNextRcseq(objectID string) (int64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	nextRcseq, ok := m.nextRcseqs[objectID]
+	return nextRcseq, ok
 }
 
 // TestPersistentObject is a test implementation of a persistent object
@@ -184,7 +204,7 @@ func TestSaveObject_Persistent(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
@@ -231,7 +251,7 @@ func TestLoadObject(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
+	err = SaveObject(ctx, provider, obj.Id(), obj.Type(), data, 0)
 	if err != nil {
 		t.Fatalf("SaveObject() returned error: %v", err)
 	}
@@ -246,7 +266,7 @@ func TestLoadObject(t *testing.T) {
 		t.Fatalf("ToData() returned error: %v", err)
 	}
 
-	err = LoadObject(ctx, provider, "test-id", loadedData)
+	_, err = LoadObject(ctx, provider, "test-id", loadedData)
 	if err != nil {
 		t.Fatalf("LoadObject() returned error: %v", err)
 	}

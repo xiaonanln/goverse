@@ -467,15 +467,17 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 		protoMsg, err := obj.ToData()
 		if err == nil {
 			// Object supports persistence, try to load
-			err = object.LoadObject(ctx, provider, id, protoMsg)
+			nextRcseq, err := object.LoadObject(ctx, provider, id, protoMsg)
 			if err == nil {
 				// Successfully loaded from persistence
-				node.logger.Infof("Loaded object %s from persistence", id)
+				node.logger.Infof("Loaded object %s from persistence (next_rcseq=%d)", id, nextRcseq)
 				dataToRestore = protoMsg
+				obj.SetNextRcseq(nextRcseq)
 			} else if errors.Is(err, object.ErrObjectNotFound) {
 				// Object not found in storage, will call FromData(nil) to indicate new creation
 				node.logger.Infof("Object %s not found in persistence, creating new object", id)
 				dataToRestore = nil
+				obj.SetNextRcseq(0) // Default to 0 for new objects
 			} else {
 				// Other error loading from persistence -> treat as serious error
 				node.logger.Errorf("Failed to load object %s from persistence: %v", id, err)
@@ -485,6 +487,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 			// Object type doesn't support persistence, call FromData(nil)
 			node.logger.Infof("Object type %s is not persistent, creating new object", typ)
 			dataToRestore = nil
+			obj.SetNextRcseq(0) // Default to 0 for non-persistent objects
 		}
 	}
 
@@ -800,8 +803,11 @@ func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
 			continue
 		}
 
+		// Get next_rcseq from object
+		nextRcseq := obj.GetNextRcseq()
+
 		// Save the object data (while holding per-key RLock)
-		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data)
+		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data, nextRcseq)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj, err)
 			errorCount++

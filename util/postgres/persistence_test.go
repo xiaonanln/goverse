@@ -31,7 +31,7 @@ func TestSaveObject_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := db.SaveObject(context.Background(), tt.objectID, tt.objectType, []byte(`{"key":"value"}`))
+			err := db.SaveObject(context.Background(), tt.objectID, tt.objectType, []byte(`{"key":"value"}`), 0)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("SaveObject() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -43,7 +43,7 @@ func TestLoadObject_Validation(t *testing.T) {
 	db := &DB{}
 
 	t.Run("empty object_id", func(t *testing.T) {
-		_, err := db.LoadObject(context.Background(), "")
+		_, _, err := db.LoadObject(context.Background(), "")
 		if err == nil {
 			t.Fatal("LoadObject() should return error for empty object_id")
 		}

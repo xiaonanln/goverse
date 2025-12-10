@@ -14,13 +14,14 @@ type ObjectData struct {
 	ObjectID   string
 	ObjectType string
 	Data       []byte
+	NextRcseq  int64
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
 
 // SaveObject saves an object to the database
-// If the object already exists, it updates the data and updated_at timestamp
-func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data []byte) error {
+// If the object already exists, it updates the data, next_rcseq and updated_at timestamp
+func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data []byte, nextRcseq int64) error {
 	if objectID == "" {
 		return fmt.Errorf("object_id cannot be empty")
 	}
@@ -32,14 +33,14 @@ func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data 
 	}
 
 	query := `
-		INSERT INTO goverse_objects (object_id, object_type, data, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO goverse_objects (object_id, object_type, data, next_rcseq, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (object_id) DO UPDATE
-		SET data = $3, updated_at = $5, object_type = $2
+		SET data = $3, next_rcseq = $4, updated_at = $6, object_type = $2
 	`
 
 	now := time.Now()
-	_, err := db.conn.ExecContext(ctx, query, objectID, objectType, data, now, now)
+	_, err := db.conn.ExecContext(ctx, query, objectID, objectType, data, nextRcseq, now, now)
 	if err != nil {
 		return fmt.Errorf("failed to save object: %w", err)
 	}
@@ -48,28 +49,29 @@ func (db *DB) SaveObject(ctx context.Context, objectID, objectType string, data 
 }
 
 // LoadObject retrieves an object from the database by its ID
-func (db *DB) LoadObject(ctx context.Context, objectID string) ([]byte, error) {
+func (db *DB) LoadObject(ctx context.Context, objectID string) ([]byte, int64, error) {
 	if objectID == "" {
-		return nil, fmt.Errorf("object_id cannot be empty")
+		return nil, 0, fmt.Errorf("object_id cannot be empty")
 	}
 
 	query := `
-		SELECT data
+		SELECT data, next_rcseq
 		FROM goverse_objects
 		WHERE object_id = $1
 	`
 
 	var jsonData []byte
-	err := db.conn.QueryRowContext(ctx, query, objectID).Scan(&jsonData)
+	var nextRcseq int64
+	err := db.conn.QueryRowContext(ctx, query, objectID).Scan(&jsonData, &nextRcseq)
 
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("object not found: %s", objectID)
+		return nil, 0, fmt.Errorf("object not found: %s", objectID)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to load object: %w", err)
+		return nil, 0, fmt.Errorf("failed to load object: %w", err)
 	}
 
-	return jsonData, nil
+	return jsonData, nextRcseq, nil
 }
 
 // DeleteObject deletes an object from the database
@@ -119,7 +121,7 @@ func (db *DB) ListObjectsByType(ctx context.Context, objectType string) ([]*Obje
 	}
 
 	query := `
-		SELECT object_id, object_type, data, created_at, updated_at
+		SELECT object_id, object_type, data, next_rcseq, created_at, updated_at
 		FROM goverse_objects
 		WHERE object_type = $1
 		ORDER BY created_at DESC
@@ -139,6 +141,7 @@ func (db *DB) ListObjectsByType(ctx context.Context, objectType string) ([]*Obje
 			&objData.ObjectID,
 			&objData.ObjectType,
 			&objData.Data,
+			&objData.NextRcseq,
 			&objData.CreatedAt,
 			&objData.UpdatedAt,
 		)

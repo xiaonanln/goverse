@@ -137,7 +137,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get object data: %v", err)
 	}
-	err = object.SaveObject(ctx, provider, user1.Id(), user1.Type(), data)
+	err = object.SaveObject(ctx, provider, user1.Id(), user1.Type(), data, 0)
 	if err != nil {
 		log.Fatalf("Failed to save object: %v", err)
 	}
@@ -155,7 +155,7 @@ func main() {
 		log.Fatalf("Failed to create data template: %v", err)
 	}
 
-	err = object.LoadObject(ctx, provider, "user-alice", loadedData)
+	_, err = object.LoadObject(ctx, provider, "user-alice", loadedData)
 	if err != nil {
 		log.Fatalf("Failed to load object: %v", err)
 	}
@@ -186,7 +186,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get object data: %v", err)
 	}
-	err = object.SaveObject(ctx, provider, user2.Id(), user2.Type(), data)
+	err = object.SaveObject(ctx, provider, user2.Id(), user2.Type(), data, 0)
 	if err != nil {
 		log.Fatalf("Failed to update object: %v", err)
 	}
@@ -216,7 +216,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to get object data for %s: %v", u.id, err)
 		}
-		err = object.SaveObject(ctx, provider, userObj.Id(), userObj.Type(), data)
+		err = object.SaveObject(ctx, provider, userObj.Id(), userObj.Type(), data, 0)
 		if err != nil {
 			log.Fatalf("Failed to save user %s: %v", u.id, err)
 		}

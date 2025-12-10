@@ -63,6 +63,7 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		object_id VARCHAR(255) PRIMARY KEY,
 		object_type VARCHAR(255) NOT NULL,
 		data JSONB NOT NULL,
+		next_rcseq BIGINT NOT NULL DEFAULT 0,
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);

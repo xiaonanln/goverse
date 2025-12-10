@@ -3,6 +3,7 @@ package object
 import (
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/xiaonanln/goverse/util/logger"
@@ -55,6 +56,12 @@ type Object interface {
 	// Returns:
 	//   - error: Deserialization error, or nil for non-persistent objects
 	FromData(data proto.Message) error
+
+	// GetNextRcseq returns the next reliable call sequence number for this object
+	GetNextRcseq() int64
+
+	// SetNextRcseq sets the next reliable call sequence number for this object
+	SetNextRcseq(rcseq int64)
 }
 
 // ErrNotPersistent is returned when an object type does not support persistence.
@@ -64,6 +71,7 @@ type BaseObject struct {
 	self         Object
 	id           string
 	creationTime time.Time
+	nextRcseq    atomic.Int64
 	Logger       *logger.Logger
 }
 
@@ -104,4 +112,14 @@ func (base *BaseObject) ToData() (proto.Message, error) {
 // Returns an error indicating this object type is not persistent
 func (base *BaseObject) FromData(data proto.Message) error {
 	return nil
+}
+
+// GetNextRcseq returns the next reliable call sequence number for this object
+func (base *BaseObject) GetNextRcseq() int64 {
+	return base.nextRcseq.Load()
+}
+
+// SetNextRcseq sets the next reliable call sequence number for this object
+func (base *BaseObject) SetNextRcseq(rcseq int64) {
+	base.nextRcseq.Store(rcseq)
 }
