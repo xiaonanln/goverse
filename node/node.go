@@ -358,6 +358,32 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	return resp.Interface().(proto.Message), nil
 }
 
+// ReliableCallObject handles a reliable call request for an object.
+// This is a stub implementation for PR 6 that will be expanded in later PRs
+// to fetch and execute pending reliable calls from the persistence provider.
+func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string) ([]byte, error) {
+	// Lock ordering: stopMu.RLock
+	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
+	node.stopMu.RLock()
+	defer node.stopMu.RUnlock()
+
+	// Check if node is stopped after acquiring lock
+	if node.stopped.Load() {
+		return nil, fmt.Errorf("node is stopped")
+	}
+
+	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s", callID, objectType, objectID)
+
+	// Stub implementation: return success with empty result for now
+	// Later PRs will:
+	// - Fetch pending reliable calls from persistence provider
+	// - Execute calls sequentially by seq
+	// - Update call status in database
+	// - Track nextRcseq on the object
+	// - Return the actual result data
+	return []byte{}, nil
+}
+
 // CreateObject implements the Goverse gRPC service CreateObject method
 func (node *Node) CreateObject(ctx context.Context, typ string, id string) (string, error) {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
