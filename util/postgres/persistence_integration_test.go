@@ -548,9 +548,9 @@ func TestUpdateReliableCallStatus_Integration(t *testing.T) {
 		t.Fatalf("InsertOrGetReliableCall() failed: %v", err)
 	}
 
-	// Update status to completed
+	// Update status to success
 	resultData := []byte("result-data")
-	err = db.UpdateReliableCallStatus(ctx, rc.Seq, "completed", resultData, "")
+	err = db.UpdateReliableCallStatus(ctx, rc.Seq, "success", resultData, "")
 	if err != nil {
 		t.Fatalf("UpdateReliableCallStatus() failed: %v", err)
 	}
@@ -561,8 +561,8 @@ func TestUpdateReliableCallStatus_Integration(t *testing.T) {
 		t.Fatalf("GetReliableCall() failed: %v", err)
 	}
 
-	if updated.Status != "completed" {
-		t.Fatalf("Status = %s, want completed", updated.Status)
+	if updated.Status != "success" {
+		t.Fatalf("Status = %s, want success", updated.Status)
 	}
 	if string(updated.ResultData) != string(resultData) {
 		t.Fatalf("ResultData = %s, want %s", string(updated.ResultData), string(resultData))
@@ -607,8 +607,8 @@ func TestGetPendingReliableCalls_Integration(t *testing.T) {
 		t.Fatalf("InsertOrGetReliableCall() req-3 failed: %v", err)
 	}
 
-	// Update one to completed
-	err = db.UpdateReliableCallStatus(ctx, rc2.Seq, "completed", []byte("result"), "")
+	// Update one to success
+	err = db.UpdateReliableCallStatus(ctx, rc2.Seq, "success", []byte("result"), "")
 	if err != nil {
 		t.Fatalf("UpdateReliableCallStatus() failed: %v", err)
 	}

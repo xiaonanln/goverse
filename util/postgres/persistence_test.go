@@ -157,7 +157,7 @@ func TestUpdateReliableCallStatus_Validation(t *testing.T) {
 		{
 			name:         "zero seq",
 			seq:          0,
-			status:       "completed",
+			status:       "success",
 			resultData:   []byte("result"),
 			errorMessage: "",
 			wantErr:      true,
@@ -165,7 +165,7 @@ func TestUpdateReliableCallStatus_Validation(t *testing.T) {
 		{
 			name:         "negative seq",
 			seq:          -1,
-			status:       "completed",
+			status:       "success",
 			resultData:   []byte("result"),
 			errorMessage: "",
 			wantErr:      true,
