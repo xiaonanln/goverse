@@ -45,6 +45,25 @@ A simple distributed counter service demonstrating the Goverse virtual actor mod
    - Counters are created on-demand when first accessed
    - Runs as a Goverse node
 
+## Method Signatures
+
+All object methods in GoVerse must follow the RPC signature:
+
+```go
+func (c *Counter) MethodName(ctx context.Context, req *RequestType) (*ResponseType, error)
+```
+
+**Why return values are required:**
+1. **RPC Semantics**: GoVerse uses remote procedure call (RPC) semantics for all object calls
+2. **Client Feedback**: Clients expect confirmation that operations succeeded and current state
+3. **HTTP/gRPC Compatibility**: Both HTTP REST and gRPC protocols require response messages
+4. **Distributed Systems**: Network calls must provide feedback (success/failure, results)
+
+Even operations that "don't need" to return data (like `Reset()`) must return a response message. This ensures:
+- Clients can confirm the operation completed
+- Errors can be propagated properly
+- The pattern remains consistent across all methods
+
 ## API Design
 
 ### HTTP Endpoints
@@ -157,7 +176,7 @@ cd samples/counter
 ```go
 type Counter struct {
     goverseapi.BaseObject
-    mu    sync.Mutex
+    mu    sync.Mutex  // Required: protects value from concurrent access
     value int32
 }
 
@@ -166,7 +185,7 @@ func (c *Counter) OnCreated() {
 }
 
 func (c *Counter) Increment(ctx context.Context, req *pb.IncrementRequest) (*pb.CounterResponse, error) {
-    c.mu.Lock()
+    c.mu.Lock()  // Necessary because GoVerse allows concurrent method calls
     defer c.mu.Unlock()
     
     c.value += req.Amount
@@ -384,16 +403,36 @@ The Counter sample requires three separate processes:
                      └─────────────┘
 ```
 
+## Concurrency Model
+
+**Important**: GoVerse's concurrency model differs from traditional actor frameworks like Orleans:
+
+- **Orleans-style actors**: Serialize method calls per actor (turn-based concurrency). Only one method runs at a time per actor, so no locks needed within methods.
+- **GoVerse objects**: Allow **concurrent method execution** on the same object. Multiple method calls can run simultaneously on the same object instance.
+
+This design choice enables:
+- Higher throughput for read-heavy workloads (multiple `Get()` calls run in parallel)
+- More efficient resource utilization
+- Better performance for independent operations
+
+**Consequence**: Object developers must protect shared state using:
+1. **Mutex locks** (`sync.Mutex`) - General purpose, easy to use
+2. **Atomic operations** (`atomic.Int32`, `atomic.Int64`) - Lock-free, best for simple counters
+3. **RWMutex** (`sync.RWMutex`) - For read-heavy patterns with occasional writes
+
+The Counter sample uses `sync.Mutex` to demonstrate the standard pattern. For production counters, consider using `atomic.Int32` for better performance.
+
 ## Learning Outcomes
 
 After studying this sample, developers will understand:
 
 1. **Object Creation**: How Goverse objects are created and identified
 2. **State Management**: How objects maintain independent state with proper locking
-3. **Method Invocation**: How to call methods on Goverse objects
-4. **HTTP Integration**: How the Gate translates HTTP requests to object calls
-5. **Distribution**: How counters are automatically distributed across nodes
-6. **Concurrency**: How multiple clients can safely access the same counter
+3. **Concurrency Model**: Why locks are necessary (concurrent method execution vs turn-based)
+4. **Method Invocation**: How to call methods on Goverse objects
+5. **HTTP Integration**: How the Gate translates HTTP requests to object calls
+6. **Distribution**: How counters are automatically distributed across nodes
+7. **Thread Safety**: How multiple clients can safely access the same counter concurrently
 
 ## Future Enhancements
 

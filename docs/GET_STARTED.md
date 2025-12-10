@@ -56,6 +56,55 @@ go get github.com/xiaonanln/goverse
 - Safe recovery after node failures
 - Automatic object migration during rebalancing
 
+### Concurrency Model
+
+**Important**: GoVerse's concurrency model differs from traditional actor frameworks:
+
+- **Traditional Actors (Orleans, Akka)**: Serialize method calls per actor. Only one method runs at a time per actor (turn-based concurrency). Objects don't need internal locks.
+
+- **GoVerse Objects**: Allow **concurrent method execution** on the same object. Multiple method calls can run simultaneously on the same object instance.
+
+**Why this design?**
+- Higher throughput for read-heavy workloads
+- Better CPU utilization
+- More flexibility for object developers
+- Natural fit for Go's concurrency model
+
+**Implications for developers:**
+1. **Must protect shared state** using `sync.Mutex`, `sync.RWMutex`, or atomic operations
+2. **Must consider race conditions** when accessing object fields
+3. **Can leverage Go's concurrency** primitives (goroutines, channels) within objects
+4. **Can optimize** with read/write locks for read-heavy patterns
+
+**Example:**
+```go
+type Counter struct {
+    goverseapi.BaseObject
+    mu    sync.Mutex  // Required: protects value
+    value int
+}
+
+func (c *Counter) Add(ctx context.Context, req *pb.AddRequest) (*pb.CounterResponse, error) {
+    c.mu.Lock()  // Protect from concurrent Add/Get calls
+    defer c.mu.Unlock()
+    c.value += int(req.Amount)
+    return &pb.CounterResponse{Value: int32(c.value)}, nil
+}
+```
+
+**Alternative - Lock-free with atomics:**
+```go
+type AtomicCounter struct {
+    goverseapi.BaseObject
+    value atomic.Int32  // Lock-free operations
+}
+
+func (c *AtomicCounter) Add(ctx context.Context, req *pb.AddRequest) (*pb.CounterResponse, error) {
+    newValue := c.value.Add(req.Amount)
+    return &pb.CounterResponse{Value: newValue}, nil
+}
+```
+
 ---
 
 ## Project Structure

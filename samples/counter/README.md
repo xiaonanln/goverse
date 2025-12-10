@@ -110,19 +110,45 @@ python counter.py delete visitors
   - Counters are created on-demand when first accessed
   - Runs as a Goverse node
 
+### Concurrency and Locking
+
+The Counter uses `sync.Mutex` to protect its state because **GoVerse allows concurrent method calls** on the same object. This differs from Orleans-style actors that serialize calls per actor.
+
+**Why locks are needed:**
+- Multiple clients can call `Increment()`, `Get()`, etc. simultaneously
+- Without locks, race conditions would corrupt the counter value
+- GoVerse prioritizes throughput over turn-based serialization
+
+**Alternative implementation:**
+See `server/atomic_counter_example.go` for a lock-free implementation using `atomic.Int32`. Atomic operations are:
+- Faster than mutex for simple operations
+- Lock-free (no goroutine blocking)
+- Ideal for simple counters
+
+Choose mutex when:
+- Multiple fields need coordinated updates
+- Complex logic requires consistent state
+- Readability is more important than performance
+
+Choose atomics when:
+- Single value to protect
+- Simple read-modify-write operations
+- Maximum performance is critical
+
 ## Project Structure
 
 ```
 samples/counter/
-├── DESIGN.md              # Design document
-├── README.md              # This file
-├── counter.py             # CLI to interact with counters
+├── DESIGN.md                      # Design document
+├── README.md                      # This file
+├── counter.py                     # CLI to interact with counters
 ├── proto/
-│   └── counter.proto      # Protocol buffer definitions
+│   └── counter.proto              # Protocol buffer definitions
 ├── server/
-│   ├── main.go           # Counter server entry point
-│   └── counter.go        # Counter object implementation
-└── compile-proto.sh      # Proto compilation script
+│   ├── main.go                    # Counter server entry point
+│   ├── counter.go                 # Counter implementation (mutex-based)
+│   └── atomic_counter_example.go  # Alternative implementation (atomic-based)
+└── compile-proto.sh               # Proto compilation script
 ```
 
 ## API Design

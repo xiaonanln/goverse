@@ -52,18 +52,21 @@ GoVerse uses a **Node + Gate** architecture:
 // counter.go
 type Counter struct {
     goverseapi.BaseObject
-    mu    sync.Mutex
+    mu    sync.Mutex  // Required: GoVerse allows concurrent method calls on the same object
     value int
 }
 
 // Object methods use protobuf types for HTTP/gRPC compatibility
+// Must return a response - GoVerse uses RPC semantics for all object calls
 func (c *Counter) Add(ctx context.Context, req *wrapperspb.Int32Value) (*wrapperspb.Int32Value, error) {
-    c.mu.Lock()
+    c.mu.Lock()  // Protect shared state from concurrent access
     defer c.mu.Unlock()
     c.value += int(req.GetValue())
     return &wrapperspb.Int32Value{Value: int32(c.value)}, nil
 }
 ```
+
+> **Note on Concurrency**: Unlike Orleans-style actors that serialize method calls per actor, GoVerse allows **concurrent method execution** on the same object. You must use locks (or atomic operations) to protect shared state. For simple counters, `atomic.Int32` is an alternative to explicit locks.
 
 ### 2. Start a Node (Object Server)
 
