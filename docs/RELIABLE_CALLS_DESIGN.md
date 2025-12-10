@@ -31,7 +31,7 @@ The reliable calls system consists of several key components:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Application Layer                        │
-│              (goverseapi.CallObject)                         │
+│           (goverseapi.ReliableCallObject)                    │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      │ Initiates reliable call
@@ -46,8 +46,8 @@ The reliable calls system consists of several key components:
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                   Node Layer                                 │
-│     - Receives CallObject RPC requests                       │
-│     - Processes pending reliable calls                       │
+│     - Receives ReliableCallObject RPC requests               │
+│     - Triggers processing of pending reliable calls          │
 │     - Updates call status                                    │
 └────────────────────┬────────────────────────────────────────┘
                      │
@@ -115,8 +115,9 @@ Caller Node                    Target Node                    Database
      │<─ Return ReliableCall ───────────────────────────────────────│
      │   (status: pending)          │                              │
      │                              │                              │
-     │ 3. CallObject RPC            │                              │
+     │ 3. ReliableCallObject RPC    │                              │
      │─────────────────────────────>│                              │
+     │   (triggers pending calls)   │                              │
      │                              │                              │
      │                              │ 4. GetPendingReliableCalls() │
      │                              │─────────────────────────────>│
@@ -154,12 +155,13 @@ Caller Node                    Target Node                    Database
    - If `call_id` already exists, returns existing record (deduplication)
 
 3. **Call Routing**
-   - Caller routes the call to the target node via `CallObject()` RPC
+   - Caller routes the call to the target node via `ReliableCallObject()` RPC
+   - This RPC triggers the target node to process pending reliable calls for the object
    - Cluster layer determines which node hosts the target object
    - Call is sent via gRPC to the target node
 
 4. **Pending Call Retrieval**
-   - Target node, upon receiving a call OR during object activation:
+   - Target node, upon receiving the `ReliableCallObject` RPC:
      - Fetches pending calls via `GetPendingReliableCalls(objectID, nextRcseq)`
      - Returns calls with `seq > nextRcseq` and `status = pending`
      - Results are ordered by `seq` (ascending)
@@ -195,16 +197,15 @@ rc, err := provider.InsertOrGetReliableCall(
     requestData,
 )
 
-// 3. Route call to target node (handled by cluster)
-result, err := cluster.This().CallObject(
+// 3. Route call to target node via ReliableCallObject RPC
+// This triggers the target node to process pending calls
+result, err := cluster.This().ReliableCallObject(
     ctx,
     "TargetType",
     "target-obj-123",
-    "ProcessOrder",
-    request,
 )
 
-// Target node receives the call and:
+// Target node receives ReliableCallObject RPC and:
 // 4. Fetches pending calls
 pending, err := provider.GetPendingReliableCalls(
     ctx,
@@ -250,10 +251,11 @@ Pending reliable calls are processed in two scenarios:
    - When an object is activated (loaded into memory), the node fetches and processes all pending calls
    - Ensures calls made while the object was inactive are not lost
 
-2. **On Receiving New Calls**
-   - Whenever an object receives a `CallObject` RPC, it checks for pending calls
-   - Processes any pending calls before handling the new request
-   - Maintains sequential ordering of operations
+2. **On Receiving ReliableCallObject RPC**
+   - Whenever a node receives a `ReliableCallObject` RPC for an object, it triggers processing of pending calls
+   - The RPC does not carry the method/request data itself - that data is already stored in the database
+   - The node fetches pending calls from the database and executes them in order
+   - Returns the result of the call that was just registered (identified by `call_id`)
 
 ### Deduplication
 
@@ -296,15 +298,22 @@ Reliable calls survive failures:
    - Call remains in "pending" status in the database
    - When the object is activated on another node (or the same node after restart), pending calls are fetched and processed
 
-2. **Network Partition**
+2. **Object Crash Before Save**
+   - If an object crashes (or the node crashes) after executing a reliable call but before saving state, the call status remains "pending" in the database
+   - Upon recovery, the object's `nextRcseq` still points to before the call (since state wasn't persisted)
+   - The call will be re-executed when the object is activated again
+   - This ensures no reliable call is lost, even if the result wasn't persisted
+   - **Important**: Methods invoked via reliable calls should be idempotent or designed to handle re-execution gracefully
+
+3. **Network Partition**
    - If the caller cannot reach the target node, the call remains "pending"
    - When connectivity is restored, the target node processes the call
 
-3. **Database Failure**
+4. **Database Failure**
    - If the database is unavailable, calls cannot be registered
    - This is intentional: without persistence, exactly-once guarantees cannot be provided
 
-4. **Retry Safety**
+5. **Retry Safety**
    - Retrying a call with the same `call_id` is safe
    - The deduplication mechanism ensures no duplicate execution
    - The cached result is returned if the call was already completed
@@ -469,8 +478,8 @@ Applications interact with reliable calls through `goverseapi`:
 ```go
 import "github.com/xiaonanln/goverse/goverseapi"
 
-// Standard call (uses reliable calls internally if configured)
-result, err := goverseapi.CallObject(
+// Reliable call with exactly-once semantics
+result, err := goverseapi.ReliableCallObject(
     ctx,
     "OrderProcessor",
     "order-123",
@@ -480,9 +489,10 @@ result, err := goverseapi.CallObject(
 ```
 
 The cluster layer handles:
-- Routing to the correct node
-- Invoking the target object's method
-- Managing reliable call lifecycle (if persistence is configured)
+- Inserting the call into the database with a unique `call_id`
+- Routing the `ReliableCallObject` RPC to the correct node
+- Triggering the target node to process pending calls
+- Returning the result of the specified call
 
 ### Implementation Example
 
@@ -582,268 +592,6 @@ func TestInsertOrGetReliableCall_Integration(t *testing.T) {
 }
 ```
 
-## Limitations and Future Improvements
-
-### Current Limitations
-
-1. **Synchronous Execution Only**
-   - Calls are processed synchronously during object activation or method invocation
-   - No background processing of pending calls
-   - May delay object responses if many pending calls exist
-
-2. **No Automatic Retry**
-   - Failed calls remain in "failed" status indefinitely
-   - No automatic retry mechanism for transient failures
-   - Applications must implement their own retry logic
-
-3. **Single Database Dependency**
-   - Only PostgreSQL is currently implemented
-   - No support for distributed databases or alternative backends
-   - Database becomes a single point of failure
-
-4. **No Call Expiration**
-   - Pending calls never expire
-   - Old, stale calls remain in the database forever
-   - No automatic cleanup mechanism
-
-5. **No Priority Ordering**
-   - All calls are processed in strict `seq` order
-   - No way to prioritize urgent calls
-   - High-priority calls may wait behind low-priority ones
-
-6. **Limited Batch Operations**
-   - Calls are inserted one at a time
-   - No bulk insert or update operations
-   - May be inefficient for high-volume scenarios
-
-7. **No Observability**
-   - No built-in metrics for call processing
-   - No monitoring of pending call queue depth
-   - Limited visibility into system health
-
-### Suggested Future Enhancements
-
-#### 1. Asynchronous Processing
-
-Add background workers to process pending calls:
-
-```go
-type ReliableCallProcessor struct {
-    provider PersistenceProvider
-    interval time.Duration
-}
-
-func (p *ReliableCallProcessor) Start(ctx context.Context) {
-    ticker := time.NewTicker(p.interval)
-    defer ticker.Stop()
-
-    for {
-        select {
-        case <-ticker.C:
-            p.processPendingCalls(ctx)
-        case <-ctx.Done():
-            return
-        }
-    }
-}
-```
-
-Benefits:
-- Objects respond faster (don't wait for pending calls)
-- Decouples call processing from object activation
-- Enables parallel processing of independent calls
-
-#### 2. Automatic Retry with Exponential Backoff
-
-Add retry logic for failed calls:
-
-```go
-type ReliableCall struct {
-    // ... existing fields ...
-    RetryCount    int
-    NextRetryAt   time.Time
-    MaxRetries    int
-}
-
-// Retry policy
-if call.RetryCount < call.MaxRetries {
-    nextRetry := time.Now().Add(backoff(call.RetryCount))
-    UpdateReliableCallForRetry(ctx, call.Seq, nextRetry)
-}
-```
-
-Benefits:
-- Handles transient failures automatically
-- Reduces manual intervention
-- Improves reliability
-
-#### 3. Call Expiration and Cleanup
-
-Add TTL for pending calls:
-
-```go
-// Schema enhancement
-ALTER TABLE goverse_reliable_calls 
-ADD COLUMN expires_at TIMESTAMP;
-
-// Cleanup query
-DELETE FROM goverse_reliable_calls 
-WHERE expires_at < CURRENT_TIMESTAMP 
-AND status IN ('pending', 'failed');
-```
-
-Benefits:
-- Prevents unbounded database growth
-- Removes stale calls
-- Improves query performance
-
-#### 4. Priority-Based Processing
-
-Add priority field for urgent calls:
-
-```go
-type ReliableCall struct {
-    // ... existing fields ...
-    Priority int  // 0 = normal, 1 = high, 2 = urgent
-}
-
-// Query with priority
-SELECT * FROM goverse_reliable_calls 
-WHERE object_id = $1 AND seq > $2 AND status = 'pending' 
-ORDER BY priority DESC, seq ASC
-```
-
-Benefits:
-- Critical calls processed first
-- Better resource utilization
-- Improved user experience
-
-#### 5. Batch Operations
-
-Add bulk insert and update:
-
-```go
-func (db *DB) InsertReliableCallsBatch(
-    ctx context.Context, 
-    calls []*ReliableCall,
-) error {
-    // Use PostgreSQL COPY or multi-row INSERT
-}
-
-func (db *DB) UpdateReliableCallStatusBatch(
-    ctx context.Context, 
-    updates []StatusUpdate,
-) error {
-    // Batch update with transaction
-}
-```
-
-Benefits:
-- Higher throughput
-- Reduced database round trips
-- Better performance under load
-
-#### 6. Metrics and Observability
-
-Add Prometheus metrics:
-
-```go
-var (
-    callsTotal = promauto.NewCounterVec(
-        prometheus.CounterOpts{
-            Name: "goverse_reliable_calls_total",
-            Help: "Total number of reliable calls",
-        },
-        []string{"status", "object_type"},
-    )
-    
-    pendingCallsGauge = promauto.NewGaugeVec(
-        prometheus.GaugeOpts{
-            Name: "goverse_pending_reliable_calls",
-            Help: "Number of pending reliable calls",
-        },
-        []string{"object_id"},
-    )
-    
-    callProcessingDuration = promauto.NewHistogramVec(
-        prometheus.HistogramOpts{
-            Name: "goverse_call_processing_duration_seconds",
-            Help: "Duration of reliable call processing",
-        },
-        []string{"object_type", "method"},
-    )
-)
-```
-
-Benefits:
-- Real-time visibility into call processing
-- Alerts for queue buildup
-- Performance analysis
-
-#### 7. Alternative Storage Backends
-
-Implement additional providers:
-
-- **Redis**: For low-latency, in-memory processing
-- **DynamoDB**: For AWS-native deployments
-- **MongoDB**: For document-oriented storage
-- **Cassandra**: For high-throughput, distributed scenarios
-
-Example interface remains the same:
-
-```go
-type RedisPersistenceProvider struct {
-    client *redis.Client
-}
-
-func (r *RedisPersistenceProvider) InsertOrGetReliableCall(...) (*ReliableCall, error) {
-    // Redis-specific implementation
-}
-```
-
-Benefits:
-- Flexibility in deployment
-- Optimized for specific use cases
-- Reduced vendor lock-in
-
-#### 8. Transaction Support
-
-Add transactional operations:
-
-```go
-func (db *DB) ExecuteInTransaction(
-    ctx context.Context, 
-    fn func(*sql.Tx) error,
-) error {
-    tx, err := db.conn.BeginTx(ctx, nil)
-    if err != nil {
-        return err
-    }
-    
-    if err := fn(tx); err != nil {
-        tx.Rollback()
-        return err
-    }
-    
-    return tx.Commit()
-}
-
-// Usage: Atomic multi-call operations
-db.ExecuteInTransaction(ctx, func(tx *sql.Tx) error {
-    for _, call := range calls {
-        if err := insertCall(tx, call); err != nil {
-            return err
-        }
-    }
-    return nil
-})
-```
-
-Benefits:
-- Atomic multi-call operations
-- Stronger consistency guarantees
-- Simplified error handling
-
 ## Conclusion
 
 Reliable calls provide a robust foundation for exactly-once semantics in Goverse's distributed object runtime. The current implementation offers:
@@ -855,13 +603,7 @@ Reliable calls provide a robust foundation for exactly-once semantics in Goverse
 ✅ **Simple API**: Easy to integrate and use  
 ✅ **Production-Ready**: Tested with PostgreSQL backend
 
-While the current implementation is solid, the suggested enhancements would further improve:
-- Performance (async processing, batch ops)
-- Reliability (auto-retry, transaction support)
-- Observability (metrics, monitoring)
-- Flexibility (alternative backends, priority processing)
-
-The modular design with the `PersistenceProvider` interface makes these enhancements straightforward to implement without breaking existing functionality.
+The modular design with the `PersistenceProvider` interface makes future enhancements straightforward to implement without breaking existing functionality.
 
 ## References
 
