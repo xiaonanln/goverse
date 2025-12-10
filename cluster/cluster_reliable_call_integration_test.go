@@ -15,9 +15,6 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	// Use testutil to get a unique prefix for this test
-	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
-
 	// Create PostgreSQL config
 	pgConfig := &postgres.Config{
 		Host:     "localhost",
@@ -46,7 +43,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
 
-	// Create node and cluster
+	// Create node
 	nodeAddr := testutil.GetFreeAddress()
 	n := node.NewNode(nodeAddr, testutil.TestNumShards)
 	n.SetPersistenceProvider(provider)
@@ -57,26 +54,9 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	}
 	defer n.Stop(ctx)
 
-	cfg := Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  etcdPrefix,
-		MinQuorum:   1,
-		NumShards:   testutil.TestNumShards,
-	}
-
-	cluster, err := NewClusterWithNode(cfg, n)
-	if err != nil {
-		t.Fatalf("Failed to create cluster: %v", err)
-	}
-
-	err = cluster.Start(ctx, n)
-	if err != nil {
-		t.Fatalf("Failed to start cluster: %v", err)
-	}
-	defer cluster.Stop(ctx)
-
-	// Wait for cluster to be ready before running tests
-	testutil.WaitForClusterReady(t, cluster)
+	// Create a simple cluster without etcd for testing
+	// We only need the cluster to provide the ReliableCallObject method
+	cluster := newClusterForTesting(n, "TestCluster")
 
 	t.Run("Insert new call", func(t *testing.T) {
 		callID := "integration-test-call-1"
