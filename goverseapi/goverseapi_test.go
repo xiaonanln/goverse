@@ -223,14 +223,14 @@ func TestGenerateCallID(t *testing.T) {
 func TestGenerateCallID_Uniqueness(t *testing.T) {
 	// Generate many IDs and check for duplicates
 	const numIds = 10000
-	ids := make(map[string]bool, numIds)
+	ids := make(map[string]struct{}, numIds)
 
 	for i := 0; i < numIds; i++ {
 		id := GenerateCallID()
-		if ids[id] {
+		if _, exists := ids[id]; exists {
 			t.Fatalf("Duplicate ID found: %s", id)
 		}
-		ids[id] = true
+		ids[id] = struct{}{}
 	}
 
 	// All IDs should be unique
@@ -263,12 +263,12 @@ func TestGenerateCallID_Concurrent(t *testing.T) {
 	close(ids)
 
 	// Collect all IDs
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 	for id := range ids {
-		if seen[id] {
+		if _, exists := seen[id]; exists {
 			t.Fatalf("Duplicate ID found in concurrent generation: %s", id)
 		}
-		seen[id] = true
+		seen[id] = struct{}{}
 	}
 
 	// Verify we got the expected number of unique IDs
