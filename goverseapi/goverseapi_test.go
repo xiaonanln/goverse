@@ -189,3 +189,84 @@ func TestCreateObjectIDOnNode_InvalidInput(t *testing.T) {
 	}()
 	CreateObjectIDOnNode("")
 }
+
+func TestGenerateCallID(t *testing.T) {
+	// Test that GenerateCallID returns a non-empty string
+	id := GenerateCallID()
+	if id == "" {
+		t.Fatal("GenerateCallID() returned empty string")
+	}
+
+	// Test that multiple calls return different IDs
+	id1 := GenerateCallID()
+	id2 := GenerateCallID()
+	if id1 == id2 {
+		t.Fatal("GenerateCallID() returned same ID for consecutive calls")
+	}
+
+	// Test that IDs don't contain '/' or '#' (important for routing)
+	for i := 0; i < 100; i++ {
+		id := GenerateCallID()
+		if len(id) == 0 {
+			t.Fatal("GenerateCallID() returned empty string")
+		}
+		// The ID should not contain '/' or '#' characters
+		for _, ch := range id {
+			if ch == '/' || ch == '#' {
+				t.Fatalf("GenerateCallID() returned string containing '/' or '#': %s", id)
+			}
+		}
+	}
+}
+
+func TestGenerateCallID_Uniqueness(t *testing.T) {
+	// Generate many IDs and check for duplicates
+	const numIds = 10000
+	ids := make(map[string]bool, numIds)
+
+	for i := 0; i < numIds; i++ {
+		id := GenerateCallID()
+		if ids[id] {
+			t.Fatalf("Duplicate ID found: %s", id)
+		}
+		ids[id] = true
+	}
+
+	// All IDs should be unique
+	if len(ids) != numIds {
+		t.Fatalf("Expected %d unique IDs, got %d", numIds, len(ids))
+	}
+}
+
+func TestGenerateCallID_Concurrent(t *testing.T) {
+	// Test concurrent generation produces no duplicates
+	const numGoroutines = 10
+	const idsPerGoroutine = 1000
+
+	ids := make(chan string, numGoroutines*idsPerGoroutine)
+
+	// Launch multiple goroutines generating IDs concurrently
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			for j := 0; j < idsPerGoroutine; j++ {
+				ids <- GenerateCallID()
+			}
+		}()
+	}
+
+	// Collect all IDs
+	seen := make(map[string]bool)
+	for i := 0; i < numGoroutines*idsPerGoroutine; i++ {
+		id := <-ids
+		if seen[id] {
+			t.Fatalf("Duplicate ID found in concurrent generation: %s", id)
+		}
+		seen[id] = true
+	}
+
+	// Verify we got the expected number of unique IDs
+	expectedTotal := numGoroutines * idsPerGoroutine
+	if len(seen) != expectedTotal {
+		t.Fatalf("Expected %d unique IDs, got %d", expectedTotal, len(seen))
+	}
+}
