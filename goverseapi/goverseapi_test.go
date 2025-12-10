@@ -1,6 +1,7 @@
 package goverseapi
 
 import (
+	"sync"
 	"testing"
 )
 
@@ -188,4 +189,77 @@ func TestCreateObjectIDOnNode_InvalidInput(t *testing.T) {
 		}
 	}()
 	CreateObjectIDOnNode("")
+}
+
+func TestGenerateCallID(t *testing.T) {
+	// Test that GenerateCallID returns a non-empty string
+	id := GenerateCallID()
+	if id == "" {
+		t.Fatal("GenerateCallID() returned empty string")
+	}
+
+	// Test that multiple calls return different IDs
+	id1 := GenerateCallID()
+	id2 := GenerateCallID()
+	if id1 == id2 {
+		t.Fatal("GenerateCallID() returned same ID for consecutive calls")
+	}
+}
+
+func TestGenerateCallID_Uniqueness(t *testing.T) {
+	// Generate many IDs and check for duplicates
+	const numIds = 10000
+	ids := make(map[string]struct{}, numIds)
+
+	for i := 0; i < numIds; i++ {
+		id := GenerateCallID()
+		if _, exists := ids[id]; exists {
+			t.Fatalf("Duplicate ID found: %s", id)
+		}
+		ids[id] = struct{}{}
+	}
+
+	// All IDs should be unique
+	if len(ids) != numIds {
+		t.Fatalf("Expected %d unique IDs, got %d", numIds, len(ids))
+	}
+}
+
+func TestGenerateCallID_Concurrent(t *testing.T) {
+	// Test concurrent generation produces no duplicates
+	const numGoroutines = 10
+	const idsPerGoroutine = 1000
+
+	ids := make(chan string, numGoroutines*idsPerGoroutine)
+
+	// Launch multiple goroutines generating IDs concurrently
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < idsPerGoroutine; j++ {
+				ids <- GenerateCallID()
+			}
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(ids)
+
+	// Collect all IDs
+	seen := make(map[string]struct{})
+	for id := range ids {
+		if _, exists := seen[id]; exists {
+			t.Fatalf("Duplicate ID found in concurrent generation: %s", id)
+		}
+		seen[id] = struct{}{}
+	}
+
+	// Verify we got the expected number of unique IDs
+	expectedTotal := numGoroutines * idsPerGoroutine
+	if len(seen) != expectedTotal {
+		t.Fatalf("Expected %d unique IDs, got %d", expectedTotal, len(seen))
+	}
 }

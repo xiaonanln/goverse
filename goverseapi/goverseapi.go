@@ -262,3 +262,21 @@ func GetAutoLoadObjectIDsByType(objType string) []string {
 func GetAutoLoadObjectIDs() map[string][]string {
 	return cluster.This().GetAutoLoadObjectIDs()
 }
+
+// GenerateCallID generates a unique call ID for reliable calls.
+// The generated ID is guaranteed to be unique and can be used for reliable call deduplication.
+//
+// Use this function when you need to ensure exactly-once semantics for inter-object calls.
+// By providing the same call ID in retry attempts, the reliable call system ensures the
+// operation is only executed once, with cached results returned for subsequent attempts.
+//
+// Example:
+//
+//	// Generate a unique call ID
+//	callID := goverseapi.GenerateCallID()
+//
+//	// Use it with reliable call (when ReliableCallObject API is implemented)
+//	// result, err := goverseapi.ReliableCallObject(ctx, "OrderProcessor", "order-123", callID, "ProcessPayment", request)
+func GenerateCallID() string {
+	return uniqueid.UniqueId()
+}
