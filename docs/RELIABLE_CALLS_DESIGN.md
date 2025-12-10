@@ -592,6 +592,291 @@ func TestInsertOrGetReliableCall_Integration(t *testing.T) {
 }
 ```
 
+## Implementation Plan
+
+This section outlines a series of incremental PRs to implement the reliable calls feature. Each PR is small, focused, and independently testable.
+
+### PR 1: Database Schema and Basic CRUD Operations ✅ DONE
+
+**Focus**: Create the database table and implement basic persistence operations.
+
+**Changes**:
+- Add `goverse_reliable_calls` table schema to `util/postgres/db.go`
+- Implement `InsertOrGetReliableCall()` in `util/postgres/persistence.go`
+- Implement `GetReliableCall()` for retrieving a single call by `call_id`
+- Implement `UpdateReliableCallStatus()` for status updates
+- Add integration tests for all CRUD operations
+
+**Tests**:
+- Test insert new call returns pending status
+- Test duplicate insert returns existing record (deduplication)
+- Test status update from pending to completed/failed
+- Test constraints (completed requires result_data, failed requires error_message)
+
+**Status**: Already implemented in `util/postgres/db.go` and `util/postgres/persistence.go`.
+
+---
+
+### PR 2: Pending Calls Query and Sequential Processing Support ✅ DONE
+
+**Focus**: Add ability to fetch pending calls for an object with ordering.
+
+**Changes**:
+- Implement `GetPendingReliableCalls(objectID, nextRcseq)` in `util/postgres/persistence.go`
+- Add index for efficient pending call queries
+- Add integration tests for sequential retrieval
+
+**Tests**:
+- Test fetching pending calls returns correct order by `seq`
+- Test `nextRcseq` filtering excludes already processed calls
+- Test empty result when no pending calls exist
+- Test multiple objects have isolated pending queues
+
+**Status**: Already implemented in `util/postgres/persistence.go`.
+
+---
+
+### PR 3: PersistenceProvider Interface Extension ✅ DONE
+
+**Focus**: Extend the `PersistenceProvider` interface with reliable call methods.
+
+**Changes**:
+- Add reliable call methods to `PersistenceProvider` interface in `object/persistence.go`
+- Define `ReliableCall` struct in `object/persistence.go`
+- Implement interface methods in `PostgresPersistenceProvider`
+- Update mock persistence provider for testing
+
+**Tests**:
+- Test `PostgresPersistenceProvider` implements all interface methods
+- Test mock provider works correctly for unit tests
+
+**Status**: Already implemented in `object/persistence.go` and `util/postgres/provider.go`.
+
+---
+
+### PR 4: Add ReliableCallObject gRPC Definition
+
+**Focus**: Define the new `ReliableCallObject` RPC in the protobuf schema.
+
+**Changes**:
+- Add `ReliableCallObject` RPC to `proto/goverse.proto`
+- Define `ReliableCallObjectRequest` message (object_id, object_type, call_id)
+- Define `ReliableCallObjectResponse` message (result_data, error)
+- Run `compile-proto.sh` to generate Go code
+
+**Tests**:
+- Verify generated gRPC code compiles
+- Test request/response serialization
+
+---
+
+### PR 5: High-Level API: goverseapi.GenerateCallID
+
+**Focus**: Expose call ID generation through the high-level API for users to generate unique call IDs.
+
+**Changes**:
+- Add `GenerateCallID()` to `goverseapi/api.go`
+- Delegate to `util/uniqueid.UniqueId()` internally
+- Document usage for reliable call deduplication
+
+**Tests**:
+- Test generated IDs are unique across multiple calls
+- Test ID format is valid and consistent
+- Test concurrent generation produces no duplicates
+
+---
+
+### PR 6: Server-Level ReliableCallObject RPC Handler
+
+**Focus**: Wire up the gRPC server to accept incoming `ReliableCallObject` requests.
+
+**Changes**:
+- Implement `ReliableCallObject` in `server/server.go`
+- Route RPC to node's handler method (stub implementation initially)
+- Handle errors and return appropriate responses
+
+**Tests**:
+- Integration test: gRPC client can call `ReliableCallObject`
+- Test error handling for missing parameters
+
+---
+
+### PR 7: Node-Level ReliableCallObject Handler (Fetch and Execute)
+
+**Focus**: Implement the node handler that fetches and executes pending calls.
+
+**Changes**:
+- Add `ReliableCallObject()` method to `node/node.go`
+- Fetch pending calls from database for the target object
+- Execute pending calls sequentially in order by `seq`
+- Activate object if not already active
+
+**Tests**:
+- Test handler fetches pending calls in correct order
+- Test calls are executed sequentially
+- Test object is activated if needed
+
+---
+
+### PR 8: Update Call Status After Execution
+
+**Focus**: Update the reliable call status in the database after execution.
+
+**Changes**:
+- After successful execution, update status to `completed` with result data
+- After failed execution, update status to `failed` with error message
+- Ensure status update happens within the same transaction/operation
+
+**Tests**:
+- Test status is updated to completed on success
+- Test status is updated to failed on error
+- Test result_data/error_message are stored correctly
+
+---
+
+### PR 9: Track nextRcseq on Object
+
+**Focus**: Track which reliable calls have been processed to prevent re-execution.
+
+**Changes**:
+- Add `nextRcseq` field to object state
+- Update `nextRcseq` after processing each reliable call
+- Ensure `nextRcseq` is persisted with object state
+
+**Tests**:
+- Test `nextRcseq` increments after each call
+- Test `nextRcseq` is persisted correctly
+- Test pending calls query uses `nextRcseq` to filter
+
+---
+
+### PR 10: Cluster-Level ReliableCallObject (Insert + Route)
+
+**Focus**: Implement `cluster.ReliableCallObject()` which inserts the call to DB and routes to the target node.
+
+**Changes**:
+- Add `ReliableCallObject()` method to `cluster/cluster.go`
+- Insert call to database via persistence provider (deduplication via `call_id`)
+- Implement shard-based lookup to determine target node
+- Forward `ReliableCallObject` RPC to target node via gRPC
+- Handle local execution when object is on same node
+- Return result from RPC response (no DB polling needed)
+
+**Tests**:
+- Test call is inserted to DB before routing
+- Test routing selects correct node based on object shard
+- Test call is forwarded when object is on remote node
+- Test local execution when object is on same node
+- Test duplicate `call_id` returns existing result without re-execution
+
+---
+
+### PR 11: Route Reliable Call Result Back to Caller
+
+**Focus**: Ensure the reliable call result is returned directly to the caller via RPC response.
+
+**Changes**:
+- Node executes pending calls and returns result in `ReliableCallObjectResponse`
+- Cluster layer receives result from RPC and returns to caller
+- Caller receives result immediately without polling DB
+- Handle error responses and propagate appropriately
+
+**Tests**:
+- Test successful result is returned to caller via RPC
+- Test error result is returned to caller via RPC
+- Test caller does not need to query DB for result
+- Test result is also persisted in DB for crash recovery
+
+---
+
+### PR 12: High-Level API: goverseapi.ReliableCallObject
+
+**Focus**: Expose reliable call functionality through the high-level API for external callers (gates, clients).
+
+**Changes**:
+- Add `ReliableCallObject()` to `goverseapi/api.go`
+- Generate `call_id` if not provided
+- Call `cluster.ReliableCallObject()` which handles DB insert + routing
+- Return result from cluster call
+
+**Tests**:
+- End-to-end test: external caller invokes object method via `ReliableCallObject`
+- Test deduplication: same `call_id` returns cached result
+- Test call survives node restart (persistence)
+
+---
+
+### PR 13: High-Level API for Initiating Reliable Calls (Object-to-Object)
+
+**Focus**: Create the `goverseapi.ReliableCall()` API for user logic within an object to initiate a reliable call to another object.
+
+**Changes**:
+- Add `ReliableCall()` to `goverseapi/api.go`
+- Generate unique `call_id` if not provided
+- Call `cluster.ReliableCallObject()` which handles DB insert + routing
+- Return result from executed call
+
+**Tests**:
+- Test initiating reliable call from object method via `goverseapi.ReliableCall()`
+- Test call is persisted before routing
+- Test deduplication when same `call_id` is used
+
+---
+
+### PR 14: Object Activation Processes Pending Calls
+
+**Focus**: Automatically process pending reliable calls when an object is created/activated.
+
+**Changes**:
+- Modify object activation in `node/node.go` to fetch pending calls
+- Execute pending calls in order before returning activated object
+- Update `nextRcseq` after processing
+
+**Tests**:
+- Test object activation processes pending calls
+- Test calls made while object was inactive are executed on activation
+- Test `nextRcseq` prevents reprocessing on subsequent activations
+
+---
+
+### PR 15: Crash Recovery - Re-execute on Unsaved State
+
+**Focus**: Ensure calls are re-executed if object crashes before saving state.
+
+**Changes**:
+- Ensure `nextRcseq` is only updated when object state is persisted
+- On recovery, pending calls with `seq > persisted_nextRcseq` are re-executed
+- Add documentation for idempotency requirements
+
+**Tests**:
+- Test: crash before save → call re-executes on recovery
+- Test: crash after save → call not re-executed
+- Test: multiple pending calls all re-execute correctly
+
+---
+
+### Summary
+
+| PR | Focus | Key Deliverable | Status |
+|----|-------|------------------|--------|
+| 1 | Database Schema | Table + basic CRUD | ✅ Done |
+| 2 | Pending Calls Query | Sequential retrieval | ✅ Done |
+| 3 | Interface Extension | `PersistenceProvider` methods | ✅ Done |
+| 4 | gRPC Definition | `ReliableCallObject` proto | Not Started |
+| 5 | Call ID Generation API | `goverseapi.GenerateCallID()` | Not Started |
+| 6 | Server RPC Handler | Wire up gRPC endpoint | Not Started |
+| 7 | Node Handler | Fetch and execute pending calls | Not Started |
+| 8 | Status Update | Mark completed/failed in DB | Not Started |
+| 9 | nextRcseq Tracking | Prevent re-execution | Not Started |
+| 10 | Cluster Insert + Route | `cluster.ReliableCallObject()` | Not Started |
+| 11 | Result Routing | Return result via RPC to caller | Not Started |
+| 12 | External Caller API | `goverseapi.ReliableCallObject()` | Not Started |
+| 13 | Object-to-Object API | `goverseapi.ReliableCall()` | Not Started |
+| 14 | Object Activation | Process on create/activate | Not Started |
+| 15 | Crash Recovery | Re-execute unsaved calls | Not Started |
+
+Each PR builds on the previous one, allowing incremental development and testing. PRs 1-3 are foundational (database layer, already done), PRs 4-11 are infrastructure (gRPC, node execution, cluster routing, result return), and PRs 12-15 complete the feature (high-level APIs and recovery).
+
 ## Conclusion
 
 Reliable calls provide a robust foundation for exactly-once semantics in Goverse's distributed object runtime. The current implementation offers:
