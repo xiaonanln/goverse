@@ -52,16 +52,13 @@ GoVerse uses a **Node + Gate** architecture:
 // counter.go
 type Counter struct {
     goverseapi.BaseObject
-    mu    sync.Mutex
-    value int
+    value atomic.Int32
 }
 
 // Object methods use protobuf types for HTTP/gRPC compatibility
 func (c *Counter) Add(ctx context.Context, req *wrapperspb.Int32Value) (*wrapperspb.Int32Value, error) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    c.value += int(req.GetValue())
-    return &wrapperspb.Int32Value{Value: int32(c.value)}, nil
+    newValue := c.value.Add(req.GetValue())
+    return &wrapperspb.Int32Value{Value: newValue}, nil
 }
 ```
 
