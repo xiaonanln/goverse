@@ -862,8 +862,8 @@ This section outlines a series of incremental PRs to implement the reliable call
 | 1 | Database Schema | Table + basic CRUD | ✅ Done |
 | 2 | Pending Calls Query | Sequential retrieval | ✅ Done |
 | 3 | Interface Extension | `PersistenceProvider` methods | ✅ Done |
-| 4 | gRPC Definition | `ReliableCallObject` proto | Not Started |
-| 5 | Call ID Generation API | `goverseapi.GenerateCallID()` | Not Started |
+| 4 | gRPC Definition | `ReliableCallObject` proto | ✅ Done |
+| 5 | Call ID Generation API | `goverseapi.GenerateCallID()` | ✅ Done |
 | 6 | Server RPC Handler | Wire up gRPC endpoint | Not Started |
 | 7 | Node Handler | Fetch and execute pending calls | Not Started |
 | 8 | Status Update | Mark completed/failed in DB | Not Started |
