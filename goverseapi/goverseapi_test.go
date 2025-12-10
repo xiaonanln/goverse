@@ -1,6 +1,7 @@
 package goverseapi
 
 import (
+	"sync"
 	"testing"
 )
 
@@ -246,18 +247,24 @@ func TestGenerateCallID_Concurrent(t *testing.T) {
 	ids := make(chan string, numGoroutines*idsPerGoroutine)
 
 	// Launch multiple goroutines generating IDs concurrently
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
+			defer wg.Done()
 			for j := 0; j < idsPerGoroutine; j++ {
 				ids <- GenerateCallID()
 			}
 		}()
 	}
 
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(ids)
+
 	// Collect all IDs
 	seen := make(map[string]bool)
-	for i := 0; i < numGoroutines*idsPerGoroutine; i++ {
-		id := <-ids
+	for id := range ids {
 		if seen[id] {
 			t.Fatalf("Duplicate ID found in concurrent generation: %s", id)
 		}
