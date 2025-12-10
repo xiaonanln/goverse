@@ -33,6 +33,7 @@ type AtomicCounter struct {
 // OnCreated is called when the AtomicCounter object is created.
 func (c *AtomicCounter) OnCreated() {
 	c.Logger.Infof("AtomicCounter %s created", c.Id())
+	// Note: atomic.Int32 zero-initializes to 0, but we call Store(0) explicitly for clarity
 	c.value.Store(0)
 }
 
