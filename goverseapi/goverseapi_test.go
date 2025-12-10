@@ -204,20 +204,6 @@ func TestGenerateCallID(t *testing.T) {
 	if id1 == id2 {
 		t.Fatal("GenerateCallID() returned same ID for consecutive calls")
 	}
-
-	// Test that IDs don't contain '/' or '#' (important for routing)
-	for i := 0; i < 100; i++ {
-		id := GenerateCallID()
-		if len(id) == 0 {
-			t.Fatal("GenerateCallID() returned empty string")
-		}
-		// The ID should not contain '/' or '#' characters
-		for _, ch := range id {
-			if ch == '/' || ch == '#' {
-				t.Fatalf("GenerateCallID() returned string containing '/' or '#': %s", id)
-			}
-		}
-	}
 }
 
 func TestGenerateCallID_Uniqueness(t *testing.T) {

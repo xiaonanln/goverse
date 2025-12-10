@@ -277,9 +277,6 @@ func GetAutoLoadObjectIDs() map[string][]string {
 //
 //	// Use it with reliable call (when ReliableCallObject API is implemented)
 //	// result, err := goverseapi.ReliableCallObject(ctx, "OrderProcessor", "order-123", callID, "ProcessPayment", request)
-//
-// The generated ID uses base64 URL encoding and will never contain '/' or '#' characters,
-// making it safe to use as part of object identifiers without conflicting with routing logic.
 func GenerateCallID() string {
 	return uniqueid.UniqueId()
 }
