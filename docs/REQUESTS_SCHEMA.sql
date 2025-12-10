@@ -8,7 +8,7 @@
 --
 -- Key Design Principles:
 -- - request_id is the deduplication key (PRIMARY KEY ensures uniqueness)
--- - Status transitions: pending -> processing -> completed/failed
+-- - Status transitions: pending -> success/failed
 -- - result_data and error_message are populated based on final status
 
 CREATE TABLE goverse_requests (
@@ -26,7 +26,7 @@ CREATE TABLE goverse_requests (
     -- Request payload (serialized protobuf or other format)
     request_data BYTEA NOT NULL,
     
-    -- Response data (populated when status = 'completed')
+    -- Response data (populated when status = 'success')
     result_data BYTEA,
     
     -- Error message (populated when status = 'failed')
@@ -34,20 +34,19 @@ CREATE TABLE goverse_requests (
     
     -- Processing status with state machine enforcement
     -- pending: request received, not yet processing
-    -- processing: actively being processed by a node
-    -- completed: successfully processed, result_data available
+    -- success: successfully processed, result_data available
     -- failed: processing failed, error_message available
     status VARCHAR(50) NOT NULL DEFAULT 'pending' 
-        CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+        CHECK (status IN ('pending', 'success', 'failed')),
     
     -- Timestamps for lifecycle tracking
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
     -- Constraints to enforce data integrity
-    -- Ensure completed requests always have result data
-    CONSTRAINT valid_completed_state CHECK (
-        status != 'completed' OR result_data IS NOT NULL
+    -- Ensure success requests always have result data
+    CONSTRAINT valid_success_state CHECK (
+        status != 'success' OR result_data IS NOT NULL
     ),
     -- Ensure failed requests always have error message
     CONSTRAINT valid_failed_state CHECK (
