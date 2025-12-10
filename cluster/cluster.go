@@ -821,10 +821,6 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Get the persistence provider from the node
 	node := c.GetThisNode()
-	if node == nil {
-		return nil, fmt.Errorf("node is not initialized")
-	}
-
 	provider := node.GetPersistenceProvider()
 	if provider == nil {
 		return nil, fmt.Errorf("persistence provider is not configured")
