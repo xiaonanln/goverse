@@ -75,6 +75,9 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	}
 	defer cluster.Stop(ctx)
 
+	// Wait for cluster to be ready before running tests
+	testutil.WaitForClusterReady(t, cluster)
+
 	t.Run("Insert new call", func(t *testing.T) {
 		callID := "integration-test-call-1"
 		objectType := "TestType"
