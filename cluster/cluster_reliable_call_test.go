@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaonanln/goverse/cluster/consensusmanager"
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/object"
@@ -116,30 +115,6 @@ func (m *mockPersistenceProvider) HasStoredData(callID string) bool {
 	return ok
 }
 
-// setupTestShardMapping sets up a simple shard mapping for unit tests
-// All shards are assigned to the given nodeAddr
-func setupTestShardMapping(cluster *Cluster, nodeAddr string) {
-	// Set up nodes
-	nodes := map[string]bool{
-		nodeAddr: true,
-	}
-	cluster.consensusManager.SetNodesForTesting(nodes)
-	
-	// Create shard mapping - assign all shards to this node
-	shardMapping := &consensusmanager.ShardMapping{
-		Shards: make(map[int]consensusmanager.ShardInfo),
-	}
-	for i := 0; i < cluster.numShards; i++ {
-		shardMapping.Shards[i] = consensusmanager.ShardInfo{
-			TargetNode:  nodeAddr,
-			CurrentNode: nodeAddr,
-		}
-	}
-	
-	// Set the mapping using the testing method
-	cluster.consensusManager.SetMappingForTesting(shardMapping)
-}
-
 func TestReliableCallObject_ValidatesInputs(t *testing.T) {
 	t.Parallel()
 
@@ -150,9 +125,6 @@ func TestReliableCallObject_ValidatesInputs(t *testing.T) {
 	// Set up a mock persistence provider
 	mockProvider := newMockPersistenceProvider()
 	n.SetPersistenceProvider(mockProvider)
-
-	// Set up shard mapping for routing to work
-	setupTestShardMapping(cluster, "test-node")
 
 	tests := []struct {
 		name        string
@@ -298,9 +270,6 @@ func TestReliableCallObject_InsertsNewCall(t *testing.T) {
 	mockProvider := newMockPersistenceProvider()
 	n.SetPersistenceProvider(mockProvider)
 
-	// Set up shard mapping for routing to work
-	setupTestShardMapping(cluster, "test-node")
-
 	callID := "test-call-new"
 	objectType := "TestType"
 	objectID := "test-obj-1"
@@ -353,9 +322,6 @@ func TestReliableCallObject_DeduplicationPending(t *testing.T) {
 	mockProvider := newMockPersistenceProvider()
 	n.SetPersistenceProvider(mockProvider)
 
-	// Set up shard mapping for routing to work
-	setupTestShardMapping(cluster, "test-node")
-
 	callID := "test-call-dup"
 	objectType := "TestType"
 	objectID := "test-obj-1"
@@ -395,9 +361,6 @@ func TestReliableCallObject_ReturnsSuccessCall(t *testing.T) {
 
 	mockProvider := newMockPersistenceProvider()
 	n.SetPersistenceProvider(mockProvider)
-
-	// Set up shard mapping for routing to work
-	setupTestShardMapping(cluster, "test-node")
 
 	callID := "test-call-success"
 	objectType := "TestType"
@@ -445,9 +408,6 @@ func TestReliableCallObject_ReturnsFailedCall(t *testing.T) {
 
 	mockProvider := newMockPersistenceProvider()
 	n.SetPersistenceProvider(mockProvider)
-
-	// Set up shard mapping for routing to work
-	setupTestShardMapping(cluster, "test-node")
 
 	callID := "test-call-failed"
 	objectType := "TestType"
