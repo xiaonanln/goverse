@@ -310,6 +310,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	return resp, nil
 }
 
+// invokeObjectMethod invokes the specified method on the given object using reflection
 func (node *Node) invokeObjectMethod(ctx context.Context, obj Object, method string, request proto.Message) (proto.Message, error) {
 	objValue := reflect.ValueOf(obj)
 	methodValue := objValue.MethodByName(method)
