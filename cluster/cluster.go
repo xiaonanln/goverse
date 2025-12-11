@@ -199,14 +199,17 @@ func (c *Cluster) init(cfg Config) error {
 // Uses test-appropriate configuration values
 func newClusterForTesting(node *node.Node, name string) *Cluster {
 	// Use test-appropriate durations (faster than production defaults)
-	shardLock := shardlock.NewShardLock(sharding.NumShards)
+	// Use testutil.TestNumShards for consistency with test node configuration
+	numShards := testutil.TestNumShards
+	shardLock := shardlock.NewShardLock(numShards)
 	return &Cluster{
 		node:                      node,
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
-		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", sharding.NumShards),
+		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", numShards),
 		minQuorum:                 1,
+		numShards:                 numShards,
 		shardMappingCheckInterval: 1 * time.Second,
 		shardLock:                 shardLock,
 		gateChannels:              make(map[string]chan proto.Message),
