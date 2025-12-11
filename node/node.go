@@ -691,6 +691,14 @@ func (node *Node) SetPersistenceProvider(provider object.PersistenceProvider) {
 	node.persistenceProvider = provider
 }
 
+// GetPersistenceProvider returns the persistence provider for this node
+// Returns nil if no persistence provider is configured
+func (node *Node) GetPersistenceProvider() object.PersistenceProvider {
+	node.persistenceProviderMu.RLock()
+	defer node.persistenceProviderMu.RUnlock()
+	return node.persistenceProvider
+}
+
 // SetPersistenceInterval configures how often objects are persisted
 // Must be called before Start() to take effect
 func (node *Node) SetPersistenceInterval(interval time.Duration) {

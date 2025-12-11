@@ -435,7 +435,7 @@ func SubmitWithRetry(ctx context.Context, db *sql.DB,
         
         // Handle based on current status
         switch status {
-        case "completed":
+        case "success":
             // Return cached result (success)
             return nil // or return resultData
         case "failed":
