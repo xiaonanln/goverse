@@ -432,6 +432,11 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 
 	node.logger.Infof("Found %d pending reliable calls for object %s (processing will be implemented in PR7)", len(pendingCalls), objectID)
 	
+	// Log out all pending calls for debugging
+	for _, call := range pendingCalls {
+		node.logger.Infof("Pending call: seq=%d, call_id=%s, method=%s, status=%s", call.Seq, call.CallID, call.MethodName, call.Status)
+	}
+	
 	// TODO (PR7): Process each pending call sequentially
 	// For now, we just log that we found them
 	

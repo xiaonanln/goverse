@@ -846,19 +846,10 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	// Call is pending (either newly inserted or was already pending)
 	c.logger.Infof("%s - Reliable call %s inserted/retrieved with status pending (seq: %d)", c, callID, rc.Seq)
 
-	// Try to find the target node for this object
-	// This may fail if shard mapping is not initialized (e.g., in tests)
+	// Find the target node for this object
 	targetNodeAddr, err := c.GetCurrentNodeForObject(ctx, objectID)
 	if err != nil {
-		// If we can't determine the target node (e.g., no shard mapping in simple tests),
-		// process the call locally on this node
-		c.logger.Infof("%s - Cannot determine target node (shard mapping not available), processing locally: %v", c, err)
-		_, err := node.ReliableCallObject(ctx, callID, objectType, objectID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
-		}
-		// Return the pending call - actual result is in database after processing
-		return rc, nil
+		return nil, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
 	}
 
 	c.logger.Infof("%s - Routing reliable call %s to target node %s for object %s (type: %s)", c, callID, targetNodeAddr, objectID, objectType)

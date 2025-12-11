@@ -1599,6 +1599,13 @@ func (cm *ConsensusManager) SetMappingForTesting(mapping *ShardMapping) {
 	cm.mu.Unlock()
 }
 
+// SetNodesForTesting sets the active nodes for testing purposes
+func (cm *ConsensusManager) SetNodesForTesting(nodes map[string]bool) {
+	cm.mu.Lock()
+	cm.state.Nodes = nodes
+	cm.mu.Unlock()
+}
+
 // LockClusterState acquires a read lock on the cluster state and returns the state and an unlock function.
 // The caller must call the unlock function when done accessing the state.
 // Usage:
