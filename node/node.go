@@ -374,14 +374,68 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s", callID, objectType, objectID)
 
-	// Stub implementation: return success with empty result for now
-	// Later PRs will:
-	// - Fetch pending reliable calls from persistence provider
-	// - Execute calls sequentially by seq
-	// - Update call status in database
-	// - Track nextRcseq on the object
-	// - Return the actual result data
+	// Get the persistence provider to access reliable calls
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider == nil {
+		// No persistence provider configured - cannot process reliable calls
+		node.logger.Warnf("ReliableCallObject: no persistence provider configured")
+		return []byte{}, nil
+	}
+
+	// Trigger processing of pending reliable calls for this object
+	// This will fetch pending calls from the database and execute them sequentially
+	err := node.processPendingReliableCalls(ctx, objectID, objectType)
+	if err != nil {
+		node.logger.Errorf("Failed to process pending reliable calls for object %s: %v", objectID, err)
+		return nil, fmt.Errorf("failed to process pending reliable calls: %w", err)
+	}
+
+	// Return success (the actual result data is stored in the database)
 	return []byte{}, nil
+}
+
+// processPendingReliableCalls fetches and processes pending reliable calls for an object
+// This is called when a ReliableCallObject RPC is received
+func (node *Node) processPendingReliableCalls(ctx context.Context, objectID string, objectType string) error {
+	// Get the persistence provider
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider == nil {
+		return fmt.Errorf("no persistence provider configured")
+	}
+
+	// TODO (PR7): Implement full processing logic:
+	// 1. Fetch pending calls via GetPendingReliableCalls(objectID, nextRcseq)
+	// 2. Execute calls sequentially by seq
+	// 3. Update call status in database via UpdateReliableCallStatus
+	// 4. Track nextRcseq on the object
+	// 5. Return the result data
+	//
+	// For now, this is a placeholder that logs the intent
+	node.logger.Infof("processPendingReliableCalls triggered for object %s (type: %s)", objectID, objectType)
+	
+	// Fetch pending calls for this object (starting from seq 0 since we don't track nextRcseq yet)
+	pendingCalls, err := provider.GetPendingReliableCalls(ctx, objectID, 0)
+	if err != nil {
+		return fmt.Errorf("failed to fetch pending calls: %w", err)
+	}
+
+	if len(pendingCalls) == 0 {
+		node.logger.Infof("No pending reliable calls for object %s", objectID)
+		return nil
+	}
+
+	node.logger.Infof("Found %d pending reliable calls for object %s (processing will be implemented in PR7)", len(pendingCalls), objectID)
+	
+	// TODO (PR7): Process each pending call sequentially
+	// For now, we just log that we found them
+	
+	return nil
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
