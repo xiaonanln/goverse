@@ -44,18 +44,7 @@ default.etcd/
 etcd-*.tar.gz
 etcd-*/
 
-# Compiled example binaries
-persistence
-periodic_persistence
-custom_stability_duration
-minquorum
-demo-server
 .venv/
 *.log
 *.zip
 .vscode/**
-
-# Inspector demo binary
-demo
-inspector
-pgadmin

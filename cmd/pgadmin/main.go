@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -255,11 +256,15 @@ func verifyDatabase(ctx context.Context, config *postgres.Config) error {
 }
 
 func resetSchema(ctx context.Context, config *postgres.Config) error {
+	return resetSchemaWithInput(ctx, config, os.Stdin)
+}
+
+func resetSchemaWithInput(ctx context.Context, config *postgres.Config, input io.Reader) error {
 	fmt.Println("WARNING: This will delete all data in the database!")
 	fmt.Print("Are you sure you want to continue? (yes/no): ")
 
 	// Use bufio.Scanner for safe input handling
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(input)
 	if !scanner.Scan() {
 		return fmt.Errorf("failed to read input")
 	}
