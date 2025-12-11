@@ -784,8 +784,8 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 // Behavior:
 //   - Inserts the call into the database via the persistence provider
 //   - If a call with the same callID already exists:
-//     - If the existing call status is NOT "pending", returns the call immediately (with cached result/error)
-//     - If the existing call status is "pending", returns the call (waiting for processing)
+//   - If the existing call status is NOT "pending", returns the call immediately (with cached result/error)
+//   - If the existing call status is "pending", returns the call (waiting for processing)
 //   - This method only handles database insertion; routing and execution are handled in later PRs
 //
 // Example:
@@ -797,7 +797,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 //	    return err
 //	}
 //	// Check if call is already completed
-//	if rc.Status == "completed" {
+//	if rc.Status == "success" {
 //	    // Use rc.ResultData
 //	} else if rc.Status == "failed" {
 //	    // Handle rc.Error

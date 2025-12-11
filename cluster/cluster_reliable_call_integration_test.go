@@ -123,8 +123,8 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("First call failed: %v", err)
 		}
 
-		// Update status to completed
-		err = provider.UpdateReliableCallStatus(ctx, rc1.Seq, "completed", resultData, "")
+		// Update status to success
+		err = provider.UpdateReliableCallStatus(ctx, rc1.Seq, "success", resultData, "")
 		if err != nil {
 			t.Fatalf("Failed to update call status: %v", err)
 		}
@@ -135,9 +135,9 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Duplicate call failed: %v", err)
 		}
 
-		// Should return the completed call with cached result
-		if rc2.Status != "completed" {
-			t.Errorf("Expected status 'completed', got %q", rc2.Status)
+		// Should return the successful call with cached result
+		if rc2.Status != "success" {
+			t.Errorf("Expected status 'success', got %q", rc2.Status)
 		}
 		if string(rc2.ResultData) != string(resultData) {
 			t.Errorf("Expected result_data %q, got %q", resultData, rc2.ResultData)

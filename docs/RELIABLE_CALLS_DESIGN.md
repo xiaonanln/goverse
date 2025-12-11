@@ -20,7 +20,7 @@ In distributed systems, achieving exactly-once semantics is crucial for maintain
 3. **Crash Recovery**: Pending calls survive node crashes and are processed after recovery
 4. **Sequential Processing**: Calls are executed in order using the `seq` field
 5. **Incremental Processing**: Objects track progress via `nextRcseq` to avoid reprocessing
-6. **Status Tracking**: Each call has a clear lifecycle: pending → processing → completed/failed
+6. **Status Tracking**: Each call has a clear lifecycle: pending → success/failed
 
 ## Architecture
 
@@ -78,7 +78,7 @@ The reliable calls system consists of several key components:
 │     - call_id (VARCHAR, PRIMARY KEY)                        │
 │     - object_id, object_type, method_name                   │
 │     - request_data, result_data, error_message              │
-│     - status (pending/processing/completed/failed)          │
+│     - status (pending/success/failed)                       │
 │     - created_at, updated_at                                │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -128,7 +128,7 @@ Caller Node                    Target Node                    Database
      │                              │    (invoke object method)    │
      │                              │                              │
      │                              │ 6. UpdateReliableCallStatus()│
-     │                              │    (completed/failed)        │
+     │                              │    (success/failed)          │
      │                              │─────────────────────────────>│
      │                              │                              │
      │                              │ 7. Increment nextRcseq       │
@@ -175,7 +175,7 @@ Caller Node                    Target Node                    Database
 
 6. **Status Update**
    - After execution, calls `UpdateReliableCallStatus(seq, status, result, error)`
-   - Status becomes "completed" (with `result_data`) or "failed" (with `error_message`)
+   - Status becomes "success" (with `result_data`) or "failed" (with `error_message`)
 
 7. **Progress Tracking**
    - Object increments its `nextRcseq` to the processed call's `seq`
@@ -230,7 +230,7 @@ for _, call := range pending {
         provider.UpdateReliableCallStatus(
             ctx,
             call.Seq,
-            "completed",
+            "success",
             result,
             "",
         )
@@ -316,7 +316,7 @@ Reliable calls survive failures:
 5. **Retry Safety**
    - Retrying a call with the same `call_id` is safe
    - The deduplication mechanism ensures no duplicate execution
-   - The cached result is returned if the call was already completed
+   - The cached result is returned if the call was already successful
 
 ## Database Schema
 
@@ -338,7 +338,7 @@ CREATE TABLE IF NOT EXISTS goverse_reliable_calls (
     -- Request payload (serialized protobuf or JSON)
     request_data BYTEA NOT NULL,
     
-    -- Response data (populated when status = 'completed')
+    -- Response data (populated when status = 'success')
     result_data BYTEA,
     
     -- Error message (populated when status = 'failed')
@@ -346,15 +346,15 @@ CREATE TABLE IF NOT EXISTS goverse_reliable_calls (
     
     -- Processing status with state machine enforcement
     status VARCHAR(50) NOT NULL DEFAULT 'pending' 
-        CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+        CHECK (status IN ('pending', 'success', 'failed')),
     
     -- Timestamps for lifecycle tracking
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
     -- Constraints to enforce data integrity
-    CONSTRAINT valid_completed_state CHECK (
-        status != 'completed' OR result_data IS NOT NULL
+    CONSTRAINT valid_success_state CHECK (
+        status != 'success' OR result_data IS NOT NULL
     ),
     CONSTRAINT valid_failed_state CHECK (
         status != 'failed' OR error_message IS NOT NULL
@@ -406,7 +406,7 @@ CREATE TRIGGER trigger_update_goverse_reliable_calls_timestamp
 | `request_data` | BYTEA | Serialized request payload (protobuf or JSON) |
 | `result_data` | BYTEA | Serialized result (populated on completion) |
 | `error_message` | TEXT | Error description (populated on failure) |
-| `status` | VARCHAR(50) | Call status: pending, processing, completed, failed |
+| `status` | VARCHAR(50) | Call status: pending, success, failed |
 | `created_at` | TIMESTAMP | When the call was first registered |
 | `updated_at` | TIMESTAMP | Last modification time (auto-updated) |
 
@@ -610,8 +610,8 @@ This section outlines a series of incremental PRs to implement the reliable call
 **Tests**:
 - Test insert new call returns pending status
 - Test duplicate insert returns existing record (deduplication)
-- Test status update from pending to completed/failed
-- Test constraints (completed requires result_data, failed requires error_message)
+- Test status update from pending to success/failed
+- Test constraints (success requires result_data, failed requires error_message)
 
 **Status**: Already implemented in `util/postgres/db.go` and `util/postgres/persistence.go`.
 
@@ -723,12 +723,12 @@ This section outlines a series of incremental PRs to implement the reliable call
 **Focus**: Update the reliable call status in the database after execution.
 
 **Changes**:
-- After successful execution, update status to `completed` with result data
+- After successful execution, update status to `success` with result data
 - After failed execution, update status to `failed` with error message
 - Ensure status update happens within the same transaction/operation
 
 **Tests**:
-- Test status is updated to completed on success
+- Test status is updated to success on success
 - Test status is updated to failed on error
 - Test result_data/error_message are stored correctly
 
@@ -866,7 +866,7 @@ This section outlines a series of incremental PRs to implement the reliable call
 | 5 | Call ID Generation API | `goverseapi.GenerateCallID()` | ✅ Done |
 | 6 | Server RPC Handler | Wire up gRPC endpoint | Not Started |
 | 7 | Node Handler | Fetch and execute pending calls | Not Started |
-| 8 | Status Update | Mark completed/failed in DB | Not Started |
+| 8 | Status Update | Mark success/failed in DB | Not Started |
 | 9 | nextRcseq Tracking | Prevent re-execution | Not Started |
 | 10 | Cluster Insert + Route | `cluster.ReliableCallObject()` | Not Started |
 | 11 | Result Routing | Return result via RPC to caller | Not Started |

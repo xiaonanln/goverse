@@ -28,6 +28,7 @@ const (
 	tableObjects       = "goverse_objects"
 	tableReliableCalls = "goverse_reliable_calls"
 	dropSchemaSQL      = `
+		DROP TRIGGER IF EXISTS trigger_update_goverse_reliable_calls_timestamp ON goverse_reliable_calls;
 		DROP TABLE IF EXISTS goverse_reliable_calls CASCADE;
 		DROP TABLE IF EXISTS goverse_objects CASCADE;
 		DROP FUNCTION IF EXISTS update_goverse_reliable_calls_timestamp() CASCADE;
