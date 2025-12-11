@@ -20,6 +20,7 @@ import (
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/objectid"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type Object = object.Object
@@ -295,33 +296,43 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		return nil, callErr
 	}
 
+	// Call the method via reflection
+	resp, err := node.invokeObjectMethod(ctx, obj, method, request)
+	if err != nil {
+		callErr = err
+		return nil, callErr
+	}
+
+	// Report successful call to inspector (enabled by default, no config flag)
+	node.inspectorManager.NotifyObjectCall(id, typ, method)
+
+	node.logger.Infof("Response type: %T, value: %+v", resp, resp)
+	return resp, nil
+}
+
+func (node *Node) invokeObjectMethod(ctx context.Context, obj Object, method string, request proto.Message) (proto.Message, error) {
 	objValue := reflect.ValueOf(obj)
 	methodValue := objValue.MethodByName(method)
 	if !methodValue.IsValid() {
-		callErr = fmt.Errorf("method not found in class %s: %s", obj.Type(), method)
-		return nil, callErr
+		return nil, fmt.Errorf("method not found in class %s: %s", obj.Type(), method)
 	}
 
 	methodType := methodValue.Type()
 	if methodType.NumIn() != 2 {
-		callErr = fmt.Errorf("method %s has invalid number of arguments (expected: 2, got: %d)", method, methodType.NumIn())
-		return nil, callErr
+		return nil, fmt.Errorf("method %s has invalid number of arguments (expected: 2, got: %d)", method, methodType.NumIn())
 	}
 	if !methodType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) ||
 		!isConcreteProtoMessage(methodType.In(1)) {
-		callErr = fmt.Errorf("method %s has invalid argument types (expected: context.Context, *Message; got: %s, %s)", method, methodType.In(0), methodType.In(1))
-		return nil, callErr
+		return nil, fmt.Errorf("method %s has invalid argument types (expected: context.Context, *Message; got: %s, %s)", method, methodType.In(0), methodType.In(1))
 	}
 
 	// Check method return types: (proto.Message, error)
 	if methodType.NumOut() != 2 {
-		callErr = fmt.Errorf("method %s has invalid number of return values (expected: 2, got: %d)", method, methodType.NumOut())
-		return nil, callErr
+		return nil, fmt.Errorf("method %s has invalid number of return values (expected: 2, got: %d)", method, methodType.NumOut())
 	}
 	if !isConcreteProtoMessage(methodType.Out(0)) ||
 		!methodType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		callErr = fmt.Errorf("method %s has invalid return types (expected: *Message, error; got: %s, %s)", method, methodType.Out(0), methodType.Out(1))
-		return nil, callErr
+		return nil, fmt.Errorf("method %s has invalid return types (expected: *Message, error; got: %s, %s)", method, methodType.Out(0), methodType.Out(1))
 	}
 
 	// Unmarshal request to the expected concrete proto.Message type
@@ -329,8 +340,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	node.logger.Infof("Request value: %+v", request)
 
 	if reflect.TypeOf(request) != expectedReqType {
-		callErr = fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
-		return nil, callErr
+		return nil, fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
 	}
 
 	// Call the method with the unmarshaled request as argument
@@ -339,29 +349,23 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	results := methodValue.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
 
 	if len(results) != 2 {
-		callErr = fmt.Errorf("method %s has invalid signature", method)
-		return nil, callErr
+		return nil, fmt.Errorf("method %s has invalid signature", method)
 	}
 
 	// Return the actual result from the method
 	resp, errVal := results[0], results[1]
 
 	if !errVal.IsNil() {
-		callErr = errVal.Interface().(error)
-		return nil, callErr
+		return nil, errVal.Interface().(error)
 	}
 
-	// Report successful call to inspector (enabled by default, no config flag)
-	node.inspectorManager.NotifyObjectCall(id, typ, method)
-
-	node.logger.Infof("Response type: %T, value: %+v", resp.Interface(), resp.Interface())
 	return resp.Interface().(proto.Message), nil
 }
 
 // ReliableCallObject handles a reliable call request for an object.
 // This is a stub implementation for PR 6 that will be expanded in later PRs
 // to fetch and execute pending reliable calls from the persistence provider.
-func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string) ([]byte, error) {
+func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string) (*anypb.Any, error) {
 	// Lock ordering: stopMu.RLock
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -382,7 +386,7 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 	if provider == nil {
 		// No persistence provider configured - cannot process reliable calls
 		node.logger.Warnf("ReliableCallObject: no persistence provider configured")
-		return []byte{}, nil
+		return nil, nil
 	}
 
 	// Trigger processing of pending reliable calls for this object
@@ -394,7 +398,7 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	// Return success (the actual result data is stored in the database)
-	return []byte{}, nil
+	return nil, nil
 }
 
 // processPendingReliableCalls fetches and processes pending reliable calls for an object
@@ -418,9 +422,48 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 	//
 	// For now, this is a placeholder that logs the intent
 	node.logger.Infof("processPendingReliableCalls triggered for object %s (type: %s)", objectID, objectType)
-	
+
+	// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
+	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
+	node.stopMu.RLock()
+	defer node.stopMu.RUnlock()
+
+	// Check if node is stopped after acquiring lock
+	if node.stopped.Load() {
+		return fmt.Errorf("node is stopped")
+	}
+
+	node.logger.Infof("processPendingReliableCalls: type=%s, id=%s", objectType, objectID)
+
+	// Auto-create object
+	err := node.createObject(ctx, objectType, objectID)
+	if err != nil {
+		return fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
+	}
+
+	// Now acquire per-key read lock to prevent concurrent delete during method call
+	unlockKey := node.keyLock.RLock(objectID)
+	defer unlockKey()
+
+	// Fetch the object while holding the lock
+	node.objectsMu.RLock()
+	obj, ok := node.objects[objectID]
+	node.objectsMu.RUnlock()
+
+	if !ok {
+		// Generally, this should not happen since we just created it if it didn't exist. However, in extreme cases of concurrent deletes, it might.
+		return fmt.Errorf("object %s was not found [RETRY]", objectID)
+	}
+
+	// Validate that the provided type matches the object's actual type
+	if obj.Type() != objectType {
+		return fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
+	}
+
+	nextRcseq := obj.GetNextRcseq()
+
 	// Fetch pending calls for this object (starting from seq 0 since we don't track nextRcseq yet)
-	pendingCalls, err := provider.GetPendingReliableCalls(ctx, objectID, 0)
+	pendingCalls, err := provider.GetPendingReliableCalls(ctx, objectID, nextRcseq)
 	if err != nil {
 		return fmt.Errorf("failed to fetch pending calls: %w", err)
 	}
@@ -431,15 +474,16 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 	}
 
 	node.logger.Infof("Found %d pending reliable calls for object %s (processing will be implemented in PR7)", len(pendingCalls), objectID)
-	
+
 	// Log out all pending calls for debugging
 	for _, call := range pendingCalls {
 		node.logger.Infof("Pending call: seq=%d, call_id=%s, method=%s, status=%s", call.Seq, call.CallID, call.MethodName, call.Status)
+
 	}
-	
+
 	// TODO (PR7): Process each pending call sequentially
 	// For now, we just log that we found them
-	
+
 	return nil
 }
 
