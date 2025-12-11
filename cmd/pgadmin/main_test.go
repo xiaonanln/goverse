@@ -39,7 +39,7 @@ func TestTableExists(t *testing.T) {
 
 	// Create a temporary test table in the public schema
 	testTableName := "test_table_exists_12345"
-	_, err = db.Connection().ExecContext(ctx, 
+	_, err = db.Connection().ExecContext(ctx,
 		fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (id INT)", testTableName))
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
