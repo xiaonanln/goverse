@@ -377,7 +377,7 @@ func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, ob
 	}
 
 	// Marshal the request proto.Message to bytes
-	requestData, err := protohelper.MessageToAnyBytes(request)
+	requestData, err := protohelper.MsgToBytes(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
