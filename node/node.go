@@ -364,6 +364,34 @@ func (node *Node) invokeObjectMethod(ctx context.Context, obj Object, method str
 	return resp.Interface().(proto.Message), nil
 }
 
+// InsertOrGetReliableCall inserts a reliable call into the database or retrieves an existing one.
+// Returns the ReliableCall record which contains the status and any cached result/error.
+func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (*object.ReliableCall, error) {
+	// Get the persistence provider
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider == nil {
+		return nil, fmt.Errorf("persistence provider is not configured")
+	}
+
+	// Marshal the request proto.Message to bytes
+	requestData, err := protohelper.MessageToAnyBytes(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Insert or get the reliable call from the database
+	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s)", callID, objectID, methodName, objectType)
+	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
+	}
+
+	return rc, nil
+}
+
 // ReliableCallObject handles a reliable call request for an object.
 // This is a stub implementation for PR 6 that will be expanded in later PRs
 // to fetch and execute pending reliable calls from the persistence provider.

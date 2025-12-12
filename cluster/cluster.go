@@ -19,7 +19,6 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
-	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -822,43 +821,26 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
 	}
 
-	// Get the persistence provider from the node
+	// Get the node and insert/get the reliable call from the database
 	node := c.GetThisNode()
-	provider := node.GetPersistenceProvider()
-	if provider == nil {
-		return nil, fmt.Errorf("persistence provider is not configured")
-	}
-
-	// Marshal the request proto.Message to bytes
-	requestData, err := protohelper.MessageToAnyBytes(request)
+	rc, err := node.InsertOrGetReliableCall(ctx, callID, objectType, objectID, methodName, request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, err
 	}
 
-	// Insert or get the reliable call from the database
-	c.logger.Infof("%s - Inserting reliable call %s for object %s.%s (type: %s)", c, callID, objectID, methodName, objectType)
-	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
-	}
-
-	// If the call already exists and is not pending, return it immediately
-	// This handles the deduplication case where the call has already been processed
+	// If the call already exists and is completed, return the cached result
 	if rc.Status == "success" {
 		c.logger.Infof("%s - Reliable call %s already succeeded, returning cached result", c, callID)
-
-		// Unmarshal the result data to Any, then get the message
-		var result proto.Message
-		if rc.ResultData != nil {
-			anyResult := &anypb.Any{}
-			err = proto.Unmarshal(rc.ResultData, anyResult)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal result data to Any: %w", err)
-			}
-			result, err = anyResult.UnmarshalNew()
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal Any to concrete message: %w", err)
-			}
+		if rc.ResultData == nil {
+			return nil, nil
+		}
+		anyResult := &anypb.Any{}
+		if err := proto.Unmarshal(rc.ResultData, anyResult); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal result data to Any: %w", err)
+		}
+		result, err := anyResult.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Any to concrete message: %w", err)
 		}
 		return result, nil
 	} else if rc.Status == "failed" {
@@ -866,8 +848,8 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("reliable call %s failed: %s", callID, rc.Error)
 	}
 
-	// Call is pending (either newly inserted or was already pending)
-	c.logger.Infof("%s - Reliable call %s inserted/retrieved with status pending (seq: %d)", c, callID, rc.Seq)
+	// Call is pending - find the target node and route the RPC
+	c.logger.Infof("%s - Reliable call %s is pending (seq: %d), routing to target node", c, callID, rc.Seq)
 
 	// Find the target node for this object
 	targetNodeAddr, err := c.GetCurrentNodeForObject(ctx, objectID)
@@ -885,17 +867,14 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		if err != nil {
 			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
-		// Note: We don't use the result from node.ReliableCallObject because it returns []byte
-		// The actual result will be in the database after processing
-		// For now, return the pending call - caller can query the database later for the result
-		var result proto.Message
+		var resultMsg proto.Message
 		if resultAny != nil {
-			result, err = resultAny.UnmarshalNew()
+			resultMsg, err = resultAny.UnmarshalNew()
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal result Any to concrete message: %w", err)
 			}
 		}
-		return result, nil
+		return resultMsg, nil
 	}
 
 	// Route to the remote node via gRPC
