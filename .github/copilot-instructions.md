@@ -6,8 +6,6 @@
 
 Goverse is a **distributed object runtime for Go** implementing the **virtual actor model**. Objects are stateful entities with unique IDs. The runtime handles placement, routing, lifecycle, and fault-tolerance using etcd for coordination and a fixed 8192-shard model.
 
-**Gate refactor**: See [GATE_DESIGN.md](../docs/design/GATE_DESIGN.md)
-
 ## Key Components
 
 - **node/** - Object lifecycle, management, per-object locking
@@ -16,6 +14,7 @@ Goverse is a **distributed object runtime for Go** implementing the **virtual ac
 - **server/** - Node gRPC server (Goverse service only)
 - **goverseapi/** - High-level API wrappers
 - **proto/** - Protocol definitions
+- **docs/RELIABLE_CALLS_DESIGN.md** - Reliable call design doc covering architecture and PR plan
 
 ## Base Patterns
 
