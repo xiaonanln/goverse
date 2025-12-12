@@ -19,6 +19,7 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -829,13 +830,9 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	// Marshal the request proto.Message to bytes
-	var requestData []byte
-	var err error
-	if request != nil {
-		requestData, err = proto.Marshal(request)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request: %w", err)
-		}
+	requestData, err := protohelper.MessageToAnyBytes(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Insert or get the reliable call from the database

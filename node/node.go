@@ -19,6 +19,7 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/objectid"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -398,6 +399,28 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("failed to process pending reliable calls: %w", err)
 	}
 
+	if provider != nil {
+		call, err := provider.GetReliableCall(ctx, callID)
+		if err != nil {
+			node.logger.Errorf("Failed to retrieve call %s from database: %v", callID, err)
+			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+		}
+
+		if call.Status == "success" {
+			// Return the result data that was stored during processing
+			resultAny, err := anypb.New(&anypb.Any{Value: call.ResultData})
+			if err != nil {
+				node.logger.Errorf("Failed to wrap result for call %s: %v", callID, err)
+				return nil, fmt.Errorf("failed to wrap result: %w", err)
+			}
+			node.logger.Infof("Successfully retrieved result for call %s", callID)
+			return resultAny, nil
+		} else if call.Status == "failed" {
+			node.logger.Errorf("Reliable call %s previously failed: %s", callID, call.Error)
+			return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
+		}
+	}
+
 	// Return success (the actual result data is stored in the database)
 	return nil, nil
 }
@@ -463,27 +486,58 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 
 	nextRcseq := obj.GetNextRcseq()
 
+	node.logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", objectID, nextRcseq)
+
 	// Fetch pending calls for this object (starting from seq 0 since we don't track nextRcseq yet)
 	pendingCalls, err := provider.GetPendingReliableCalls(ctx, objectID, nextRcseq)
 	if err != nil {
 		return fmt.Errorf("failed to fetch pending calls: %w", err)
 	}
 
+	node.logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), objectID)
+
 	if len(pendingCalls) == 0 {
 		node.logger.Infof("No pending reliable calls for object %s", objectID)
 		return nil
 	}
 
-	node.logger.Infof("Found %d pending reliable calls for object %s (processing will be implemented in PR7)", len(pendingCalls), objectID)
+	node.logger.Infof("Found %d pending reliable calls for object %s, processing sequentially", len(pendingCalls), objectID)
 
-	// Log out all pending calls for debugging
+	// Process each pending call sequentially in order of seq
 	for _, call := range pendingCalls {
-		node.logger.Infof("Pending call: seq=%d, call_id=%s, method=%s, status=%s", call.Seq, call.CallID, call.MethodName, call.Status)
+		node.logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
 
+		// Unmarshal the request data to proto.Message
+		requestMsg, err := protohelper.AnyBytesToMessage(call.RequestData)
+		if err != nil {
+			node.logger.Errorf("Failed to unmarshal request for call %s: %v", call.CallID, err)
+			return fmt.Errorf("failed to unmarshal request for call %s: %w", call.CallID, err)
+		}
+
+		// Invoke the method on the object
+		result, err := node.invokeObjectMethod(ctx, obj, call.MethodName, requestMsg)
+		if err != nil {
+			return fmt.Errorf("failed to invoke method %s for call %s: %w", call.MethodName, call.CallID, err)
+		}
+
+		resultData, err := protohelper.MessageToAnyBytes(result)
+		if err != nil {
+			node.logger.Errorf("Failed to marshal result Any for call %s: %v", call.CallID, err)
+			return fmt.Errorf("failed to marshal result for call %s: %w", call.CallID, err)
+		}
+
+		// Update to success status with result
+		err = provider.UpdateReliableCallStatus(ctx, call.Seq, "success", resultData, "")
+		if err != nil {
+			node.logger.Errorf("Failed to update call status to success: %v", err)
+			return fmt.Errorf("failed to update call status for call %s: %w", call.CallID, err)
+		}
+
+		node.logger.Infof("Successfully processed reliable call %s (seq=%d), result=%v", call.CallID, call.Seq, result)
+
+		// Update the object's nextRcseq to prevent reprocessing
+		obj.SetNextRcseq(call.Seq)
 	}
-
-	// TODO (PR7): Process each pending call sequentially
-	// For now, we just log that we found them
 
 	return nil
 }

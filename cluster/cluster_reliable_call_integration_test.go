@@ -73,6 +73,12 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
 
+	// Clear all data from previous test runs
+	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects CASCADE")
+	if err != nil {
+		t.Fatalf("Failed to truncate tables: %v", err)
+	}
+
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
 
