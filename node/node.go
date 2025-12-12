@@ -533,7 +533,7 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 		node.logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
 
 		// Unmarshal the request data to proto.Message
-		requestMsg, err := protohelper.AnyBytesToMessage(call.RequestData)
+		requestMsg, err := protohelper.BytesToMsg(call.RequestData)
 		if err != nil {
 			node.logger.Errorf("Failed to unmarshal request for call %s: %v", call.CallID, err)
 			return fmt.Errorf("failed to unmarshal request for call %s: %w", call.CallID, err)
@@ -545,7 +545,7 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 			return fmt.Errorf("failed to invoke method %s for call %s: %w", call.MethodName, call.CallID, err)
 		}
 
-		resultData, err := protohelper.MessageToAnyBytes(result)
+		resultData, err := protohelper.MsgToBytes(result)
 		if err != nil {
 			node.logger.Errorf("Failed to marshal result Any for call %s: %v", call.CallID, err)
 			return fmt.Errorf("failed to marshal result for call %s: %w", call.CallID, err)
