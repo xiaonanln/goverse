@@ -514,14 +514,14 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 	}
 
 	// Route to node handler
-	resultData, err := server.Node.ReliableCallObject(ctx, req.GetCallId(), req.GetObjectType(), req.GetObjectId())
+	resultAny, err := server.Node.ReliableCallObject(ctx, req.GetCallId(), req.GetObjectType(), req.GetObjectId())
 	if err != nil {
 		return nil, err
 	}
 
 	response := &goverse_pb.ReliableCallObjectResponse{
-		ResultData: resultData,
-		Error:      "",
+		Result: resultAny,
+		Error:  "",
 	}
 	return response, nil
 }

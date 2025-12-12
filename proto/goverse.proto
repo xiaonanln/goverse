@@ -99,7 +99,7 @@ message ReliableCallObjectRequest {
 }
 
 message ReliableCallObjectResponse {
-  bytes result_data = 1;   // Serialized result data (populated on success)
+  google.protobuf.Any result = 1;   // Serialized result data (populated on success)
   string error = 2;        // Error message (populated on failure)
 }
 

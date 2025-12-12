@@ -15,11 +15,11 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
-	"github.com/xiaonanln/goverse/object"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -802,7 +802,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 //	} else if rc.Status == "failed" {
 //	    // Handle rc.Error
 //	}
-func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, requestData []byte) (*object.ReliableCall, error) {
+func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (proto.Message, error) {
 	// Validate input parameters
 	if callID == "" {
 		return nil, fmt.Errorf("callID cannot be empty")
@@ -829,6 +829,12 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("persistence provider is not configured")
 	}
 
+	// Marshal the request proto.Message to bytes
+	requestData, err := protohelper.MessageToAnyBytes(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
 	// Insert or get the reliable call from the database
 	c.logger.Infof("%s - Inserting reliable call %s for object %s.%s (type: %s)", c, callID, objectID, methodName, objectType)
 	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
@@ -838,9 +844,26 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// If the call already exists and is not pending, return it immediately
 	// This handles the deduplication case where the call has already been processed
-	if rc.Status != "pending" {
-		c.logger.Infof("%s - Reliable call %s already exists with status %s, returning cached result", c, callID, rc.Status)
-		return rc, nil
+	if rc.Status == "success" {
+		c.logger.Infof("%s - Reliable call %s already succeeded, returning cached result", c, callID)
+
+		// Unmarshal the result data to Any, then get the message
+		var result proto.Message
+		if rc.ResultData != nil {
+			anyResult := &anypb.Any{}
+			err = proto.Unmarshal(rc.ResultData, anyResult)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal result data to Any: %w", err)
+			}
+			result, err = anyResult.UnmarshalNew()
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal Any to concrete message: %w", err)
+			}
+		}
+		return result, nil
+	} else if rc.Status == "failed" {
+		c.logger.Infof("%s - Reliable call %s already failed, returning cached error", c, callID)
+		return nil, fmt.Errorf("reliable call %s failed: %s", callID, rc.Error)
 	}
 
 	// Call is pending (either newly inserted or was already pending)
@@ -858,19 +881,26 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	if targetNodeAddr == c.getAdvertiseAddr() {
 		// Call locally on node - trigger processing of pending reliable calls
 		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
-		_, err := node.ReliableCallObject(ctx, callID, objectType, objectID)
+		resultAny, err := node.ReliableCallObject(ctx, callID, objectType, objectID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
 		// Note: We don't use the result from node.ReliableCallObject because it returns []byte
 		// The actual result will be in the database after processing
 		// For now, return the pending call - caller can query the database later for the result
-		return rc, nil
+		var result proto.Message
+		if resultAny != nil {
+			result, err = resultAny.UnmarshalNew()
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal result Any to concrete message: %w", err)
+			}
+		}
+		return result, nil
 	}
 
 	// Route to the remote node via gRPC
 	c.logger.Infof("%s - Routing reliable call %s to remote node %s for object %s (type: %s)", c, callID, targetNodeAddr, objectID, objectType)
-	
+
 	client, err := c.nodeConnections.GetConnection(targetNodeAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
@@ -894,9 +924,18 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
-	
+
+	var result proto.Message
+	if resp.Result != nil {
+		// Unmarshal the result Any to concrete message
+		result, err = resp.Result.UnmarshalNew()
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal result Any to concrete message: %w", err)
+		}
+	}
+
 	// Return the pending call - the actual result is stored in the database by the remote node
-	return rc, nil
+	return result, nil
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
