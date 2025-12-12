@@ -41,3 +41,22 @@ func AnyBytesToMessage(data []byte) (proto.Message, error) {
 	}
 	return anyMsg.UnmarshalNew()
 }
+
+func BytesToAny(data []byte) (*anypb.Any, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	var anyMsg anypb.Any
+	err := proto.Unmarshal(data, &anyMsg)
+	if err != nil {
+		return nil, err
+	}
+	return &anyMsg, nil
+}
+
+func AnyToBytes(anyMsg *anypb.Any) ([]byte, error) {
+	if anyMsg == nil {
+		return nil, nil
+	}
+	return proto.Marshal(anyMsg)
+}

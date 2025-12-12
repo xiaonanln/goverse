@@ -399,30 +399,27 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("failed to process pending reliable calls: %w", err)
 	}
 
-	if provider != nil {
-		call, err := provider.GetReliableCall(ctx, callID)
-		if err != nil {
-			node.logger.Errorf("Failed to retrieve call %s from database: %v", callID, err)
-			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
-		}
-
-		if call.Status == "success" {
-			// Return the result data that was stored during processing
-			resultAny, err := anypb.New(&anypb.Any{Value: call.ResultData})
-			if err != nil {
-				node.logger.Errorf("Failed to wrap result for call %s: %v", callID, err)
-				return nil, fmt.Errorf("failed to wrap result: %w", err)
-			}
-			node.logger.Infof("Successfully retrieved result for call %s", callID)
-			return resultAny, nil
-		} else if call.Status == "failed" {
-			node.logger.Errorf("Reliable call %s previously failed: %s", callID, call.Error)
-			return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
-		}
+	call, err := provider.GetReliableCall(ctx, callID)
+	if err != nil {
+		node.logger.Errorf("Failed to retrieve call %s from database: %v", callID, err)
+		return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
 	}
 
-	// Return success (the actual result data is stored in the database)
-	return nil, nil
+	if call.Status == "success" {
+		// Return the result data that was stored during processing
+		resultAny, err := protohelper.BytesToAny(call.ResultData)
+		if err != nil {
+			node.logger.Errorf("Failed to wrap result for call %s: %v", callID, err)
+			return nil, fmt.Errorf("failed to wrap result: %w", err)
+		}
+		node.logger.Infof("Successfully retrieved result for call %s", callID)
+		return resultAny, nil
+	} else if call.Status == "failed" {
+		node.logger.Errorf("Reliable call %s previously failed: %s", callID, call.Error)
+		return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
+	} else {
+		return nil, fmt.Errorf("reliable call %s is still pending", callID)
+	}
 }
 
 // processPendingReliableCalls fetches and processes pending reliable calls for an object
