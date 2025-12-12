@@ -4,16 +4,49 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/object"
+	counter_pb "github.com/xiaonanln/goverse/samples/counter/proto"
 	"github.com/xiaonanln/goverse/util/postgres"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// TestReliableCallObject_PostgresIntegration tests ReliableCallObject with actual PostgreSQL database
+// TestCounter is a simple test object for reliable calls
+type TestCounter struct {
+	object.BaseObject
+	value int32
+}
+
+func (c *TestCounter) OnCreated() {
+	c.Logger.Infof("TestCounter %s created", c.Id())
+	c.value = 0
+}
+
+func (c *TestCounter) ToData() (proto.Message, error) {
+	return nil, object.ErrNotPersistent
+}
+
+func (c *TestCounter) FromData(data proto.Message) error {
+	return nil
+}
+
+func (c *TestCounter) Increment(ctx context.Context, req *counter_pb.IncrementRequest) (*counter_pb.CounterResponse, error) {
+	c.value += req.Amount
+	return &counter_pb.CounterResponse{
+		Name:  c.Id(),
+		Value: c.value,
+	}, nil
+}
+
+// TestReliableCallObject_PostgresIntegration tests ReliableCallObject with actual cluster, etcd, and PostgreSQL
 func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
 	// Create PostgreSQL config
 	pgConfig := &postgres.Config{
@@ -43,139 +76,159 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
 
-	// Create node
+	// Create cluster with etcd using mustNewCluster helper
 	nodeAddr := testutil.GetFreeAddress()
-	n := node.NewNode(nodeAddr, testutil.TestNumShards)
-	n.SetPersistenceProvider(provider)
+	cluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
+	defer cluster.Stop(ctx)
 
-	err = n.Start(ctx)
-	if err != nil {
-		t.Fatalf("Failed to start node: %v", err)
-	}
-	defer n.Stop(ctx)
+	// Set persistence provider on the node
+	node := cluster.GetThisNode()
+	node.SetPersistenceProvider(provider)
 
-	// Create a simple cluster without etcd for testing
-	// We only need the cluster to provide the ReliableCallObject method
-	cluster := newClusterForTesting(n, "TestCluster")
+	// Register the TestCounter object type
+	node.RegisterObjectType((*TestCounter)(nil))
 
-	t.Run("Insert new call", func(t *testing.T) {
+	// Wait for cluster to be ready
+	testutil.WaitForClustersReady(t, cluster)
+
+	t.Run("Insert and execute new call", func(t *testing.T) {
 		callID := "integration-test-call-1"
-		objectType := "TestType"
-		objectID := "test-obj-1"
-		methodName := "TestMethod"
-		requestData := []byte("test request data")
+		objectType := "TestCounter"
+		objectID := "TestCounter-counter1"
+		methodName := "Increment"
+		request := &counter_pb.IncrementRequest{Amount: 5}
 
-		rc, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
 
-		if rc.CallID != callID {
-			t.Errorf("Expected call_id %q, got %q", callID, rc.CallID)
+		// Result should be a CounterResponse
+		response, ok := result.(*counter_pb.CounterResponse)
+		if !ok {
+			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
 		}
-		if rc.Status != "pending" {
-			t.Errorf("Expected status 'pending', got %q", rc.Status)
-		}
-		if rc.Seq <= 0 {
-			t.Errorf("Expected positive seq, got %d", rc.Seq)
+
+		if response.Value != 5 {
+			t.Errorf("Expected value 5, got %d", response.Value)
 		}
 	})
 
 	t.Run("Deduplication - pending call", func(t *testing.T) {
 		callID := "integration-test-call-2"
-		objectType := "TestType"
-		objectID := "test-obj-2"
-		methodName := "TestMethod"
-		requestData := []byte("test request data 2")
+		objectType := "TestCounter"
+		objectID := "TestCounter-counter2"
+		methodName := "Increment"
+		request := &counter_pb.IncrementRequest{Amount: 3}
 
 		// Insert first call
-		rc1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		result1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("First call failed: %v", err)
 		}
 
-		// Insert duplicate call
-		rc2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		// Insert duplicate call - should return the same result
+		result2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("Duplicate call failed: %v", err)
 		}
 
-		// Should return the same call
-		if rc2.Seq != rc1.Seq {
-			t.Errorf("Expected same seq %d, got %d", rc1.Seq, rc2.Seq)
-		}
-		if rc2.Status != "pending" {
-			t.Errorf("Expected status 'pending', got %q", rc2.Status)
+		// Both results should be identical
+		response1 := result1.(*counter_pb.CounterResponse)
+		response2 := result2.(*counter_pb.CounterResponse)
+
+		if response1.Value != response2.Value {
+			t.Errorf("Expected same value, got %d and %d", response1.Value, response2.Value)
 		}
 	})
 
 	t.Run("Deduplication - completed call", func(t *testing.T) {
 		callID := "integration-test-call-3"
-		objectType := "TestType"
-		objectID := "test-obj-3"
-		methodName := "TestMethod"
-		requestData := []byte("test request data 3")
-		resultData := []byte("test result")
+		objectType := "TestCounter"
+		objectID := "TestCounter-counter3"
+		methodName := "Increment"
+		request := &counter_pb.IncrementRequest{Amount: 7}
 
 		// Insert first call
-		rc1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		result1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("First call failed: %v", err)
 		}
 
+		response1 := result1.(*counter_pb.CounterResponse)
+
+		// Manually mark the call as success in database
+		// Get the reliable call record
+		rc, err := provider.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call: %v", err)
+		}
+
+		// Marshal result to Any then to bytes
+		resultAny, err := anypb.New(response1)
+		if err != nil {
+			t.Fatalf("Failed to create Any: %v", err)
+		}
+		resultData, err := proto.Marshal(resultAny)
+		if err != nil {
+			t.Fatalf("Failed to marshal Any: %v", err)
+		}
+
 		// Update status to success
-		err = provider.UpdateReliableCallStatus(ctx, rc1.Seq, "success", resultData, "")
+		err = provider.UpdateReliableCallStatus(ctx, rc.Seq, "success", resultData, "")
 		if err != nil {
 			t.Fatalf("Failed to update call status: %v", err)
 		}
 
-		// Try to insert duplicate call
-		rc2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		// Try to insert duplicate call - should return the cached result
+		result2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("Duplicate call failed: %v", err)
 		}
 
-		// Should return the successful call with cached result
-		if rc2.Status != "success" {
-			t.Errorf("Expected status 'success', got %q", rc2.Status)
-		}
-		if string(rc2.ResultData) != string(resultData) {
-			t.Errorf("Expected result_data %q, got %q", resultData, rc2.ResultData)
+		response2 := result2.(*counter_pb.CounterResponse)
+
+		// Should return the cached successful result
+		if response1.Value != response2.Value {
+			t.Errorf("Expected cached value %d, got %d", response1.Value, response2.Value)
 		}
 	})
 
 	t.Run("Deduplication - failed call", func(t *testing.T) {
 		callID := "integration-test-call-4"
-		objectType := "TestType"
-		objectID := "test-obj-4"
-		methodName := "TestMethod"
-		requestData := []byte("test request data 4")
-		errorMessage := "test error message"
+		objectType := "TestCounter"
+		objectID := "TestCounter-counter4"
+		methodName := "Increment"
+		request := &counter_pb.IncrementRequest{Amount: 10}
 
 		// Insert first call
-		rc1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		_, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("First call failed: %v", err)
 		}
 
+		// Get the reliable call record
+		rc, err := provider.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call: %v", err)
+		}
+
 		// Update status to failed
-		err = provider.UpdateReliableCallStatus(ctx, rc1.Seq, "failed", nil, errorMessage)
+		errorMessage := "test error message"
+		err = provider.UpdateReliableCallStatus(ctx, rc.Seq, "failed", nil, errorMessage)
 		if err != nil {
 			t.Fatalf("Failed to update call status: %v", err)
 		}
 
-		// Try to insert duplicate call
-		rc2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
-		if err != nil {
-			t.Fatalf("Duplicate call failed: %v", err)
+		// Try to insert duplicate call - should return the cached error
+		_, err = cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		if err == nil {
+			t.Fatal("Expected error for failed call, got nil")
 		}
 
-		// Should return the failed call with cached error
-		if rc2.Status != "failed" {
-			t.Errorf("Expected status 'failed', got %q", rc2.Status)
-		}
-		if rc2.Error != errorMessage {
-			t.Errorf("Expected error %q, got %q", errorMessage, rc2.Error)
+		// Error should contain the cached error message
+		if err.Error() != "reliable call "+callID+" failed: "+errorMessage {
+			t.Errorf("Expected error message to contain %q, got %q", errorMessage, err.Error())
 		}
 	})
 }

@@ -884,14 +884,21 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	if targetNodeAddr == c.getAdvertiseAddr() {
 		// Call locally on node - trigger processing of pending reliable calls
 		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
-		_, err := node.ReliableCallObject(ctx, callID, objectType, objectID)
+		resultAny, err := node.ReliableCallObject(ctx, callID, objectType, objectID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
 		// Note: We don't use the result from node.ReliableCallObject because it returns []byte
 		// The actual result will be in the database after processing
 		// For now, return the pending call - caller can query the database later for the result
-		return rc, nil
+		var result proto.Message
+		if resultAny != nil {
+			result, err = resultAny.UnmarshalNew()
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal result Any to concrete message: %w", err)
+			}
+		}
+		return result, nil
 	}
 
 	// Route to the remote node via gRPC
