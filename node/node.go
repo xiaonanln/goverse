@@ -421,7 +421,7 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Trigger processing of pending reliable calls for this object
 	// This will fetch pending calls from the database and execute them sequentially
-	err := node.processPendingReliableCalls(ctx, objectID, objectType)
+	err := node.processPendingReliableCalls(ctx, objectType, objectID)
 	if err != nil {
 		node.logger.Errorf("Failed to process pending reliable calls for object %s: %v", objectID, err)
 		return nil, fmt.Errorf("failed to process pending reliable calls: %w", err)
@@ -452,7 +452,7 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 
 // processPendingReliableCalls fetches and processes pending reliable calls for an object
 // This is called when a ReliableCallObject RPC is received
-func (node *Node) processPendingReliableCalls(ctx context.Context, objectID string, objectType string) error {
+func (node *Node) processPendingReliableCalls(ctx context.Context, objectType string, objectID string) error {
 	// Get the persistence provider
 	node.persistenceProviderMu.RLock()
 	provider := node.persistenceProvider
@@ -462,14 +462,6 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectID stri
 		return fmt.Errorf("no persistence provider configured")
 	}
 
-	// TODO (PR7): Implement full processing logic:
-	// 1. Fetch pending calls via GetPendingReliableCalls(objectID, nextRcseq)
-	// 2. Execute calls sequentially by seq
-	// 3. Update call status in database via UpdateReliableCallStatus
-	// 4. Track nextRcseq on the object
-	// 5. Return the result data
-	//
-	// For now, this is a placeholder that logs the intent
 	node.logger.Infof("processPendingReliableCalls triggered for object %s (type: %s)", objectID, objectType)
 
 	// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
