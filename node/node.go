@@ -421,16 +421,25 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Trigger processing of pending reliable calls for this object
 	// This will fetch pending calls from the database and execute them sequentially
-	err := node.processPendingReliableCalls(ctx, objectType, objectID)
-	if err != nil {
-		node.logger.Errorf("Failed to process pending reliable calls for object %s: %v", objectID, err)
-		return nil, fmt.Errorf("failed to process pending reliable calls: %w", err)
+	processedCalls := node.processPendingReliableCalls(ctx, objectType, objectID)
+
+	// Collect processed calls to find our target call without another DB lookup
+	var call *object.ReliableCall
+	for processedCall := range processedCalls {
+		if processedCall.CallID == callID {
+			call = processedCall
+			node.logger.Infof("Found reliable call %s in processed calls with status %s", callID, call.Status)
+		}
 	}
 
-	call, err := provider.GetReliableCall(ctx, callID)
-	if err != nil {
-		node.logger.Errorf("Failed to retrieve call %s from database: %v", callID, err)
-		return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+	// If not found in processed calls, fetch from database
+	if call == nil {
+		var err error
+		call, err = provider.GetReliableCall(ctx, callID)
+		if err != nil {
+			node.logger.Errorf("Failed to retrieve call %s from database: %v", callID, err)
+			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+		}
 	}
 
 	if call.Status == "success" {
@@ -452,111 +461,129 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 
 // processPendingReliableCalls fetches and processes pending reliable calls for an object
 // This is called when a ReliableCallObject RPC is received
-func (node *Node) processPendingReliableCalls(ctx context.Context, objectType string, objectID string) error {
-	// Get the persistence provider
-	node.persistenceProviderMu.RLock()
-	provider := node.persistenceProvider
-	node.persistenceProviderMu.RUnlock()
+// Returns a channel that receives each processed ReliableCall
+// The channel is closed when processing completes
+func (node *Node) processPendingReliableCalls(ctx context.Context, objectType string, objectID string) <-chan *object.ReliableCall {
+	callsChan := make(chan *object.ReliableCall)
 
-	if provider == nil {
-		return fmt.Errorf("no persistence provider configured")
-	}
+	go func() {
+		defer close(callsChan)
 
-	node.logger.Infof("processPendingReliableCalls triggered for object %s (type: %s)", objectID, objectType)
+		// Get the persistence provider
+		node.persistenceProviderMu.RLock()
+		provider := node.persistenceProvider
+		node.persistenceProviderMu.RUnlock()
 
-	// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
-	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
-	node.stopMu.RLock()
-	defer node.stopMu.RUnlock()
-
-	// Check if node is stopped after acquiring lock
-	if node.stopped.Load() {
-		return fmt.Errorf("node is stopped")
-	}
-
-	node.logger.Infof("processPendingReliableCalls: type=%s, id=%s", objectType, objectID)
-
-	// Auto-create object
-	err := node.createObject(ctx, objectType, objectID)
-	if err != nil {
-		return fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
-	}
-
-	// Now acquire per-key read lock to prevent concurrent delete during method call
-	unlockKey := node.keyLock.RLock(objectID)
-	defer unlockKey()
-
-	// Fetch the object while holding the lock
-	node.objectsMu.RLock()
-	obj, ok := node.objects[objectID]
-	node.objectsMu.RUnlock()
-
-	if !ok {
-		// Generally, this should not happen since we just created it if it didn't exist. However, in extreme cases of concurrent deletes, it might.
-		return fmt.Errorf("object %s was not found [RETRY]", objectID)
-	}
-
-	// Validate that the provided type matches the object's actual type
-	if obj.Type() != objectType {
-		return fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
-	}
-
-	nextRcseq := obj.GetNextRcseq()
-
-	node.logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", objectID, nextRcseq)
-
-	// Fetch pending calls for this object (starting from seq 0 since we don't track nextRcseq yet)
-	pendingCalls, err := provider.GetPendingReliableCalls(ctx, objectID, nextRcseq)
-	if err != nil {
-		return fmt.Errorf("failed to fetch pending calls: %w", err)
-	}
-
-	node.logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), objectID)
-
-	if len(pendingCalls) == 0 {
-		node.logger.Infof("No pending reliable calls for object %s", objectID)
-		return nil
-	}
-
-	node.logger.Infof("Found %d pending reliable calls for object %s, processing sequentially", len(pendingCalls), objectID)
-
-	// Process each pending call sequentially in order of seq
-	for _, call := range pendingCalls {
-		node.logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
-
-		// Unmarshal the request data to proto.Message
-		requestMsg, err := protohelper.BytesToMsg(call.RequestData)
-		if err != nil {
-			node.logger.Errorf("Failed to unmarshal request for call %s: %v", call.CallID, err)
-			return fmt.Errorf("failed to unmarshal request for call %s: %w", call.CallID, err)
+		if provider == nil {
+			node.logger.Warnf("processPendingReliableCalls: no persistence provider configured")
+			return
 		}
 
-		// Invoke the method on the object
-		result, err := node.invokeObjectMethod(ctx, obj, call.MethodName, requestMsg)
-		if err != nil {
-			return fmt.Errorf("failed to invoke method %s for call %s: %w", call.MethodName, call.CallID, err)
+		node.logger.Infof("processPendingReliableCalls triggered for object %s (type: %s)", objectID, objectType)
+
+		// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
+		// Acquire read lock to prevent Stop from proceeding while this operation is in flight
+		node.stopMu.RLock()
+		defer node.stopMu.RUnlock()
+
+		// Check if node is stopped after acquiring lock
+		if node.stopped.Load() {
+			node.logger.Warnf("processPendingReliableCalls: node is stopped")
+			return
 		}
 
-		resultData, err := protohelper.MsgToBytes(result)
+		node.logger.Infof("processPendingReliableCalls: type=%s, id=%s", objectType, objectID)
+
+		// Auto-create object
+		err := node.createObject(ctx, objectType, objectID)
 		if err != nil {
-			node.logger.Errorf("Failed to marshal result Any for call %s: %v", call.CallID, err)
-			return fmt.Errorf("failed to marshal result for call %s: %w", call.CallID, err)
+			node.logger.Errorf("processPendingReliableCalls: failed to auto-create object %s: %v", objectID, err)
+			return
 		}
 
-		// Update to success status with result
-		err = provider.UpdateReliableCallStatus(ctx, call.Seq, "success", resultData, "")
-		if err != nil {
-			node.logger.Errorf("Failed to update call status to success: %v", err)
-			return fmt.Errorf("failed to update call status for call %s: %w", call.CallID, err)
+		// Now acquire per-key read lock to prevent concurrent delete during method call
+		unlockKey := node.keyLock.RLock(objectID)
+		defer unlockKey()
+
+		// Fetch the object while holding the lock
+		node.objectsMu.RLock()
+		obj, ok := node.objects[objectID]
+		node.objectsMu.RUnlock()
+
+		if !ok {
+			node.logger.Errorf("processPendingReliableCalls: object %s was not found", objectID)
+			return
 		}
 
-		node.logger.Infof("Successfully processed reliable call %s (seq=%d), result=%v", call.CallID, call.Seq, result)
+		// Validate that the provided type matches the object's actual type
+		if obj.Type() != objectType {
+			node.logger.Errorf("processPendingReliableCalls: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
+			return
+		}
 
-		// Update the object's nextRcseq to prevent reprocessing
-		obj.SetNextRcseq(call.Seq)
-	}
+		nextRcseq := obj.GetNextRcseq()
 
-	return nil
+		node.logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", objectID, nextRcseq)
+
+		// Fetch pending calls for this object
+		pendingCalls, err := provider.GetPendingReliableCalls(ctx, objectID, nextRcseq)
+		if err != nil {
+			node.logger.Errorf("processPendingReliableCalls: failed to fetch pending calls: %v", err)
+			return
+		}
+
+		node.logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), objectID)
+
+		if len(pendingCalls) == 0 {
+			node.logger.Infof("No pending reliable calls for object %s", objectID)
+			return
+		}
+
+		node.logger.Infof("Found %d pending reliable calls for object %s, processing sequentially", len(pendingCalls), objectID)
+
+		// Process each pending call sequentially in order of seq
+		for _, call := range pendingCalls {
+			node.logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
+
+			fail := func(err error) {
+				node.logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
+				call.Status = "failed"
+				call.Error = fmt.Sprintf("failed to unmarshal request: %v", err)
+				_ = provider.UpdateReliableCallStatus(ctx, call.Seq, "failed", nil, call.Error)
+				obj.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on failure to avoid blocking
+				callsChan <- call
+			}
+
+			success := func(result proto.Message) {
+				node.logger.Infof("Reliable call %s (seq=%d) succeeded: result=%v", call.CallID, call.Seq, result)
+				resultData, _ := protohelper.MsgToBytes(result)
+				call.Status = "success"
+				call.ResultData = resultData
+				_ = provider.UpdateReliableCallStatus(ctx, call.Seq, "success", resultData, "")
+				obj.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on failure to avoid blocking
+				callsChan <- call
+			}
+
+			// Unmarshal the request data to proto.Message
+			requestMsg, err := protohelper.BytesToMsg(call.RequestData)
+			if err != nil {
+				fail(err)
+				continue
+			}
+
+			// Invoke the method on the object
+			result, err := node.invokeObjectMethod(ctx, obj, call.MethodName, requestMsg)
+			if err != nil {
+				fail(err)
+				continue
+			}
+
+			// Update to success status with result
+			success(result)
+		}
+	}()
+
+	return callsChan
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
