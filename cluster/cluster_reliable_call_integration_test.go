@@ -7,9 +7,9 @@ import (
 	"github.com/xiaonanln/goverse/object"
 	counter_pb "github.com/xiaonanln/goverse/samples/counter/proto"
 	"github.com/xiaonanln/goverse/util/postgres"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // TestCounter is a simple test object for reliable calls
@@ -118,6 +118,45 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		if response.Value != 5 {
 			t.Errorf("Expected value 5, got %d", response.Value)
 		}
+
+		// Verify the reliable call record in DB shows success with correct result data
+		rc, err := provider.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call: %v", err)
+		}
+		if rc.CallID != callID {
+			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+		}
+		if rc.ObjectID != objectID {
+			t.Errorf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
+		}
+		if rc.ObjectType != objectType {
+			t.Errorf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
+		}
+		if rc.MethodName != methodName {
+			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+		}
+		if rc.Status != "success" {
+			t.Errorf("Expected status 'success', got %q", rc.Status)
+		}
+		if rc.Error != "" {
+			t.Errorf("Expected empty error, got %q", rc.Error)
+		}
+		if rc.ResultData == nil {
+			t.Fatal("Expected result data to be set, got nil")
+		}
+		// Unmarshal and verify result data
+		storedResultMsg, err := protohelper.BytesToMsg(rc.ResultData)
+		if err != nil {
+			t.Fatalf("Failed to convert result data to message: %v", err)
+		}
+		storedResponse, ok := storedResultMsg.(*counter_pb.CounterResponse)
+		if !ok {
+			t.Fatalf("Expected stored result to be *counter_pb.CounterResponse, got %T", storedResultMsg)
+		}
+		if storedResponse.Value != 5 {
+			t.Errorf("Expected stored result value 5, got %d", storedResponse.Value)
+		}
 	})
 
 	t.Run("Deduplication - pending call", func(t *testing.T) {
@@ -162,29 +201,6 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		}
 
 		response1 := result1.(*counter_pb.CounterResponse)
-
-		// Manually mark the call as success in database
-		// Get the reliable call record
-		rc, err := provider.GetReliableCall(ctx, callID)
-		if err != nil {
-			t.Fatalf("Failed to get reliable call: %v", err)
-		}
-
-		// Marshal result to Any then to bytes
-		resultAny, err := anypb.New(response1)
-		if err != nil {
-			t.Fatalf("Failed to create Any: %v", err)
-		}
-		resultData, err := proto.Marshal(resultAny)
-		if err != nil {
-			t.Fatalf("Failed to marshal Any: %v", err)
-		}
-
-		// Update status to success
-		err = provider.UpdateReliableCallStatus(ctx, rc.Seq, "success", resultData, "")
-		if err != nil {
-			t.Fatalf("Failed to update call status: %v", err)
-		}
 
 		// Try to insert duplicate call - should return the cached result
 		result2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
