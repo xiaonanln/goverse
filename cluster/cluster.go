@@ -19,6 +19,7 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
@@ -828,24 +829,17 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, err
 	}
 
-	// If the call already exists and is completed, return the cached result
-	if rc.Status == "success" {
+	switch rc.Status {
+	case "success":
 		c.logger.Infof("%s - Reliable call %s already succeeded, returning cached result", c, callID)
-		if rc.ResultData == nil {
-			return nil, nil
-		}
-		anyResult := &anypb.Any{}
-		if err := proto.Unmarshal(rc.ResultData, anyResult); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal result data to Any: %w", err)
-		}
-		result, err := anyResult.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Any to concrete message: %w", err)
-		}
-		return result, nil
-	} else if rc.Status == "failed" {
+		return protohelper.BytesToMsg(rc.ResultData)
+	case "failed":
 		c.logger.Infof("%s - Reliable call %s already failed, returning cached error", c, callID)
 		return nil, fmt.Errorf("reliable call %s failed: %s", callID, rc.Error)
+	case "pending":
+		// Continue to routing below
+	default:
+		return nil, fmt.Errorf("reliable call %s has unknown status: %s", callID, rc.Status)
 	}
 
 	// Call is pending - find the target node and route the RPC
@@ -867,14 +861,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		if err != nil {
 			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
-		var resultMsg proto.Message
-		if resultAny != nil {
-			resultMsg, err = resultAny.UnmarshalNew()
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal result Any to concrete message: %w", err)
-			}
-		}
-		return resultMsg, nil
+		return protohelper.AnyToMsg(resultAny)
 	}
 
 	// Route to the remote node via gRPC
@@ -903,18 +890,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
-
-	var result proto.Message
-	if resp.Result != nil {
-		// Unmarshal the result Any to concrete message
-		result, err = resp.Result.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal result Any to concrete message: %w", err)
-		}
-	}
-
-	// Return the pending call - the actual result is stored in the database by the remote node
-	return result, nil
+	return protohelper.AnyToMsg(resp.Result)
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
