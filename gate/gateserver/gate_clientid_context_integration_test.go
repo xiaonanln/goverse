@@ -10,11 +10,11 @@ import (
 	"github.com/xiaonanln/goverse/cluster"
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/goverseapi"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -153,7 +153,7 @@ func TestClientIDInContext(t *testing.T) {
 
 	// 5. Call the object method with client_id in the request
 	testReq := wrapperspb.String("hello from client")
-	testReqAny, err := anypb.New(testReq)
+	testReqAny, err := protohelper.MsgToAny(testReq)
 	if err != nil {
 		t.Fatalf("Failed to marshal test request: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 
 		// Client calls ObjectA, passing ObjectB's ID
 		testReq := wrapperspb.String(objectBID)
-		testReqAny, err := anypb.New(testReq)
+		testReqAny, err := protohelper.MsgToAny(testReq)
 		if err != nil {
 			t.Fatalf("Failed to marshal test request: %v", err)
 		}
@@ -527,7 +527,7 @@ func TestClientIDPropagationThroughObjects(t *testing.T) {
 
 		// Client calls ObjectA, passing ObjectB's ID
 		testReq := wrapperspb.String(objectBID)
-		testReqAny, err := anypb.New(testReq)
+		testReqAny, err := protohelper.MsgToAny(testReq)
 		if err != nil {
 			t.Fatalf("Failed to marshal test request: %v", err)
 		}

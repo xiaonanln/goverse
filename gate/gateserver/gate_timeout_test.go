@@ -8,10 +8,10 @@ import (
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -149,7 +149,7 @@ func TestGateCallObjectTimeout(t *testing.T) {
 				"delay_ms": structpb.NewNumberValue(3000), // 3 second delay
 			},
 		}
-		reqAny, err := anypb.New(req)
+		reqAny, err := protohelper.MsgToAny(req)
 		if err != nil {
 			t.Fatalf("Failed to marshal request: %v", err)
 		}
@@ -200,7 +200,7 @@ func TestGateCallObjectTimeout(t *testing.T) {
 				"delay_ms": structpb.NewNumberValue(500), // 0.5 second delay
 			},
 		}
-		reqAny, err := anypb.New(req)
+		reqAny, err := protohelper.MsgToAny(req)
 		if err != nil {
 			t.Fatalf("Failed to marshal request: %v", err)
 		}
@@ -246,7 +246,7 @@ func TestGateCallObjectTimeout(t *testing.T) {
 				"delay_ms": structpb.NewNumberValue(2000), // 2 second delay
 			},
 		}
-		reqAny, err := anypb.New(req)
+		reqAny, err := protohelper.MsgToAny(req)
 		if err != nil {
 			t.Fatalf("Failed to marshal request: %v", err)
 		}

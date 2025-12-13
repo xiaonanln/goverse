@@ -541,12 +541,9 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Marshal the request to Any for transport
-	var requestAny *anypb.Any
-	if request != nil {
-		requestAny, err = anypb.New(request)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request: %w", err)
-		}
+	requestAny, err := protohelper.MsgToAny(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Call CallObject on the remote node
@@ -1061,7 +1058,7 @@ func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, mess
 		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, gateAddr)
 
 		// Wrap message in ClientMessageEnvelope with client ID
-		anyMsg, err := anypb.New(message)
+		anyMsg, err := protohelper.MsgToAny(message)
 		if err != nil {
 			c.gateChannelsMu.RUnlock()
 			return fmt.Errorf("failed to marshal message for gate: %w", err)

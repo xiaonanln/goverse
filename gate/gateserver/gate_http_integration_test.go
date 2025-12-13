@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/object"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -59,7 +60,7 @@ func prepareCallObjectRequestBody(t *testing.T, message string) []byte {
 		},
 	}
 
-	anyReq, err := anypb.New(echoReq)
+	anyReq, err := protohelper.MsgToAny(echoReq)
 	if err != nil {
 		t.Fatalf("Failed to create Any: %v", err)
 	}

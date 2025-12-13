@@ -14,11 +14,11 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/protohelper"
 )
 
 const (
@@ -80,7 +80,7 @@ func (c *ChatClient) CallObject(objectType, objectID, method string, arg proto.M
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	anyReq, err := anypb.New(arg)
+	anyReq, err := protohelper.MsgToAny(arg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
