@@ -258,16 +258,16 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		methodName := "Increment"
 		request := &counter_pb.IncrementRequest{Amount: 10}
 
-		// Insert first call
-		_, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		// Serialize request data
+		requestData, err := protohelper.MsgToBytes(request)
 		if err != nil {
-			t.Fatalf("First call failed: %v", err)
+			t.Fatalf("Failed to serialize request: %v", err)
 		}
 
-		// Get the reliable call record
-		rc, err := provider.GetReliableCall(ctx, callID)
+		// Insert pending call directly in DB
+		rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
 		if err != nil {
-			t.Fatalf("Failed to get reliable call: %v", err)
+			t.Fatalf("Failed to insert pending call: %v", err)
 		}
 
 		// Update status to failed
