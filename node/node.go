@@ -53,39 +53,42 @@ type Object = object.Object
 // - Deletes wait for all calls/saves to complete before removing object
 // - Creates prevent any calls/saves/deletes until object is fully initialized
 type Node struct {
-	advertiseAddress      string
-	numShards             int // Number of shards in the cluster for shard ID calculation
-	objectTypes           map[string]reflect.Type
-	objectTypesMu         sync.RWMutex
-	objects               map[string]Object
-	objectsMu             sync.RWMutex
-	keyLock               *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
-	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
-	inspectorManager      *inspectormanager.InspectorManager
-	logger                *logger.Logger
-	startupTime           time.Time
-	persistenceProvider   object.PersistenceProvider
-	persistenceProviderMu sync.RWMutex
-	persistenceInterval   time.Duration
-	persistenceCtx        context.Context
-	persistenceCancel     context.CancelFunc
-	persistenceDone       chan struct{}
-	stopped               atomic.Bool                // Atomic flag to indicate node is stopping/stopped
-	stopMu                sync.RWMutex               // RWMutex to coordinate Stop with in-flight operations
-	lifecycleValidator    *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
+	advertiseAddress              string
+	numShards                     int // Number of shards in the cluster for shard ID calculation
+	objectTypes                   map[string]reflect.Type
+	objectTypesMu                 sync.RWMutex
+	objects                       map[string]Object
+	objectsMu                     sync.RWMutex
+	keyLock                       *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
+	shardLock                     *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
+	inspectorManager              *inspectormanager.InspectorManager
+	logger                        *logger.Logger
+	startupTime                   time.Time
+	persistenceProvider           object.PersistenceProvider
+	persistenceProviderMu         sync.RWMutex
+	persistenceInterval           time.Duration
+	persistenceCtx                context.Context
+	persistenceCancel             context.CancelFunc
+	persistenceDone               chan struct{}
+	stopped                       atomic.Bool                // Atomic flag to indicate node is stopping/stopped
+	stopMu                        sync.RWMutex               // RWMutex to coordinate Stop with in-flight operations
+	lifecycleValidator            *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
+	activeReliableCallProcessors  map[string]<-chan *object.ReliableCall
+	activeReliableCallProcessorMu sync.Mutex // Protects activeReliableCallProcessors map
 }
 
 // NewNode creates a new Node instance
 func NewNode(advertiseAddress string, numShards int) *Node {
 	node := &Node{
-		advertiseAddress:    advertiseAddress,
-		numShards:           numShards,
-		objectTypes:         make(map[string]reflect.Type),
-		objects:             make(map[string]Object),
-		keyLock:             keylock.NewKeyLock(),
-		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress, ""),
-		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
-		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
+		advertiseAddress:             advertiseAddress,
+		numShards:                    numShards,
+		objectTypes:                  make(map[string]reflect.Type),
+		objects:                      make(map[string]Object),
+		keyLock:                      keylock.NewKeyLock(),
+		inspectorManager:             inspectormanager.NewInspectorManager(advertiseAddress, ""),
+		logger:                       logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
+		persistenceInterval:          5 * time.Minute, // Default to 5 minutes
+		activeReliableCallProcessors: make(map[string]<-chan *object.ReliableCall),
 	}
 
 	return node
@@ -463,11 +466,29 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 // This is called when a ReliableCallObject RPC is received
 // Returns a channel that receives each processed ReliableCall
 // The channel is closed when processing completes
+// If a goroutine is already processing calls for this object, returns the existing channel
 func (node *Node) processPendingReliableCalls(ctx context.Context, objectType string, objectID string) <-chan *object.ReliableCall {
+	// Check if there's already an active processor for this object
+	node.activeReliableCallProcessorMu.Lock()
+	if existingChan, exists := node.activeReliableCallProcessors[objectID]; exists {
+		node.activeReliableCallProcessorMu.Unlock()
+		node.logger.Infof("processPendingReliableCalls: reusing existing processor for object %s", objectID)
+		return existingChan
+	}
+
+	// Create new channel and register it before starting goroutine
 	callsChan := make(chan *object.ReliableCall)
+	node.activeReliableCallProcessors[objectID] = callsChan
+	node.activeReliableCallProcessorMu.Unlock()
 
 	go func() {
-		defer close(callsChan)
+		// Clean up map entry when done
+		defer func() {
+			close(callsChan)
+			node.activeReliableCallProcessorMu.Lock()
+			delete(node.activeReliableCallProcessors, objectID)
+			node.activeReliableCallProcessorMu.Unlock()
+		}()
 
 		// Get the persistence provider
 		node.persistenceProviderMu.RLock()

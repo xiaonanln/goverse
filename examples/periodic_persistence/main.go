@@ -62,14 +62,14 @@ func (c *Counter) FromData(data proto.Message) error {
 
 // MockPersistenceProvider for this example (in production, use PostgreSQL)
 type MockPersistenceProvider struct {
-	storage   map[string][]byte
+	storage    map[string][]byte
 	nextRcseqs map[string]int64
-	saveCount int
+	saveCount  int
 }
 
 func NewMockPersistenceProvider() *MockPersistenceProvider {
 	return &MockPersistenceProvider{
-		storage:   make(map[string][]byte),
+		storage:    make(map[string][]byte),
 		nextRcseqs: make(map[string]int64),
 	}
 }

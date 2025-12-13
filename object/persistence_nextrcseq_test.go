@@ -193,8 +193,8 @@ func TestNextRcseq_MultipleObjects(t *testing.T) {
 
 	// Create and save multiple objects with different next_rcseq values
 	objects := []struct {
-		id       string
-		data     string
+		id        string
+		data      string
 		nextRcseq int64
 	}{
 		{"obj-1", "data-1", 100},

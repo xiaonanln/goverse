@@ -11,8 +11,8 @@ import (
 
 // ReliableCall represents a tracked remote call for exactly-once semantics
 type ReliableCall struct {
-	Seq       int64
-	CallID    string
+	Seq         int64
+	CallID      string
 	ObjectID    string
 	ObjectType  string
 	MethodName  string
