@@ -557,7 +557,10 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectType st
 				node.logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
 				call.Status = "failed"
 				call.Error = fmt.Sprintf("failed to unmarshal request: %v", err)
-				_ = provider.UpdateReliableCallStatus(ctx, call.Seq, "failed", nil, call.Error)
+				// Use a separate context with 60s timeout to ensure status update completes even if ctx is cancelled
+				updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
 				obj.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on failure to avoid blocking
 				callsChan <- call
 			}
@@ -567,7 +570,10 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectType st
 				resultData, _ := protohelper.MsgToBytes(result)
 				call.Status = "success"
 				call.ResultData = resultData
-				_ = provider.UpdateReliableCallStatus(ctx, call.Seq, "success", resultData, "")
+				// Use a separate context with 60s timeout to ensure status update completes even if ctx is cancelled
+				updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "success", resultData, "")
 				obj.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on failure to avoid blocking
 				callsChan <- call
 			}
