@@ -425,19 +425,10 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Collect processed calls to find our target call without another DB lookup
 	var call *object.ReliableCall
-loop:
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case processedCall, ok := <-processedCalls:
-			if !ok {
-				break loop
-			}
-			if processedCall.CallID == callID {
-				call = processedCall
-				node.logger.Infof("Found reliable call %s in processed calls with status %s", callID, call.Status)
-			}
+	for processedCall := range processedCalls {
+		if processedCall.CallID == callID {
+			call = processedCall
+			node.logger.Infof("Found reliable call %s in processed calls with status %s", callID, call.Status)
 		}
 	}
 
@@ -552,6 +543,14 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectType st
 
 		// Process each pending call sequentially in order of seq
 		for _, call := range pendingCalls {
+			// Check if context is cancelled before processing
+			select {
+			case <-ctx.Done():
+				node.logger.Warnf("processPendingReliableCalls: context cancelled, stopping processing")
+				return
+			default:
+			}
+
 			node.logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
 
 			fail := func(err error) {
