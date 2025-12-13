@@ -6,8 +6,8 @@ import (
 	"time"
 
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -530,7 +530,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 		}
 
 		// Send message to client 1
-		anyMsg1, err := anypb.New(testMessage1)
+		anyMsg1, err := protohelper.MsgToAny(testMessage1)
 		if err != nil {
 			t.Fatalf("Failed to create Any message: %v", err)
 		}
@@ -549,7 +549,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 		gate.handleGateMessage("test-node", gateMsg1)
 
 		// Send message to client 2
-		anyMsg2, err := anypb.New(testMessage2)
+		anyMsg2, err := protohelper.MsgToAny(testMessage2)
 		if err != nil {
 			t.Fatalf("Failed to create Any message: %v", err)
 		}
@@ -631,7 +631,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 			},
 		}
 
-		anyMsg, err := anypb.New(testMessage)
+		anyMsg, err := protohelper.MsgToAny(testMessage)
 		if err != nil {
 			t.Fatalf("Failed to create Any message: %v", err)
 		}

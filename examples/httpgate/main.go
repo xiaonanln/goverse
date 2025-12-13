@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -62,7 +62,7 @@ func main() {
 
 func encodeAndPrintRequest(reqMsg proto.Message, objType, objID, method string) {
 	// Step 1: Wrap message in google.protobuf.Any
-	anyReq, err := anypb.New(reqMsg)
+	anyReq, err := protohelper.MsgToAny(reqMsg)
 	if err != nil {
 		log.Fatalf("Failed to create Any: %v", err)
 	}

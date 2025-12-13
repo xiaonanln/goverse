@@ -3,7 +3,7 @@ package gate
 import (
 	"testing"
 
-	"google.golang.org/protobuf/types/known/anypb"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -35,7 +35,7 @@ func TestClientProxyMessageChan(t *testing.T) {
 
 	// Test that we can send a message to the channel
 	testMsg := &emptypb.Empty{}
-	anyMsg, err := anypb.New(testMsg)
+	anyMsg, err := protohelper.MsgToAny(testMsg)
 	if err != nil {
 		t.Fatalf("Failed to create Any message: %v", err)
 	}

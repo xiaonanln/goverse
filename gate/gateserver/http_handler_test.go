@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -20,7 +21,7 @@ func TestHTTPRequestResponseEncoding(t *testing.T) {
 
 	// Create a test message
 	reqMsg := &wrapperspb.StringValue{Value: "hello"}
-	anyReq, err := anypb.New(reqMsg)
+	anyReq, err := protohelper.MsgToAny(reqMsg)
 	if err != nil {
 		t.Fatalf("Failed to create Any request: %v", err)
 	}

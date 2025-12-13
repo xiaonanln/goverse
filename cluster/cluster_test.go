@@ -11,8 +11,20 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
-// Helper function to create and start a cluster with etcd for testing
+// Helper function to create and start a cluster with default durations for testing
 func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPrefix string) *Cluster {
+	return mustNewClusterCustomDurations(ctx, t, nodeAddr, etcdPrefix, 3*time.Second, 1*time.Second)
+}
+
+// Helper function to create and start a cluster with minimal durations for testing
+// This speeds up tests significantly that wait for cluster readiness
+func mustNewClusterWithMinDurations(ctx context.Context, t *testing.T, nodeAddr string, etcdPrefix string) *Cluster {
+	return mustNewClusterCustomDurations(ctx, t, nodeAddr, etcdPrefix, 50*time.Millisecond, 100*time.Millisecond)
+}
+
+// Helper function to create and start a cluster with etcd for testing
+func mustNewClusterCustomDurations(ctx context.Context, t *testing.T, nodeAddr string, etcdPrefix string,
+	clusterStateStabilityDuration time.Duration, shardMappingCheckInterval time.Duration) *Cluster {
 	t.Helper()
 
 	// Create a node
@@ -29,8 +41,8 @@ func mustNewCluster(ctx context.Context, t *testing.T, nodeAddr string, etcdPref
 		EtcdAddress:                   "localhost:2379",
 		EtcdPrefix:                    etcdPrefix,
 		MinQuorum:                     1,
-		ClusterStateStabilityDuration: 3 * time.Second,
-		ShardMappingCheckInterval:     1 * time.Second,
+		ClusterStateStabilityDuration: clusterStateStabilityDuration,
+		ShardMappingCheckInterval:     shardMappingCheckInterval,
 		NumShards:                     testutil.TestNumShards,
 	}
 

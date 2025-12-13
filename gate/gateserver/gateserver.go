@@ -13,6 +13,7 @@ import (
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -244,7 +245,7 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 
 	// Send RegisterResponse
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
-	anyResp, err := anypb.New(regResp)
+	anyResp, err := protohelper.MsgToAny(regResp)
 	if err != nil {
 		return fmt.Errorf("failed to marshal RegisterResponse: %w", err)
 	}
