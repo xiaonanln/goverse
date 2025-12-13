@@ -114,7 +114,6 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		if !ok {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
 		}
-
 		if response.Value != 5 {
 			t.Errorf("Expected value 5, got %d", response.Value)
 		}
@@ -166,24 +165,60 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		methodName := "Increment"
 		request := &counter_pb.IncrementRequest{Amount: 3}
 
-		// Insert first call
-		result1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		// Serialize request data
+		requestData, err := protohelper.MsgToBytes(request)
 		if err != nil {
-			t.Fatalf("First call failed: %v", err)
+			t.Fatalf("Failed to serialize request: %v", err)
 		}
 
-		// Insert duplicate call - should return the same result
-		result2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		// Insert pending call directly in DB
+		rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
 		if err != nil {
-			t.Fatalf("Duplicate call failed: %v", err)
+			t.Fatalf("Failed to insert pending call: %v", err)
 		}
 
-		// Both results should be identical
-		response1 := result1.(*counter_pb.CounterResponse)
-		response2 := result2.(*counter_pb.CounterResponse)
+		// Verify call is pending
+		if rc.Status != "pending" {
+			t.Errorf("Expected status 'pending', got %q", rc.Status)
+		}
+		if rc.CallID != callID {
+			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+		}
+		if rc.ObjectID != objectID {
+			t.Errorf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
+		}
+		if rc.ObjectType != objectType {
+			t.Errorf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
+		}
+		if rc.MethodName != methodName {
+			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+		}
 
-		if response1.Value != response2.Value {
-			t.Errorf("Expected same value, got %d and %d", response1.Value, response2.Value)
+		// Now actually call it - should execute the pending call and return success
+		result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		if err != nil {
+			t.Fatalf("ReliableCallObject failed: %v", err)
+		}
+
+		// Verify the result
+		response, ok := result.(*counter_pb.CounterResponse)
+		if !ok {
+			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
+		}
+		if response.Value != 3 {
+			t.Errorf("Expected value 3, got %d", response.Value)
+		}
+
+		// Verify the call is now marked as success in DB
+		rc3, err := provider.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call: %v", err)
+		}
+		if rc3.Status != "success" {
+			t.Errorf("Expected status 'success', got %q", rc3.Status)
+		}
+		if rc3.ResultData == nil {
+			t.Fatal("Expected result data to be set, got nil")
 		}
 	})
 
