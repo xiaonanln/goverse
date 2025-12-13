@@ -84,7 +84,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 	// Create cluster with etcd using mustNewCluster helper
 	nodeAddr := testutil.GetFreeAddress()
-	cluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
+	cluster := mustNewClusterWithMinDurations(ctx, t, nodeAddr, testPrefix)
 	defer cluster.Stop(ctx)
 
 	// Set persistence provider on the node
