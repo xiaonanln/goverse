@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/protobuf/proto"
 )
@@ -64,6 +65,11 @@ type Object interface {
 
 	// SetNextRcseq sets the next reliable call sequence number for this object
 	SetNextRcseq(rcseq int64)
+
+	// ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
+	// Returns a channel that receives each processed ReliableCall.
+	// The channel is closed when processing completes.
+	ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider) <-chan *ReliableCall
 
 	// InvokeMethod invokes the specified method on the object using reflection
 	InvokeMethod(ctx context.Context, method string, request proto.Message) (proto.Message, error)
@@ -209,4 +215,92 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 	}
 
 	return resp.Interface().(proto.Message), nil
+}
+
+// ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
+// Returns a channel that receives each processed ReliableCall.
+// The channel is closed when processing completes.
+func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider) <-chan *ReliableCall {
+	callsChan := make(chan *ReliableCall)
+
+	go func() {
+		defer close(callsChan)
+
+		nextRcseq := base.GetNextRcseq()
+
+		base.Logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", base.id, nextRcseq)
+
+		// Fetch pending calls for this object
+		pendingCalls, err := provider.GetPendingReliableCalls(ctx, base.id, nextRcseq)
+		if err != nil {
+			base.Logger.Errorf("ProcessPendingReliableCalls: failed to fetch pending calls: %v", err)
+			return
+		}
+
+		base.Logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), base.id)
+
+		if len(pendingCalls) == 0 {
+			base.Logger.Infof("No pending reliable calls for object %s", base.id)
+			return
+		}
+
+		base.Logger.Infof("Found %d pending reliable calls for object %s, processing sequentially", len(pendingCalls), base.id)
+
+		// Process each pending call sequentially in order of seq
+		for _, call := range pendingCalls {
+			// Check if context is cancelled before processing
+			select {
+			case <-ctx.Done():
+				base.Logger.Warnf("ProcessPendingReliableCalls: context cancelled, stopping processing")
+				return
+			default:
+			}
+
+			base.Logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
+
+			fail := func(err error) {
+				base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
+				call.Status = "failed"
+				call.Error = err.Error()
+				// Use a separate context with 60s timeout to ensure status update completes even if ctx is cancelled
+				updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
+				base.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on failure to avoid blocking
+				callsChan <- call
+			}
+
+			success := func(result proto.Message) {
+				base.Logger.Infof("Reliable call %s (seq=%d) succeeded: result=%v", call.CallID, call.Seq, result)
+				resultData, _ := protohelper.MsgToBytes(result)
+				call.Status = "success"
+				call.ResultData = resultData
+				// Use a separate context with 60s timeout to ensure status update completes even if ctx is cancelled
+				updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "success", resultData, "")
+				base.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on success
+				callsChan <- call
+			}
+
+			// Unmarshal the request data to proto.Message
+			requestMsg, err := protohelper.BytesToMsg(call.RequestData)
+			if err != nil {
+				fail(err)
+				continue
+			}
+
+			// Invoke the method on the object
+			result, err := base.self.InvokeMethod(ctx, call.MethodName, requestMsg)
+			if err != nil {
+				fail(err)
+				continue
+			}
+
+			// Update to success status with result
+			success(result)
+		}
+	}()
+
+	return callsChan
 }

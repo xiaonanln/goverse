@@ -89,6 +89,26 @@ Proto files: `proto/goverse.proto`, `gate/proto/gate.proto`
 - Never hold locks across async operations or goroutine boundaries
 - Never call methods that acquire locks while holding locks (check call chain)
 
+### Proto Message Conversion
+
+**Use `util/protohelper`** for converting between `proto.Message`, `anypb.Any`, and `[]byte`:
+
+```go
+import "github.com/xiaonanln/goverse/util/protohelper"
+
+// proto.Message <-> anypb.Any
+anyMsg, err := protohelper.MsgToAny(msg)
+msg, err := protohelper.AnyToMsg(anyMsg)
+
+// proto.Message <-> []byte (via anypb.Any)
+data, err := protohelper.MsgToBytes(msg)
+msg, err := protohelper.BytesToMsg(data)
+
+// anypb.Any <-> []byte
+data, err := protohelper.AnyToBytes(anyMsg)
+anyMsg, err := protohelper.BytesToAny(data)
+```
+
 ## Testing
 
 **Coverage targets**: util/object/client 100%, cluster 90%+
