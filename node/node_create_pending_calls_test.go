@@ -86,7 +86,9 @@ func TestCreateObject_ProcessesPendingReliableCalls(t *testing.T) {
 	provider := postgres.NewPostgresPersistenceProvider(db)
 
 	// Create node
-	nodeAddr := "localhost:12345" // Test address, not actually used for network binding in this test
+	// Note: This is just metadata - no actual server is started in this test,
+	// so the hard-coded port won't cause conflicts with concurrent tests
+	nodeAddr := "localhost:12345"
 	node := NewNode(nodeAddr, testNumShards)
 	node.SetPersistenceProvider(provider)
 
