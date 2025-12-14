@@ -15,12 +15,86 @@ import (
 )
 
 type Object interface {
+	// Id returns the unique identifier of the object.
+	//
+	// The ID is set during object initialization via OnInit and remains constant
+	// throughout the object's lifetime. IDs are globally unique within the cluster.
+	//
+	// Returns:
+	//   - string: The unique object identifier
 	Id() string
+
+	// Type returns the type name of the object.
+	//
+	// The type name is derived from the concrete struct type name using reflection
+	// (e.g., "Counter" for *Counter). This is used for object registration, routing,
+	// and diagnostic purposes.
+	//
+	// Returns:
+	//   - string: The object type name
 	Type() string
+
+	// String returns a human-readable string representation of the object.
+	//
+	// The default format is "TypeName(id)" (e.g., "Counter(abc-123)").
+	// This method is primarily used for logging and debugging.
+	//
+	// Returns:
+	//   - string: String representation of the object
 	String() string
+
+	// CreationTime returns the timestamp when the object was created.
+	//
+	// This is set during OnInit and represents when the object instance was
+	// first initialized in memory, not necessarily when it was first persisted.
+	//
+	// Returns:
+	//   - time.Time: Object creation timestamp
 	CreationTime() time.Time
+
+	// OnInit initializes the object with its identity.
+	//
+	// This is the first method called when an object is created or reactivated.
+	// It sets up the object's ID, creation time, logger, and lifetime context.
+	// This method is called by the runtime and should not be called directly.
+	//
+	// Parameters:
+	//   - self: Reference to the concrete object implementation
+	//   - id: Unique identifier for the object (generated if empty string provided)
+	//
+	// Implementation Note:
+	// When embedding BaseObject, this method is automatically implemented.
+	// Custom implementations must initialize all required fields.
 	OnInit(self Object, id string)
+
+	// OnCreated is called after the object is fully initialized and registered.
+	//
+	// This lifecycle hook is invoked after OnInit and after the object is added
+	// to the node's object registry. Use this method to perform initialization
+	// logic that requires the object to be fully operational (e.g., starting
+	// background tasks, establishing connections, loading data).
+	//
+	// Thread-Safety: This method is called with the object's per-key lock held,
+	// ensuring no concurrent calls can be made to the object during initialization.
 	OnCreated()
+
+	// Destroy is called when the object is being removed from memory.
+	//
+	// This lifecycle hook allows the object to perform cleanup before removal.
+	// The default implementation cancels the object's lifetime context, which
+	// signals to any background goroutines that they should terminate.
+	//
+	// Thread-Safety: This method may be called concurrently with object methods
+	// if the object is being destroyed while processing requests. Implementations
+	// should handle cleanup gracefully and be idempotent (safe to call multiple times).
+	//
+	// Implementation Note:
+	// When overriding, always call the base implementation to ensure proper
+	// context cancellation:
+	//   func (obj *MyObject) Destroy() {
+	//       // Custom cleanup
+	//       obj.BaseObject.Destroy()  // Cancel context
+	//   }
 	Destroy()
 
 	// ToData serializes the object state to a proto.Message for persistence.
@@ -61,18 +135,86 @@ type Object interface {
 	//   - error: Deserialization error, or nil for non-persistent objects
 	FromData(data proto.Message) error
 
-	// GetNextRcseq returns the next reliable call sequence number for this object
+	// GetNextRcseq returns the next reliable call sequence number for this object.
+	//
+	// Reliable calls are sequentially numbered to ensure exactly-once execution
+	// semantics. This method returns the sequence number that will be assigned
+	// to the next reliable call. Sequence numbers start at 0 and increment by 1
+	// for each processed call.
+	//
+	// Thread-Safety: This method is thread-safe and uses atomic operations.
+	//
+	// Returns:
+	//   - int64: The next reliable call sequence number
 	GetNextRcseq() int64
 
-	// SetNextRcseq sets the next reliable call sequence number for this object
+	// SetNextRcseq sets the next reliable call sequence number for this object.
+	//
+	// This method is used during object reactivation to restore the reliable call
+	// sequence number from persistent storage. It updates the internal counter to
+	// ensure sequence continuity across object lifecycle events.
+	//
+	// Thread-Safety: This method is thread-safe and uses atomic operations.
+	//
+	// Parameters:
+	//   - rcseq: The sequence number to set as the next reliable call sequence
 	SetNextRcseq(rcseq int64)
 
-	// ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
-	// Returns a channel that receives each processed ReliableCall.
-	// The channel is closed when processing completes.
+	// ProcessPendingReliableCalls processes pending reliable calls up to and including the specified sequence.
+	//
+	// This method fetches reliable calls from the persistence provider and executes them
+	// sequentially in order. It ensures exactly-once execution semantics by tracking
+	// processed sequence numbers. Multiple concurrent callers will wait for a single
+	// processing goroutine to handle all pending calls.
+	//
+	// The returned channel receives the ReliableCall matching the requested sequence number
+	// if it is processed. The channel is closed after processing completes, regardless of
+	// whether the call was found or already executed.
+	//
+	// Behavior:
+	//   - If seq < current sequence: Channel closes immediately (already processed)
+	//   - If processing is already running: Waits for existing goroutine to process
+	//   - If no processing is running: Starts a new processing goroutine
+	//   - Processing continues until no more pending calls exist in persistence
+	//
+	// Thread-Safety: This method is thread-safe and can be called concurrently.
+	//
+	// Parameters:
+	//   - provider: PersistenceProvider for fetching pending calls from storage
+	//   - seq: The sequence number of the reliable call to wait for
+	//
+	// Returns:
+	//   - <-chan *ReliableCall: Channel that receives the matching ReliableCall (if found and processed)
 	ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall
 
-	// InvokeMethod invokes the specified method on the object using reflection
+	// InvokeMethod invokes the specified method on the object using reflection.
+	//
+	// This method uses reflection to dynamically call object methods by name. It validates
+	// that the method exists, has the correct signature (ctx context.Context, req proto.Message)
+	// returning (proto.Message, error), and then invokes it with the provided arguments.
+	//
+	// Method Signature Requirements:
+	//   - Must accept exactly 2 parameters: (context.Context, *ConcreteProtoMessage)
+	//   - Must return exactly 2 values: (*ConcreteProtoMessage, error)
+	//   - Request and response must be concrete protobuf message pointer types
+	//
+	// Example Method:
+	//   func (obj *Counter) Add(ctx context.Context, req *wrapperspb.Int32Value) (*wrapperspb.Int32Value, error) {
+	//       // Implementation
+	//   }
+	//
+	// Thread-Safety: This method is called with the object's per-key lock held by the
+	// runtime, ensuring serialized access. The invoked method should not attempt to
+	// acquire this lock again.
+	//
+	// Parameters:
+	//   - ctx: Context for cancellation and timeouts
+	//   - method: Name of the method to invoke (case-sensitive)
+	//   - request: Protobuf message containing method arguments
+	//
+	// Returns:
+	//   - proto.Message: The response from the method invocation
+	//   - error: Method invocation error, validation error, or nil on success
 	InvokeMethod(ctx context.Context, method string, request proto.Message) (proto.Message, error)
 }
 
