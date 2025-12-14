@@ -1,8 +1,13 @@
 package object
 
 import (
+	"context"
+	"reflect"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // TestObject is a simple test implementation of the Object interface
@@ -204,5 +209,185 @@ func TestBaseObject_Destroy_Idempotent(t *testing.T) {
 		// Good - context is cancelled
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Context should be cancelled after calling Destroy")
+	}
+}
+
+// TestObjectWithMethod is a test object with a valid method for InvokeMethod testing
+type TestObjectWithMethod struct {
+	BaseObject
+	CallCount int
+}
+
+func (t *TestObjectWithMethod) OnCreated() {}
+
+func (t *TestObjectWithMethod) TestMethod(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+	t.CallCount++
+	return &emptypb.Empty{}, nil
+}
+
+func (t *TestObjectWithMethod) GetValue(ctx context.Context, req *emptypb.Empty) (*structpb.Struct, error) {
+	return &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"count": structpb.NewNumberValue(float64(t.CallCount)),
+		},
+	}, nil
+}
+
+func TestBaseObject_InvokeMethod_Success(t *testing.T) {
+	obj := &TestObjectWithMethod{}
+	obj.OnInit(obj, "test-id")
+
+	ctx := context.Background()
+	req := &emptypb.Empty{}
+
+	// First call
+	resp, err := obj.InvokeMethod(ctx, "TestMethod", req)
+	if err != nil {
+		t.Fatalf("InvokeMethod failed: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("InvokeMethod returned nil response")
+	}
+
+	if obj.CallCount != 1 {
+		t.Fatalf("CallCount = %d; want 1", obj.CallCount)
+	}
+
+	// Second call
+	resp, err = obj.InvokeMethod(ctx, "TestMethod", req)
+	if err != nil {
+		t.Fatalf("InvokeMethod failed on second call: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("InvokeMethod returned nil response on second call")
+	}
+
+	if obj.CallCount != 2 {
+		t.Fatalf("CallCount = %d; want 2", obj.CallCount)
+	}
+}
+
+func TestBaseObject_InvokeMethod_MethodNotFound(t *testing.T) {
+	obj := &TestObjectWithMethod{}
+	obj.OnInit(obj, "test-id")
+
+	ctx := context.Background()
+	req := &emptypb.Empty{}
+
+	_, err := obj.InvokeMethod(ctx, "NonExistentMethod", req)
+	if err == nil {
+		t.Fatal("InvokeMethod should fail for non-existent method")
+	}
+}
+
+func TestBaseObject_InvokeMethod_InvalidRequestType(t *testing.T) {
+	obj := &TestObjectWithMethod{}
+	obj.OnInit(obj, "test-id")
+
+	ctx := context.Background()
+	// Use wrong request type
+	req := &structpb.Struct{}
+
+	_, err := obj.InvokeMethod(ctx, "TestMethod", req)
+	if err == nil {
+		t.Fatal("InvokeMethod should fail for invalid request type")
+	}
+}
+
+func TestBaseObject_InvokeMethod_ReturnsCorrectValue(t *testing.T) {
+	obj := &TestObjectWithMethod{}
+	obj.OnInit(obj, "test-id")
+
+	ctx := context.Background()
+	req := &emptypb.Empty{}
+
+	// Call GetValue which returns a struct
+	resp, err := obj.InvokeMethod(ctx, "GetValue", req)
+	if err != nil {
+		t.Fatalf("InvokeMethod failed: %v", err)
+	}
+
+	structResp, ok := resp.(*structpb.Struct)
+	if !ok {
+		t.Fatalf("Response should be *structpb.Struct, got %T", resp)
+	}
+
+	// Verify count is 0 (TestMethod wasn't called)
+	countVal := structResp.Fields["count"]
+	if countVal == nil {
+		t.Fatal("Response missing 'count' field")
+	}
+	if countVal.GetNumberValue() != 0 {
+		t.Fatalf("count = %f; want 0", countVal.GetNumberValue())
+	}
+}
+
+// TestObjectWithInvalidMethod has methods with invalid signatures for testing
+type TestObjectWithInvalidMethod struct {
+	BaseObject
+}
+
+func (t *TestObjectWithInvalidMethod) OnCreated() {}
+
+// Invalid: wrong number of arguments
+func (t *TestObjectWithInvalidMethod) InvalidArgs(ctx context.Context) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
+
+// Invalid: wrong argument types
+func (t *TestObjectWithInvalidMethod) InvalidArgTypes(s string, i int) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
+
+// Invalid: wrong return types
+func (t *TestObjectWithInvalidMethod) InvalidReturn(ctx context.Context, req *emptypb.Empty) string {
+	return "invalid"
+}
+
+func TestBaseObject_InvokeMethod_InvalidMethodSignatures(t *testing.T) {
+	tests := []struct {
+		name       string
+		methodName string
+	}{
+		{"InvalidArgs", "InvalidArgs"},
+		{"InvalidArgTypes", "InvalidArgTypes"},
+		{"InvalidReturn", "InvalidReturn"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &TestObjectWithInvalidMethod{}
+			obj.OnInit(obj, "test-id")
+
+			ctx := context.Background()
+			req := &emptypb.Empty{}
+
+			_, err := obj.InvokeMethod(ctx, tt.methodName, req)
+			if err == nil {
+				t.Fatalf("InvokeMethod should fail for method %s with invalid signature", tt.methodName)
+			}
+		})
+	}
+}
+
+func TestIsConcreteProtoMessage(t *testing.T) {
+	tests := []struct {
+		name     string
+		typ      reflect.Type
+		expected bool
+	}{
+		{"EmptyProto", reflect.TypeOf((*emptypb.Empty)(nil)), true},
+		{"StructProto", reflect.TypeOf((*structpb.Struct)(nil)), true},
+		{"String", reflect.TypeOf(""), false},
+		{"Int", reflect.TypeOf(0), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isConcreteProtoMessage(tt.typ)
+			if result != tt.expected {
+				t.Fatalf("isConcreteProtoMessage(%v) = %v; want %v", tt.typ, result, tt.expected)
+			}
+		})
 	}
 }

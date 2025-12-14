@@ -230,18 +230,6 @@ func (node *Node) RegisterObjectType(obj Object) {
 	node.logger.Infof("Registered object type %s = %v", objTypeName, node.objectTypes[objTypeName])
 }
 
-// Check if the type is a concrete implementation of proto.Message
-func isConcreteProtoMessage(t reflect.Type) bool {
-	if t.Kind() != reflect.Ptr {
-		return false
-	}
-	if t.Elem().Kind() != reflect.Struct {
-		return false
-	}
-	protoMessageType := reflect.TypeOf((*proto.Message)(nil)).Elem()
-	return t.Implements(protoMessageType)
-}
-
 // CallObject implements the Goverse gRPC service CallObject method
 func (node *Node) CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error) {
 	// Start timing for metrics
@@ -305,7 +293,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	// Call the method via reflection
-	resp, err := node.invokeObjectMethod(ctx, obj, method, request)
+	resp, err := obj.InvokeMethod(ctx, method, request)
 	if err != nil {
 		callErr = err
 		return nil, callErr
@@ -316,59 +304,6 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	node.logger.Infof("Response type: %T, value: %+v", resp, resp)
 	return resp, nil
-}
-
-// invokeObjectMethod invokes the specified method on the given object using reflection
-func (node *Node) invokeObjectMethod(ctx context.Context, obj Object, method string, request proto.Message) (proto.Message, error) {
-	objValue := reflect.ValueOf(obj)
-	methodValue := objValue.MethodByName(method)
-	if !methodValue.IsValid() {
-		return nil, fmt.Errorf("method not found in class %s: %s", obj.Type(), method)
-	}
-
-	methodType := methodValue.Type()
-	if methodType.NumIn() != 2 {
-		return nil, fmt.Errorf("method %s has invalid number of arguments (expected: 2, got: %d)", method, methodType.NumIn())
-	}
-	if !methodType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) ||
-		!isConcreteProtoMessage(methodType.In(1)) {
-		return nil, fmt.Errorf("method %s has invalid argument types (expected: context.Context, *Message; got: %s, %s)", method, methodType.In(0), methodType.In(1))
-	}
-
-	// Check method return types: (proto.Message, error)
-	if methodType.NumOut() != 2 {
-		return nil, fmt.Errorf("method %s has invalid number of return values (expected: 2, got: %d)", method, methodType.NumOut())
-	}
-	if !isConcreteProtoMessage(methodType.Out(0)) ||
-		!methodType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return nil, fmt.Errorf("method %s has invalid return types (expected: *Message, error; got: %s, %s)", method, methodType.Out(0), methodType.Out(1))
-	}
-
-	// Unmarshal request to the expected concrete proto.Message type
-	expectedReqType := methodType.In(1)
-	node.logger.Infof("Request value: %+v", request)
-
-	if reflect.TypeOf(request) != expectedReqType {
-		return nil, fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
-	}
-
-	// Call the method with the unmarshaled request as argument
-	// At this point the per-key read lock is still held.
-	// This guarantees that no concurrent Delete/Create can remove or replace the object while the user method executes.
-	results := methodValue.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
-
-	if len(results) != 2 {
-		return nil, fmt.Errorf("method %s has invalid signature", method)
-	}
-
-	// Return the actual result from the method
-	resp, errVal := results[0], results[1]
-
-	if !errVal.IsNil() {
-		return nil, errVal.Interface().(error)
-	}
-
-	return resp.Interface().(proto.Message), nil
 }
 
 // InsertOrGetReliableCall inserts a reliable call into the database or retrieves an existing one.
@@ -593,7 +528,7 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectType st
 			}
 
 			// Invoke the method on the object
-			result, err := node.invokeObjectMethod(ctx, obj, call.MethodName, requestMsg)
+			result, err := obj.InvokeMethod(ctx, call.MethodName, requestMsg)
 			if err != nil {
 				fail(err)
 				continue
