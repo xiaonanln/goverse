@@ -69,7 +69,7 @@ type Object interface {
 	// ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
 	// Returns a channel that receives each processed ReliableCall.
 	// The channel is closed when processing completes.
-	ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall
+	ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall
 
 	// InvokeMethod invokes the specified method on the object using reflection
 	InvokeMethod(ctx context.Context, method string, request proto.Message) (proto.Message, error)
@@ -222,7 +222,7 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 // Returns a channel that receives each processed ReliableCall.
 // The channel is closed when processing completes.
 // Only one processing goroutine is allowed at a time; returns nil if already processing.
-func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall {
+func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall {
 	// Ensure only one processing goroutine runs at a time
 	if !base.processingCalls.CompareAndSwap(false, true) {
 		base.Logger.Warnf("ProcessPendingReliableCalls: already processing, skipping")
@@ -240,7 +240,7 @@ func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provide
 		base.Logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", base.id, nextRcseq)
 
 		// Fetch pending calls for this object
-		pendingCalls, err := provider.GetPendingReliableCalls(ctx, base.id, nextRcseq)
+		pendingCalls, err := provider.GetPendingReliableCalls(base.ctx, base.id, nextRcseq)
 		if err != nil {
 			base.Logger.Errorf("ProcessPendingReliableCalls: failed to fetch pending calls: %v", err)
 			return
@@ -257,10 +257,10 @@ func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provide
 
 		// Process each pending call sequentially in order of seq
 		for _, call := range pendingCalls {
-			// Check if context is cancelled before processing
+			// Check if object is destroyed before processing
 			select {
-			case <-ctx.Done():
-				base.Logger.Warnf("ProcessPendingReliableCalls: context cancelled, stopping processing")
+			case <-base.ctx.Done():
+				base.Logger.Warnf("ProcessPendingReliableCalls: object destroyed, stopping processing")
 				return
 			default:
 			}
@@ -300,7 +300,7 @@ func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provide
 			}
 
 			// Invoke the method on the object
-			result, err := base.self.InvokeMethod(ctx, call.MethodName, requestMsg)
+			result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
 			if err != nil {
 				fail(err)
 				continue
