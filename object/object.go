@@ -19,7 +19,7 @@ type Object interface {
 	CreationTime() time.Time
 	OnInit(self Object, id string)
 	OnCreated()
-	OnDestroy()
+	Destroy()
 
 	// ToData serializes the object state to a proto.Message for persistence.
 	//
@@ -136,11 +136,9 @@ func (base *BaseObject) Context() context.Context {
 	return base.ctx
 }
 
-// OnDestroy is called when the object is being destroyed.
+// Destroy is called when the object is being destroyed.
 // It cancels the object's lifetime context and allows subclasses to perform cleanup.
 // This method is called automatically by the node and is idempotent - multiple calls are safe.
-func (base *BaseObject) OnDestroy() {
-	if base.cancelFunc != nil {
-		base.cancelFunc()
-	}
+func (base *BaseObject) Destroy() {
+	base.cancelFunc()
 }

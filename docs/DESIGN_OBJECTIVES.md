@@ -647,7 +647,7 @@ When modifying `.proto` files:
 1. **Orchestration**: Use client objects to coordinate multiple object calls
 2. **State Management**: Keep minimal client-specific state
 3. **Error Handling**: Return clear errors to clients
-4. **Cleanup**: Implement proper cleanup in OnDestroy()
+4. **Cleanup**: Implement proper cleanup in Destroy()
 
 ### Cluster Operations
 

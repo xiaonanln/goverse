@@ -151,12 +151,12 @@ func (node *Node) Stop(ctx context.Context) error {
 	objects := node.objects
 	node.objects = make(map[string]Object)
 	node.objectsMu.Unlock()
-	
-	// Call OnDestroy for all objects to allow cleanup
+
+	// Call Destroy for all objects to allow cleanup
 	for _, obj := range objects {
-		obj.OnDestroy()
+		obj.Destroy()
 	}
-	
+
 	node.logger.Infof("Cleared %d objects from memory", objectCount)
 
 	// Stop the inspector manager and unregister from inspector
@@ -777,12 +777,12 @@ func (node *Node) destroyObject(id string) {
 		delete(node.objects, id)
 	}
 	node.objectsMu.Unlock()
-	
-	// Call OnDestroy to allow the object to clean up
+
+	// Call Destroy to allow the object to clean up
 	if exists && obj != nil {
-		obj.OnDestroy()
+		obj.Destroy()
 	}
-	
+
 	node.logger.Infof("Destroyed object %s", id)
 
 	// Notify inspector manager about object removal

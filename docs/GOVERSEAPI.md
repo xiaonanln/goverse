@@ -429,8 +429,8 @@ func (obj *MyObject) OnCreated() {
     obj.Logger.Info("Object created")
 }
 
-// OnDestroy is called when the object is being destroyed
-func (obj *MyObject) OnDestroy() {
+// Destroy is called when the object is being destroyed
+func (obj *MyObject) Destroy() {
     // Perform cleanup (cancels lifetime context automatically)
     obj.Logger.Info("Object destroyed")
 }
@@ -462,7 +462,7 @@ func (obj *MyObject) OnCreated() {
 }
 ```
 
-The context is accessible via `obj.Context()` and is cancelled automatically by `OnDestroy()` when:
+The context is accessible via `obj.Context()` and is cancelled automatically by `Destroy()` when:
 - `DeleteObject` is called for this object
 - The node is stopped with `Stop()`
 
@@ -471,15 +471,15 @@ The context is accessible via `obj.Context()` and is cancelled automatically by 
 - Cancel long-running operations
 - Clean up resources when the object is destroyed
 
-**Note:** You can override `OnDestroy()` to add custom cleanup logic, but make sure to call the base implementation to cancel the context:
+**Note:** You can override `Destroy()` to add custom cleanup logic, but make sure to call the base implementation to cancel the context:
 
 ```go
-func (obj *MyObject) OnDestroy() {
+func (obj *MyObject) Destroy() {
     // Custom cleanup first
     obj.customCleanup()
     
     // Call base implementation to cancel context
-    obj.BaseObject.OnDestroy()
+    obj.BaseObject.Destroy()
 }
 ```
 
