@@ -292,10 +292,10 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	})
 
 	t.Run("Concurrent calls from 10 goroutines", func(t *testing.T) {
+		const numGoroutines = 10
 		objectType := "TestCounter"
 		objectID := "TestCounter-concurrent"
 		methodName := "Increment"
-		numGoroutines := 10
 
 		var wg sync.WaitGroup
 		results := make([]int32, numGoroutines)
@@ -303,14 +303,14 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		wg.Add(numGoroutines)
 
-		// Launch 10 goroutines that each make a reliable call
+		// Launch goroutines that each make a reliable call
 		for i := 0; i < numGoroutines; i++ {
 			go func(index int) {
 				defer wg.Done()
 
 				// Each goroutine has a unique call ID and increments by a different amount
 				callID := fmt.Sprintf("concurrent-call-%d", index)
-				amount := int32(index + 1) // Increment by 1, 2, 3, ..., 10
+				amount := int32(index + 1) // Increment by 1, 2, 3, ..., numGoroutines
 				request := &counter_pb.IncrementRequest{Amount: amount}
 
 				result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
@@ -350,8 +350,9 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Logf("Goroutine %d: result value = %d", i, value)
 		}
 
-		// Verify the sum: we incremented by 1+2+3+...+10 = 55
-		// The final value should be 55
+		// Verify the sum: we incremented by 1+2+3+...+numGoroutines
+		// The final value should equal the sum of arithmetic series: n*(n+1)/2
+		expectedSum := int32(numGoroutines * (numGoroutines + 1) / 2)
 		// We can verify by calling one more time with amount=0
 		finalCallID := "concurrent-final-check"
 		finalRequest := &counter_pb.IncrementRequest{Amount: 0}
@@ -363,8 +364,8 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		if !ok {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", finalResult)
 		}
-		if finalResponse.Value != 55 {
-			t.Errorf("Expected final counter value to be 55, got %d", finalResponse.Value)
+		if finalResponse.Value != expectedSum {
+			t.Errorf("Expected final counter value to be %d, got %d", expectedSum, finalResponse.Value)
 		}
 
 		// Verify all reliable call records are in the database with success status
