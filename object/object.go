@@ -64,6 +64,9 @@ type Object interface {
 
 	// SetNextRcseq sets the next reliable call sequence number for this object
 	SetNextRcseq(rcseq int64)
+
+	// InvokeMethod invokes the specified method on the object using reflection
+	InvokeMethod(ctx context.Context, method string, request proto.Message) (proto.Message, error)
 }
 
 // ErrNotPersistent is returned when an object type does not support persistence.

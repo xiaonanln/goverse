@@ -293,9 +293,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	// Call the method via reflection
-	resp, err := obj.(interface {
-		InvokeMethod(context.Context, string, proto.Message) (proto.Message, error)
-	}).InvokeMethod(ctx, method, request)
+	resp, err := obj.InvokeMethod(ctx, method, request)
 	if err != nil {
 		callErr = err
 		return nil, callErr
@@ -530,9 +528,7 @@ func (node *Node) processPendingReliableCalls(ctx context.Context, objectType st
 			}
 
 			// Invoke the method on the object
-			result, err := obj.(interface {
-				InvokeMethod(context.Context, string, proto.Message) (proto.Message, error)
-			}).InvokeMethod(ctx, call.MethodName, requestMsg)
+			result, err := obj.InvokeMethod(ctx, call.MethodName, requestMsg)
 			if err != nil {
 				fail(err)
 				continue
