@@ -275,6 +275,7 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 	}
 
 	// Validate request parameters
+	// Note: seq must be positive (> 0) because it's a BIGSERIAL in PostgreSQL which starts from 1
 	if req.GetSeq() <= 0 {
 		return nil, fmt.Errorf("seq must be positive in ReliableCallObject request")
 	}

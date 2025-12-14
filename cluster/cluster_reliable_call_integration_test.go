@@ -327,6 +327,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 	}
 
 	// Clear all data from previous test runs
+	// Note: Using explicit table names as they are defined in util/postgres/db.go InitSchema
 	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects CASCADE")
 	if err != nil {
 		t.Fatalf("Failed to truncate tables: %v", err)
@@ -391,6 +392,8 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 
 	t.Run("Distributed reliable calls across 3 nodes", func(t *testing.T) {
 		// Create ~10 objects with specific shard assignments to ensure distribution
+		// Using different shards (5, 10, 15, etc.) to spread objects across the 3 nodes
+		// Test uses 64 shards (testutil.TestNumShards), so these shard IDs ensure good distribution
 		objectIDs := []string{
 			testutil.GetObjectIDForShard(5, "Counter1"),
 			testutil.GetObjectIDForShard(10, "Counter2"),
