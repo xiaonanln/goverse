@@ -69,7 +69,7 @@ type Object interface {
 	// ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
 	// Returns a channel that receives each processed ReliableCall.
 	// The channel is closed when processing completes.
-	ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider) <-chan *ReliableCall
+	ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall
 
 	// InvokeMethod invokes the specified method on the object using reflection
 	InvokeMethod(ctx context.Context, method string, request proto.Message) (proto.Message, error)
@@ -220,7 +220,7 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 // ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
 // Returns a channel that receives each processed ReliableCall.
 // The channel is closed when processing completes.
-func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider) <-chan *ReliableCall {
+func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall {
 	callsChan := make(chan *ReliableCall)
 
 	go func() {

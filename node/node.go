@@ -390,7 +390,7 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 
 	// Trigger processing of pending reliable calls for this object
 	// This will fetch pending calls from the database and execute them sequentially
-	processedCalls := obj.ProcessPendingReliableCalls(ctx, provider)
+	processedCalls := obj.ProcessPendingReliableCalls(ctx, provider, seq)
 
 	// Collect processed calls to find our target call without another DB lookup
 	var call *object.ReliableCall
