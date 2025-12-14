@@ -342,7 +342,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Verify all results are valid
 		// Since goroutines can execute in any order, we can't predict exact values
-		// But we can verify that all results are positive and increasing as the object state progresses
+		// But we can verify that all results are positive (the counter progresses with each call)
 		for i, value := range results {
 			if value <= 0 {
 				t.Errorf("Goroutine %d: expected positive value, got %d", i, value)
