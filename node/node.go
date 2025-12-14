@@ -26,6 +26,12 @@ import (
 
 type Object = object.Object
 
+// contextCanceler is an interface for objects that support context cancellation
+// This is implemented by BaseObject to cancel the object's lifetime context
+type contextCanceler interface {
+	CancelContext()
+}
+
 // Node represents a node in the distributed system that manages objects and clients
 //
 // Locking Strategy:
@@ -153,9 +159,6 @@ func (node *Node) Stop(ctx context.Context) error {
 	node.objectsMu.Unlock()
 	
 	// Cancel all object contexts
-	type contextCanceler interface {
-		CancelContext()
-	}
 	for _, obj := range objects {
 		if canceler, ok := obj.(contextCanceler); ok {
 			canceler.CancelContext()
@@ -785,10 +788,6 @@ func (node *Node) destroyObject(id string) {
 	
 	// Cancel the object's lifetime context if it exists
 	if exists && obj != nil {
-		// Use type assertion to access BaseObject's cancel function
-		type contextCanceler interface {
-			CancelContext()
-		}
 		if canceler, ok := obj.(contextCanceler); ok {
 			canceler.CancelContext()
 		}

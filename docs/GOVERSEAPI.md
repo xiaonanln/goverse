@@ -423,6 +423,41 @@ func (obj *MyObject) OnCreated() {
 }
 ```
 
+### Object Lifetime Context
+
+Each object has a lifetime context that is automatically cancelled when the object is destroyed:
+
+```go
+func (obj *MyObject) OnCreated() {
+    // Start a background goroutine that respects object lifetime
+    go func() {
+        ticker := time.NewTicker(1 * time.Second)
+        defer ticker.Stop()
+        
+        for {
+            select {
+            case <-obj.Context().Done():
+                // Object is being destroyed, clean up and exit
+                obj.Logger.Info("Object destroyed, stopping background task")
+                return
+            case <-ticker.C:
+                // Do periodic work
+                obj.doPeriodicWork()
+            }
+        }
+    }()
+}
+```
+
+The context is accessible via `obj.Context()` and is cancelled when:
+- `DeleteObject` is called for this object
+- The node is stopped with `Stop()`
+
+**Use this to:**
+- Stop background goroutines gracefully
+- Cancel long-running operations
+- Clean up resources when the object is destroyed
+
 ---
 
 ## Type Aliases
