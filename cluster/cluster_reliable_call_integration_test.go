@@ -119,7 +119,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		}
 
 		// Verify the reliable call record in DB shows success with correct result data
-		rc, err := provider.GetReliableCall(ctx, callID)
+		rc, err := db.GetReliableCall(ctx, callID)
 		if err != nil {
 			t.Fatalf("Failed to get reliable call: %v", err)
 		}
@@ -210,7 +210,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		}
 
 		// Verify the call is now marked as success in DB
-		rc3, err := provider.GetReliableCall(ctx, callID)
+		rc3, err := db.GetReliableCall(ctx, callID)
 		if err != nil {
 			t.Fatalf("Failed to get reliable call: %v", err)
 		}

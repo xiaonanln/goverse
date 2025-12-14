@@ -108,10 +108,6 @@ func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, o
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*object.ReliableCall, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
 func (m *MockPersistenceProvider) GetReliableCallBySeq(ctx context.Context, seq int64) (*object.ReliableCall, error) {
 	return nil, fmt.Errorf("not implemented")
 }

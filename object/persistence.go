@@ -35,7 +35,6 @@ type PersistenceProvider interface {
 	InsertOrGetReliableCall(ctx context.Context, requestID string, objectID string, objectType string, methodName string, requestData []byte) (*ReliableCall, error)
 	UpdateReliableCallStatus(ctx context.Context, seq int64, status string, resultData []byte, errorMessage string) error
 	GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*ReliableCall, error)
-	GetReliableCall(ctx context.Context, requestID string) (*ReliableCall, error)
 	GetReliableCallBySeq(ctx context.Context, seq int64) (*ReliableCall, error)
 }
 

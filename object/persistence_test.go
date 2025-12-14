@@ -71,10 +71,6 @@ func (m *MockPersistenceProvider) GetPendingReliableCalls(ctx context.Context, o
 	return nil, nil
 }
 
-func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*ReliableCall, error) {
-	return nil, ErrObjectNotFound
-}
-
 func (m *MockPersistenceProvider) GetReliableCallBySeq(ctx context.Context, seq int64) (*ReliableCall, error) {
 	return nil, ErrObjectNotFound
 }
