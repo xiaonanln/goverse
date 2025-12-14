@@ -2,6 +2,8 @@ package cluster
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/xiaonanln/goverse/object"
@@ -286,6 +288,96 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		// Error should contain the cached error message
 		if err.Error() != "reliable call "+callID+" failed: "+errorMessage {
 			t.Errorf("Expected error message to contain %q, got %q", errorMessage, err.Error())
+		}
+	})
+
+	t.Run("Concurrent calls from 10 goroutines", func(t *testing.T) {
+		objectType := "TestCounter"
+		objectID := "TestCounter-concurrent"
+		methodName := "Increment"
+		numGoroutines := 10
+
+		var wg sync.WaitGroup
+		results := make([]int32, numGoroutines)
+		errors := make([]error, numGoroutines)
+
+		wg.Add(numGoroutines)
+
+		// Launch 10 goroutines that each make a reliable call
+		for i := 0; i < numGoroutines; i++ {
+			go func(index int) {
+				defer wg.Done()
+
+				// Each goroutine has a unique call ID and increments by a different amount
+				callID := fmt.Sprintf("concurrent-call-%d", index)
+				amount := int32(index + 1) // Increment by 1, 2, 3, ..., 10
+				request := &counter_pb.IncrementRequest{Amount: amount}
+
+				result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+				if err != nil {
+					errors[index] = err
+					return
+				}
+
+				// Verify result type and store value
+				response, ok := result.(*counter_pb.CounterResponse)
+				if !ok {
+					errors[index] = fmt.Errorf("expected *counter_pb.CounterResponse, got %T", result)
+					return
+				}
+
+				results[index] = response.Value
+			}(i)
+		}
+
+		// Wait for all goroutines to complete
+		wg.Wait()
+
+		// Check for errors
+		for i, err := range errors {
+			if err != nil {
+				t.Errorf("Goroutine %d failed: %v", i, err)
+			}
+		}
+
+		// Verify all results are valid
+		// Since goroutines can execute in any order, we can't predict exact values
+		// But we can verify that all results are positive and increasing as the object state progresses
+		for i, value := range results {
+			if value <= 0 {
+				t.Errorf("Goroutine %d: expected positive value, got %d", i, value)
+			}
+			t.Logf("Goroutine %d: result value = %d", i, value)
+		}
+
+		// Verify the sum: we incremented by 1+2+3+...+10 = 55
+		// The final value should be 55
+		// We can verify by calling one more time with amount=0
+		finalCallID := "concurrent-final-check"
+		finalRequest := &counter_pb.IncrementRequest{Amount: 0}
+		finalResult, err := cluster.ReliableCallObject(ctx, finalCallID, objectType, objectID, methodName, finalRequest)
+		if err != nil {
+			t.Fatalf("Final check call failed: %v", err)
+		}
+		finalResponse := finalResult.(*counter_pb.CounterResponse)
+		if finalResponse.Value != 55 {
+			t.Errorf("Expected final counter value to be 55, got %d", finalResponse.Value)
+		}
+
+		// Verify all reliable call records are in the database with success status
+		for i := 0; i < numGoroutines; i++ {
+			callID := fmt.Sprintf("concurrent-call-%d", i)
+			rc, err := db.GetReliableCall(ctx, callID)
+			if err != nil {
+				t.Errorf("Failed to get reliable call %s: %v", callID, err)
+				continue
+			}
+			if rc.Status != "success" {
+				t.Errorf("Call %s: expected status 'success', got %q", callID, rc.Status)
+			}
+			if rc.ResultData == nil {
+				t.Errorf("Call %s: expected result data to be set", callID)
+			}
 		}
 	})
 }
