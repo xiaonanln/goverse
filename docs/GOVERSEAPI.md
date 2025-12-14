@@ -416,10 +416,70 @@ See [Persistence](PERSISTENCE_IMPLEMENTATION.md) for full details.
 
 ### Object Lifecycle Hooks
 
+Objects have three lifecycle hooks:
+
+```go
+// OnInit is called first to initialize the object
+func (obj *MyObject) OnInit(self Object, id string) {
+    // Initialize state
+}
+
+// OnCreated is called after object is created and initialized
+func (obj *MyObject) OnCreated() {
+    obj.Logger.Info("Object created")
+}
+
+// Destroy is called when the object is being destroyed
+func (obj *MyObject) Destroy() {
+    // Perform cleanup (cancels lifetime context automatically)
+    obj.Logger.Info("Object destroyed")
+}
+```
+
+### Object Lifetime Context
+
+Each object has a lifetime context that is automatically cancelled when the object is destroyed:
+
 ```go
 func (obj *MyObject) OnCreated() {
-    // Called after object is created and initialized
-    obj.Logger.Info("Object created")
+    // Start a background goroutine that respects object lifetime
+    go func() {
+        ticker := time.NewTicker(1 * time.Second)
+        defer ticker.Stop()
+        
+        for {
+            select {
+            case <-obj.Context().Done():
+                // Object is being destroyed, clean up and exit
+                obj.Logger.Info("Object destroyed, stopping background task")
+                return
+            case <-ticker.C:
+                // Do periodic work
+                obj.doPeriodicWork()
+            }
+        }
+    }()
+}
+```
+
+The context is accessible via `obj.Context()` and is cancelled automatically by `Destroy()` when:
+- `DeleteObject` is called for this object
+- The node is stopped with `Stop()`
+
+**Use this to:**
+- Stop background goroutines gracefully
+- Cancel long-running operations
+- Clean up resources when the object is destroyed
+
+**Note:** You can override `Destroy()` to add custom cleanup logic, but make sure to call the base implementation to cancel the context:
+
+```go
+func (obj *MyObject) Destroy() {
+    // Custom cleanup first
+    obj.customCleanup()
+    
+    // Call base implementation to cancel context
+    obj.BaseObject.Destroy()
 }
 ```
 

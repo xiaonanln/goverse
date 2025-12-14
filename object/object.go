@@ -1,6 +1,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -18,6 +19,7 @@ type Object interface {
 	CreationTime() time.Time
 	OnInit(self Object, id string)
 	OnCreated()
+	Destroy()
 
 	// ToData serializes the object state to a proto.Message for persistence.
 	//
@@ -73,6 +75,8 @@ type BaseObject struct {
 	creationTime time.Time
 	nextRcseq    atomic.Int64
 	Logger       *logger.Logger
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
 }
 
 func (base *BaseObject) OnInit(self Object, id string) {
@@ -83,6 +87,7 @@ func (base *BaseObject) OnInit(self Object, id string) {
 	base.id = id
 	base.creationTime = time.Now()
 	base.Logger = logger.NewLogger(fmt.Sprintf("%s@%s", base.Type(), base.id))
+	base.ctx, base.cancelFunc = context.WithCancel(context.Background())
 }
 
 func (base *BaseObject) String() string {
@@ -122,4 +127,18 @@ func (base *BaseObject) GetNextRcseq() int64 {
 // SetNextRcseq sets the next reliable call sequence number for this object
 func (base *BaseObject) SetNextRcseq(rcseq int64) {
 	base.nextRcseq.Store(rcseq)
+}
+
+// Context returns the object's lifetime context.
+// This context is cancelled when the object is destroyed.
+// Object methods can use this context to know when to stop background operations.
+func (base *BaseObject) Context() context.Context {
+	return base.ctx
+}
+
+// Destroy is called when the object is being destroyed.
+// It cancels the object's lifetime context and allows subclasses to perform cleanup.
+// This method is called automatically by the node and is idempotent - multiple calls are safe.
+func (base *BaseObject) Destroy() {
+	base.cancelFunc()
 }
