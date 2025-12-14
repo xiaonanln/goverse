@@ -54,10 +54,18 @@ defer unlockKey()
 
 ## Build & Test
 
-**Always run `./script/compile-proto.sh` first** before building or testing.
+**Always compile protos first** before building or testing:
+- Linux/macOS: `./script/compile-proto.sh`
+- Windows: `.\script\win\compile-proto.cmd`
 
 ```bash
-./script/compile-proto.sh  # Required first step
+# Linux/macOS
+./script/compile-proto.sh
+go build ./...
+go test -v -p 1 ./...
+
+# Windows (PowerShell)
+.\script\win\compile-proto.cmd
 go build ./...
 go test -v -p 1 ./...
 ```

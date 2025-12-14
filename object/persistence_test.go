@@ -75,6 +75,10 @@ func (m *MockPersistenceProvider) GetReliableCall(ctx context.Context, requestID
 	return nil, ErrObjectNotFound
 }
 
+func (m *MockPersistenceProvider) GetReliableCallBySeq(ctx context.Context, seq int64) (*ReliableCall, error) {
+	return nil, ErrObjectNotFound
+}
+
 func (m *MockPersistenceProvider) GetStoredNextRcseq(objectID string) (int64, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

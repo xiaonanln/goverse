@@ -55,3 +55,8 @@ func (p *PostgresPersistenceProvider) GetPendingReliableCalls(ctx context.Contex
 func (p *PostgresPersistenceProvider) GetReliableCall(ctx context.Context, requestID string) (*object.ReliableCall, error) {
 	return p.db.GetReliableCall(ctx, requestID)
 }
+
+// GetReliableCallBySeq retrieves a reliable call by its sequence number
+func (p *PostgresPersistenceProvider) GetReliableCallBySeq(ctx context.Context, seq int64) (*object.ReliableCall, error) {
+	return p.db.GetReliableCallBySeq(ctx, seq)
+}

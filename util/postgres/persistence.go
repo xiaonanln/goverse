@@ -386,3 +386,50 @@ func (db *DB) GetReliableCall(ctx context.Context, requestID string) (*object.Re
 
 	return &rc, nil
 }
+
+// GetReliableCallBySeq retrieves a reliable call by its sequence number
+func (db *DB) GetReliableCallBySeq(ctx context.Context, seq int64) (*object.ReliableCall, error) {
+	if seq <= 0 {
+		return nil, fmt.Errorf("seq must be positive")
+	}
+
+	query := `
+		SELECT seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
+		FROM goverse_reliable_calls
+		WHERE seq = $1
+	`
+
+	var rc object.ReliableCall
+	var resultData sql.NullString
+	var errorMessage sql.NullString
+
+	err := db.conn.QueryRowContext(ctx, query, seq).Scan(
+		&rc.Seq,
+		&rc.CallID,
+		&rc.ObjectID,
+		&rc.ObjectType,
+		&rc.MethodName,
+		&rc.RequestData,
+		&resultData,
+		&errorMessage,
+		&rc.Status,
+		&rc.CreatedAt,
+		&rc.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("reliable call not found: seq=%d", seq)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reliable call: %w", err)
+	}
+
+	if resultData.Valid {
+		rc.ResultData = []byte(resultData.String)
+	}
+	if errorMessage.Valid {
+		rc.Error = errorMessage.String
+	}
+
+	return &rc, nil
+}

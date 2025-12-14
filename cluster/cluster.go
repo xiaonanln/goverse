@@ -848,13 +848,13 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
 	}
 
-	c.logger.Infof("%s - Routing reliable call %s to target node %s for object %s (type: %s)", c, callID, targetNodeAddr, objectID, objectType)
+	c.logger.Infof("%s - Routing reliable call seq=%d to target node %s for object %s (type: %s)", c, rc.Seq, targetNodeAddr, objectID, objectType)
 
 	// Check if the object is on this node (local call)
 	if targetNodeAddr == c.getAdvertiseAddr() {
 		// Call locally on node - trigger processing of pending reliable calls
-		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
-		resultAny, err := node.ReliableCallObject(ctx, callID, objectType, objectID)
+		c.logger.Infof("%s - Processing reliable call seq=%d locally for object %s (type: %s)", c, rc.Seq, objectID, objectType)
+		resultAny, err := node.ReliableCallObject(ctx, rc.Seq, objectType, objectID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
@@ -862,7 +862,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	// Route to the remote node via gRPC
-	c.logger.Infof("%s - Routing reliable call %s to remote node %s for object %s (type: %s)", c, callID, targetNodeAddr, objectID, objectType)
+	c.logger.Infof("%s - Routing reliable call seq=%d to remote node %s for object %s (type: %s)", c, rc.Seq, targetNodeAddr, objectID, objectType)
 
 	client, err := c.nodeConnections.GetConnection(targetNodeAddr)
 	if err != nil {
@@ -871,7 +871,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Issue ReliableCallObject RPC to target node
 	req := &goverse_pb.ReliableCallObjectRequest{
-		CallId:     callID,
+		Seq:        rc.Seq,
 		ObjectType: objectType,
 		ObjectId:   objectID,
 	}
@@ -886,7 +886,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
 	}
 
-	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
+	c.logger.Infof("%s - Reliable call seq=%d successfully processed on remote node %s", c, rc.Seq, targetNodeAddr)
 	return protohelper.AnyToMsg(resp.Result)
 }
 

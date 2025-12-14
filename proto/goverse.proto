@@ -93,7 +93,7 @@ message GateMessage {
 }
 
 message ReliableCallObjectRequest {
-  string call_id = 1;      // Unique identifier for deduplication
+  int64 seq = 1;           // Sequence number of the reliable call
   string object_type = 2;  // Type of the target object
   string object_id = 3;    // ID of the target object
 }

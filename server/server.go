@@ -498,8 +498,8 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 	server.logRPC("ReliableCallObject", req)
 
 	// Validate request parameters
-	if req.GetCallId() == "" {
-		return nil, fmt.Errorf("call_id must be specified in ReliableCallObject request")
+	if req.GetSeq() <= 0 {
+		return nil, fmt.Errorf("seq must be positive in ReliableCallObject request")
 	}
 	if req.GetObjectType() == "" {
 		return nil, fmt.Errorf("object_type must be specified in ReliableCallObject request")
@@ -514,7 +514,7 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 	}
 
 	// Route to node handler
-	resultAny, err := server.Node.ReliableCallObject(ctx, req.GetCallId(), req.GetObjectType(), req.GetObjectId())
+	resultAny, err := server.Node.ReliableCallObject(ctx, req.GetSeq(), req.GetObjectType(), req.GetObjectId())
 	if err != nil {
 		return nil, err
 	}

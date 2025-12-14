@@ -337,7 +337,7 @@ func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, ob
 // ReliableCallObject handles a reliable call request for an object.
 // This is a stub implementation for PR 6 that will be expanded in later PRs
 // to fetch and execute pending reliable calls from the persistence provider.
-func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string) (*anypb.Any, error) {
+func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType string, objectID string) (*anypb.Any, error) {
 	// Lock ordering: stopMu.RLock
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -348,7 +348,7 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("node is stopped")
 	}
 
-	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s", callID, objectType, objectID)
+	node.logger.Infof("ReliableCallObject received: seq=%d, object_type=%s, object_id=%s", seq, objectType, objectID)
 
 	// Get the persistence provider to access reliable calls
 	node.persistenceProviderMu.RLock()
@@ -395,18 +395,18 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 	// Collect processed calls to find our target call without another DB lookup
 	var call *object.ReliableCall
 	for processedCall := range processedCalls {
-		if processedCall.CallID == callID {
+		if processedCall.Seq == seq {
 			call = processedCall
-			node.logger.Infof("Found reliable call %s in processed calls with status %s", callID, call.Status)
+			node.logger.Infof("Found reliable call seq=%d in processed calls with status %s", seq, call.Status)
 		}
 	}
 
 	// If not found in processed calls, fetch from database
 	if call == nil {
 		var err error
-		call, err = provider.GetReliableCall(ctx, callID)
+		call, err = provider.GetReliableCallBySeq(ctx, seq)
 		if err != nil {
-			node.logger.Errorf("Failed to retrieve call %s from database: %v", callID, err)
+			node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
 			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
 		}
 	}
@@ -415,16 +415,16 @@ func (node *Node) ReliableCallObject(ctx context.Context, callID string, objectT
 		// Return the result data that was stored during processing
 		resultAny, err := protohelper.BytesToAny(call.ResultData)
 		if err != nil {
-			node.logger.Errorf("Failed to wrap result for call %s: %v", callID, err)
+			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
 			return nil, fmt.Errorf("failed to wrap result: %w", err)
 		}
-		node.logger.Infof("Successfully retrieved result for call %s", callID)
+		node.logger.Infof("Successfully retrieved result for call seq=%d", seq)
 		return resultAny, nil
 	} else if call.Status == "failed" {
-		node.logger.Errorf("Reliable call %s previously failed: %s", callID, call.Error)
+		node.logger.Errorf("Reliable call seq=%d previously failed: %s", seq, call.Error)
 		return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
 	} else {
-		return nil, fmt.Errorf("reliable call %s is still pending", callID)
+		return nil, fmt.Errorf("reliable call seq=%d is still pending", seq)
 	}
 }
 
