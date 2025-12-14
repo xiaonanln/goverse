@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -78,12 +79,20 @@ type Object interface {
 // ErrNotPersistent is returned when an object type does not support persistence.
 var ErrNotPersistent = fmt.Errorf("object is not persistent")
 
+// seqWaiter represents a waiter for a specific reliable call sequence number
+type seqWaiter struct {
+	seq int64
+	ch  chan<- *ReliableCall
+}
+
 type BaseObject struct {
 	self            Object
 	id              string
 	creationTime    time.Time
 	nextRcseq       atomic.Int64
 	processingCalls atomic.Bool // true if a ProcessPendingReliableCalls goroutine is running
+	seqWaiters      []seqWaiter // waiters sorted by seq (can have duplicates)
+	seqWaitersMu    sync.Mutex  // protects seqWaiters
 	Logger          *logger.Logger
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -96,6 +105,7 @@ func (base *BaseObject) OnInit(self Object, id string) {
 	}
 	base.id = id
 	base.creationTime = time.Now()
+	base.seqWaiters = nil // sorted slice, initialized empty
 	base.Logger = logger.NewLogger(fmt.Sprintf("%s@%s", base.Type(), base.id))
 	base.ctx, base.cancelFunc = context.WithCancel(context.Background())
 }
@@ -218,98 +228,177 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 	return resp.Interface().(proto.Message), nil
 }
 
-// ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
-// Returns a channel that receives each processed ReliableCall.
-// The channel is closed when processing completes.
-// Only one processing goroutine is allowed at a time; returns nil if already processing.
+// ProcessPendingReliableCalls processes pending reliable calls up to and including the specified seq.
+// Returns a channel that receives the ReliableCall matching the given seq (if processed).
+// The channel is closed after processing completes.
+// If the call was already executed (seq < nextRcseq), the channel is closed immediately without adding anything.
+// Always returns a channel; if processing is already running, the caller waits for that goroutine.
 func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall {
-	// Ensure only one processing goroutine runs at a time
-	if !base.processingCalls.CompareAndSwap(false, true) {
-		base.Logger.Warnf("ProcessPendingReliableCalls: already processing, skipping")
-		return nil
+	callsChan := make(chan *ReliableCall, 1)
+
+	// If the seq is already processed, close immediately
+	if seq < base.GetNextRcseq() {
+		close(callsChan)
+		return callsChan
 	}
 
-	callsChan := make(chan *ReliableCall)
+	// Register as a waiter for this seq (insert in sorted order)
+	base.seqWaitersMu.Lock()
+	base.insertWaiterSorted(seq, callsChan)
+	base.seqWaitersMu.Unlock()
 
-	go func() {
-		defer base.processingCalls.Store(false)
-		defer close(callsChan)
+	// Try to start the processing goroutine (only one runs at a time)
+	if base.processingCalls.CompareAndSwap(false, true) {
+		go base.runProcessingLoop(provider)
+	}
+
+	return callsChan
+}
+
+// insertWaiterSorted inserts a waiter in sorted order by seq.
+// Must be called with seqWaitersMu held.
+func (base *BaseObject) insertWaiterSorted(seq int64, ch chan<- *ReliableCall) {
+	w := seqWaiter{seq: seq, ch: ch}
+	base.seqWaiters = append(base.seqWaiters, w)
+	// Bubble up to maintain sorted order
+	for i := len(base.seqWaiters) - 1; i > 0 && base.seqWaiters[i].seq < base.seqWaiters[i-1].seq; i-- {
+		base.seqWaiters[i], base.seqWaiters[i-1] = base.seqWaiters[i-1], base.seqWaiters[i]
+	}
+}
+
+// notifyWaiters sends the processed call to all waiters for that seq and closes their channels.
+// Also closes any waiters with seq < the specified seq (they missed their call).
+// Since the list is sorted and calls are processed in order, matching waiters are at the front.
+func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
+	base.seqWaitersMu.Lock()
+	// Pop waiters from the front: close those with seq < current, notify those with seq == current
+	var toClose []chan<- *ReliableCall
+	var toNotify []chan<- *ReliableCall
+	for len(base.seqWaiters) > 0 && base.seqWaiters[0].seq <= seq {
+		if base.seqWaiters[0].seq == seq {
+			toNotify = append(toNotify, base.seqWaiters[0].ch)
+		} else {
+			toClose = append(toClose, base.seqWaiters[0].ch)
+		}
+		base.seqWaiters = base.seqWaiters[1:]
+	}
+	base.seqWaitersMu.Unlock()
+
+	for _, ch := range toClose {
+		close(ch)
+	}
+	for _, ch := range toNotify {
+		if call != nil {
+			ch <- call
+		}
+		close(ch)
+	}
+}
+
+// closeAllWaiters closes all pending waiter channels without sending a result
+func (base *BaseObject) closeAllWaiters() {
+	base.seqWaitersMu.Lock()
+	allWaiters := base.seqWaiters
+	base.seqWaiters = nil
+	base.seqWaitersMu.Unlock()
+
+	for _, w := range allWaiters {
+		close(w.ch)
+	}
+}
+
+// runProcessingLoop is the single processing goroutine that processes pending calls.
+// It continues processing as long as there are pending calls in the database,
+// even if there are no waiters.
+func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
+	defer base.processingCalls.Store(false)
+	defer base.closeAllWaiters()
+
+	for {
+		// Check if object is destroyed
+		select {
+		case <-base.ctx.Done():
+			base.Logger.Warnf("runProcessingLoop: object destroyed, exiting")
+			return
+		default:
+		}
 
 		nextRcseq := base.GetNextRcseq()
+
+		// Close waiters for already-processed seqs (those with seq < nextRcseq)
+		base.notifyWaiters(nextRcseq-1, nil)
 
 		base.Logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", base.id, nextRcseq)
 
 		// Fetch pending calls for this object
 		pendingCalls, err := provider.GetPendingReliableCalls(base.ctx, base.id, nextRcseq)
 		if err != nil {
-			base.Logger.Errorf("ProcessPendingReliableCalls: failed to fetch pending calls: %v", err)
+			base.Logger.Errorf("runProcessingLoop: failed to fetch pending calls: %v", err)
 			return
 		}
 
 		base.Logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), base.id)
 
+		// No more pending calls - exit (defer will close remaining waiters)
 		if len(pendingCalls) == 0 {
 			base.Logger.Infof("No pending reliable calls for object %s", base.id)
 			return
 		}
 
-		base.Logger.Infof("Found %d pending reliable calls for object %s, processing sequentially", len(pendingCalls), base.id)
-
-		// Process each pending call sequentially in order of seq
+		// Process each pending call sequentially
 		for _, call := range pendingCalls {
 			// Check if object is destroyed before processing
 			select {
 			case <-base.ctx.Done():
-				base.Logger.Warnf("ProcessPendingReliableCalls: object destroyed, stopping processing")
+				base.Logger.Warnf("runProcessingLoop: object destroyed, stopping processing")
 				return
 			default:
 			}
 
 			base.Logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
 
-			fail := func(err error) {
-				base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
-				call.Status = "failed"
-				call.Error = err.Error()
-				// Use a separate context with 60s timeout to ensure status update completes even if ctx is cancelled
-				updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-				defer cancel()
-				_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
-				base.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on failure to avoid blocking
-				callsChan <- call
-			}
+			// Process the call
+			base.processReliableCall(provider, call)
+			base.SetNextRcseq(call.Seq + 1)
 
-			success := func(result proto.Message) {
-				base.Logger.Infof("Reliable call %s (seq=%d) succeeded: result=%v", call.CallID, call.Seq, result)
-				resultData, _ := protohelper.MsgToBytes(result)
-				call.Status = "success"
-				call.ResultData = resultData
-				// Use a separate context with 60s timeout to ensure status update completes even if ctx is cancelled
-				updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-				defer cancel()
-				_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "success", resultData, "")
-				base.SetNextRcseq(call.Seq + 1) // Advance nextRcseq on success
-				callsChan <- call
-			}
-
-			// Unmarshal the request data to proto.Message
-			requestMsg, err := protohelper.BytesToMsg(call.RequestData)
-			if err != nil {
-				fail(err)
-				continue
-			}
-
-			// Invoke the method on the object
-			result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
-			if err != nil {
-				fail(err)
-				continue
-			}
-
-			// Update to success status with result
-			success(result)
+			// Notify waiters for this seq
+			base.notifyWaiters(call.Seq, call)
 		}
-	}()
+	}
+}
 
-	return callsChan
+// processReliableCall executes a single reliable call
+func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *ReliableCall) {
+	// Unmarshal the request data to proto.Message
+	requestMsg, err := protohelper.BytesToMsg(call.RequestData)
+	if err != nil {
+		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
+		call.Status = "failed"
+		call.Error = err.Error()
+		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
+		return
+	}
+
+	// Invoke the method on the object
+	result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
+	if err != nil {
+		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
+		call.Status = "failed"
+		call.Error = err.Error()
+		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
+		return
+	}
+
+	// Update to success status with result
+	base.Logger.Infof("Reliable call %s (seq=%d) succeeded: result=%v", call.CallID, call.Seq, result)
+	resultData, _ := protohelper.MsgToBytes(result)
+	call.Status = "success"
+	call.ResultData = resultData
+	updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "success", resultData, "")
 }
