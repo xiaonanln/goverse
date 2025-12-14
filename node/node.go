@@ -394,10 +394,12 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 
 	// Collect processed calls to find our target call without another DB lookup
 	var call *object.ReliableCall
-	for processedCall := range processedCalls {
-		if processedCall.Seq == seq {
-			call = processedCall
-			node.logger.Infof("Found reliable call seq=%d in processed calls with status %s", seq, call.Status)
+	if processedCalls != nil {
+		for processedCall := range processedCalls {
+			if processedCall.Seq == seq {
+				call = processedCall
+				node.logger.Infof("Found reliable call seq=%d in processed calls with status %s", seq, call.Status)
+			}
 		}
 	}
 

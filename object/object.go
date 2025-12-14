@@ -79,13 +79,14 @@ type Object interface {
 var ErrNotPersistent = fmt.Errorf("object is not persistent")
 
 type BaseObject struct {
-	self         Object
-	id           string
-	creationTime time.Time
-	nextRcseq    atomic.Int64
-	Logger       *logger.Logger
-	ctx          context.Context
-	cancelFunc   context.CancelFunc
+	self            Object
+	id              string
+	creationTime    time.Time
+	nextRcseq       atomic.Int64
+	processingCalls atomic.Bool // true if a ProcessPendingReliableCalls goroutine is running
+	Logger          *logger.Logger
+	ctx             context.Context
+	cancelFunc      context.CancelFunc
 }
 
 func (base *BaseObject) OnInit(self Object, id string) {
@@ -220,10 +221,18 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 // ProcessPendingReliableCalls fetches and processes pending reliable calls for this object.
 // Returns a channel that receives each processed ReliableCall.
 // The channel is closed when processing completes.
+// Only one processing goroutine is allowed at a time; returns nil if already processing.
 func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall {
+	// Ensure only one processing goroutine runs at a time
+	if !base.processingCalls.CompareAndSwap(false, true) {
+		base.Logger.Warnf("ProcessPendingReliableCalls: already processing, skipping")
+		return nil
+	}
+
 	callsChan := make(chan *ReliableCall)
 
 	go func() {
+		defer base.processingCalls.Store(false)
 		defer close(callsChan)
 
 		nextRcseq := base.GetNextRcseq()
