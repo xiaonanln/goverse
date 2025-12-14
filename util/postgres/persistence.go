@@ -178,7 +178,7 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 	query := `
 		INSERT INTO goverse_reliable_calls (call_id, object_id, object_type, method_name, request_data, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, 'pending', $6, $6)
-		ON CONFLICT (call_id) DO NOTHING
+		ON CONFLICT (call_id) DO UPDATE SET call_id = EXCLUDED.call_id
 		RETURNING seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
 	`
 
@@ -204,11 +204,6 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 		&rc.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
-		// Conflict occurred, fetch the existing record
-		fmt.Printf("[DEBUG InsertOrGetReliableCall] Conflict occurred, fetching existing record for call_id=%s\n", requestID)
-		return db.GetReliableCall(ctx, requestID)
-	}
 	if err != nil {
 		fmt.Printf("[DEBUG InsertOrGetReliableCall] ERROR: %v\n", err)
 		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
