@@ -206,34 +206,3 @@ func TestBaseObject_CancelContext_Idempotent(t *testing.T) {
 		t.Fatal("Context should be cancelled after calling CancelContext")
 	}
 }
-
-func TestBaseObject_Context_BeforeInit(t *testing.T) {
-	obj := &TestObject{}
-	
-	// Context() should not panic before OnInit
-	ctx := obj.Context()
-	if ctx == nil {
-		t.Fatal("Context() should never return nil")
-	}
-	
-	// Should return a valid context (context.Background)
-	select {
-	case <-ctx.Done():
-		t.Fatal("Background context should not be cancelled")
-	default:
-		// Good - context is not cancelled
-	}
-}
-
-func TestBaseObject_CancelContext_BeforeInit(t *testing.T) {
-	obj := &TestObject{}
-	
-	// CancelContext should not panic before OnInit
-	obj.CancelContext()
-	
-	// Should be safe to call
-	ctx := obj.Context()
-	if ctx == nil {
-		t.Fatal("Context() should never return nil")
-	}
-}

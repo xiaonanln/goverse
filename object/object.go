@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -77,7 +76,6 @@ type BaseObject struct {
 	Logger       *logger.Logger
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
-	cancelOnce   sync.Once // Ensures CancelContext is called only once
 }
 
 func (base *BaseObject) OnInit(self Object, id string) {
@@ -133,22 +131,16 @@ func (base *BaseObject) SetNextRcseq(rcseq int64) {
 // Context returns the object's lifetime context.
 // This context is cancelled when the object is destroyed.
 // Object methods can use this context to know when to stop background operations.
-// If called before OnInit, returns context.Background() as a safe default.
 func (base *BaseObject) Context() context.Context {
-	if base.ctx == nil {
-		return context.Background()
-	}
 	return base.ctx
 }
 
 // CancelContext cancels the object's lifetime context.
 // This is called automatically by the node when the object is destroyed.
 // Users should not call this method directly.
-// This method is thread-safe and idempotent - multiple calls are safe.
+// This method is idempotent - multiple calls are safe.
 func (base *BaseObject) CancelContext() {
-	base.cancelOnce.Do(func() {
-		if base.cancelFunc != nil {
-			base.cancelFunc()
-		}
-	})
+	if base.cancelFunc != nil {
+		base.cancelFunc()
+	}
 }
