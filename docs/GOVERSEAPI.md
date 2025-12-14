@@ -416,10 +416,23 @@ See [Persistence](PERSISTENCE_IMPLEMENTATION.md) for full details.
 
 ### Object Lifecycle Hooks
 
+Objects have three lifecycle hooks:
+
 ```go
+// OnInit is called first to initialize the object
+func (obj *MyObject) OnInit(self Object, id string) {
+    // Initialize state
+}
+
+// OnCreated is called after object is created and initialized
 func (obj *MyObject) OnCreated() {
-    // Called after object is created and initialized
     obj.Logger.Info("Object created")
+}
+
+// OnDestroy is called when the object is being destroyed
+func (obj *MyObject) OnDestroy() {
+    // Perform cleanup (cancels lifetime context automatically)
+    obj.Logger.Info("Object destroyed")
 }
 ```
 
@@ -449,7 +462,7 @@ func (obj *MyObject) OnCreated() {
 }
 ```
 
-The context is accessible via `obj.Context()` and is cancelled when:
+The context is accessible via `obj.Context()` and is cancelled automatically by `OnDestroy()` when:
 - `DeleteObject` is called for this object
 - The node is stopped with `Stop()`
 
@@ -457,6 +470,18 @@ The context is accessible via `obj.Context()` and is cancelled when:
 - Stop background goroutines gracefully
 - Cancel long-running operations
 - Clean up resources when the object is destroyed
+
+**Note:** You can override `OnDestroy()` to add custom cleanup logic, but make sure to call the base implementation to cancel the context:
+
+```go
+func (obj *MyObject) OnDestroy() {
+    // Custom cleanup first
+    obj.customCleanup()
+    
+    // Call base implementation to cancel context
+    obj.BaseObject.OnDestroy()
+}
+```
 
 ---
 

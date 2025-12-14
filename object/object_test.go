@@ -147,7 +147,7 @@ func TestBaseObject_Context(t *testing.T) {
 	}
 }
 
-func TestBaseObject_CancelContext(t *testing.T) {
+func TestBaseObject_OnDestroy(t *testing.T) {
 	obj := &TestObject{}
 	obj.OnInit(obj, "test-id")
 
@@ -156,23 +156,23 @@ func TestBaseObject_CancelContext(t *testing.T) {
 		t.Fatal("Context() should return a non-nil context")
 	}
 
-	// Verify context is not cancelled before CancelContext
+	// Verify context is not cancelled before OnDestroy
 	select {
 	case <-ctx.Done():
-		t.Fatal("Context should not be cancelled before calling CancelContext")
+		t.Fatal("Context should not be cancelled before calling OnDestroy")
 	default:
 		// Good - context is not cancelled
 	}
 
-	// Cancel the context
-	obj.CancelContext()
+	// Destroy the object
+	obj.OnDestroy()
 
 	// Verify context is now cancelled
 	select {
 	case <-ctx.Done():
 		// Good - context is cancelled
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Context should be cancelled after calling CancelContext")
+		t.Fatal("Context should be cancelled after calling OnDestroy")
 	}
 }
 
@@ -188,14 +188,14 @@ func TestBaseObject_Context_SameInstance(t *testing.T) {
 	}
 }
 
-func TestBaseObject_CancelContext_Idempotent(t *testing.T) {
+func TestBaseObject_OnDestroy_Idempotent(t *testing.T) {
 	obj := &TestObject{}
 	obj.OnInit(obj, "test-id")
 
-	// Cancel multiple times should not panic
-	obj.CancelContext()
-	obj.CancelContext()
-	obj.CancelContext()
+	// Destroy multiple times should not panic
+	obj.OnDestroy()
+	obj.OnDestroy()
+	obj.OnDestroy()
 
 	// Verify context is cancelled
 	ctx := obj.Context()
@@ -203,6 +203,6 @@ func TestBaseObject_CancelContext_Idempotent(t *testing.T) {
 	case <-ctx.Done():
 		// Good - context is cancelled
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Context should be cancelled after calling CancelContext")
+		t.Fatal("Context should be cancelled after calling OnDestroy")
 	}
 }
