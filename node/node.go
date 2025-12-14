@@ -390,20 +390,16 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 
 	// Trigger processing of pending reliable calls for this object
 	// This will fetch pending calls from the database and execute them sequentially
-	processedCalls := obj.ProcessPendingReliableCalls(provider, seq)
+	resultChan := obj.ProcessPendingReliableCalls(provider, seq)
 
-	// Collect processed calls to find our target call without another DB lookup
-	var call *object.ReliableCall
-	if processedCalls != nil {
-		for processedCall := range processedCalls {
-			if processedCall.Seq == seq {
-				call = processedCall
-				node.logger.Infof("Found reliable call seq=%d in processed calls with status %s", seq, call.Status)
-			}
-		}
-	}
+	// Wait for our call's result
+	// Channel sends the ReliableCall if processed, or closes without sending if:
+	// - seq was already processed (seq < nextRcseq)
+	// - object was destroyed during processing
+	// - processing encountered an error
+	call := <-resultChan
 
-	// If not found in processed calls, fetch from database
+	// If not received from channel, fetch from database
 	if call == nil {
 		var err error
 		call, err = provider.GetReliableCallBySeq(ctx, seq)
