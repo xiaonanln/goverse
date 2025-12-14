@@ -90,9 +90,9 @@ type BaseObject struct {
 	id              string
 	creationTime    time.Time
 	nextRcseq       atomic.Int64
-	processingCalls atomic.Bool // true if a ProcessPendingReliableCalls goroutine is running
+	processingCalls bool        // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
 	seqWaiters      []seqWaiter // waiters sorted by seq (can have duplicates)
-	seqWaitersMu    sync.Mutex  // protects seqWaiters
+	seqWaitersMu    sync.Mutex  // protects seqWaiters and processingCalls
 	Logger          *logger.Logger
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -242,13 +242,16 @@ func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider
 		return callsChan
 	}
 
-	// Register as a waiter for this seq (insert in sorted order)
+	// Register as a waiter and try to start processing goroutine atomically
 	base.seqWaitersMu.Lock()
 	base.insertWaiterSorted(seq, callsChan)
+	shouldStart := !base.processingCalls
+	if shouldStart {
+		base.processingCalls = true
+	}
 	base.seqWaitersMu.Unlock()
 
-	// Try to start the processing goroutine (only one runs at a time)
-	if base.processingCalls.CompareAndSwap(false, true) {
+	if shouldStart {
 		go base.runProcessingLoop(provider)
 	}
 
@@ -295,24 +298,22 @@ func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
 	}
 }
 
-// closeAllWaiters closes all pending waiter channels without sending a result
-func (base *BaseObject) closeAllWaiters() {
-	base.seqWaitersMu.Lock()
-	allWaiters := base.seqWaiters
-	base.seqWaiters = nil
-	base.seqWaitersMu.Unlock()
-
-	for _, w := range allWaiters {
-		close(w.ch)
-	}
-}
-
 // runProcessingLoop is the single processing goroutine that processes pending calls.
 // It continues processing as long as there are pending calls in the database,
 // even if there are no waiters.
 func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
-	defer base.processingCalls.Store(false)
-	defer base.closeAllWaiters()
+	defer func() {
+		// Atomically close all waiters and mark processing as done
+		base.seqWaitersMu.Lock()
+		allWaiters := base.seqWaiters
+		base.seqWaiters = nil
+		base.processingCalls = false
+		base.seqWaitersMu.Unlock()
+
+		for _, w := range allWaiters {
+			close(w.ch)
+		}
+	}()
 
 	for {
 		// Check if object is destroyed
