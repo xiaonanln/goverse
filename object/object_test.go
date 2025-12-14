@@ -128,3 +128,81 @@ func TestBaseObject_CreationTime_IsSet(t *testing.T) {
 		t.Fatal("CreationTime should be set after OnInit")
 	}
 }
+
+func TestBaseObject_Context(t *testing.T) {
+	obj := &TestObject{}
+	obj.OnInit(obj, "test-id")
+
+	ctx := obj.Context()
+	if ctx == nil {
+		t.Fatal("Context() should return a non-nil context after OnInit")
+	}
+
+	// Verify the context is not cancelled yet
+	select {
+	case <-ctx.Done():
+		t.Fatal("Context should not be cancelled immediately after OnInit")
+	default:
+		// Good - context is not cancelled
+	}
+}
+
+func TestBaseObject_CancelContext(t *testing.T) {
+	obj := &TestObject{}
+	obj.OnInit(obj, "test-id")
+
+	ctx := obj.Context()
+	if ctx == nil {
+		t.Fatal("Context() should return a non-nil context")
+	}
+
+	// Verify context is not cancelled before CancelContext
+	select {
+	case <-ctx.Done():
+		t.Fatal("Context should not be cancelled before calling CancelContext")
+	default:
+		// Good - context is not cancelled
+	}
+
+	// Cancel the context
+	obj.CancelContext()
+
+	// Verify context is now cancelled
+	select {
+	case <-ctx.Done():
+		// Good - context is cancelled
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Context should be cancelled after calling CancelContext")
+	}
+}
+
+func TestBaseObject_Context_SameInstance(t *testing.T) {
+	obj := &TestObject{}
+	obj.OnInit(obj, "test-id")
+
+	ctx1 := obj.Context()
+	ctx2 := obj.Context()
+
+	if ctx1 != ctx2 {
+		t.Fatal("Multiple calls to Context() should return the same context instance")
+	}
+}
+
+func TestBaseObject_CancelContext_Idempotent(t *testing.T) {
+	obj := &TestObject{}
+	obj.OnInit(obj, "test-id")
+
+	// Cancel multiple times should not panic
+	obj.CancelContext()
+	obj.CancelContext()
+	obj.CancelContext()
+
+	// Verify context is cancelled
+	ctx := obj.Context()
+	select {
+	case <-ctx.Done():
+		// Good - context is cancelled
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Context should be cancelled after calling CancelContext")
+	}
+}

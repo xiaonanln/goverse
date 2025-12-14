@@ -1,6 +1,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -73,6 +74,8 @@ type BaseObject struct {
 	creationTime time.Time
 	nextRcseq    atomic.Int64
 	Logger       *logger.Logger
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
 }
 
 func (base *BaseObject) OnInit(self Object, id string) {
@@ -83,6 +86,7 @@ func (base *BaseObject) OnInit(self Object, id string) {
 	base.id = id
 	base.creationTime = time.Now()
 	base.Logger = logger.NewLogger(fmt.Sprintf("%s@%s", base.Type(), base.id))
+	base.ctx, base.cancelFunc = context.WithCancel(context.Background())
 }
 
 func (base *BaseObject) String() string {
@@ -122,4 +126,20 @@ func (base *BaseObject) GetNextRcseq() int64 {
 // SetNextRcseq sets the next reliable call sequence number for this object
 func (base *BaseObject) SetNextRcseq(rcseq int64) {
 	base.nextRcseq.Store(rcseq)
+}
+
+// Context returns the object's lifetime context.
+// This context is cancelled when the object is destroyed.
+// Object methods can use this context to know when to stop background operations.
+func (base *BaseObject) Context() context.Context {
+	return base.ctx
+}
+
+// CancelContext cancels the object's lifetime context.
+// This is called automatically by the node when the object is destroyed.
+// Users should not call this method directly.
+func (base *BaseObject) CancelContext() {
+	if base.cancelFunc != nil {
+		base.cancelFunc()
+	}
 }
