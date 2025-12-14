@@ -359,7 +359,10 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Final check call failed: %v", err)
 		}
-		finalResponse := finalResult.(*counter_pb.CounterResponse)
+		finalResponse, ok := finalResult.(*counter_pb.CounterResponse)
+		if !ok {
+			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", finalResult)
+		}
 		if finalResponse.Value != 55 {
 			t.Errorf("Expected final counter value to be 55, got %d", finalResponse.Value)
 		}
