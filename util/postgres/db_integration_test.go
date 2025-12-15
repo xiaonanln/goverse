@@ -2,68 +2,25 @@ package postgres
 
 import (
 	"context"
-	"os"
 	"testing"
+
+	"github.com/xiaonanln/goverse/util/testutil"
 )
-
-// skipIfNoPostgres skips the test if PostgreSQL is not available
-func skipIfNoPostgres(t *testing.T) *Config {
-	t.Helper()
-
-	// Check if we should skip PostgreSQL tests
-	if os.Getenv("SKIP_POSTGRES_TESTS") == "1" {
-		t.Skip("Skipping PostgreSQL integration test (SKIP_POSTGRES_TESTS=1)")
-	}
-
-	// Use environment variables if set, otherwise use defaults
-	config := &Config{
-		Host:     getEnvOrDefault("POSTGRES_HOST", "localhost"),
-		Port:     5432,
-		User:     getEnvOrDefault("POSTGRES_USER", "postgres"),
-		Password: getEnvOrDefault("POSTGRES_PASSWORD", "postgres"),
-		Database: getEnvOrDefault("POSTGRES_DB", "postgres"),
-		SSLMode:  "disable",
-	}
-
-	return config
-}
-
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// cleanupTestTable removes all test data from the goverse_objects and goverse_reliable_calls tables
-func cleanupTestTable(t *testing.T, db *DB) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := db.conn.ExecContext(ctx, "DELETE FROM goverse_objects")
-	if err != nil {
-		t.Logf("Warning: failed to cleanup goverse_objects table: %v", err)
-	}
-	_, err = db.conn.ExecContext(ctx, "DELETE FROM goverse_reliable_calls")
-	if err != nil {
-		t.Logf("Warning: failed to cleanup goverse_reliable_calls table: %v", err)
-	}
-}
 
 func TestNewDB_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	// Verify connection is working
 	ctx := context.Background()
-	err = db.Ping(ctx)
+	err := db.Ping(ctx)
 	if err != nil {
 		t.Fatalf("Ping() failed: %v", err)
 	}
@@ -73,24 +30,17 @@ func TestDB_InitSchema_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	// Drop functions and tables first to ensure a clean state
-	// Drop functions before tables to avoid dependency issues
-	_, _ = db.conn.ExecContext(ctx, "DROP FUNCTION IF EXISTS update_goverse_reliable_calls_timestamp CASCADE")
-	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_objects CASCADE")
-	_, _ = db.conn.ExecContext(ctx, "DROP TABLE IF EXISTS goverse_reliable_calls CASCADE")
-
 	// Initialize schema
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
@@ -142,16 +92,15 @@ func TestDB_Ping_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
-	err = db.Ping(ctx)
+	err := db.Ping(ctx)
 	if err != nil {
 		t.Fatalf("Ping() failed: %v", err)
 	}
@@ -161,14 +110,14 @@ func TestDB_Close_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
 
-	err = db.Close()
+	err := db.Close()
 	if err != nil {
 		t.Fatalf("Close() failed: %v", err)
 	}
@@ -185,13 +134,12 @@ func TestDB_Connection_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	conn := db.Connection()
 	if conn == nil {
@@ -200,7 +148,7 @@ func TestDB_Connection_Integration(t *testing.T) {
 
 	// Verify we can use the raw connection
 	ctx := context.Background()
-	err = conn.PingContext(ctx)
+	err := conn.PingContext(ctx)
 	if err != nil {
 		t.Fatalf("PingContext() on raw connection failed: %v", err)
 	}

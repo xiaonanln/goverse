@@ -50,6 +50,11 @@ func (db *DB) Connection() *sql.DB {
 	return db.conn
 }
 
+// Config returns the configuration used to create this database connection
+func (db *DB) Config() *Config {
+	return db.config
+}
+
 // Ping checks if the database connection is alive
 func (db *DB) Ping(ctx context.Context) error {
 	return db.conn.PingContext(ctx)

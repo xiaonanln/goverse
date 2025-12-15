@@ -3,28 +3,28 @@ package postgres
 import (
 	"context"
 	"testing"
+
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestSaveObject_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
 	// Initialize schema
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// Test saving a new object
 	objectID := "test-obj-123"
@@ -50,21 +50,19 @@ func TestSaveObject_Update_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	objectID := "test-obj-update"
 	objectType := "TestType"
@@ -101,21 +99,19 @@ func TestLoadObject_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	objectID := "test-obj-load"
 	objectType := "TestType"
@@ -142,21 +138,19 @@ func TestLoadObject_NotFound_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// Try to load non-existent object
 	_, _, err = db.LoadObject(ctx, "non-existent-id")
@@ -169,21 +163,19 @@ func TestDeleteObject_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	objectID := "test-obj-delete"
 	objectType := "TestType"
@@ -215,21 +207,19 @@ func TestDeleteObject_NotFound_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// Try to delete non-existent object
 	err = db.DeleteObject(ctx, "non-existent-id")
@@ -242,21 +232,19 @@ func TestObjectExists_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	objectID := "test-obj-exists"
 	objectType := "TestType"
@@ -291,21 +279,19 @@ func TestListObjectsByType_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	objectType := "TestTypeList"
 
@@ -354,21 +340,19 @@ func TestListObjectsByType_Empty_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// List objects of a type that doesn't exist
 	results, err := db.ListObjectsByType(ctx, "NonExistentType")
@@ -385,21 +369,19 @@ func TestPersistence_FullWorkflow_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// Full workflow test: create, read, update, list, delete
 	objectID := "workflow-test"
@@ -472,21 +454,19 @@ func TestInsertOrGetReliableCall_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	requestID := "test-req-123"
 	objectID := "test-obj-123"
@@ -525,21 +505,19 @@ func TestUpdateReliableCallStatus_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// Create a reliable call
 	requestID := "test-req-update"
@@ -573,21 +551,19 @@ func TestGetPendingReliableCalls_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	objectID := "test-obj-pending"
 
@@ -650,21 +626,19 @@ func TestGetReliableCall_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	requestID := "test-req-get"
 	objectID := "test-obj-get"
@@ -702,21 +676,19 @@ func TestGetReliableCall_NotFound_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running integration test in short mode")
 	}
-	config := skipIfNoPostgres(t)
 
-	db, err := NewDB(config)
-	if err != nil {
-		t.Fatalf("NewDB() failed: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("InitSchema() failed: %v", err)
 	}
-	defer cleanupTestTable(t, db)
 
 	// Try to get non-existent call
 	_, err = db.GetReliableCall(ctx, "non-existent-req")

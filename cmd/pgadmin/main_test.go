@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/util/postgres"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // cleanupSchema removes all tables and functions for testing
@@ -16,27 +17,13 @@ func cleanupSchema(ctx context.Context, db *postgres.DB) error {
 }
 
 func TestTableExists(t *testing.T) {
-	config := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	db, err := postgres.NewDB(config)
-	if err != nil {
-		t.Skipf("Skipping test - unable to connect to database: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
-	if err := db.Ping(ctx); err != nil {
-		t.Skipf("Skipping test - unable to ping database: %v", err)
-		return
-	}
 
 	// Create a temporary test table in the public schema
 	testTableName := "test_table_exists_12345"
@@ -70,27 +57,13 @@ func TestTableExists(t *testing.T) {
 }
 
 func TestIndexExists(t *testing.T) {
-	config := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	db, err := postgres.NewDB(config)
-	if err != nil {
-		t.Skipf("Skipping test - unable to connect to database: %v", err)
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
-	defer db.Close()
 
 	ctx := context.Background()
-	if err := db.Ping(ctx); err != nil {
-		t.Skipf("Skipping test - unable to ping database: %v", err)
-		return
-	}
 
 	// Test with a non-existent index
 	exists, err := indexExists(ctx, db, "pg_class", "nonexistent_index_12345")
@@ -103,31 +76,22 @@ func TestIndexExists(t *testing.T) {
 }
 
 func TestInitSchema(t *testing.T) {
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Create config for the test database
 	config := &postgres.Config{
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
 		Password: "postgres",
-		Database: "postgres",
+		Database: db.Config().Database,
 		SSLMode:  "disable",
-	}
-
-	db, err := postgres.NewDB(config)
-	if err != nil {
-		t.Skipf("Skipping test - unable to connect to database: %v", err)
-		return
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	if err := db.Ping(ctx); err != nil {
-		t.Skipf("Skipping test - unable to ping database: %v", err)
-		return
-	}
-
-	// Clean up first
-	if err := cleanupSchema(ctx, db); err != nil {
-		t.Fatalf("Failed to clean up: %v", err)
 	}
 
 	// Initialize schema
@@ -166,31 +130,22 @@ func TestInitSchema(t *testing.T) {
 }
 
 func TestResetSchema(t *testing.T) {
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Create config for the test database
 	config := &postgres.Config{
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
 		Password: "postgres",
-		Database: "postgres",
+		Database: db.Config().Database,
 		SSLMode:  "disable",
-	}
-
-	db, err := postgres.NewDB(config)
-	if err != nil {
-		t.Skipf("Skipping test - unable to connect to database: %v", err)
-		return
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	if err := db.Ping(ctx); err != nil {
-		t.Skipf("Skipping test - unable to ping database: %v", err)
-		return
-	}
-
-	// Clean up first
-	if err := cleanupSchema(ctx, db); err != nil {
-		t.Fatalf("Failed to clean up: %v", err)
 	}
 
 	// Initialize schema first
@@ -269,38 +224,25 @@ func TestResetSchema(t *testing.T) {
 		t.Errorf("Expected 0 rows after reset, got %d", count)
 	}
 
-	// Clean up
-	if err := cleanupSchema(ctx, db); err != nil {
-		t.Logf("Warning: Failed to clean up after test: %v", err)
-	}
 }
 
 func TestResetSchema_Cancelled(t *testing.T) {
+	// Create test database with automatic cleanup
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Create config for the test database
 	config := &postgres.Config{
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
 		Password: "postgres",
-		Database: "postgres",
+		Database: db.Config().Database,
 		SSLMode:  "disable",
-	}
-
-	db, err := postgres.NewDB(config)
-	if err != nil {
-		t.Skipf("Skipping test - unable to connect to database: %v", err)
-		return
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	if err := db.Ping(ctx); err != nil {
-		t.Skipf("Skipping test - unable to ping database: %v", err)
-		return
-	}
-
-	// Clean up first
-	if err := cleanupSchema(ctx, db); err != nil {
-		t.Fatalf("Failed to clean up: %v", err)
 	}
 
 	// Initialize schema
@@ -333,10 +275,5 @@ func TestResetSchema_Cancelled(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("Expected 1 row after cancelled reset, got %d", count)
-	}
-
-	// Clean up
-	if err := cleanupSchema(ctx, db); err != nil {
-		t.Logf("Warning: Failed to clean up after test: %v", err)
 	}
 }
