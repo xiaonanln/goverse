@@ -94,7 +94,7 @@ Comprehensive observability features enable production operations:
 - Core node logic and object lifecycle management
 - Sophisticated multi-level locking strategy:
   - **stopMu (RWMutex)**: Protects node lifecycle operations
-  - **keyLock (per-object locks)**: Serializes operations on individual objects
+  - **objectLifecycleLock (per-object locks)**: Serializes operations on individual objects
   - **objectsMu (RWMutex)**: Protects the objects map
 - Object creation, deletion, and method invocation
 - Periodic persistence for durable objects
