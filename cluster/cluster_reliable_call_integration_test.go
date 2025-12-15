@@ -376,7 +376,7 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 	// Check for errors
 	for i, err := range errors {
 		if err != nil {
-			t.Fatalf("Goroutine %d failed: %v", i, err)
+			t.Errorf("Goroutine %d failed: %v", i, err)
 		}
 	}
 
@@ -392,7 +392,7 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		expected := int32(i + 1)
 		if sortedResults[i] != expected {
-			t.Fatalf("Sorted result[%d]: expected %d, got %d", i, expected, sortedResults[i])
+			t.Errorf("Sorted result[%d]: expected %d, got %d", i, expected, sortedResults[i])
 		}
 	}
 
@@ -412,7 +412,7 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 		t.Fatalf("Expected *counter_pb.CounterResponse, got %T", finalResult)
 	}
 	if finalResponse.Value != int32(numGoroutines) {
-		t.Fatalf("Expected final counter value to be %d, got %d", numGoroutines, finalResponse.Value)
+		t.Errorf("Expected final counter value to be %d, got %d", numGoroutines, finalResponse.Value)
 	}
 
 	// Verify all reliable call records are in the database with success status
@@ -424,7 +424,7 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 			continue
 		}
 		if rc.Status != "success" {
-			t.Fatalf("Call %s: expected status 'success', got %q", callID, rc.Status)
+			t.Errorf("Call %s: expected status 'success', got %q", callID, rc.Status)
 		}
 		if rc.ResultData == nil {
 			t.Fatalf("Call %s: expected result data to be set", callID)
