@@ -160,6 +160,18 @@ type Object interface {
 	//   - rcseq: The sequence number to set as the next reliable call sequence
 	SetNextRcseq(rcseq int64)
 
+	// LockSeqWrite acquires the sequential write lock for reliable call INSERTs.
+	//
+	// This method is used by the node to serialize reliable call INSERTs for this object,
+	// ensuring sequential seq allocation in the persistence layer. The lock is held only
+	// during the INSERT operation and released immediately after.
+	//
+	// Thread-Safety: This method is thread-safe and uses mutex synchronization.
+	//
+	// Returns:
+	//   - unlock: Function to release the lock (must be called by the caller)
+	LockSeqWrite() (unlock func())
+
 	// ProcessPendingReliableCalls processes pending reliable calls up to and including the specified sequence.
 	//
 	// This method fetches reliable calls from the persistence provider and executes them
@@ -235,6 +247,7 @@ type BaseObject struct {
 	processingCalls bool        // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
 	seqWaiters      []seqWaiter // waiters sorted by seq (can have duplicates)
 	seqWaitersMu    sync.Mutex  // protects seqWaiters and processingCalls
+	seqWriteMu      sync.Mutex  // serializes reliable call INSERTs for per-object ordering
 	Logger          *logger.Logger
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -289,6 +302,15 @@ func (base *BaseObject) GetNextRcseq() int64 {
 // SetNextRcseq sets the next reliable call sequence number for this object
 func (base *BaseObject) SetNextRcseq(rcseq int64) {
 	base.nextRcseq.Store(rcseq)
+}
+
+// LockSeqWrite acquires the sequential write lock for reliable call INSERTs.
+// This ensures that reliable call INSERTs for this object are serialized,
+// guaranteeing sequential seq allocation in the persistence layer.
+// The caller must call the returned unlock function when done.
+func (base *BaseObject) LockSeqWrite() (unlock func()) {
+	base.seqWriteMu.Lock()
+	return base.seqWriteMu.Unlock
 }
 
 // Context returns the object's lifetime context.

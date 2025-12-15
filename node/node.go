@@ -341,7 +341,7 @@ func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, ob
 }
 
 // ReliableCallObject handles a reliable call request for an object.
-// It performs INSERT with per-object locking to ensure sequential seq allocation,
+// It performs INSERT with the object's seqWriteMu to ensure sequential seq allocation,
 // then fetches and executes pending reliable calls from the persistence provider.
 func (node *Node) ReliableCallObject(
 	ctx context.Context,
@@ -351,7 +351,7 @@ func (node *Node) ReliableCallObject(
 	methodName string,
 	requestData []byte,
 ) (*anypb.Any, error) {
-	// Lock ordering: stopMu.RLock → keyLock.Lock → (brief objectsMu usage)
+	// Lock ordering: stopMu.RLock → objectLifecycleLock.RLock (brief) → object.seqWriteMu → (brief objectsMu usage)
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
@@ -389,25 +389,54 @@ func (node *Node) ReliableCallObject(
 		return nil, fmt.Errorf("no persistence provider configured")
 	}
 
-	// Acquire per-object EXCLUSIVE lock for INSERT
+	// Auto-create object first if it doesn't exist (needed to access object's seqWriteMu)
+	err := node.createObject(ctx, objectType, objectID)
+	if err != nil {
+		node.logger.Errorf("ReliableCallObject: failed to auto-create object %s: %v", objectID, err)
+		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
+	}
+
+	// Acquire per-key read lock to get the object
+	unlockKey := node.objectLifecycleLock.RLock(objectID)
+
+	// Fetch the object while holding the lock
+	node.objectsMu.RLock()
+	obj, ok := node.objects[objectID]
+	node.objectsMu.RUnlock()
+
+	// Release lifecycle lock - we only needed it to safely fetch the object
+	unlockKey()
+
+	if !ok {
+		node.logger.Errorf("ReliableCallObject: object %s was not found", objectID)
+		return nil, fmt.Errorf("object %s was not found", objectID)
+	}
+
+	// Validate that the provided type matches the object's actual type
+	if obj.Type() != objectType {
+		node.logger.Errorf("ReliableCallObject: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
+		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
+	}
+
+	// Acquire object's sequential write lock for INSERT
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
-	unlockKeyExclusive := node.objectLifecycleLock.Lock(objectID)
-	var exclusiveLockReleased bool
+	unlockSeqWrite := obj.LockSeqWrite()
+	var seqWriteLockReleased bool
 	defer func() {
 		// Safety: ensure lock is always released even if a panic occurs
-		if !exclusiveLockReleased {
-			unlockKeyExclusive()
+		if !seqWriteLockReleased {
+			unlockSeqWrite()
 		}
 	}()
 
-	// INSERT or GET the reliable call while holding the lock
-	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s) with lock",
+	// INSERT or GET the reliable call while holding the object's sequential write lock
+	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s) with seqWriteMu",
 		callID, objectID, methodName, objectType)
 	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
 
-	// Release the exclusive lock immediately after INSERT
-	unlockKeyExclusive()
-	exclusiveLockReleased = true
+	// Release the sequential write lock immediately after INSERT
+	unlockSeqWrite()
+	seqWriteLockReleased = true
 
 	if err != nil {
 		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
@@ -424,36 +453,9 @@ func (node *Node) ReliableCallObject(
 		return nil, fmt.Errorf("reliable call failed: %s", rc.Error)
 	}
 
-	// Call is pending - continue with object activation and execution
+	// Call is pending - continue with execution
 	seq := rc.Seq
 	node.logger.Infof("Reliable call %s is pending (seq: %d), processing", callID, seq)
-
-	// Auto-create object if it doesn't exist
-	err = node.createObject(ctx, objectType, objectID)
-	if err != nil {
-		node.logger.Errorf("ReliableCallObject: failed to auto-create object %s: %v", objectID, err)
-		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
-	}
-
-	// Now acquire per-key read lock to prevent concurrent delete during method call
-	unlockKey := node.objectLifecycleLock.RLock(objectID)
-	defer unlockKey()
-
-	// Fetch the object while holding the lock
-	node.objectsMu.RLock()
-	obj, ok := node.objects[objectID]
-	node.objectsMu.RUnlock()
-
-	if !ok {
-		node.logger.Errorf("ReliableCallObject: object %s was not found", objectID)
-		return nil, fmt.Errorf("object %s was not found", objectID)
-	}
-
-	// Validate that the provided type matches the object's actual type
-	if obj.Type() != objectType {
-		node.logger.Errorf("ReliableCallObject: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
-		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
-	}
 
 	// Trigger processing of pending reliable calls for this object
 	// This will fetch pending calls from the database and execute them sequentially
