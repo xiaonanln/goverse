@@ -96,6 +96,31 @@ func TestReliableCallObject_ConcurrentOrderingGuarantee(t *testing.T) {
 	node2.RegisterObjectType((*testCounterForOrdering)(nil))
 	node3.RegisterObjectType((*testCounterForOrdering)(nil))
 
+	// Start mock gRPC servers for all nodes (required for inter-node RPC)
+	mockServer1 := testutil.NewMockGoverseServer()
+	mockServer1.SetNode(node1)
+	testServer1 := testutil.NewTestServerHelper(nodeAddr1, mockServer1)
+	if err := testServer1.Start(ctx); err != nil {
+		t.Fatalf("Failed to start mock server 1: %v", err)
+	}
+	t.Cleanup(func() { testServer1.Stop() })
+
+	mockServer2 := testutil.NewMockGoverseServer()
+	mockServer2.SetNode(node2)
+	testServer2 := testutil.NewTestServerHelper(nodeAddr2, mockServer2)
+	if err := testServer2.Start(ctx); err != nil {
+		t.Fatalf("Failed to start mock server 2: %v", err)
+	}
+	t.Cleanup(func() { testServer2.Stop() })
+
+	mockServer3 := testutil.NewMockGoverseServer()
+	mockServer3.SetNode(node3)
+	testServer3 := testutil.NewTestServerHelper(nodeAddr3, mockServer3)
+	if err := testServer3.Start(ctx); err != nil {
+		t.Fatalf("Failed to start mock server 3: %v", err)
+	}
+	t.Cleanup(func() { testServer3.Stop() })
+
 	// Wait for all clusters to be ready
 	testutil.WaitForClustersReady(t, cluster1, cluster2, cluster3)
 
@@ -268,6 +293,23 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 	node1.RegisterObjectType((*testCounterForOrdering)(nil))
 	node2.RegisterObjectType((*testCounterForOrdering)(nil))
 
+	// Start mock gRPC servers for both nodes (required for inter-node RPC)
+	mockServer1 := testutil.NewMockGoverseServer()
+	mockServer1.SetNode(node1)
+	testServer1 := testutil.NewTestServerHelper(nodeAddr1, mockServer1)
+	if err := testServer1.Start(ctx); err != nil {
+		t.Fatalf("Failed to start mock server 1: %v", err)
+	}
+	t.Cleanup(func() { testServer1.Stop() })
+
+	mockServer2 := testutil.NewMockGoverseServer()
+	mockServer2.SetNode(node2)
+	testServer2 := testutil.NewTestServerHelper(nodeAddr2, mockServer2)
+	if err := testServer2.Start(ctx); err != nil {
+		t.Fatalf("Failed to start mock server 2: %v", err)
+	}
+	t.Cleanup(func() { testServer2.Stop() })
+
 	// Wait for clusters to be ready
 	testutil.WaitForClustersReady(t, cluster1, cluster2)
 
@@ -331,7 +373,7 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 		// Fetch the seq from the database
 		rc, err := db.GetReliableCall(ctx, callID)
 		if err != nil {
-			t.Fatalf("Call %d: failed to get reliable call: %w", i, err)
+			t.Fatalf("Call %d: failed to get reliable call: %v", i, err)
 		}
 		seqs = append(seqs, rc.Seq)
 		t.Logf("Call %d (%s) got seq: %d", i, location, rc.Seq)
