@@ -75,7 +75,7 @@ func TestCreateObject_ProcessesPendingReliableCalls(t *testing.T) {
 
 	// Create unique test prefix to avoid conflicts
 	testPrefix := fmt.Sprintf("test_%d", time.Now().UnixNano())
-	
+
 	// Clear test data
 	_, err = db.Connection().ExecContext(ctx, "DELETE FROM goverse_reliable_calls WHERE object_id LIKE $1", testPrefix+"%")
 	if err != nil {
@@ -98,7 +98,7 @@ func TestCreateObject_ProcessesPendingReliableCalls(t *testing.T) {
 	// Test object ID with unique prefix
 	objectType := "TestCounterForPendingCalls"
 	objectID := testPrefix + "-counter1"
-	
+
 	// Insert pending reliable calls BEFORE creating the object
 	// This simulates calls made while the object was inactive
 	t.Run("Insert pending calls before object creation", func(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
+	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -349,7 +350,7 @@ func TestNode_ListObjects(t *testing.T) {
 	}
 	// Create a node directly without going through NewServer
 	ctx := context.Background()
-	n := testutil.MustNewNode(ctx, t, "localhost:9094")
+	n := node.MustNewNodeForTesting(ctx, t, "localhost:9094")
 
 	// Test that ListObjects returns empty list initially
 	objectInfos := n.ListObjects()
