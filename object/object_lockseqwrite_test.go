@@ -76,13 +76,19 @@ func TestBaseObject_LockSeqWrite_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Run 10 goroutines that each increment the counter 100 times
+	// If the lock works correctly, all increments will be serialized
+	// and the final value will be exactly 1000
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				unlock := obj.LockSeqWrite()
-				counter++
+				// The lock should protect this critical section
+				// If not protected, race detector will fail or counter will be wrong
+				localCounter := counter
+				time.Sleep(1 * time.Nanosecond) // Increase chance of race if lock doesn't work
+				counter = localCounter + 1
 				unlock()
 			}
 		}()
@@ -91,8 +97,9 @@ func TestBaseObject_LockSeqWrite_Concurrent(t *testing.T) {
 	wg.Wait()
 
 	// If locking is correct, counter should be exactly 1000
+	// If not, it will be less due to lost updates
 	if counter != 1000 {
-		t.Errorf("Expected counter to be 1000, got %d", counter)
+		t.Errorf("Expected counter to be 1000, got %d (lock failed to serialize access)", counter)
 	}
 }
 
