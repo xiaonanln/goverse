@@ -351,7 +351,9 @@ func (node *Node) ReliableCallObject(
 	methodName string,
 	requestData []byte,
 ) (*anypb.Any, error) {
-	// Lock ordering: stopMu.RLock → objectLifecycleLock.RLock (brief) → object.seqWriteMu → (brief objectsMu usage)
+	// Lock ordering: stopMu.RLock → objectLifecycleLock.RLock → object.seqWriteMu → (brief objectsMu usage)
+	// The lifecycle lock is held only long enough to safely fetch the object and acquire seqWriteMu,
+	// then released before the INSERT operation.
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
@@ -396,7 +398,9 @@ func (node *Node) ReliableCallObject(
 		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
-	// Acquire per-key read lock to get the object
+	// Acquire per-key read lock to get the object and acquire its seqWriteMu
+	// We must keep this lock held until seqWriteMu is acquired to prevent the object
+	// from being deleted between fetching it and locking it
 	unlockKey := node.objectLifecycleLock.RLock(objectID)
 
 	// Fetch the object while holding the lock
@@ -404,16 +408,15 @@ func (node *Node) ReliableCallObject(
 	obj, ok := node.objects[objectID]
 	node.objectsMu.RUnlock()
 
-	// Release lifecycle lock - we only needed it to safely fetch the object
-	unlockKey()
-
 	if !ok {
+		unlockKey()
 		node.logger.Errorf("ReliableCallObject: object %s was not found", objectID)
 		return nil, fmt.Errorf("object %s was not found", objectID)
 	}
 
 	// Validate that the provided type matches the object's actual type
 	if obj.Type() != objectType {
+		unlockKey()
 		node.logger.Errorf("ReliableCallObject: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
 		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
 	}
@@ -421,6 +424,11 @@ func (node *Node) ReliableCallObject(
 	// Acquire object's sequential write lock for INSERT
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
 	unlockSeqWrite := obj.LockSeqWrite()
+
+	// Now we can release the lifecycle lock - the seqWriteMu protects the INSERT operation
+	// and the object cannot be deleted while we're inserting because ProcessPendingReliableCalls
+	// will keep the object active
+	unlockKey()
 	var seqWriteLockReleased bool
 	defer func() {
 		// Safety: ensure lock is always released even if a panic occurs
