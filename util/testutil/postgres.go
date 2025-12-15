@@ -111,3 +111,17 @@ func CreateTestDatabase(t *testing.T) *postgres.DB {
 
 	return db
 }
+
+// TruncateReliableCallTables truncates the goverse_reliable_calls and goverse_objects tables
+// and resets their sequences. This is useful for ensuring a clean state between test runs.
+func TruncateReliableCallTables(t *testing.T, db *postgres.DB) {
+	t.Helper()
+
+	ctx := context.Background()
+	_, err := db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects RESTART IDENTITY CASCADE")
+	if err != nil {
+		t.Fatalf("Failed to truncate tables: %v", err)
+	}
+
+	t.Logf("Truncated goverse_reliable_calls and goverse_objects tables")
+}

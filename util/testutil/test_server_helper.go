@@ -119,7 +119,7 @@ type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	DeleteObject(ctx context.Context, id string) error
-	ReliableCallObject(ctx context.Context, seq int64, objectType string, objectID string) (*anypb.Any, error)
+	ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, requestData []byte) (*anypb.Any, error)
 }
 
 type clusterInterface interface {
@@ -274,10 +274,9 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
-	// Validate request parameters
-	// Note: seq must be positive (> 0) because it's a BIGSERIAL in PostgreSQL which starts from 1
-	if req.GetSeq() <= 0 {
-		return nil, fmt.Errorf("seq must be positive in ReliableCallObject request")
+	// Validate request parameters - require the new fields
+	if req.GetCallId() == "" {
+		return nil, fmt.Errorf("call_id must be specified in ReliableCallObject request")
 	}
 	if req.GetObjectType() == "" {
 		return nil, fmt.Errorf("object_type must be specified in ReliableCallObject request")
@@ -285,9 +284,22 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 	if req.GetObjectId() == "" {
 		return nil, fmt.Errorf("object_id must be specified in ReliableCallObject request")
 	}
+	if req.GetMethodName() == "" {
+		return nil, fmt.Errorf("method_name must be specified in ReliableCallObject request")
+	}
+	if req.GetRequestData() == nil {
+		return nil, fmt.Errorf("request_data must be specified in ReliableCallObject request")
+	}
 
-	// Call ReliableCallObject on the actual node
-	resultAny, err := node.ReliableCallObject(ctx, req.GetSeq(), req.GetObjectType(), req.GetObjectId())
+	// Call ReliableCallObject on the actual node with new parameters
+	resultAny, err := node.ReliableCallObject(
+		ctx,
+		req.GetCallId(),
+		req.GetObjectType(),
+		req.GetObjectId(),
+		req.GetMethodName(),
+		req.GetRequestData(),
+	)
 	if err != nil {
 		return &goverse_pb.ReliableCallObjectResponse{
 			Error: err.Error(),

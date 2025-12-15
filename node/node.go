@@ -341,10 +341,17 @@ func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, ob
 }
 
 // ReliableCallObject handles a reliable call request for an object.
-// This is a stub implementation for PR 6 that will be expanded in later PRs
-// to fetch and execute pending reliable calls from the persistence provider.
-func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType string, objectID string) (*anypb.Any, error) {
-	// Lock ordering: stopMu.RLock
+// It performs INSERT with per-object locking to ensure sequential seq allocation,
+// then fetches and executes pending reliable calls from the persistence provider.
+func (node *Node) ReliableCallObject(
+	ctx context.Context,
+	callID string,
+	objectType string,
+	objectID string,
+	methodName string,
+	requestData []byte,
+) (*anypb.Any, error) {
+	// Lock ordering: stopMu.RLock → keyLock.Lock → (brief objectsMu usage)
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
@@ -354,7 +361,22 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 		return nil, fmt.Errorf("node is stopped")
 	}
 
-	node.logger.Infof("ReliableCallObject received: seq=%d, object_type=%s, object_id=%s", seq, objectType, objectID)
+	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s, method=%s",
+		callID, objectType, objectID, methodName)
+
+	// Validate input parameters
+	if callID == "" {
+		return nil, fmt.Errorf("callID cannot be empty")
+	}
+	if objectType == "" {
+		return nil, fmt.Errorf("objectType cannot be empty")
+	}
+	if objectID == "" {
+		return nil, fmt.Errorf("objectID cannot be empty")
+	}
+	if methodName == "" {
+		return nil, fmt.Errorf("methodName cannot be empty")
+	}
 
 	// Get the persistence provider to access reliable calls
 	node.persistenceProviderMu.RLock()
@@ -367,16 +389,55 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 		return nil, fmt.Errorf("no persistence provider configured")
 	}
 
-	// Auto-create object
-	err := node.createObject(ctx, objectType, objectID)
+	// Acquire per-object EXCLUSIVE lock for INSERT
+	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
+	unlockKeyExclusive := node.keyLock.Lock(objectID)
+	var exclusiveLockReleased bool
+	defer func() {
+		// Safety: ensure lock is always released even if a panic occurs
+		if !exclusiveLockReleased {
+			unlockKeyExclusive()
+		}
+	}()
+
+	// INSERT or GET the reliable call while holding the lock
+	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s) with lock",
+		callID, objectID, methodName, objectType)
+	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
+
+	// Release the exclusive lock immediately after INSERT
+	unlockKeyExclusive()
+	exclusiveLockReleased = true
+
+	if err != nil {
+		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
+		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
+	}
+
+	// Check if the call was already completed (idempotency)
+	switch rc.Status {
+	case "success":
+		node.logger.Infof("Reliable call %s already succeeded, returning cached result", callID)
+		return protohelper.BytesToAny(rc.ResultData)
+	case "failed":
+		node.logger.Infof("Reliable call %s already failed, returning cached error", callID)
+		return nil, fmt.Errorf("reliable call failed: %s", rc.Error)
+	}
+
+	// Call is pending - continue with object activation and execution
+	seq := rc.Seq
+	node.logger.Infof("Reliable call %s is pending (seq: %d), processing", callID, seq)
+
+	// Auto-create object if it doesn't exist
+	err = node.createObject(ctx, objectType, objectID)
 	if err != nil {
 		node.logger.Errorf("ReliableCallObject: failed to auto-create object %s: %v", objectID, err)
 		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
-	// Now acquire per-key read lock to prevent concurrent delete during method call
-	unlockKey := node.keyLock.RLock(objectID)
-	defer unlockKey()
+	// Acquire per-key read lock to prevent concurrent delete during processing
+	unlockKeyRead := node.keyLock.RLock(objectID)
+	defer unlockKeyRead() // Will be released when function returns
 
 	// Fetch the object while holding the lock
 	node.objectsMu.RLock()
@@ -398,38 +459,50 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 	// This will fetch pending calls from the database and execute them sequentially
 	resultChan := obj.ProcessPendingReliableCalls(provider, seq)
 
-	// Wait for our call's result
-	// Channel sends the ReliableCall if processed, or closes without sending if:
-	// - seq was already processed (seq < nextRcseq)
-	// - object was destroyed during processing
-	// - processing encountered an error
-	call := <-resultChan
+	// Wait for our call's result with one retry if still pending.
+	// Pending on first attempt means our INSERT committed after the processing loop's SELECT.
+	// Re-triggering MUST see our committed INSERT, so one retry is sufficient.
+	for attempt := 0; attempt < 2; attempt++ {
+		// Channel sends the ReliableCall if processed, or closes without sending if:
+		// - seq was already processed (seq < nextRcseq)
+		// - object was destroyed during processing
+		// - processing encountered an error
+		call := <-resultChan
 
-	// If not received from channel, fetch from database
-	if call == nil {
-		var err error
-		call, err = provider.GetReliableCallBySeq(ctx, seq)
-		if err != nil {
-			node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
-			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+		// If not received from channel, fetch from database
+		if call == nil {
+			var err error
+			call, err = provider.GetReliableCallBySeq(ctx, seq)
+			if err != nil {
+				node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
+				return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+			}
+		}
+
+		switch call.Status {
+		case "success":
+			resultAny, err := protohelper.BytesToAny(call.ResultData)
+			if err != nil {
+				node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
+				return nil, fmt.Errorf("failed to wrap result: %w", err)
+			}
+			node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
+			return resultAny, nil
+		case "failed":
+			node.logger.Errorf("Reliable call seq=%d (call_id=%s) failed: %s", seq, callID, call.Error)
+			return nil, fmt.Errorf("reliable call failed: %s", call.Error)
+		}
+
+		// Still pending - re-trigger processing on first attempt only
+		if attempt == 0 {
+			node.logger.Infof("Reliable call seq=%d (call_id=%s) still pending, re-triggering processing", seq, callID)
+			resultChan = obj.ProcessPendingReliableCalls(provider, seq)
 		}
 	}
 
-	if call.Status == "success" {
-		// Return the result data that was stored during processing
-		resultAny, err := protohelper.BytesToAny(call.ResultData)
-		if err != nil {
-			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
-			return nil, fmt.Errorf("failed to wrap result: %w", err)
-		}
-		node.logger.Infof("Successfully retrieved result for call seq=%d", seq)
-		return resultAny, nil
-	} else if call.Status == "failed" {
-		node.logger.Errorf("Reliable call seq=%d previously failed: %s", seq, call.Error)
-		return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
-	} else {
-		return nil, fmt.Errorf("reliable call seq=%d is still pending", seq)
-	}
+	// Still pending after retry - this should never happen since our INSERT is committed
+	node.logger.Errorf("BUG: Reliable call seq=%d (call_id=%s) still pending after retry", seq, callID)
+	return nil, fmt.Errorf("BUG: reliable call seq=%d still pending after retry", seq)
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method
