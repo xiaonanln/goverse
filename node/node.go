@@ -437,7 +437,7 @@ func (node *Node) ReliableCallObject(
 
 	// Acquire per-key read lock to prevent concurrent delete during processing
 	unlockKeyRead := node.keyLock.RLock(objectID)
-	defer unlockKeyRead()  // Will be released when function returns
+	defer unlockKeyRead() // Will be released when function returns
 
 	// Fetch the object while holding the lock
 	node.objectsMu.RLock()
@@ -459,38 +459,50 @@ func (node *Node) ReliableCallObject(
 	// This will fetch pending calls from the database and execute them sequentially
 	resultChan := obj.ProcessPendingReliableCalls(provider, seq)
 
-	// Wait for our call's result
-	// Channel sends the ReliableCall if processed, or closes without sending if:
-	// - seq was already processed (seq < nextRcseq)
-	// - object was destroyed during processing
-	// - processing encountered an error
-	call := <-resultChan
+	// Wait for our call's result with one retry if still pending.
+	// Pending on first attempt means our INSERT committed after the processing loop's SELECT.
+	// Re-triggering MUST see our committed INSERT, so one retry is sufficient.
+	for attempt := 0; attempt < 2; attempt++ {
+		// Channel sends the ReliableCall if processed, or closes without sending if:
+		// - seq was already processed (seq < nextRcseq)
+		// - object was destroyed during processing
+		// - processing encountered an error
+		call := <-resultChan
 
-	// If not received from channel, fetch from database
-	if call == nil {
-		var err error
-		call, err = provider.GetReliableCallBySeq(ctx, seq)
-		if err != nil {
-			node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
-			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+		// If not received from channel, fetch from database
+		if call == nil {
+			var err error
+			call, err = provider.GetReliableCallBySeq(ctx, seq)
+			if err != nil {
+				node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
+				return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+			}
+		}
+
+		switch call.Status {
+		case "success":
+			resultAny, err := protohelper.BytesToAny(call.ResultData)
+			if err != nil {
+				node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
+				return nil, fmt.Errorf("failed to wrap result: %w", err)
+			}
+			node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
+			return resultAny, nil
+		case "failed":
+			node.logger.Errorf("Reliable call seq=%d (call_id=%s) failed: %s", seq, callID, call.Error)
+			return nil, fmt.Errorf("reliable call failed: %s", call.Error)
+		}
+
+		// Still pending - re-trigger processing on first attempt only
+		if attempt == 0 {
+			node.logger.Infof("Reliable call seq=%d (call_id=%s) still pending, re-triggering processing", seq, callID)
+			resultChan = obj.ProcessPendingReliableCalls(provider, seq)
 		}
 	}
 
-	if call.Status == "success" {
-		// Return the result data that was stored during processing
-		resultAny, err := protohelper.BytesToAny(call.ResultData)
-		if err != nil {
-			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
-			return nil, fmt.Errorf("failed to wrap result: %w", err)
-		}
-		node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
-		return resultAny, nil
-	} else if call.Status == "failed" {
-		node.logger.Errorf("Reliable call seq=%d (call_id=%s) previously failed: %s", seq, callID, call.Error)
-		return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
-	} else {
-		return nil, fmt.Errorf("reliable call seq=%d (call_id=%s) is still pending", seq, callID)
-	}
+	// Still pending after retry - this should never happen since our INSERT is committed
+	node.logger.Errorf("BUG: Reliable call seq=%d (call_id=%s) still pending after retry", seq, callID)
+	return nil, fmt.Errorf("BUG: reliable call seq=%d still pending after retry", seq)
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method

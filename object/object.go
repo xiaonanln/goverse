@@ -482,7 +482,7 @@ func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 
 		base.Logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), base.id)
 
-		// No more pending calls - exit (defer will close remaining waiters)
+		// No more pending calls
 		if len(pendingCalls) == 0 {
 			base.Logger.Infof("No pending reliable calls for object %s", base.id)
 			return
