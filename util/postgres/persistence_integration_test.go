@@ -631,8 +631,9 @@ func TestGetPendingReliableCalls_Integration(t *testing.T) {
 		t.Fatalf("Second pending call Seq = %d, want %d", pending[1].Seq, rc3.Seq)
 	}
 
-	// Get pending calls with nextRcseq = rc1.Seq (should only return rc3)
-	pending2, err := db.GetPendingReliableCalls(ctx, objectID, rc1.Seq)
+	// Get pending calls with nextRcseq = rc1.Seq+1 (should skip rc1 and rc2, return only rc3)
+	// Note: nextRcseq represents the next seq to process, so we use rc1.Seq+1 to skip rc1
+	pending2, err := db.GetPendingReliableCalls(ctx, objectID, rc1.Seq+1)
 	if err != nil {
 		t.Fatalf("GetPendingReliableCalls() with nextRcseq failed: %v", err)
 	}
