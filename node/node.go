@@ -401,10 +401,11 @@ func (node *Node) ReliableCallObject(
 		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
-	// Acquire per-key read lock to get the object and acquire its seqWriteMu
-	// We must keep this lock held until seqWriteMu is acquired to prevent the object
-	// from being deleted between fetching it and locking it
+	// Acquire per-key read lock for the entire operation.
+	// This prevents DeleteObject from removing the object while we're processing.
+	// RLock allows concurrent calls/saves, only DeleteObject (which needs exclusive Lock) waits.
 	unlockKey := node.objectLifecycleLock.RLock(objectID)
+	defer unlockKey()
 
 	// Fetch the object while holding the lock
 	node.objectsMu.RLock()
@@ -412,14 +413,12 @@ func (node *Node) ReliableCallObject(
 	node.objectsMu.RUnlock()
 
 	if !ok {
-		unlockKey()
 		node.logger.Errorf("ReliableCallObject: object %s was not found", objectID)
 		return nil, fmt.Errorf("object %s was not found", objectID)
 	}
 
 	// Validate that the provided type matches the object's actual type
 	if obj.Type() != objectType {
-		unlockKey()
 		node.logger.Errorf("ReliableCallObject: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
 		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
 	}
@@ -428,18 +427,6 @@ func (node *Node) ReliableCallObject(
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
 	unlockSeqWrite := obj.LockSeqWrite()
 
-	// Now we can release the lifecycle lock - the seqWriteMu protects the INSERT operation
-	// and the object cannot be deleted while we're inserting because ProcessPendingReliableCalls
-	// will keep the object active
-	unlockKey()
-	var seqWriteLockReleased bool
-	defer func() {
-		// Safety: ensure lock is always released even if a panic occurs
-		if !seqWriteLockReleased {
-			unlockSeqWrite()
-		}
-	}()
-
 	// INSERT or GET the reliable call while holding the object's sequential write lock
 	node.logger.Infof("INSERT or GET reliable call %s for object %s.%s (type: %s) with sequential write lock",
 		callID, objectID, methodName, objectType)
@@ -447,7 +434,6 @@ func (node *Node) ReliableCallObject(
 
 	// Release the sequential write lock immediately after INSERT
 	unlockSeqWrite()
-	seqWriteLockReleased = true
 
 	if err != nil {
 		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
