@@ -23,9 +23,18 @@ jobs:
         uses: ./.github/actions/setup-test-env
 
       - name: Run concurrent calls test (100 iterations)
-        run: go test -v -count 100 -failfast -run ^TestReliableCallObject_ConcurrentCalls$ github.com/xiaonanln/goverse/cluster
+        run: go test -v -count 100 -failfast -coverprofile=coverage-concurrency.out -covermode=atomic -run ^TestReliableCallObject_ConcurrentCalls$ github.com/xiaonanln/goverse/cluster
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-concurrency.out
+          flags: concurrency
+          name: codecov-concurrency
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
