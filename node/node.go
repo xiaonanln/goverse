@@ -36,9 +36,9 @@ type Object = object.Object
 //   - Operations acquire stopMu.RLock() to prevent Stop during execution
 //   - Stop() acquires stopMu.Lock() to wait for operations to complete
 //
-// 2. keyLock (per-object ID): Prevents concurrent create/delete on same object
-//   - Create/Delete operations acquire keyLock.Lock(id) for exclusive access
-//   - Call/Save operations acquire keyLock.RLock(id) for shared access
+// 2. objectLifecycleLock (per-object ID): Prevents concurrent create/delete on same object
+//   - Create/Delete operations acquire objectLifecycleLock.Lock(id) for exclusive access
+//   - Call/Save operations acquire objectLifecycleLock.RLock(id) for shared access
 //   - Automatically cleaned up via reference counting when no longer in use
 //
 // 3. objectsMu (RWMutex): Protects the objects map
@@ -46,7 +46,7 @@ type Object = object.Object
 //
 // Lock Ordering Rule (MUST be followed to avoid deadlocks):
 //
-//	stopMu.RLock() → keyLock.Lock/RLock(id) → objectsMu.Lock/RLock()
+//	stopMu.RLock() → objectLifecycleLock.Lock/RLock(id) → objectsMu.Lock/RLock()
 //
 // This ensures:
 // - No concurrent create/delete on the same object ID
@@ -60,7 +60,7 @@ type Node struct {
 	objectTypesMu         sync.RWMutex
 	objects               map[string]Object
 	objectsMu             sync.RWMutex
-	keyLock               *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
+	objectLifecycleLock   *keylock.KeyLock     // Per-object ID locking for create/delete/call/save coordination
 	shardLock             *shardlock.ShardLock // Shard-level locking for ownership transitions (set by cluster during initialization)
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
@@ -83,7 +83,7 @@ func NewNode(advertiseAddress string, numShards int) *Node {
 		numShards:           numShards,
 		objectTypes:         make(map[string]reflect.Type),
 		objects:             make(map[string]Object),
-		keyLock:             keylock.NewKeyLock(),
+		objectLifecycleLock: keylock.NewKeyLock(),
 		inspectorManager:    inspectormanager.NewInspectorManager(advertiseAddress, ""),
 		logger:              logger.NewLogger(fmt.Sprintf("Node@%s", advertiseAddress)),
 		persistenceInterval: 5 * time.Minute, // Default to 5 minutes
@@ -278,7 +278,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	// Now acquire per-key read lock to prevent concurrent delete during method call
-	unlockKey := node.keyLock.RLock(id)
+	unlockKey := node.objectLifecycleLock.RLock(id)
 	defer unlockKey()
 
 	// Fetch the object while holding the lock
@@ -435,9 +435,9 @@ func (node *Node) ReliableCallObject(
 		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
-	// Acquire per-key read lock to prevent concurrent delete during processing
-	unlockKeyRead := node.keyLock.RLock(objectID)
-	defer unlockKeyRead() // Will be released when function returns
+	// Now acquire per-key read lock to prevent concurrent delete during method call
+	unlockKey := node.objectLifecycleLock.RLock(objectID)
+	defer unlockKey()
 
 	// Fetch the object while holding the lock
 	node.objectsMu.RLock()
@@ -559,7 +559,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 
 	// Lock ordering: per-key Lock → objectsMu
 	// Acquire per-key exclusive lock to prevent concurrent create/delete/call on this object
-	unlockKey := node.keyLock.Lock(id)
+	unlockKey := node.objectLifecycleLock.Lock(id)
 	defer unlockKey()
 
 	// Check if object already exists first (with just objectsMu read lock)
@@ -718,7 +718,7 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	}
 
 	// Acquire per-key exclusive lock to prevent concurrent create/delete/call on this object
-	unlockKey := node.keyLock.Lock(id)
+	unlockKey := node.objectLifecycleLock.Lock(id)
 	defer unlockKey()
 
 	// Check if object exists (must hold objectsMu for map access)
@@ -947,7 +947,7 @@ func (node *Node) saveAllObjectsLocked(ctx context.Context) error {
 	// Lock ordering: per-key RLock → objectsMu.RLock (to get object)
 	for _, id := range objectIDs {
 		// Acquire per-key read lock to prevent concurrent delete on this object
-		unlockKey := node.keyLock.RLock(id)
+		unlockKey := node.objectLifecycleLock.RLock(id)
 
 		// Get the object
 		node.objectsMu.RLock()
