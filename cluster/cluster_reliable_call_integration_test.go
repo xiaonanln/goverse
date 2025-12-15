@@ -82,6 +82,8 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		t.Fatalf("Failed to truncate tables: %v", err)
 	}
 
+	t.Logf("Truncated goverse_reliable_calls and goverse_objects tables")
+
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
 
@@ -118,7 +120,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
 		}
 		if response.Value != 5 {
-			t.Errorf("Expected value 5, got %d", response.Value)
+			t.Fatalf("Expected value 5, got %d", response.Value)
 		}
 
 		// Verify the reliable call record in DB shows success with correct result data
@@ -127,22 +129,22 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Failed to get reliable call: %v", err)
 		}
 		if rc.CallID != callID {
-			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+			t.Fatalf("Expected CallID %q, got %q", callID, rc.CallID)
 		}
 		if rc.ObjectID != objectID {
-			t.Errorf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
+			t.Fatalf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
 		}
 		if rc.ObjectType != objectType {
-			t.Errorf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
+			t.Fatalf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
 		}
 		if rc.MethodName != methodName {
-			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+			t.Fatalf("Expected MethodName %q, got %q", methodName, rc.MethodName)
 		}
 		if rc.Status != "success" {
-			t.Errorf("Expected status 'success', got %q", rc.Status)
+			t.Fatalf("Expected status 'success', got %q", rc.Status)
 		}
 		if rc.Error != "" {
-			t.Errorf("Expected empty error, got %q", rc.Error)
+			t.Fatalf("Expected empty error, got %q", rc.Error)
 		}
 		if rc.ResultData == nil {
 			t.Fatal("Expected result data to be set, got nil")
@@ -157,7 +159,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected stored result to be *counter_pb.CounterResponse, got %T", storedResultMsg)
 		}
 		if storedResponse.Value != 5 {
-			t.Errorf("Expected stored result value 5, got %d", storedResponse.Value)
+			t.Fatalf("Expected stored result value 5, got %d", storedResponse.Value)
 		}
 	})
 
@@ -182,19 +184,19 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Verify call is pending
 		if rc.Status != "pending" {
-			t.Errorf("Expected status 'pending', got %q", rc.Status)
+			t.Fatalf("Expected status 'pending', got %q", rc.Status)
 		}
 		if rc.CallID != callID {
-			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+			t.Fatalf("Expected CallID %q, got %q", callID, rc.CallID)
 		}
 		if rc.ObjectID != objectID {
-			t.Errorf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
+			t.Fatalf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
 		}
 		if rc.ObjectType != objectType {
-			t.Errorf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
+			t.Fatalf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
 		}
 		if rc.MethodName != methodName {
-			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+			t.Fatalf("Expected MethodName %q, got %q", methodName, rc.MethodName)
 		}
 
 		// Now actually call it - should execute the pending call and return success
@@ -209,7 +211,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
 		}
 		if response.Value != 3 {
-			t.Errorf("Expected value 3, got %d", response.Value)
+			t.Fatalf("Expected value 3, got %d", response.Value)
 		}
 
 		// Verify the call is now marked as success in DB
@@ -218,7 +220,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Failed to get reliable call: %v", err)
 		}
 		if rc3.Status != "success" {
-			t.Errorf("Expected status 'success', got %q", rc3.Status)
+			t.Fatalf("Expected status 'success', got %q", rc3.Status)
 		}
 		if rc3.ResultData == nil {
 			t.Fatal("Expected result data to be set, got nil")
@@ -250,7 +252,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Should return the cached successful result
 		if response1.Value != response2.Value {
-			t.Errorf("Expected cached value %d, got %d", response1.Value, response2.Value)
+			t.Fatalf("Expected cached value %d, got %d", response1.Value, response2.Value)
 		}
 	})
 
@@ -288,7 +290,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Error should contain the cached error message
 		if err.Error() != "reliable call "+callID+" failed: "+errorMessage {
-			t.Errorf("Expected error message to contain %q, got %q", errorMessage, err.Error())
+			t.Fatalf("Expected error message to contain %q, got %q", errorMessage, err.Error())
 		}
 	})
 
@@ -336,7 +338,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		// Check for errors
 		for i, err := range errors {
 			if err != nil {
-				t.Errorf("Goroutine %d failed: %v", i, err)
+				t.Fatalf("Goroutine %d failed: %v", i, err)
 			}
 		}
 
@@ -352,7 +354,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		for i := 0; i < numGoroutines; i++ {
 			expected := int32(i + 1)
 			if sortedResults[i] != expected {
-				t.Errorf("Sorted result[%d]: expected %d, got %d", i, expected, sortedResults[i])
+				t.Fatalf("Sorted result[%d]: expected %d, got %d", i, expected, sortedResults[i])
 			}
 		}
 
@@ -372,7 +374,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", finalResult)
 		}
 		if finalResponse.Value != int32(numGoroutines) {
-			t.Errorf("Expected final counter value to be %d, got %d", numGoroutines, finalResponse.Value)
+			t.Fatalf("Expected final counter value to be %d, got %d", numGoroutines, finalResponse.Value)
 		}
 
 		// Verify all reliable call records are in the database with success status
@@ -380,14 +382,14 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			callID := fmt.Sprintf("concurrent-call-%d", i)
 			rc, err := db.GetReliableCall(ctx, callID)
 			if err != nil {
-				t.Errorf("Failed to get reliable call %s: %v", callID, err)
+				t.Fatalf("Failed to get reliable call %s: %v", callID, err)
 				continue
 			}
 			if rc.Status != "success" {
-				t.Errorf("Call %s: expected status 'success', got %q", callID, rc.Status)
+				t.Fatalf("Call %s: expected status 'success', got %q", callID, rc.Status)
 			}
 			if rc.ResultData == nil {
-				t.Errorf("Call %s: expected result data to be set", callID)
+				t.Fatalf("Call %s: expected result data to be set", callID)
 			}
 		}
 	})
@@ -539,7 +541,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 
 			expectedValue := int32(i + 1)
 			if response.Value != expectedValue {
-				t.Errorf("Object %s: expected value %d, got %d", objID, expectedValue, response.Value)
+				t.Fatalf("Object %s: expected value %d, got %d", objID, expectedValue, response.Value)
 			}
 
 			// Verify the reliable call record in DB
@@ -548,10 +550,10 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 				t.Fatalf("Failed to get reliable call for %s: %v", callID, err)
 			}
 			if rc.Status != "success" {
-				t.Errorf("Call %s: expected status 'success', got %q", callID, rc.Status)
+				t.Fatalf("Call %s: expected status 'success', got %q", callID, rc.Status)
 			}
 			if rc.ObjectID != objID {
-				t.Errorf("Call %s: expected ObjectID %q, got %q", callID, objID, rc.ObjectID)
+				t.Fatalf("Call %s: expected ObjectID %q, got %q", callID, objID, rc.ObjectID)
 			}
 
 			// Verify result data is stored correctly
@@ -567,7 +569,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 				t.Fatalf("Call %s: expected stored result to be *counter_pb.CounterResponse, got %T", callID, storedResultMsg)
 			}
 			if storedResponse.Value != expectedValue {
-				t.Errorf("Call %s: expected stored result value %d, got %d", callID, expectedValue, storedResponse.Value)
+				t.Fatalf("Call %s: expected stored result value %d, got %d", callID, expectedValue, storedResponse.Value)
 			}
 
 			t.Logf("Successfully executed reliable call %s for object %s with value %d", callID, objID, response.Value)
@@ -597,10 +599,10 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 
 		// Should return the same result (42)
 		if response1.Value != response2.Value {
-			t.Errorf("Deduplication failed: first call returned %d, second call returned %d", response1.Value, response2.Value)
+			t.Fatalf("Deduplication failed: first call returned %d, second call returned %d", response1.Value, response2.Value)
 		}
 		if response1.Value != 42 {
-			t.Errorf("Expected value 42, got %d", response1.Value)
+			t.Fatalf("Expected value 42, got %d", response1.Value)
 		}
 
 		// Third call from cluster3 - should also return cached result
@@ -611,7 +613,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 		response3 := result3.(*counter_pb.CounterResponse)
 
 		if response3.Value != 42 {
-			t.Errorf("Third call: expected value 42, got %d", response3.Value)
+			t.Fatalf("Third call: expected value 42, got %d", response3.Value)
 		}
 
 		t.Logf("Successfully verified deduplication across 3 nodes, all returned value 42")
