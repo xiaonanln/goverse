@@ -497,9 +497,9 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.ReliableCallObjectRequest) (*goverse_pb.ReliableCallObjectResponse, error) {
 	server.logRPC("ReliableCallObject", req)
 
-	// Validate request parameters
-	if req.GetSeq() <= 0 {
-		return nil, fmt.Errorf("seq must be positive in ReliableCallObject request")
+	// Validate request parameters - require the new fields
+	if req.GetCallId() == "" {
+		return nil, fmt.Errorf("call_id must be specified in ReliableCallObject request")
 	}
 	if req.GetObjectType() == "" {
 		return nil, fmt.Errorf("object_type must be specified in ReliableCallObject request")
@@ -507,14 +507,27 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 	if req.GetObjectId() == "" {
 		return nil, fmt.Errorf("object_id must be specified in ReliableCallObject request")
 	}
+	if req.GetMethodName() == "" {
+		return nil, fmt.Errorf("method_name must be specified in ReliableCallObject request")
+	}
+	if req.GetRequestData() == nil {
+		return nil, fmt.Errorf("request_data must be specified in ReliableCallObject request")
+	}
 
 	// Validate that this object should be on this node
 	if err := server.validateObjectShardOwnership(ctx, req.GetObjectId()); err != nil {
 		return nil, err
 	}
 
-	// Route to node handler
-	resultAny, err := server.Node.ReliableCallObject(ctx, req.GetSeq(), req.GetObjectType(), req.GetObjectId())
+	// Route to node handler with new parameters
+	resultAny, err := server.Node.ReliableCallObject(
+		ctx,
+		req.GetCallId(),
+		req.GetObjectType(),
+		req.GetObjectId(),
+		req.GetMethodName(),
+		req.GetRequestData(),
+	)
 	if err != nil {
 		return nil, err
 	}

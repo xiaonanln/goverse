@@ -341,10 +341,17 @@ func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, ob
 }
 
 // ReliableCallObject handles a reliable call request for an object.
-// This is a stub implementation for PR 6 that will be expanded in later PRs
-// to fetch and execute pending reliable calls from the persistence provider.
-func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType string, objectID string) (*anypb.Any, error) {
-	// Lock ordering: stopMu.RLock
+// It performs INSERT with per-object locking to ensure sequential seq allocation,
+// then fetches and executes pending reliable calls from the persistence provider.
+func (node *Node) ReliableCallObject(
+	ctx context.Context,
+	callID string,
+	objectType string,
+	objectID string,
+	methodName string,
+	requestData []byte,
+) (*anypb.Any, error) {
+	// Lock ordering: stopMu.RLock → keyLock.Lock → (brief objectsMu usage)
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
@@ -354,7 +361,22 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 		return nil, fmt.Errorf("node is stopped")
 	}
 
-	node.logger.Infof("ReliableCallObject received: seq=%d, object_type=%s, object_id=%s", seq, objectType, objectID)
+	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s, method=%s",
+		callID, objectType, objectID, methodName)
+
+	// Validate input parameters
+	if callID == "" {
+		return nil, fmt.Errorf("callID cannot be empty")
+	}
+	if objectType == "" {
+		return nil, fmt.Errorf("objectType cannot be empty")
+	}
+	if objectID == "" {
+		return nil, fmt.Errorf("objectID cannot be empty")
+	}
+	if methodName == "" {
+		return nil, fmt.Errorf("methodName cannot be empty")
+	}
 
 	// Get the persistence provider to access reliable calls
 	node.persistenceProviderMu.RLock()
@@ -367,15 +389,46 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 		return nil, fmt.Errorf("no persistence provider configured")
 	}
 
-	// Auto-create object
-	err := node.createObject(ctx, objectType, objectID)
+	// Acquire per-object EXCLUSIVE lock for INSERT
+	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
+	unlockKey := node.keyLock.Lock(objectID)
+
+	// INSERT or GET the reliable call while holding the lock
+	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s) with lock",
+		callID, objectID, methodName, objectType)
+	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
+
+	// Release the lock immediately after INSERT
+	unlockKey()
+
+	if err != nil {
+		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
+		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
+	}
+
+	// Check if the call was already completed (idempotency)
+	switch rc.Status {
+	case "success":
+		node.logger.Infof("Reliable call %s already succeeded, returning cached result", callID)
+		return protohelper.BytesToAny(rc.ResultData)
+	case "failed":
+		node.logger.Infof("Reliable call %s already failed, returning cached error", callID)
+		return nil, fmt.Errorf("reliable call failed: %s", rc.Error)
+	}
+
+	// Call is pending - continue with object activation and execution
+	seq := rc.Seq
+	node.logger.Infof("Reliable call %s is pending (seq: %d), processing", callID, seq)
+
+	// Auto-create object if it doesn't exist
+	err = node.createObject(ctx, objectType, objectID)
 	if err != nil {
 		node.logger.Errorf("ReliableCallObject: failed to auto-create object %s: %v", objectID, err)
 		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
-	// Now acquire per-key read lock to prevent concurrent delete during method call
-	unlockKey := node.keyLock.RLock(objectID)
+	// Acquire per-key read lock to prevent concurrent delete during processing
+	unlockKey = node.keyLock.RLock(objectID)
 	defer unlockKey()
 
 	// Fetch the object while holding the lock
@@ -422,13 +475,13 @@ func (node *Node) ReliableCallObject(ctx context.Context, seq int64, objectType 
 			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
 			return nil, fmt.Errorf("failed to wrap result: %w", err)
 		}
-		node.logger.Infof("Successfully retrieved result for call seq=%d", seq)
+		node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
 		return resultAny, nil
 	} else if call.Status == "failed" {
-		node.logger.Errorf("Reliable call seq=%d previously failed: %s", seq, call.Error)
+		node.logger.Errorf("Reliable call seq=%d (call_id=%s) previously failed: %s", seq, callID, call.Error)
 		return nil, fmt.Errorf("reliable call previously failed: %s", call.Error)
 	} else {
-		return nil, fmt.Errorf("reliable call seq=%d is still pending", seq)
+		return nil, fmt.Errorf("reliable call seq=%d (call_id=%s) is still pending", seq, callID)
 	}
 }
 

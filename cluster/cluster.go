@@ -819,61 +819,50 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
 	}
 
-	// Get the node and insert/get the reliable call from the database
-	node := c.GetThisNode()
-	rc, err := node.InsertOrGetReliableCall(ctx, callID, objectType, objectID, methodName, request)
+	// Serialize request data BEFORE routing
+	requestData, err := protohelper.MsgToBytes(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	switch rc.Status {
-	case "success":
-		c.logger.Infof("%s - Reliable call %s already succeeded, returning cached result", c, callID)
-		return protohelper.BytesToMsg(rc.ResultData)
-	case "failed":
-		c.logger.Infof("%s - Reliable call %s already failed, returning cached error", c, callID)
-		return nil, fmt.Errorf("reliable call %s failed: %s", callID, rc.Error)
-	case "pending":
-		// Continue to routing below
-	default:
-		return nil, fmt.Errorf("reliable call %s has unknown status: %s", callID, rc.Status)
-	}
-
-	// Call is pending - find the target node and route the RPC
-	c.logger.Infof("%s - Reliable call %s is pending (seq: %d), routing to target node", c, callID, rc.Seq)
-
-	// Find the target node for this object
+	// Find the target node FIRST (before INSERT)
+	// This ensures INSERT happens on the owner node with proper locking
 	targetNodeAddr, err := c.GetCurrentNodeForObject(ctx, objectID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
 	}
 
-	c.logger.Infof("%s - Routing reliable call seq=%d to target node %s for object %s (type: %s)", c, rc.Seq, targetNodeAddr, objectID, objectType)
+	c.logger.Infof("%s - Routing reliable call %s to target node %s for object %s (type: %s, method: %s)",
+		c, callID, targetNodeAddr, objectID, objectType, methodName)
+
+	node := c.GetThisNode()
 
 	// Check if the object is on this node (local call)
 	if targetNodeAddr == c.getAdvertiseAddr() {
-		// Call locally on node - trigger processing of pending reliable calls
-		c.logger.Infof("%s - Processing reliable call seq=%d locally for object %s (type: %s)", c, rc.Seq, objectID, objectType)
-		resultAny, err := node.ReliableCallObject(ctx, rc.Seq, objectType, objectID)
+		// Local: INSERT + execute on this node
+		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
+		resultAny, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
 		return protohelper.AnyToMsg(resultAny)
 	}
 
-	// Route to the remote node via gRPC
-	c.logger.Infof("%s - Routing reliable call seq=%d to remote node %s for object %s (type: %s)", c, rc.Seq, targetNodeAddr, objectID, objectType)
+	// Remote: send RPC with full call data to owner node
+	c.logger.Infof("%s - Routing reliable call %s to remote node %s for object %s (type: %s)", c, callID, targetNodeAddr, objectID, objectType)
 
 	client, err := c.nodeConnections.GetConnection(targetNodeAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
 	}
 
-	// Issue ReliableCallObject RPC to target node
+	// Issue ReliableCallObject RPC to target node with full call data
 	req := &goverse_pb.ReliableCallObjectRequest{
-		Seq:        rc.Seq,
-		ObjectType: objectType,
-		ObjectId:   objectID,
+		CallId:      callID,
+		ObjectType:  objectType,
+		ObjectId:    objectID,
+		MethodName:  methodName,
+		RequestData: requestData,
 	}
 
 	resp, err := client.ReliableCallObject(ctx, req)
@@ -886,7 +875,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
 	}
 
-	c.logger.Infof("%s - Reliable call seq=%d successfully processed on remote node %s", c, rc.Seq, targetNodeAddr)
+	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
 	return protohelper.AnyToMsg(resp.Result)
 }
 
