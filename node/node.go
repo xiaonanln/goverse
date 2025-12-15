@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -575,6 +576,18 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
+
+	// Process any pending reliable calls for this object
+	// This ensures calls made while the object was inactive are processed upon activation
+	if provider != nil {
+		// Trigger processing without waiting for result (fire-and-forget)
+		// Pass math.MaxInt64 as seq to trigger processing of all pending calls.
+		// The seq parameter only determines which specific call result to send on the channel;
+		// the processing loop fetches and executes ALL pending calls regardless of the seq value.
+		// Since we discard the channel, the specific seq doesn't matter - we just need
+		// a value >= nextRcseq to trigger the processing goroutine.
+		_ = obj.ProcessPendingReliableCalls(provider, math.MaxInt64)
+	}
 
 	// Notify inspector manager with shard ID
 	// Fixed-node objects don't belong to any shard, use -1 to indicate this
