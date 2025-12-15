@@ -457,7 +457,6 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 // TestReliableCallObject_MultiNodeDistributed tests ReliableCallObject with 3 nodes
 // and verifies reliable calls work correctly across multiple nodes
 func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -682,7 +681,6 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 // TestReliableCallObject_CrossClusterWithShutdown tests reliable calls between 2 clusters
 // and verifies behavior when calling a shutdown cluster
 func TestReliableCallObject_CrossClusterWithShutdown(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
