@@ -845,7 +845,7 @@ This section outlines a series of incremental PRs to implement the reliable call
 
 **Changes**:
 - Ensure `nextRcseq` is only updated when object state is persisted
-- On recovery, pending calls with `seq > persisted_nextRcseq` are re-executed
+- On recovery, pending calls with `seq >= persisted_nextRcseq` are re-executed
 - Add documentation for idempotency requirements
 
 **Tests**:
