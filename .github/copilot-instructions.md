@@ -35,14 +35,14 @@ resp, _ := goverseapi.CallObject(ctx, "MyObject-id", "Method", req)
 
 **Lock hierarchy** (acquire in this order):
 1. `stopMu.RLock()` - Lifecycle protection
-2. `keyLock.Lock(objID)` - Per-object serialization  
+2. `objectLifecycleLock.Lock(objID)` - Per-object serialization  
 3. `objectsMu` - Map access (brief, use double-check)
 
 ```go
 // Standard pattern
 node.stopMu.RLock()
 defer node.stopMu.RUnlock()
-unlockKey := node.keyLock.Lock(objID)
+unlockKey := node.objectLifecycleLock.Lock(objID)
 defer unlockKey()
 // Brief objectsMu access for map operations
 ```

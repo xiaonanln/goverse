@@ -318,7 +318,7 @@ func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
 	}
 	defer node.Stop(ctx)
 
-	initialLocks := node.keyLock.Len()
+	initialLocks := node.objectLifecycleLock.Len()
 
 	// Create and delete many objects
 	for i := 0; i < 100; i++ {
@@ -338,7 +338,7 @@ func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
 	// Give some time for cleanup
 	time.Sleep(10 * time.Millisecond)
 
-	finalLocks := node.keyLock.Len()
+	finalLocks := node.objectLifecycleLock.Len()
 	if finalLocks > initialLocks {
 		t.Fatalf("Lock leak detected: initial=%d, final=%d", initialLocks, finalLocks)
 	}
