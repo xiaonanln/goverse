@@ -15,13 +15,11 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 ## Key Features
 
+- **Exactly-once call semantics** for reliable inter-object communication
 - Virtual objects with automatic lifecycle & activation
 - Sharded placement using etcd with dynamic object & shard rebalancing across nodes
-- Gate architecture with streaming gRPC
-- Automatic failover & fault recovery
-- Sharded placement using etcd
 - Gate architecture with streaming gRPC and HTTP REST API
-- Automatic rebalancing & fault recovery
+- Automatic failover & fault recovery
 - PostgreSQL persistence with JSONB storage
 - Built-in Prometheus metrics and pprof profiling
 - Inspector UI for visualizing object topology ([demo video](https://youtu.be/-B8OXXI4hCY))
@@ -34,6 +32,7 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 ## Why GoVerse?
 
+- **Exactly-once semantics**: Reliable calls ensure each operation executes once, even with failures or retries
 - High-level programming model without giving up Go's performance
 - Scales horizontally with minimal coordination
 - Built for trading infra, backend automation, and real-time apps
@@ -154,6 +153,7 @@ GoVerse includes several command-line tools for cluster management:
 Full documentation:
 - [Getting Started](docs/GET_STARTED.md) - Complete guide to building with GoVerse
 - [GoVerse API](docs/GOVERSEAPI.md) - API reference for the goverseapi package
+- [Reliable Calls](docs/RELIABLE_CALLS_DESIGN.md) - Exactly-once semantics for inter-object calls
 - [Object Model & Architecture](docs/GET_STARTED.md#core-concepts) - Understanding virtual actors
 - [Cluster Configuration](docs/CONFIGURATION.md) - YAML config and cluster settings
 - [Object Persistence](docs/PERSISTENCE_IMPLEMENTATION.md) - PostgreSQL integration
@@ -195,7 +195,6 @@ High-level objectives for future development:
 
 ### Core System Improvements
 - **Shard rebalancing based on actual node load** - Dynamic rebalancing that considers CPU, memory, and object count
-- **Support different object call semantics** - Currently only best-effort; add at-least-once, exactly-once, and idempotent patterns
 - **Configuration hot reload** - Support runtime configuration updates without cluster restart for access control, lifecycle rules, and other policies
 
 ### Gate & Client Features
