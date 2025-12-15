@@ -184,7 +184,7 @@ func TestFixedShardDistinctFromFixedNode(t *testing.T) {
 	}
 
 	// Test that GetCurrentNodeForObject correctly distinguishes them
-	testNode := node.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNodeForTesting(ctx, t, "localhost:7000")
 	defer testNode.Stop(ctx)
 	c := newClusterForTesting(testNode, "TestFixedShardDistinctFromFixedNode")
 

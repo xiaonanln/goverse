@@ -14,7 +14,7 @@ import (
 func TestCreateObject_FixedNodeAddress(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := node.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNodeForTesting(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
@@ -61,7 +61,7 @@ func TestCreateObject_FixedNodeAddress(t *testing.T) {
 func TestCallObject_FixedNodeAddress(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := node.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNodeForTesting(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress")
 
 	// Note: Fixed node addresses bypass consensus manager routing
@@ -93,7 +93,7 @@ func TestCallObject_FixedNodeAddress(t *testing.T) {
 func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := node.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNodeForTesting(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_WrongNode")
 
 	// Register object type
@@ -118,7 +118,7 @@ func TestCreateObject_FixedNodeAddress_WrongNode(t *testing.T) {
 func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := node.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNodeForTesting(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCallObject_FixedNodeAddress_WrongNode")
 
 	// Try to call an object on a different node without node connections set up
@@ -133,7 +133,7 @@ func TestCallObject_FixedNodeAddress_WrongNode(t *testing.T) {
 func TestCreateObject_FixedNodeAddress_Format(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := node.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNodeForTesting(ctx, t, "localhost:7000")
 	c := newClusterForTesting(testNode, "TestCreateObject_FixedNodeAddress_Format")
 
 	// Note: Fixed node addresses bypass consensus manager routing

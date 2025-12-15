@@ -10,10 +10,10 @@ import (
 // makes tests faster and reduces resource usage.
 const testNumShards = 64
 
-// MustNewNode creates and starts a new node for testing.
+// MustNewNodeForTesting creates and starts a new node for testing.
 // The node is automatically stopped when the test completes via t.Cleanup.
 // Uses testNumShards (64) for faster test execution.
-func MustNewNode(ctx context.Context, t *testing.T, advertiseAddr string) *Node {
+func MustNewNodeForTesting(ctx context.Context, t *testing.T, advertiseAddr string) *Node {
 	n := NewNode(advertiseAddr, testNumShards)
 	err := n.Start(ctx)
 	if err != nil {
