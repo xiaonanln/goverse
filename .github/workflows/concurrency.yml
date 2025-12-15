@@ -1,0 +1,31 @@
+name: Concurrency Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  concurrency-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+
+      - name: Run concurrent calls test (100 iterations)
+        run: go test -v -count 100 -failfast -run ^TestReliableCallObject_ConcurrentCalls$ github.com/xiaonanln/goverse/cluster
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
