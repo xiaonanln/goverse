@@ -10,7 +10,35 @@ import (
 	counter_pb "github.com/xiaonanln/goverse/samples/counter/proto"
 	"github.com/xiaonanln/goverse/util/postgres"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"google.golang.org/protobuf/proto"
 )
+
+// testCounterForOrdering is a simple test object for reliable call ordering tests
+type testCounterForOrdering struct {
+	object.BaseObject
+	value int32
+}
+
+func (c *testCounterForOrdering) OnCreated() {
+	c.Logger.Infof("testCounterForOrdering %s created", c.Id())
+	c.value = 0
+}
+
+func (c *testCounterForOrdering) ToData() (proto.Message, error) {
+	return nil, object.ErrNotPersistent
+}
+
+func (c *testCounterForOrdering) FromData(data proto.Message) error {
+	return nil
+}
+
+func (c *testCounterForOrdering) Increment(ctx context.Context, req *counter_pb.IncrementRequest) (*counter_pb.CounterResponse, error) {
+	c.value += req.Amount
+	return &counter_pb.CounterResponse{
+		Name:  c.Id(),
+		Value: c.value,
+	}, nil
+}
 
 // TestReliableCallObject_ConcurrentOrderingGuarantee tests that concurrent reliable calls
 // from multiple caller nodes to the same object get sequential seq values due to
@@ -63,17 +91,17 @@ func TestReliableCallObject_ConcurrentOrderingGuarantee(t *testing.T) {
 	node2.SetPersistenceProvider(provider)
 	node3.SetPersistenceProvider(provider)
 
-	// Register the TestCounter object type on all nodes
-	node1.RegisterObjectType((*TestCounter)(nil))
-	node2.RegisterObjectType((*TestCounter)(nil))
-	node3.RegisterObjectType((*TestCounter)(nil))
+	// Register the testCounterForOrdering object type on all nodes
+	node1.RegisterObjectType((*testCounterForOrdering)(nil))
+	node2.RegisterObjectType((*testCounterForOrdering)(nil))
+	node3.RegisterObjectType((*testCounterForOrdering)(nil))
 
 	// Wait for all clusters to be ready
 	testutil.WaitForClustersReady(t, cluster1, cluster2, cluster3)
 
 	// Test object - will be hashed to one of the nodes
-	objectType := "TestCounter"
-	objectID := "TestCounter-ordering-test"
+	objectType := "testCounterForOrdering"
+	objectID := "testCounterForOrdering-ordering-test"
 	methodName := "Increment"
 
 	t.Logf("Testing concurrent reliable calls to object: %s", objectID)
@@ -237,8 +265,8 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 	node2.SetPersistenceProvider(provider)
 
 	// Register object type
-	node1.RegisterObjectType((*TestCounter)(nil))
-	node2.RegisterObjectType((*TestCounter)(nil))
+	node1.RegisterObjectType((*testCounterForOrdering)(nil))
+	node2.RegisterObjectType((*testCounterForOrdering)(nil))
 
 	// Wait for clusters to be ready
 	testutil.WaitForClustersReady(t, cluster1, cluster2)
@@ -246,7 +274,7 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 	// Find an object that will be on node1
 	var objectID string
 	for i := 0; i < 1000; i++ {
-		testID := fmt.Sprintf("TestCounter-local-remote-%d", i)
+		testID := fmt.Sprintf("testCounterForOrdering-local-remote-%d", i)
 		ownerAddr, err := cluster1.GetCurrentNodeForObject(ctx, testID)
 		if err != nil {
 			t.Fatalf("Failed to determine owner: %v", err)
@@ -263,7 +291,7 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 
 	t.Logf("Testing object %s which is on node1 (%s)", objectID, nodeAddr1)
 
-	objectType := "TestCounter"
+	objectType := "testCounterForOrdering"
 	methodName := "Increment"
 
 	// Make calls alternating between local (cluster1) and remote (cluster2)

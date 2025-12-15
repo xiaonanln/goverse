@@ -392,6 +392,13 @@ func (node *Node) ReliableCallObject(
 	// Acquire per-object EXCLUSIVE lock for INSERT
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
 	unlockKeyExclusive := node.keyLock.Lock(objectID)
+	var exclusiveLockReleased bool
+	defer func() {
+		// Safety: ensure lock is always released even if a panic occurs
+		if !exclusiveLockReleased {
+			unlockKeyExclusive()
+		}
+	}()
 
 	// INSERT or GET the reliable call while holding the lock
 	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s) with lock",
@@ -400,6 +407,7 @@ func (node *Node) ReliableCallObject(
 
 	// Release the exclusive lock immediately after INSERT
 	unlockKeyExclusive()
+	exclusiveLockReleased = true
 
 	if err != nil {
 		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
