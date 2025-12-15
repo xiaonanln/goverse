@@ -15,8 +15,8 @@ Designed for building fault-tolerant backend services and large-scale real-time 
 
 ## Key Features
 
-- **Exactly-once call semantics** for reliable inter-object communication
 - Virtual objects with automatic lifecycle & activation
+- **Exactly-once call semantics** for reliable inter-object communication
 - Sharded placement using etcd with dynamic object & shard rebalancing across nodes
 - Gate architecture with streaming gRPC and HTTP REST API
 - Automatic failover & fault recovery
