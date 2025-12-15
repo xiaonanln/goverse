@@ -38,12 +38,7 @@ func TestReliableCallObject_ConcurrentOrderingGuarantee(t *testing.T) {
 	}
 
 	// Clear all data from previous test runs and reset sequences
-	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects RESTART IDENTITY CASCADE")
-	if err != nil {
-		t.Fatalf("Failed to truncate tables: %v", err)
-	}
-
-	t.Logf("Truncated goverse_reliable_calls and goverse_objects tables")
+	testutil.TruncateReliableCallTables(t, db)
 
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
@@ -221,10 +216,7 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 	}
 
 	// Clear all data
-	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects RESTART IDENTITY CASCADE")
-	if err != nil {
-		t.Fatalf("Failed to truncate tables: %v", err)
-	}
+	testutil.TruncateReliableCallTables(t, db)
 
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
