@@ -10,6 +10,7 @@ import (
 	counter_pb "github.com/xiaonanln/goverse/samples/counter/proto"
 	"github.com/xiaonanln/goverse/util/postgres"
 	"github.com/xiaonanln/goverse/util/protohelper"
+	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -47,40 +48,20 @@ func TestCreateObject_ProcessesPendingReliableCalls(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	// Create PostgreSQL config
-	pgConfig := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	// Create DB connection
-	db, err := postgres.NewDB(pgConfig)
-	if err != nil {
-		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
-	defer db.Close()
 
 	// Initialize schema
 	ctx := context.Background()
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
-		t.Skipf("Skipping test - Failed to initialize schema: %v", err)
-		return
+		t.Fatalf("Failed to initialize schema: %v", err)
 	}
 
 	// Create unique test prefix to avoid conflicts
 	testPrefix := fmt.Sprintf("test_%d", time.Now().UnixNano())
-
-	// Clear test data
-	_, err = db.Connection().ExecContext(ctx, "DELETE FROM goverse_reliable_calls WHERE object_id LIKE $1", testPrefix+"%")
-	if err != nil {
-		t.Fatalf("Failed to clear test data: %v", err)
-	}
 
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
