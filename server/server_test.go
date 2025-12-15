@@ -350,7 +350,7 @@ func TestNode_ListObjects(t *testing.T) {
 	}
 	// Create a node directly without going through NewServer
 	ctx := context.Background()
-	n := node.MustNewNode(ctx, t, "localhost:9094", testutil.TestNumShards)
+	n := node.MustNewNode(ctx, t, "localhost:9094")
 
 	// Test that ListObjects returns empty list initially
 	objectInfos := n.ListObjects()
