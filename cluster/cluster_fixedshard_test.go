@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster/sharding"
+	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
@@ -183,7 +184,7 @@ func TestFixedShardDistinctFromFixedNode(t *testing.T) {
 	}
 
 	// Test that GetCurrentNodeForObject correctly distinguishes them
-	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNode(ctx, t, "localhost:7000", testutil.TestNumShards)
 	defer testNode.Stop(ctx)
 	c := newClusterForTesting(testNode, "TestFixedShardDistinctFromFixedNode")
 

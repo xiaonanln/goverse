@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/xiaonanln/goverse/node"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
@@ -12,7 +13,7 @@ import (
 func TestPushMessageToClient_NoNode(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNode(ctx, t, "localhost:7000", testutil.TestNumShards)
 	c := newClusterForTesting(testNode, "TestPushMessageToClient_NoNode")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
@@ -32,7 +33,7 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNode(ctx, t, "localhost:7000", testutil.TestNumShards)
 	c := newClusterForTesting(testNode, "TestPushMessageToClient_InvalidClientID")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
@@ -69,7 +70,7 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 func TestPushMessageToClient_ClientNotFound(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	testNode := testutil.MustNewNode(ctx, t, "localhost:7000")
+	testNode := node.MustNewNode(ctx, t, "localhost:7000", testutil.TestNumShards)
 	c := newClusterForTesting(testNode, "TestPushMessageToClient_ClientNotFound")
 
 	testMsg := &chat_pb.Client_NewMessageNotification{
