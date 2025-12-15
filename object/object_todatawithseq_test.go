@@ -1,6 +1,7 @@
 package object
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -87,33 +88,45 @@ func TestBaseObject_ToDataWithSeq_NonPersistent(t *testing.T) {
 }
 
 // TestBaseObject_ToDataWithSeq_Consistency tests atomic snapshot during concurrent modifications
+// This test verifies that ToDataWithSeq returns consistent (data, nextRcseq) pairs
+// even when concurrent writers are updating the state and nextRcseq.
 func TestBaseObject_ToDataWithSeq_Consistency(t *testing.T) {
 	obj := &testPersistentObject{}
 	obj.OnInit(obj, "test-consistency")
 
-	// Run concurrent operations that modify state and nextRcseq
 	var wg sync.WaitGroup
 	const numGoroutines = 10
 	const numIterations = 100
 
-	// Writer goroutines that simulate RC execution (acquire stateMu write lock)
+	// Counter channel to generate unique sequential values
+	counterChan := make(chan int64, numGoroutines*numIterations)
+	go func() {
+		for i := int64(1); i <= numGoroutines*numIterations; i++ {
+			counterChan <- i
+		}
+		close(counterChan)
+	}()
+
+	// Writer goroutines that simulate RC execution
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func() {
 			defer wg.Done()
 			for j := 0; j < numIterations; j++ {
-				// Simulate processReliableCall behavior
+				c := <-counterChan
+				
+				// Simulate processReliableCall behavior:
+				// Set state and nextRcseq atomically while holding stateMu.Lock()
 				obj.stateMu.Lock()
-				obj.SetValue(int32(id*1000 + j))
-				obj.SetNextRcseq(int64(id*1000 + j + 1))
+				obj.SetValue(int32(c))
+				obj.SetNextRcseq(c)
 				obj.stateMu.Unlock()
 			}
-		}(i)
+		}()
 	}
 
-	// Reader goroutines that call ToDataWithSeq (acquire stateMu read lock)
-	inconsistencies := 0
-	var inconsistencyMu sync.Mutex
+	// Reader goroutines that call ToDataWithSeq
+	var readErrors sync.Map  // map[string]bool to track unique errors
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -125,18 +138,17 @@ func TestBaseObject_ToDataWithSeq_Consistency(t *testing.T) {
 					return
 				}
 
-				// Verify consistency: nextRcseq should be value + 1
 				msg, ok := data.(*wrapperspb.Int32Value)
 				if !ok {
 					t.Errorf("Expected *wrapperspb.Int32Value, got %T", data)
 					return
 				}
 
-				expectedSeq := int64(msg.Value + 1)
-				if nextRcseq != expectedSeq {
-					inconsistencyMu.Lock()
-					inconsistencies++
-					inconsistencyMu.Unlock()
+				// Verify the invariant: value should equal nextRcseq
+				// (since we set both to the same counter value)
+				if int64(msg.Value) != nextRcseq {
+					key := fmt.Sprintf("value=%d,nextRcseq=%d", msg.Value, nextRcseq)
+					readErrors.Store(key, true)
 				}
 			}
 		}()
@@ -145,8 +157,17 @@ func TestBaseObject_ToDataWithSeq_Consistency(t *testing.T) {
 	wg.Wait()
 
 	// With proper locking, there should be NO inconsistencies
-	if inconsistencies > 0 {
-		t.Errorf("Found %d inconsistent (data, nextRcseq) pairs - race condition detected!", inconsistencies)
+	errorCount := 0
+	readErrors.Range(func(key, value interface{}) bool {
+		errorCount++
+		if errorCount <= 5 {
+			t.Logf("Inconsistency: %s", key.(string))
+		}
+		return true
+	})
+	
+	if errorCount > 0 {
+		t.Errorf("Found %d inconsistent (data, nextRcseq) pairs - race condition detected!", errorCount)
 	}
 }
 
