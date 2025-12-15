@@ -332,7 +332,7 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClustersReady(t, cluster)
 
-	const numGoroutines = 100
+	const numGoroutines = 1000
 	objectType := "TestCounter"
 	objectID := "TestCounter-concurrent"
 	methodName := "Increment"
