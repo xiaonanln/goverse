@@ -124,24 +124,29 @@ func (node *Node) Stop(ctx context.Context) error {
 	// Set the stopped flag atomically to signal that no new operations should start
 	node.stopped.Store(true)
 
-	// Acquire write lock to wait for all in-flight operations to complete
-	// This ensures that all operations that checked the stopped flag before it was set
-	// will complete before we proceed with final persistence and cleanup
-	node.stopMu.Lock()
-	defer node.stopMu.Unlock()
-
-	// Stop periodic persistence and save all objects one final time
+	// Stop periodic persistence BEFORE acquiring write lock to avoid deadlock.
+	// The periodicPersistenceLoop may be calling SaveAllObjects which needs stopMu.RLock.
+	// If we hold stopMu.Lock while waiting for the goroutine, it would deadlock.
 	node.persistenceProviderMu.RLock()
 	hasProvider := node.persistenceProvider != nil
 	node.persistenceProviderMu.RUnlock()
 
 	if hasProvider {
 		node.StopPeriodicPersistence()
+	}
 
+	// Acquire write lock to wait for all in-flight operations to complete
+	// This ensures that all operations that checked the stopped flag before it was set
+	// will complete before we proceed with final persistence and cleanup
+	node.stopMu.Lock()
+	defer node.stopMu.Unlock()
+
+	// Save all objects one final time
+	if hasProvider {
 		// Save all objects before shutting down
-		// Use internal version that doesn't check stopped flag since we're already stopping
+		// Use locked version since we already hold stopMu write lock
 		node.logger.Infof("Saving all objects before shutdown...")
-		if err := node.saveAllObjectsInternal(ctx); err != nil {
+		if err := node.saveAllObjectsLocked(ctx); err != nil {
 			node.logger.Errorf("Failed to save all objects during shutdown: %v", err)
 		}
 	}
@@ -834,17 +839,17 @@ func (node *Node) SaveAllObjects(ctx context.Context) error {
 
 	// Check if node is stopped after acquiring lock
 	// Note: If called from periodic persistence while stopping, this will return early.
-	// The final save will be done by Stop() itself using saveAllObjectsInternal().
+	// The final save will be done by Stop() itself using saveAllObjectsLocked().
 	if node.stopped.Load() {
 		return fmt.Errorf("node is stopped")
 	}
 
-	return node.saveAllObjectsInternal(ctx)
+	return node.saveAllObjectsLocked(ctx)
 }
 
-// saveAllObjectsInternal performs the actual save operation without lock coordination
-// This is used internally by Stop() which already holds the write lock
-func (node *Node) saveAllObjectsInternal(ctx context.Context) error {
+// saveAllObjectsLocked performs the actual save operation.
+// REQUIRES: caller must hold stopMu (either read or write lock)
+func (node *Node) saveAllObjectsLocked(ctx context.Context) error {
 	node.persistenceProviderMu.RLock()
 	provider := node.persistenceProvider
 	node.persistenceProviderMu.RUnlock()

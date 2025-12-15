@@ -119,6 +119,7 @@ type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	DeleteObject(ctx context.Context, id string) error
+	ReliableCallObject(ctx context.Context, seq int64, objectType string, objectID string) (*anypb.Any, error)
 }
 
 type clusterInterface interface {
@@ -261,6 +262,41 @@ func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.De
 	}
 
 	return &goverse_pb.DeleteObjectResponse{}, nil
+}
+
+// ReliableCallObject handles remote reliable object calls by delegating to the node
+func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse_pb.ReliableCallObjectRequest) (*goverse_pb.ReliableCallObjectResponse, error) {
+	m.mu.Lock()
+	node := m.node
+	m.mu.Unlock()
+
+	if node == nil {
+		return nil, fmt.Errorf("no node assigned to mock server")
+	}
+
+	// Validate request parameters
+	// Note: seq must be positive (> 0) because it's a BIGSERIAL in PostgreSQL which starts from 1
+	if req.GetSeq() <= 0 {
+		return nil, fmt.Errorf("seq must be positive in ReliableCallObject request")
+	}
+	if req.GetObjectType() == "" {
+		return nil, fmt.Errorf("object_type must be specified in ReliableCallObject request")
+	}
+	if req.GetObjectId() == "" {
+		return nil, fmt.Errorf("object_id must be specified in ReliableCallObject request")
+	}
+
+	// Call ReliableCallObject on the actual node
+	resultAny, err := node.ReliableCallObject(ctx, req.GetSeq(), req.GetObjectType(), req.GetObjectId())
+	if err != nil {
+		return &goverse_pb.ReliableCallObjectResponse{
+			Error: err.Error(),
+		}, nil
+	}
+
+	return &goverse_pb.ReliableCallObjectResponse{
+		Result: resultAny,
+	}, nil
 }
 
 // ListObjects returns an empty list
