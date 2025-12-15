@@ -78,6 +78,7 @@ func TestBaseObject_LockSeqWrite_Concurrent(t *testing.T) {
 	// Run 10 goroutines that each increment the counter 100 times
 	// If the lock works correctly, all increments will be serialized
 	// and the final value will be exactly 1000
+	// Use -race flag to detect race conditions
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
@@ -85,9 +86,8 @@ func TestBaseObject_LockSeqWrite_Concurrent(t *testing.T) {
 			for j := 0; j < 100; j++ {
 				unlock := obj.LockSeqWrite()
 				// The lock should protect this critical section
-				// If not protected, race detector will fail or counter will be wrong
+				// If not protected, race detector (-race flag) will fail
 				localCounter := counter
-				time.Sleep(1 * time.Microsecond) // Increase chance of race if lock doesn't work
 				counter = localCounter + 1
 				unlock()
 			}

@@ -441,7 +441,7 @@ func (node *Node) ReliableCallObject(
 	}()
 
 	// INSERT or GET the reliable call while holding the object's sequential write lock
-	node.logger.Infof("Inserting reliable call %s for object %s.%s (type: %s) with sequential write lock",
+	node.logger.Infof("INSERT or GET reliable call %s for object %s.%s (type: %s) with sequential write lock",
 		callID, objectID, methodName, objectType)
 	rc, err := provider.InsertOrGetReliableCall(ctx, callID, objectID, objectType, methodName, requestData)
 
