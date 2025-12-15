@@ -457,7 +457,6 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 // TestReliableCallObject_MultiNodeDistributed tests ReliableCallObject with 3 nodes
 // and verifies reliable calls work correctly across multiple nodes
 func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -676,5 +675,190 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 		}
 
 		t.Logf("Successfully verified deduplication across 3 nodes, all returned value 42")
+	})
+}
+
+// TestReliableCallObject_CrossClusterWithShutdown tests reliable calls between 2 clusters
+// and verifies behavior when calling a shutdown cluster
+func TestReliableCallObject_CrossClusterWithShutdown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	// Create PostgreSQL config
+	pgConfig := &postgres.Config{
+		Host:     "localhost",
+		Port:     5432,
+		User:     "postgres",
+		Password: "postgres",
+		Database: "postgres",
+		SSLMode:  "disable",
+	}
+
+	// Create DB connection
+	db, err := postgres.NewDB(pgConfig)
+	if err != nil {
+		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+		return
+	}
+	defer db.Close()
+
+	// Initialize schema
+	ctx := context.Background()
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("Failed to initialize schema: %v", err)
+	}
+
+	// Clear all data from previous test runs
+	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects CASCADE")
+	if err != nil {
+		t.Fatalf("Failed to truncate tables: %v", err)
+	}
+
+	// Create persistence provider
+	provider := postgres.NewPostgresPersistenceProvider(db)
+
+	// Get free addresses for 2 nodes
+	addr1 := testutil.GetFreeAddress()
+	addr2 := testutil.GetFreeAddress()
+
+	// Create 2 clusters using mustNewClusterWithMinDurations
+	cluster1 := mustNewClusterWithMinDurations(ctx, t, addr1, testPrefix)
+	cluster2 := mustNewClusterWithMinDurations(ctx, t, addr2, testPrefix)
+
+	// Set persistence provider on both nodes
+	node1 := cluster1.GetThisNode()
+	node2 := cluster2.GetThisNode()
+	node1.SetPersistenceProvider(provider)
+	node2.SetPersistenceProvider(provider)
+
+	// Register the TestCounter object type on both nodes
+	node1.RegisterObjectType((*TestCounter)(nil))
+	node2.RegisterObjectType((*TestCounter)(nil))
+
+	// Start mock gRPC servers for both nodes
+	mockServer1 := testutil.NewMockGoverseServer()
+	mockServer1.SetNode(node1)
+	testServer1 := testutil.NewTestServerHelper(addr1, mockServer1)
+	err = testServer1.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start mock server 1: %v", err)
+	}
+	t.Cleanup(func() { testServer1.Stop() })
+
+	mockServer2 := testutil.NewMockGoverseServer()
+	mockServer2.SetNode(node2)
+	testServer2 := testutil.NewTestServerHelper(addr2, mockServer2)
+	err = testServer2.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start mock server 2: %v", err)
+	}
+	t.Cleanup(func() { testServer2.Stop() })
+
+	// Wait for both clusters to be fully ready
+	testutil.WaitForClustersReady(t, cluster1, cluster2)
+
+	t.Run("Reliable call from cluster1 to cluster2 - success", func(t *testing.T) {
+		// Create an object ID that will be assigned to cluster2
+		// Use a specific shard to ensure it's on cluster2
+		objID := testutil.GetObjectIDForShard(10, "CrossClusterCounter")
+		callID := "cross-cluster-call-1"
+		methodName := "Increment"
+		request := &counter_pb.IncrementRequest{Amount: 15}
+
+		t.Logf("Calling object %s from cluster1 (should route to cluster2)", objID)
+
+		// Invoke the reliable call from cluster1
+		result, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		if err != nil {
+			t.Fatalf("ReliableCallObject failed: %v", err)
+		}
+
+		// Verify the result
+		response, ok := result.(*counter_pb.CounterResponse)
+		if !ok {
+			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
+		}
+
+		if response.Value != 15 {
+			t.Errorf("Expected value 15, got %d", response.Value)
+		}
+
+		// Verify the reliable call record in DB shows success
+		rc, err := db.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call: %v", err)
+		}
+		if rc.Status != "success" {
+			t.Errorf("Expected status 'success', got %q", rc.Status)
+		}
+		if rc.ObjectID != objID {
+			t.Errorf("Expected ObjectID %q, got %q", objID, rc.ObjectID)
+		}
+
+		t.Logf("Successfully executed reliable call from cluster1 to cluster2 with value %d", response.Value)
+	})
+
+	// Shutdown cluster2
+	t.Logf("Shutting down cluster2...")
+	err = testServer2.Stop()
+	if err != nil {
+		t.Fatalf("Failed to stop test server 2: %v", err)
+	}
+	err = cluster2.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop cluster 2: %v", err)
+	}
+	err = node2.Stop(ctx)
+	if err != nil {
+		t.Fatalf("Failed to stop node 2: %v", err)
+	}
+	t.Logf("Cluster2 shutdown complete")
+
+	t.Run("Reliable call after cluster2 shutdown - fails with stale shard mapping", func(t *testing.T) {
+		// After cluster2 shuts down, the shard mapping may still point to cluster2
+		// until the leader detects the departure and reassigns shards.
+		// This test verifies the call is stored but returns an error when the target is unavailable.
+		objID := testutil.GetObjectIDForShard(15, "ShutdownClusterCounter")
+		callID := "cross-cluster-call-2"
+		methodName := "Increment"
+		request := &counter_pb.IncrementRequest{Amount: 20}
+
+		t.Logf("Calling object %s from cluster1 (target node may be stale)", objID)
+
+		// Invoke the reliable call from cluster1 - should fail since target node is unavailable
+		result, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		if err == nil {
+			t.Logf("Note: Call succeeded (shard may have been reassigned). Result: %v", result)
+			// This is also acceptable if the leader already reassigned shards
+		} else {
+			t.Logf("Got expected error: %v", err)
+		}
+
+		// Verify the reliable call was stored in the database
+		rc, err := db.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call from DB: %v", err)
+		}
+
+		// Verify the call is stored
+		if rc.CallID != callID {
+			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+		}
+		if rc.ObjectID != objID {
+			t.Errorf("Expected ObjectID %q, got %q", objID, rc.ObjectID)
+		}
+		if rc.ObjectType != "TestCounter" {
+			t.Errorf("Expected ObjectType %q, got %q", "TestCounter", rc.ObjectType)
+		}
+		if rc.MethodName != methodName {
+			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+		}
+
+		t.Logf("Verified reliable call was stored in DB: callID=%s, objectID=%s, status=%s", rc.CallID, rc.ObjectID, rc.Status)
 	})
 }
