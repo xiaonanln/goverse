@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -308,10 +309,9 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			go func(index int) {
 				defer wg.Done()
 
-				// Each goroutine has a unique call ID and increments by a different amount
+				// Each goroutine has a unique call ID and increments by 1
 				callID := fmt.Sprintf("concurrent-call-%d", index)
-				amount := int32(index + 1) // Increment by 1, 2, 3, ..., numGoroutines
-				request := &counter_pb.IncrementRequest{Amount: amount}
+				request := &counter_pb.IncrementRequest{Amount: 1}
 
 				result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 				if err != nil {
@@ -340,20 +340,27 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			}
 		}
 
-		// Verify all results are valid
-		// Since goroutines can execute in any order, we can't predict exact values
-		// But we can verify that all results are positive (the counter progresses with each call)
-		for i, value := range results {
-			if value <= 0 {
-				t.Errorf("Goroutine %d: expected positive value, got %d", i, value)
+		// Sort the results to verify they are [1, 2, 3, ..., numGoroutines]
+		// This proves all calls executed properly and in what order they completed
+		sortedResults := make([]int32, len(results))
+		copy(sortedResults, results)
+		sort.Slice(sortedResults, func(i, j int) bool {
+			return sortedResults[i] < sortedResults[j]
+		})
+
+		// Verify sorted results are exactly [1, 2, 3, ..., numGoroutines]
+		for i := 0; i < numGoroutines; i++ {
+			expected := int32(i + 1)
+			if sortedResults[i] != expected {
+				t.Errorf("Sorted result[%d]: expected %d, got %d", i, expected, sortedResults[i])
 			}
-			t.Logf("Goroutine %d: result value = %d", i, value)
 		}
 
-		// Verify the sum: we incremented by 1+2+3+...+numGoroutines
-		// The final value should equal the sum of arithmetic series: n*(n+1)/2
-		expectedSum := int32(numGoroutines * (numGoroutines + 1) / 2)
-		// We can verify by calling one more time with amount=0
+		// Log the results for debugging
+		t.Logf("Results (execution order): %v", results)
+		t.Logf("Results (sorted): %v", sortedResults)
+
+		// Verify the final counter value is exactly numGoroutines
 		finalCallID := "concurrent-final-check"
 		finalRequest := &counter_pb.IncrementRequest{Amount: 0}
 		finalResult, err := cluster.ReliableCallObject(ctx, finalCallID, objectType, objectID, methodName, finalRequest)
@@ -364,8 +371,8 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		if !ok {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", finalResult)
 		}
-		if finalResponse.Value != expectedSum {
-			t.Errorf("Expected final counter value to be %d, got %d", expectedSum, finalResponse.Value)
+		if finalResponse.Value != int32(numGoroutines) {
+			t.Errorf("Expected final counter value to be %d, got %d", numGoroutines, finalResponse.Value)
 		}
 
 		// Verify all reliable call records are in the database with success status
