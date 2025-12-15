@@ -87,7 +87,7 @@ func TestBaseObject_LockSeqWrite_Concurrent(t *testing.T) {
 				// The lock should protect this critical section
 				// If not protected, race detector will fail or counter will be wrong
 				localCounter := counter
-				time.Sleep(1 * time.Nanosecond) // Increase chance of race if lock doesn't work
+				time.Sleep(1 * time.Microsecond) // Increase chance of race if lock doesn't work
 				counter = localCounter + 1
 				unlock()
 			}

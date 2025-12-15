@@ -351,9 +351,12 @@ func (node *Node) ReliableCallObject(
 	methodName string,
 	requestData []byte,
 ) (*anypb.Any, error) {
-	// Lock ordering: stopMu.RLock → objectLifecycleLock.RLock → object.seqWriteMu → (brief objectsMu usage)
-	// The lifecycle lock is held only long enough to safely fetch the object and acquire seqWriteMu,
-	// then released before the INSERT operation.
+	// Lock ordering:
+	// 1. stopMu.RLock (held throughout)
+	// 2. objectLifecycleLock.RLock (held briefly to fetch object and acquire seqWriteMu)
+	// 3. object.seqWriteMu (held during INSERT, lifecycle lock released before INSERT)
+	// 4. objectsMu (brief reads/writes)
+	//
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
 	defer node.stopMu.RUnlock()
