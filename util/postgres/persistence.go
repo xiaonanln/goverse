@@ -271,20 +271,6 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 	// Debug: Log the query parameters
 	fmt.Printf("[DEBUG GetPendingReliableCalls] object_id=%s, nextRcseq=%d\n", objectID, nextRcseq)
 
-	// Debug: Check what's actually in the database
-	var count int
-	debugQuery := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1`
-	db.conn.QueryRowContext(ctx, debugQuery, objectID).Scan(&count)
-	fmt.Printf("[DEBUG GetPendingReliableCalls] Total rows for object_id=%s: %d\n", objectID, count)
-
-	debugQuery2 := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1 AND seq >= $2`
-	db.conn.QueryRowContext(ctx, debugQuery2, objectID, nextRcseq).Scan(&count)
-	fmt.Printf("[DEBUG GetPendingReliableCalls] Rows with seq >= %d: %d\n", nextRcseq, count)
-
-	debugQuery3 := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1 AND seq >= $2 AND status = 'pending'`
-	db.conn.QueryRowContext(ctx, debugQuery3, objectID, nextRcseq).Scan(&count)
-	fmt.Printf("[DEBUG GetPendingReliableCalls] Rows with seq >= %d AND status='pending': %d\n", nextRcseq, count)
-
 	rows, err := db.conn.QueryContext(ctx, query, objectID, nextRcseq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending reliable calls: %w", err)

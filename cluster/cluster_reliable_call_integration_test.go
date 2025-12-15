@@ -51,27 +51,16 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create PostgreSQL config
-	pgConfig := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	// Create DB connection
-	db, err := postgres.NewDB(pgConfig)
-	if err != nil {
-		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+	// Create test database and get connection
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
 	defer db.Close()
 
 	// Initialize schema
 	ctx := context.Background()
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
@@ -304,27 +293,16 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create PostgreSQL config
-	pgConfig := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	// Create DB connection
-	db, err := postgres.NewDB(pgConfig)
-	if err != nil {
-		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+	// Create test database and get connection
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
 	defer db.Close()
 
 	// Initialize schema
 	ctx := context.Background()
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
@@ -464,27 +442,16 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create PostgreSQL config
-	pgConfig := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	// Create DB connection
-	db, err := postgres.NewDB(pgConfig)
-	if err != nil {
-		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+	// Create test database and get connection
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
 	defer db.Close()
 
 	// Initialize schema
 	ctx := context.Background()
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
@@ -688,27 +655,16 @@ func TestReliableCallObject_CrossClusterWithShutdown(t *testing.T) {
 	// Use PrepareEtcdPrefix for test isolation
 	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 
-	// Create PostgreSQL config
-	pgConfig := &postgres.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "postgres",
-		SSLMode:  "disable",
-	}
-
-	// Create DB connection
-	db, err := postgres.NewDB(pgConfig)
-	if err != nil {
-		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+	// Create test database and get connection
+	db := testutil.CreateTestDatabase(t)
+	if db == nil {
 		return
 	}
 	defer db.Close()
 
 	// Initialize schema
 	ctx := context.Background()
-	err = db.InitSchema(ctx)
+	err := db.InitSchema(ctx)
 	if err != nil {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
