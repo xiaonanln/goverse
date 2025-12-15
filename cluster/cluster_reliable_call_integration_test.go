@@ -2,6 +2,9 @@ package cluster
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"sync"
 	"testing"
 
 	"github.com/xiaonanln/goverse/object"
@@ -73,11 +76,13 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
 
-	// Clear all data from previous test runs
-	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects CASCADE")
+	// Clear all data from previous test runs and reset sequences
+	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects RESTART IDENTITY CASCADE")
 	if err != nil {
 		t.Fatalf("Failed to truncate tables: %v", err)
 	}
+
+	t.Logf("Truncated goverse_reliable_calls and goverse_objects tables")
 
 	// Create persistence provider
 	provider := postgres.NewPostgresPersistenceProvider(db)
@@ -115,7 +120,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
 		}
 		if response.Value != 5 {
-			t.Errorf("Expected value 5, got %d", response.Value)
+			t.Fatalf("Expected value 5, got %d", response.Value)
 		}
 
 		// Verify the reliable call record in DB shows success with correct result data
@@ -124,22 +129,22 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Failed to get reliable call: %v", err)
 		}
 		if rc.CallID != callID {
-			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+			t.Fatalf("Expected CallID %q, got %q", callID, rc.CallID)
 		}
 		if rc.ObjectID != objectID {
-			t.Errorf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
+			t.Fatalf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
 		}
 		if rc.ObjectType != objectType {
-			t.Errorf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
+			t.Fatalf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
 		}
 		if rc.MethodName != methodName {
-			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+			t.Fatalf("Expected MethodName %q, got %q", methodName, rc.MethodName)
 		}
 		if rc.Status != "success" {
-			t.Errorf("Expected status 'success', got %q", rc.Status)
+			t.Fatalf("Expected status 'success', got %q", rc.Status)
 		}
 		if rc.Error != "" {
-			t.Errorf("Expected empty error, got %q", rc.Error)
+			t.Fatalf("Expected empty error, got %q", rc.Error)
 		}
 		if rc.ResultData == nil {
 			t.Fatal("Expected result data to be set, got nil")
@@ -154,7 +159,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected stored result to be *counter_pb.CounterResponse, got %T", storedResultMsg)
 		}
 		if storedResponse.Value != 5 {
-			t.Errorf("Expected stored result value 5, got %d", storedResponse.Value)
+			t.Fatalf("Expected stored result value 5, got %d", storedResponse.Value)
 		}
 	})
 
@@ -179,19 +184,19 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Verify call is pending
 		if rc.Status != "pending" {
-			t.Errorf("Expected status 'pending', got %q", rc.Status)
+			t.Fatalf("Expected status 'pending', got %q", rc.Status)
 		}
 		if rc.CallID != callID {
-			t.Errorf("Expected CallID %q, got %q", callID, rc.CallID)
+			t.Fatalf("Expected CallID %q, got %q", callID, rc.CallID)
 		}
 		if rc.ObjectID != objectID {
-			t.Errorf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
+			t.Fatalf("Expected ObjectID %q, got %q", objectID, rc.ObjectID)
 		}
 		if rc.ObjectType != objectType {
-			t.Errorf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
+			t.Fatalf("Expected ObjectType %q, got %q", objectType, rc.ObjectType)
 		}
 		if rc.MethodName != methodName {
-			t.Errorf("Expected MethodName %q, got %q", methodName, rc.MethodName)
+			t.Fatalf("Expected MethodName %q, got %q", methodName, rc.MethodName)
 		}
 
 		// Now actually call it - should execute the pending call and return success
@@ -206,7 +211,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Expected *counter_pb.CounterResponse, got %T", result)
 		}
 		if response.Value != 3 {
-			t.Errorf("Expected value 3, got %d", response.Value)
+			t.Fatalf("Expected value 3, got %d", response.Value)
 		}
 
 		// Verify the call is now marked as success in DB
@@ -215,7 +220,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 			t.Fatalf("Failed to get reliable call: %v", err)
 		}
 		if rc3.Status != "success" {
-			t.Errorf("Expected status 'success', got %q", rc3.Status)
+			t.Fatalf("Expected status 'success', got %q", rc3.Status)
 		}
 		if rc3.ResultData == nil {
 			t.Fatal("Expected result data to be set, got nil")
@@ -247,7 +252,7 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Should return the cached successful result
 		if response1.Value != response2.Value {
-			t.Errorf("Expected cached value %d, got %d", response1.Value, response2.Value)
+			t.Fatalf("Expected cached value %d, got %d", response1.Value, response2.Value)
 		}
 	})
 
@@ -285,9 +290,168 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 
 		// Error should contain the cached error message
 		if err.Error() != "reliable call "+callID+" failed: "+errorMessage {
-			t.Errorf("Expected error message to contain %q, got %q", errorMessage, err.Error())
+			t.Fatalf("Expected error message to contain %q, got %q", errorMessage, err.Error())
 		}
 	})
+}
+
+// TestReliableCallObject_ConcurrentCalls tests concurrent reliable calls from multiple goroutines
+func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	// Use PrepareEtcdPrefix for test isolation
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	// Create PostgreSQL config
+	pgConfig := &postgres.Config{
+		Host:     "localhost",
+		Port:     5432,
+		User:     "postgres",
+		Password: "postgres",
+		Database: "postgres",
+		SSLMode:  "disable",
+	}
+
+	// Create DB connection
+	db, err := postgres.NewDB(pgConfig)
+	if err != nil {
+		t.Skipf("Skipping test - PostgreSQL not available: %v", err)
+		return
+	}
+	defer db.Close()
+
+	// Initialize schema
+	ctx := context.Background()
+	err = db.InitSchema(ctx)
+	if err != nil {
+		t.Fatalf("Failed to initialize schema: %v", err)
+	}
+
+	// Clear all data from previous test runs and reset sequences
+	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects RESTART IDENTITY CASCADE")
+	if err != nil {
+		t.Fatalf("Failed to truncate tables: %v", err)
+	}
+
+	// Create persistence provider
+	provider := postgres.NewPostgresPersistenceProvider(db)
+	_ = provider // Used by cluster node
+
+	// Create cluster with etcd using mustNewCluster helper
+	nodeAddr := testutil.GetFreeAddress()
+	cluster := mustNewClusterWithMinDurations(ctx, t, nodeAddr, testPrefix)
+	defer cluster.Stop(ctx)
+
+	// Set persistence provider on the node
+	node := cluster.GetThisNode()
+	node.SetPersistenceProvider(provider)
+
+	// Register the TestCounter object type
+	node.RegisterObjectType((*TestCounter)(nil))
+
+	// Wait for cluster to be ready
+	testutil.WaitForClustersReady(t, cluster)
+
+	const numGoroutines = 100
+	objectType := "TestCounter"
+	objectID := "TestCounter-concurrent"
+	methodName := "Increment"
+
+	var wg sync.WaitGroup
+	results := make([]int32, numGoroutines)
+	errors := make([]error, numGoroutines)
+
+	wg.Add(numGoroutines)
+
+	// Launch goroutines that each make a reliable call
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			defer wg.Done()
+
+			// Each goroutine has a unique call ID and increments by 1
+			callID := fmt.Sprintf("concurrent-call-%d", index)
+			request := &counter_pb.IncrementRequest{Amount: 1}
+
+			result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+			t.Logf("Reliable call %s completed, got result %v, error %v", callID, result, err)
+			if err != nil {
+				errors[index] = err
+				return
+			}
+
+			// Verify result type and store value
+			response, ok := result.(*counter_pb.CounterResponse)
+			if !ok {
+				errors[index] = fmt.Errorf("expected *counter_pb.CounterResponse, got %T", result)
+				return
+			}
+
+			results[index] = response.Value
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	// Check for errors
+	for i, err := range errors {
+		if err != nil {
+			t.Fatalf("Goroutine %d failed: %v", i, err)
+		}
+	}
+
+	// Sort the results to verify they are [1, 2, 3, ..., numGoroutines]
+	// This proves all calls executed properly and in what order they completed
+	sortedResults := make([]int32, len(results))
+	copy(sortedResults, results)
+	sort.Slice(sortedResults, func(i, j int) bool {
+		return sortedResults[i] < sortedResults[j]
+	})
+
+	// Verify sorted results are exactly [1, 2, 3, ..., numGoroutines]
+	for i := 0; i < numGoroutines; i++ {
+		expected := int32(i + 1)
+		if sortedResults[i] != expected {
+			t.Fatalf("Sorted result[%d]: expected %d, got %d", i, expected, sortedResults[i])
+		}
+	}
+
+	// Log the results for debugging
+	t.Logf("Results (execution order): %v", results)
+	t.Logf("Results (sorted): %v", sortedResults)
+
+	// Verify the final counter value is exactly numGoroutines
+	finalCallID := "concurrent-final-check"
+	finalRequest := &counter_pb.IncrementRequest{Amount: 0}
+	finalResult, err := cluster.ReliableCallObject(ctx, finalCallID, objectType, objectID, methodName, finalRequest)
+	if err != nil {
+		t.Fatalf("Final check call failed: %v", err)
+	}
+	finalResponse, ok := finalResult.(*counter_pb.CounterResponse)
+	if !ok {
+		t.Fatalf("Expected *counter_pb.CounterResponse, got %T", finalResult)
+	}
+	if finalResponse.Value != int32(numGoroutines) {
+		t.Fatalf("Expected final counter value to be %d, got %d", numGoroutines, finalResponse.Value)
+	}
+
+	// Verify all reliable call records are in the database with success status
+	for i := 0; i < numGoroutines; i++ {
+		callID := fmt.Sprintf("concurrent-call-%d", i)
+		rc, err := db.GetReliableCall(ctx, callID)
+		if err != nil {
+			t.Fatalf("Failed to get reliable call %s: %v", callID, err)
+			continue
+		}
+		if rc.Status != "success" {
+			t.Fatalf("Call %s: expected status 'success', got %q", callID, rc.Status)
+		}
+		if rc.ResultData == nil {
+			t.Fatalf("Call %s: expected result data to be set", callID)
+		}
+	}
 }
 
 // TestReliableCallObject_MultiNodeDistributed tests ReliableCallObject with 3 nodes
@@ -326,9 +490,9 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
 
-	// Clear all data from previous test runs
+	// Clear all data from previous test runs and reset sequences
 	// Note: Using explicit table names as they are defined in util/postgres/db.go InitSchema
-	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects CASCADE")
+	_, err = db.Connection().ExecContext(ctx, "TRUNCATE goverse_reliable_calls, goverse_objects RESTART IDENTITY CASCADE")
 	if err != nil {
 		t.Fatalf("Failed to truncate tables: %v", err)
 	}
@@ -436,7 +600,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 
 			expectedValue := int32(i + 1)
 			if response.Value != expectedValue {
-				t.Errorf("Object %s: expected value %d, got %d", objID, expectedValue, response.Value)
+				t.Fatalf("Object %s: expected value %d, got %d", objID, expectedValue, response.Value)
 			}
 
 			// Verify the reliable call record in DB
@@ -445,10 +609,10 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 				t.Fatalf("Failed to get reliable call for %s: %v", callID, err)
 			}
 			if rc.Status != "success" {
-				t.Errorf("Call %s: expected status 'success', got %q", callID, rc.Status)
+				t.Fatalf("Call %s: expected status 'success', got %q", callID, rc.Status)
 			}
 			if rc.ObjectID != objID {
-				t.Errorf("Call %s: expected ObjectID %q, got %q", callID, objID, rc.ObjectID)
+				t.Fatalf("Call %s: expected ObjectID %q, got %q", callID, objID, rc.ObjectID)
 			}
 
 			// Verify result data is stored correctly
@@ -464,7 +628,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 				t.Fatalf("Call %s: expected stored result to be *counter_pb.CounterResponse, got %T", callID, storedResultMsg)
 			}
 			if storedResponse.Value != expectedValue {
-				t.Errorf("Call %s: expected stored result value %d, got %d", callID, expectedValue, storedResponse.Value)
+				t.Fatalf("Call %s: expected stored result value %d, got %d", callID, expectedValue, storedResponse.Value)
 			}
 
 			t.Logf("Successfully executed reliable call %s for object %s with value %d", callID, objID, response.Value)
@@ -494,10 +658,10 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 
 		// Should return the same result (42)
 		if response1.Value != response2.Value {
-			t.Errorf("Deduplication failed: first call returned %d, second call returned %d", response1.Value, response2.Value)
+			t.Fatalf("Deduplication failed: first call returned %d, second call returned %d", response1.Value, response2.Value)
 		}
 		if response1.Value != 42 {
-			t.Errorf("Expected value 42, got %d", response1.Value)
+			t.Fatalf("Expected value 42, got %d", response1.Value)
 		}
 
 		// Third call from cluster3 - should also return cached result
@@ -508,7 +672,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 		response3 := result3.(*counter_pb.CounterResponse)
 
 		if response3.Value != 42 {
-			t.Errorf("Third call: expected value 42, got %d", response3.Value)
+			t.Fatalf("Third call: expected value 42, got %d", response3.Value)
 		}
 
 		t.Logf("Successfully verified deduplication across 3 nodes, all returned value 42")

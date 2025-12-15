@@ -255,7 +255,7 @@ func (db *DB) UpdateReliableCallStatus(ctx context.Context, id int64, status str
 }
 
 // GetPendingReliableCalls retrieves pending reliable calls for an object, ordered by seq
-// Only returns calls with seq > nextRcseq to support incremental processing
+// Only returns calls with seq >= nextRcseq to support incremental processing
 func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, nextRcseq int64) ([]*object.ReliableCall, error) {
 	if objectID == "" {
 		return nil, fmt.Errorf("object_id cannot be empty")
@@ -264,7 +264,7 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 	query := `
 		SELECT seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
 		FROM goverse_reliable_calls
-		WHERE object_id = $1 AND seq > $2 AND status = 'pending'
+		WHERE object_id = $1 AND seq >= $2 AND status = 'pending'
 		ORDER BY seq ASC
 	`
 
@@ -277,13 +277,13 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 	db.conn.QueryRowContext(ctx, debugQuery, objectID).Scan(&count)
 	fmt.Printf("[DEBUG GetPendingReliableCalls] Total rows for object_id=%s: %d\n", objectID, count)
 
-	debugQuery2 := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1 AND seq > $2`
+	debugQuery2 := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1 AND seq >= $2`
 	db.conn.QueryRowContext(ctx, debugQuery2, objectID, nextRcseq).Scan(&count)
-	fmt.Printf("[DEBUG GetPendingReliableCalls] Rows with seq > %d: %d\n", nextRcseq, count)
+	fmt.Printf("[DEBUG GetPendingReliableCalls] Rows with seq >= %d: %d\n", nextRcseq, count)
 
-	debugQuery3 := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1 AND seq > $2 AND status = 'pending'`
+	debugQuery3 := `SELECT COUNT(*) FROM goverse_reliable_calls WHERE object_id = $1 AND seq >= $2 AND status = 'pending'`
 	db.conn.QueryRowContext(ctx, debugQuery3, objectID, nextRcseq).Scan(&count)
-	fmt.Printf("[DEBUG GetPendingReliableCalls] Rows with seq > %d AND status='pending': %d\n", nextRcseq, count)
+	fmt.Printf("[DEBUG GetPendingReliableCalls] Rows with seq >= %d AND status='pending': %d\n", nextRcseq, count)
 
 	rows, err := db.conn.QueryContext(ctx, query, objectID, nextRcseq)
 	if err != nil {
