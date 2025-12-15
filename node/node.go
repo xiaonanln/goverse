@@ -391,7 +391,7 @@ func (node *Node) ReliableCallObject(
 
 	// Acquire per-object EXCLUSIVE lock for INSERT
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
-	unlockKeyExclusive := node.keyLock.Lock(objectID)
+	unlockKeyExclusive := node.objectLifecycleLock.Lock(objectID)
 	var exclusiveLockReleased bool
 	defer func() {
 		// Safety: ensure lock is always released even if a panic occurs
