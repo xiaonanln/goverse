@@ -78,6 +78,33 @@ func CallObject(ctx context.Context, objType, id string, method string, request 
 	return cluster.This().CallObject(ctx, objType, id, method, request)
 }
 
+// ReliableCallObject performs a reliable call to an object method with exactly-once semantics.
+// This ensures the call is executed exactly once, even in the presence of failures, retries, or network issues.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - callID: Unique identifier for this call (used for deduplication). Generate using GenerateCallID()
+//   - objType: The type name of the target object
+//   - objID: The unique identifier of the target object
+//   - method: The name of the method to call on the object
+//   - request: The protobuf message to pass as the method argument
+//
+// Returns the result of the method call, or an error if the call fails.
+//
+// The callID is used for deduplication - if you retry with the same callID, the cached result
+// is returned without re-executing the method. This provides exactly-once semantics.
+//
+// Example:
+//
+//	callID := goverseapi.GenerateCallID()
+//	result, err := goverseapi.ReliableCallObject(ctx, callID, "OrderProcessor", "order-123", "ProcessPayment", request)
+//	if err != nil {
+//	    // Handle error
+//	}
+func ReliableCallObject(ctx context.Context, callID string, objType, objID string, method string, request proto.Message) (proto.Message, error) {
+	return cluster.This().ReliableCallObject(ctx, callID, objType, objID, method, request)
+}
+
 // PushMessageToClient sends a message to a client via the gate connection
 // This allows distributed objects to push notifications/messages to connected clients
 // The client ID has the format: gateAddress/uniqueId (e.g., "localhost:7001/abc123")
@@ -275,8 +302,8 @@ func GetAutoLoadObjectIDs() map[string][]string {
 //	// Generate a unique call ID
 //	callID := goverseapi.GenerateCallID()
 //
-//	// Use it with reliable call (when ReliableCallObject API is implemented)
-//	// result, err := goverseapi.ReliableCallObject(ctx, "OrderProcessor", "order-123", callID, "ProcessPayment", request)
+//	// Use it with reliable call
+//	result, err := goverseapi.ReliableCallObject(ctx, callID, "OrderProcessor", "order-123", "ProcessPayment", request)
 func GenerateCallID() string {
 	return uniqueid.UniqueId()
 }
