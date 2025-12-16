@@ -455,53 +455,62 @@ func (node *Node) ReliableCallObject(
 	node.logger.Infof("Reliable call %s is pending (seq: %d), processing", callID, seq)
 
 	// Trigger processing of pending reliable calls for this object
-	// This will fetch pending calls from the database and execute them sequentially
+	// This will fetch pending calls from the database and execute them sequentially.
+	// The processing loop retries automatically when new waiters arrive, so single trigger is sufficient.
 	resultChan := obj.ProcessPendingReliableCalls(provider, seq)
 
-	// Wait for our call's result with one retry if still pending.
-	// Pending on first attempt means our INSERT committed after the processing loop's SELECT.
-	// Re-triggering MUST see our committed INSERT, so one retry is sufficient.
-	for attempt := 0; attempt < 2; attempt++ {
-		// Channel sends the ReliableCall if processed, or closes without sending if:
-		// - seq was already processed (seq < nextRcseq)
-		// - object was destroyed during processing
-		// - processing encountered an error
-		call := <-resultChan
+	// Wait for our call's result.
+	// Channel sends the ReliableCall if processed, or closes without sending if:
+	// - seq was already processed (seq < nextRcseq)
+	// - object was destroyed during processing
+	// - processing encountered an error
+	call := <-resultChan
 
-		// If not received from channel, fetch from database
-		if call == nil {
+	// If not received from channel, fetch from database
+	// Retry if still pending - this handles race with concurrent auto-load processing
+	if call == nil {
+		const maxRetries = 50 // 50 * 100ms = 5000ms max wait
+		const retryInterval = 100 * time.Millisecond
+
+		for i := 0; i < maxRetries; i++ {
 			var err error
 			call, err = provider.GetReliableCallBySeq(ctx, seq)
 			if err != nil {
 				node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
 				return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
 			}
-		}
-
-		switch call.Status {
-		case "success":
-			resultAny, err := protohelper.BytesToAny(call.ResultData)
-			if err != nil {
-				node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
-				return nil, fmt.Errorf("failed to wrap result: %w", err)
+			if call.Status != "pending" {
+				break
 			}
-			node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
-			return resultAny, nil
-		case "failed":
-			node.logger.Errorf("Reliable call seq=%d (call_id=%s) failed: %s", seq, callID, call.Error)
-			return nil, fmt.Errorf("reliable call failed: %s", call.Error)
-		}
-
-		// Still pending - re-trigger processing on first attempt only
-		if attempt == 0 {
-			node.logger.Infof("Reliable call seq=%d (call_id=%s) still pending, re-triggering processing", seq, callID)
-			resultChan = obj.ProcessPendingReliableCalls(provider, seq)
+			// Still pending - auto-load might be updating DB, wait briefly
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(retryInterval):
+			}
 		}
 	}
 
-	// Still pending after retry - this should never happen since our INSERT is committed
-	node.logger.Errorf("BUG: Reliable call seq=%d (call_id=%s) still pending after retry", seq, callID)
-	return nil, fmt.Errorf("BUG: reliable call seq=%d still pending after retry", seq)
+	switch call.Status {
+	case "success":
+		resultAny, err := protohelper.BytesToAny(call.ResultData)
+		if err != nil {
+			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
+			return nil, fmt.Errorf("failed to wrap result: %w", err)
+		}
+		node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
+		return resultAny, nil
+	case "failed":
+		node.logger.Errorf("Reliable call seq=%d (call_id=%s) failed: %s", seq, callID, call.Error)
+		return nil, fmt.Errorf("reliable call failed: %s", call.Error)
+	case "pending":
+		// Should not reach here since processing loop retries when new waiters are present
+		node.logger.Errorf("BUG: Reliable call seq=%d (call_id=%s) still pending after processing", seq, callID)
+		return nil, fmt.Errorf("BUG: reliable call seq=%d still pending after processing", seq)
+	default:
+		node.logger.Errorf("Unknown status for call seq=%d: %s", seq, call.Status)
+		return nil, fmt.Errorf("unknown reliable call status: %s", call.Status)
+	}
 }
 
 // CreateObject implements the Goverse gRPC service CreateObject method

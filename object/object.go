@@ -257,11 +257,11 @@ type BaseObject struct {
 	id              string
 	creationTime    time.Time
 	nextRcseq       atomic.Int64
-	processingCalls bool           // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
-	seqWaiters      []seqWaiter    // waiters sorted by seq (can have duplicates)
-	seqWaitersMu    sync.Mutex     // protects seqWaiters and processingCalls
-	seqWriteMu      sync.Mutex     // serializes reliable call INSERTs for per-object ordering
-	stateMu         sync.RWMutex   // protects state + nextRcseq consistency during RC execution and ToDataWithSeq
+	processingCalls bool         // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
+	seqWaiters      []seqWaiter  // waiters sorted by seq (can have duplicates)
+	seqWaitersMu    sync.Mutex   // protects seqWaiters and processingCalls
+	seqWriteMu      sync.Mutex   // serializes reliable call INSERTs for per-object ordering
+	stateMu         sync.RWMutex // protects state + nextRcseq consistency during RC execution and ToDataWithSeq
 	Logger          *logger.Logger
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -429,10 +429,13 @@ func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider
 	callsChan := make(chan *ReliableCall, 1)
 
 	// If the seq is already processed, close immediately
-	if seq < base.GetNextRcseq() {
+	nextRcseq := base.GetNextRcseq()
+	if seq < nextRcseq {
+		base.Logger.Infof("[DEBUG] ProcessPendingReliableCalls: seq=%d < nextRcseq=%d, closing immediately", seq, nextRcseq)
 		close(callsChan)
 		return callsChan
 	}
+	base.Logger.Infof("[DEBUG] ProcessPendingReliableCalls: registering waiter for seq=%d (nextRcseq=%d)", seq, nextRcseq)
 
 	// Register as a waiter and try to start processing goroutine atomically
 	base.seqWaitersMu.Lock()
@@ -469,6 +472,7 @@ func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
 	// Pop waiters from the front: close those with seq < current, notify those with seq == current
 	var toClose []chan<- *ReliableCall
 	var toNotify []chan<- *ReliableCall
+	numWaitersBefore := len(base.seqWaiters)
 	for len(base.seqWaiters) > 0 && base.seqWaiters[0].seq <= seq {
 		if base.seqWaiters[0].seq == seq {
 			toNotify = append(toNotify, base.seqWaiters[0].ch)
@@ -478,6 +482,11 @@ func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
 		base.seqWaiters = base.seqWaiters[1:]
 	}
 	base.seqWaitersMu.Unlock()
+
+	if len(toClose) > 0 || len(toNotify) > 0 {
+		base.Logger.Infof("[DEBUG] notifyWaiters(seq=%d, call=%v): before=%d, toClose=%d, toNotify=%d",
+			seq, call != nil, numWaitersBefore, len(toClose), len(toNotify))
+	}
 
 	for _, ch := range toClose {
 		close(ch)
@@ -491,72 +500,93 @@ func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
 }
 
 // runProcessingLoop is the single processing goroutine that processes pending calls.
-// It continues processing as long as there are pending calls in the database,
-// even if there are no waiters.
+// Design: The goroutine stays running as long as waiters exist. It only exits when
+// there are no waiters AND no pending calls (or on shutdown). This eliminates the
+// need for complex restart logic.
 func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
-	defer func() {
-		// Atomically close all waiters and mark processing as done
-		base.seqWaitersMu.Lock()
-		allWaiters := base.seqWaiters
-		base.seqWaiters = nil
-		base.processingCalls = false
-		base.seqWaitersMu.Unlock()
-
-		for _, w := range allWaiters {
-			close(w.ch)
-		}
-	}()
+	defer base.cleanupProcessingLoop()
 
 	for {
-		// Check if object is destroyed
-		select {
-		case <-base.ctx.Done():
-			base.Logger.Warnf("runProcessingLoop: object destroyed, exiting")
+		// Check shutdown
+		if base.ctx.Err() != nil {
 			return
-		default:
 		}
 
-		nextRcseq := base.GetNextRcseq()
+		// Close waiters for already-processed seqs
+		base.notifyWaiters(base.GetNextRcseq()-1, nil)
 
-		// Close waiters for already-processed seqs (those with seq < nextRcseq)
-		base.notifyWaiters(nextRcseq-1, nil)
+		// Check if we should exit: no waiters means no one is waiting for results.
+		// This check is atomic with setting processingCalls=false to prevent races.
+		if base.tryExitIfNoWaiters() {
+			return
+		}
 
-		base.Logger.Infof("Querying for pending reliable calls for object %s with nextRcseq=%d", base.id, nextRcseq)
-
-		// Fetch pending calls for this object
-		pendingCalls, err := provider.GetPendingReliableCalls(base.ctx, base.id, nextRcseq)
+		// Fetch pending calls
+		pendingCalls, err := provider.GetPendingReliableCalls(base.ctx, base.id, base.GetNextRcseq())
 		if err != nil {
-			base.Logger.Errorf("runProcessingLoop: failed to fetch pending calls: %v", err)
-			return
-		}
-
-		base.Logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), base.id)
-
-		// No more pending calls
-		if len(pendingCalls) == 0 {
-			base.Logger.Infof("No pending reliable calls for object %s", base.id)
-			return
-		}
-
-		// Process each pending call sequentially
-		for _, call := range pendingCalls {
-			// Check if object is destroyed before processing
-			select {
-			case <-base.ctx.Done():
-				base.Logger.Warnf("runProcessingLoop: object destroyed, stopping processing")
+			if base.ctx.Err() != nil {
 				return
-			default:
 			}
+			base.Logger.Errorf("runProcessingLoop: failed to fetch pending calls: %v", err)
+			base.waitWithBackoff()
+			continue
+		}
 
-			base.Logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
+		// No pending calls - wait and retry (waiters exist, so we keep polling)
+		if len(pendingCalls) == 0 {
+			base.waitWithBackoff()
+			continue
+		}
 
-			// Process the call (now updates nextRcseq inside the lock)
+		// Process each pending call
+		for _, call := range pendingCalls {
+			if base.ctx.Err() != nil {
+				return
+			}
 			base.processReliableCall(provider, call)
-
-			// Notify waiters for this seq
 			base.notifyWaiters(call.Seq, call)
 		}
 	}
+}
+
+// tryExitIfNoWaiters atomically checks if there are no waiters and marks processing as stopped.
+// Returns true if goroutine should exit.
+func (base *BaseObject) tryExitIfNoWaiters() bool {
+	base.seqWaitersMu.Lock()
+	defer base.seqWaitersMu.Unlock()
+
+	if len(base.seqWaiters) == 0 {
+		base.processingCalls = false
+		base.Logger.Infof("[DEBUG] tryExitIfNoWaiters: no waiters, exiting goroutine")
+		return true
+	}
+	return false
+}
+
+// waitWithBackoff waits briefly before retrying, or returns immediately on shutdown.
+func (base *BaseObject) waitWithBackoff() {
+	select {
+	case <-base.ctx.Done():
+	case <-time.After(10 * time.Millisecond):
+	}
+}
+
+// cleanupProcessingLoop handles cleanup when the processing loop exits.
+// Closes all remaining waiter channels so callers don't block forever.
+func (base *BaseObject) cleanupProcessingLoop() {
+	base.seqWaitersMu.Lock()
+	defer base.seqWaitersMu.Unlock()
+
+	numWaiters := len(base.seqWaiters)
+	if numWaiters > 0 {
+		base.Logger.Warnf("[DEBUG] cleanupProcessingLoop: closing %d remaining waiters!", numWaiters)
+	}
+
+	base.processingCalls = false
+	for _, waiter := range base.seqWaiters {
+		close(waiter.ch)
+	}
+	base.seqWaiters = nil
 }
 
 // processReliableCall executes a single reliable call
