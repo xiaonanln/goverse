@@ -11,6 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/uniqueid"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -624,6 +625,25 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
 		finalize("failed", nil, err.Error())
 		return
+	}
+
+	// Update nextRcseq INSIDE the lock (after state mutation)
+	base.nextRcseq.Store(call.Seq + 1)
+
+	// Save persistent object state after RC execution to ensure consistency
+	// For non-persistent objects, ToData() returns ErrNotPersistent and we skip saving
+	if data, dataErr := base.self.ToData(); dataErr == nil {
+		// Object is persistent - save state + nextRcseq
+		saveCtx, saveCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		jsonData, marshalErr := protojson.Marshal(data)
+		if marshalErr != nil {
+			base.Logger.Errorf("Failed to marshal object data after RC %s (seq=%d): %v", call.CallID, call.Seq, marshalErr)
+		} else if saveErr := provider.SaveObject(saveCtx, base.id, base.self.Type(), jsonData, base.nextRcseq.Load()); saveErr != nil {
+			base.Logger.Errorf("Failed to save object after RC %s (seq=%d): %v", call.CallID, call.Seq, saveErr)
+		} else {
+			base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
+		}
+		saveCancel()
 	}
 
 	// Update to success status with result
