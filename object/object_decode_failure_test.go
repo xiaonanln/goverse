@@ -2,6 +2,7 @@ package object
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestProcessReliableCall_AdvancesNextRcseqOnMethodFailure(t *testing.T) {
 	}
 
 	// Create a reliable call with VALID request data but will cause method error
-	// Use negative value to trigger error in SetValue method
+	// Calling SetValueWithError method which always returns an error
 	requestMsg := wrapperspb.Int32(-999)
 	requestData, err := protohelper.MsgToBytes(requestMsg)
 	if err != nil {
@@ -209,7 +210,7 @@ func (obj *testDecodeObject) SetValue(ctx context.Context, req *wrapperspb.Int32
 }
 
 func (obj *testDecodeObject) SetValueWithError(ctx context.Context, req *wrapperspb.Int32Value) (*wrapperspb.Int32Value, error) {
-	return nil, context.DeadlineExceeded
+	return nil, fmt.Errorf("simulated method failure")
 }
 
 // mockDecodeProvider is a minimal mock for testing decode failures
