@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -333,7 +334,10 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClustersReady(t, cluster)
 
-	const numGoroutines = 1000
+	numGoroutines := 100
+	if os.Getenv("GOVERSE_CONCURRENCY_TEST") != "" {
+		numGoroutines = 1000
+	}
 	objectType := "TestCounter"
 	objectID := "TestCounter-concurrent"
 	methodName := "Increment"

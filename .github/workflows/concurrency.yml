@@ -25,6 +25,7 @@ jobs:
       - name: Run concurrent calls test (100 iterations)
         run: go test -v -count 100 -failfast -coverprofile=coverage-concurrency.out -covermode=atomic -run ^TestReliableCallObject_ConcurrentCalls$ github.com/xiaonanln/goverse/cluster
         env:
+          GOVERSE_CONCURRENCY_TEST: "true"
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
