@@ -595,42 +595,35 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 	base.stateMu.Lock()
 	defer base.stateMu.Unlock()
 
+	// Helper to finalize call status and persist
+	finalize := func(status string, resultData []byte, errMsg string) {
+		base.nextRcseq.Store(call.Seq + 1)
+		call.Status = status
+		call.ResultData = resultData
+		call.Error = errMsg
+		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, status, resultData, errMsg)
+	}
+
 	// Unmarshal the request data to proto.Message
 	requestMsg, err := protohelper.BytesToMsg(call.RequestData)
 	if err != nil {
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
-		call.Status = "failed"
-		call.Error = err.Error()
-		// Advance nextRcseq even on decode failure to prevent stale progress marker
-		base.nextRcseq.Store(call.Seq + 1)
-		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
+		finalize("failed", nil, err.Error())
 		return
 	}
 
 	// Invoke the method on the object (state mutation happens here)
 	result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
-
-	// Update nextRcseq INSIDE the lock (after state mutation)
-	base.nextRcseq.Store(call.Seq + 1)
-
 	if err != nil {
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
-		call.Status = "failed"
-		call.Error = err.Error()
-		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
+		finalize("failed", nil, err.Error())
 		return
 	}
 
 	// Update to success status with result
 	base.Logger.Infof("Reliable call %s (seq=%d) succeeded: result=%v", call.CallID, call.Seq, result)
 	resultData, _ := protohelper.MsgToBytes(result)
-	call.Status = "success"
-	call.ResultData = resultData
-	updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "success", resultData, "")
+	finalize("success", resultData, "")
 }
