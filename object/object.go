@@ -601,6 +601,8 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
 		call.Status = "failed"
 		call.Error = err.Error()
+		// Advance nextRcseq even on decode failure to prevent stale progress marker
+		base.nextRcseq.Store(call.Seq + 1)
 		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, "failed", nil, call.Error)
