@@ -597,13 +597,17 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 
 	// Helper to finalize call status and persist
 	finalize := func(status string, resultData []byte, errMsg string) {
+		// Persist to DB BEFORE updating in-memory counter
+		// This ensures other goroutines querying by seq see the updated status
+		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, status, resultData, errMsg)
+
+		// Now safe to advance in-memory counter - DB is already updated
 		base.nextRcseq.Store(call.Seq + 1)
 		call.Status = status
 		call.ResultData = resultData
 		call.Error = errMsg
-		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, status, resultData, errMsg)
 	}
 
 	// Unmarshal the request data to proto.Message
