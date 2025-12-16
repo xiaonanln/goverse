@@ -598,14 +598,31 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 
 	// Helper to finalize call status and persist
 	finalize := func(status string, resultData []byte, errMsg string) {
-		// Persist to DB BEFORE updating in-memory counter
+		// Update nextRcseq INSIDE the lock (after state mutation)
+		base.nextRcseq.Store(call.Seq + 1)
+
+		// Save persistent object state after RC execution to ensure consistency
+		// For non-persistent objects, ToData() returns ErrNotPersistent and we skip saving
+		if data, dataErr := base.self.ToData(); dataErr == nil {
+			// Object is persistent - save state + nextRcseq
+			saveCtx, saveCancel := context.WithTimeout(context.Background(), 60*time.Second)
+			jsonData, marshalErr := protojson.Marshal(data)
+			if marshalErr != nil {
+				base.Logger.Errorf("Failed to marshal object data after RC %s (seq=%d): %v", call.CallID, call.Seq, marshalErr)
+			} else if saveErr := provider.SaveObject(saveCtx, base.id, base.self.Type(), jsonData, base.nextRcseq.Load()); saveErr != nil {
+				base.Logger.Errorf("Failed to save object after RC %s (seq=%d): %v", call.CallID, call.Seq, saveErr)
+			} else {
+				base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
+			}
+			saveCancel()
+		}
+
+		// Persist RC status to DB after saving object state
 		// This ensures other goroutines querying by seq see the updated status
 		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, status, resultData, errMsg)
 
-		// Now safe to advance in-memory counter - DB is already updated
-		base.nextRcseq.Store(call.Seq + 1)
 		call.Status = status
 		call.ResultData = resultData
 		call.Error = errMsg
@@ -625,25 +642,6 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
 		finalize("failed", nil, err.Error())
 		return
-	}
-
-	// Update nextRcseq INSIDE the lock (after state mutation)
-	base.nextRcseq.Store(call.Seq + 1)
-
-	// Save persistent object state after RC execution to ensure consistency
-	// For non-persistent objects, ToData() returns ErrNotPersistent and we skip saving
-	if data, dataErr := base.self.ToData(); dataErr == nil {
-		// Object is persistent - save state + nextRcseq
-		saveCtx, saveCancel := context.WithTimeout(context.Background(), 60*time.Second)
-		jsonData, marshalErr := protojson.Marshal(data)
-		if marshalErr != nil {
-			base.Logger.Errorf("Failed to marshal object data after RC %s (seq=%d): %v", call.CallID, call.Seq, marshalErr)
-		} else if saveErr := provider.SaveObject(saveCtx, base.id, base.self.Type(), jsonData, base.nextRcseq.Load()); saveErr != nil {
-			base.Logger.Errorf("Failed to save object after RC %s (seq=%d): %v", call.CallID, call.Seq, saveErr)
-		} else {
-			base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
-		}
-		saveCancel()
 	}
 
 	// Update to success status with result
