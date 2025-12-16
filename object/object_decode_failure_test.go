@@ -71,6 +71,46 @@ func TestProcessReliableCall_AdvancesNextRcseqOnDecodeFailure(t *testing.T) {
 	if call.Error == "" {
 		t.Errorf("Expected error message to be set, got empty string")
 	}
+
+	// === Verify subsequent valid call can be processed ===
+	// This ensures decode failure doesn't break the object's ability to process future calls
+
+	requestMsg := wrapperspb.Int32(100)
+	requestData, err := protohelper.MsgToBytes(requestMsg)
+	if err != nil {
+		t.Fatalf("Failed to marshal request: %v", err)
+	}
+
+	successCall := &ReliableCall{
+		Seq:         11, // Next seq after the failed one
+		CallID:      "call-after-decode-fail",
+		ObjectID:    obj.Id(),
+		MethodName:  "SetValue",
+		RequestData: requestData,
+		Status:      "pending",
+	}
+
+	// Process the valid call
+	obj.processReliableCall(provider, successCall)
+
+	// nextRcseq should advance to 12
+	if obj.GetNextRcseq() != 12 {
+		t.Errorf("nextRcseq not advanced after recovery: expected 12, got %d", obj.GetNextRcseq())
+	}
+
+	// Verify the call was marked as success
+	status, ok = provider.statusUpdates[11]
+	if !ok {
+		t.Errorf("Status update not recorded for seq=11")
+	}
+	if status != "success" {
+		t.Errorf("Expected status='success' for follow-up call, got '%s'", status)
+	}
+
+	// Verify the method actually executed and updated the value
+	if obj.value != 100 {
+		t.Errorf("Expected value=100 after follow-up call, got %d", obj.value)
+	}
 }
 
 // TestProcessReliableCall_AdvancesNextRcseqOnMethodFailure tests that nextRcseq
@@ -119,6 +159,46 @@ func TestProcessReliableCall_AdvancesNextRcseqOnMethodFailure(t *testing.T) {
 	}
 	if status != "failed" {
 		t.Errorf("Expected status='failed', got '%s'", status)
+	}
+
+	// === Verify subsequent valid call can be processed ===
+	// This ensures method failure doesn't break the object's ability to process future calls
+
+	successRequestMsg := wrapperspb.Int32(200)
+	successRequestData, err := protohelper.MsgToBytes(successRequestMsg)
+	if err != nil {
+		t.Fatalf("Failed to marshal request: %v", err)
+	}
+
+	successCall := &ReliableCall{
+		Seq:         6, // Next seq after the failed one
+		CallID:      "call-after-method-fail",
+		ObjectID:    obj.Id(),
+		MethodName:  "SetValue",
+		RequestData: successRequestData,
+		Status:      "pending",
+	}
+
+	// Process the valid call
+	obj.processReliableCall(provider, successCall)
+
+	// nextRcseq should advance to 7
+	if obj.GetNextRcseq() != 7 {
+		t.Errorf("nextRcseq not advanced after recovery: expected 7, got %d", obj.GetNextRcseq())
+	}
+
+	// Verify the call was marked as success
+	status, ok = provider.statusUpdates[6]
+	if !ok {
+		t.Errorf("Status update not recorded for seq=6")
+	}
+	if status != "success" {
+		t.Errorf("Expected status='success' for follow-up call, got '%s'", status)
+	}
+
+	// Verify the method actually executed and updated the value
+	if obj.value != 200 {
+		t.Errorf("Expected value=200 after follow-up call, got %d", obj.value)
 	}
 }
 
