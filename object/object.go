@@ -257,11 +257,11 @@ type BaseObject struct {
 	id              string
 	creationTime    time.Time
 	nextRcseq       atomic.Int64
-	processingCalls bool           // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
-	seqWaiters      []seqWaiter    // waiters sorted by seq (can have duplicates)
-	seqWaitersMu    sync.Mutex     // protects seqWaiters and processingCalls
-	seqWriteMu      sync.Mutex     // serializes reliable call INSERTs for per-object ordering
-	stateMu         sync.RWMutex   // protects state + nextRcseq consistency during RC execution and ToDataWithSeq
+	processingCalls bool         // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
+	seqWaiters      []seqWaiter  // waiters sorted by seq (can have duplicates)
+	seqWaitersMu    sync.Mutex   // protects seqWaiters and processingCalls
+	seqWriteMu      sync.Mutex   // serializes reliable call INSERTs for per-object ordering
+	stateMu         sync.RWMutex // protects state + nextRcseq consistency during RC execution and ToDataWithSeq
 	Logger          *logger.Logger
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -494,19 +494,6 @@ func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
 // It continues processing as long as there are pending calls in the database,
 // even if there are no waiters.
 func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
-	defer func() {
-		// Atomically close all waiters and mark processing as done
-		base.seqWaitersMu.Lock()
-		allWaiters := base.seqWaiters
-		base.seqWaiters = nil
-		base.processingCalls = false
-		base.seqWaitersMu.Unlock()
-
-		for _, w := range allWaiters {
-			close(w.ch)
-		}
-	}()
-
 	for {
 		// Check if object is destroyed
 		select {
@@ -532,10 +519,24 @@ func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 
 		base.Logger.Infof("Query returned %d pending reliable calls for object %s", len(pendingCalls), base.id)
 
-		// No more pending calls
+		// No more pending calls - check if we should continue processing
 		if len(pendingCalls) == 0 {
-			base.Logger.Infof("No pending reliable calls for object %s", base.id)
-			return
+			// Check if there are waiters for seqs >= nextRcseq (new calls that arrived)
+			base.seqWaitersMu.Lock()
+			shouldQuit := len(base.seqWaiters) == 0
+			if shouldQuit {
+				base.processingCalls = false
+			}
+			base.seqWaitersMu.Unlock()
+
+			if shouldQuit {
+				base.Logger.Infof("No pending reliable calls for object %s and no new waiters", base.id)
+				return
+			}
+
+			// New waiters arrived, retry the query to pick up their calls
+			base.Logger.Infof("No pending calls in query, but new waiters present - retrying query")
+			continue
 		}
 
 		// Process each pending call sequentially
