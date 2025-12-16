@@ -31,8 +31,8 @@ func TestReliableCallPersistenceRaceCondition(t *testing.T) {
 	obj.SetNextRcseq(0)
 
 	var wg sync.WaitGroup
-	const numRCs = 100
-	const numSaves = 100
+	const numRCs = 10000
+	const numSaves = 10000
 
 	// Simulate RC execution goroutines
 	for i := 0; i < numRCs; i++ {
@@ -40,14 +40,15 @@ func TestReliableCallPersistenceRaceCondition(t *testing.T) {
 		go func(seq int64) {
 			defer wg.Done()
 
+			// Small delay to increase chance of race
+			time.Sleep(1 * time.Microsecond)
+
 			// Simulate RC execution (what processReliableCall does)
 			obj.stateMu.Lock()
 			obj.SetValue(int32(seq))
 			obj.SetNextRcseq(seq + 1)
 			obj.stateMu.Unlock()
 
-			// Small delay to increase chance of race
-			time.Sleep(1 * time.Microsecond)
 		}(int64(i))
 	}
 
@@ -58,6 +59,9 @@ func TestReliableCallPersistenceRaceCondition(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			// Small delay to increase chance of race
+			time.Sleep(1 * time.Microsecond)
 
 			// Use ToDataWithSeq (the fix)
 			data, nextRcseq, err := obj.ToDataWithSeq()
@@ -81,8 +85,6 @@ func TestReliableCallPersistenceRaceCondition(t *testing.T) {
 				inconsistencyMu.Unlock()
 			}
 
-			// Small delay to increase chance of race
-			time.Sleep(1 * time.Microsecond)
 		}()
 	}
 
