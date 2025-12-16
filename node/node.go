@@ -467,12 +467,27 @@ func (node *Node) ReliableCallObject(
 	call := <-resultChan
 
 	// If not received from channel, fetch from database
+	// Retry if still pending - this handles race with concurrent auto-load processing
 	if call == nil {
-		var err error
-		call, err = provider.GetReliableCallBySeq(ctx, seq)
-		if err != nil {
-			node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
-			return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+		const maxRetries = 50 // 50 * 100ms = 5000ms max wait
+		const retryInterval = 100 * time.Millisecond
+
+		for i := 0; i < maxRetries; i++ {
+			var err error
+			call, err = provider.GetReliableCallBySeq(ctx, seq)
+			if err != nil {
+				node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
+				return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+			}
+			if call.Status != "pending" {
+				break
+			}
+			// Still pending - auto-load might be updating DB, wait briefly
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(retryInterval):
+			}
 		}
 	}
 
