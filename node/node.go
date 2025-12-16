@@ -959,8 +959,8 @@ func (node *Node) saveAllObjectsLocked(ctx context.Context) error {
 			continue
 		}
 
-		// Get object data
-		data, err := obj.ToData()
+		// CHANGED: Use atomic snapshot instead of separate calls
+		data, nextRcseq, err := obj.ToDataWithSeq()
 		if err == object.ErrNotPersistent {
 			// Object is not persistent, skip silently
 			node.logger.Infof("Object %s is not persistent", obj)
@@ -975,10 +975,7 @@ func (node *Node) saveAllObjectsLocked(ctx context.Context) error {
 			continue
 		}
 
-		// Get next_rcseq from object
-		nextRcseq := obj.GetNextRcseq()
-
-		// Save the object data (while holding per-key RLock)
+		// Save with consistent (data, nextRcseq) pair
 		err = object.SaveObject(ctx, provider, obj.Id(), obj.Type(), data, nextRcseq)
 		if err != nil {
 			node.logger.Errorf("Failed to save object %s: %v", obj, err)

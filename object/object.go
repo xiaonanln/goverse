@@ -135,6 +135,19 @@ type Object interface {
 	//   - error: Deserialization error, or nil for non-persistent objects
 	FromData(data proto.Message) error
 
+	// ToDataWithSeq atomically captures object state and nextRcseq together.
+	// This ensures consistency between persisted data and progress marker.
+	// Must be used by persistence layer instead of separate ToData() + GetNextRcseq() calls.
+	//
+	// Thread-Safety: This method is thread-safe and uses RWMutex synchronization with
+	// reliable call execution to ensure consistent snapshots.
+	//
+	// Returns:
+	//   - proto.Message: Serialized object state
+	//   - int64: The nextRcseq value consistent with the returned state
+	//   - error: ErrNotPersistent for non-persistent objects, or serialization error
+	ToDataWithSeq() (proto.Message, int64, error)
+
 	// GetNextRcseq returns the next reliable call sequence number for this object.
 	//
 	// Reliable calls are sequentially numbered to ensure exactly-once execution
@@ -244,10 +257,11 @@ type BaseObject struct {
 	id              string
 	creationTime    time.Time
 	nextRcseq       atomic.Int64
-	processingCalls bool        // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
-	seqWaiters      []seqWaiter // waiters sorted by seq (can have duplicates)
-	seqWaitersMu    sync.Mutex  // protects seqWaiters and processingCalls
-	seqWriteMu      sync.Mutex  // serializes reliable call INSERTs for per-object ordering
+	processingCalls bool           // true if a ProcessPendingReliableCalls goroutine is running (protected by seqWaitersMu)
+	seqWaiters      []seqWaiter    // waiters sorted by seq (can have duplicates)
+	seqWaitersMu    sync.Mutex     // protects seqWaiters and processingCalls
+	seqWriteMu      sync.Mutex     // serializes reliable call INSERTs for per-object ordering
+	stateMu         sync.RWMutex   // protects state + nextRcseq consistency during RC execution and ToDataWithSeq
 	Logger          *logger.Logger
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -292,6 +306,20 @@ func (base *BaseObject) ToData() (proto.Message, error) {
 // Returns an error indicating this object type is not persistent
 func (base *BaseObject) FromData(data proto.Message) error {
 	return nil
+}
+
+// ToDataWithSeq atomically captures object state and nextRcseq together.
+// Uses RLock since ToData() is documented as read-only/thread-safe.
+func (base *BaseObject) ToDataWithSeq() (proto.Message, int64, error) {
+	base.stateMu.RLock()
+	defer base.stateMu.RUnlock()
+
+	data, err := base.self.ToData()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return data, base.nextRcseq.Load(), nil
 }
 
 // GetNextRcseq returns the next reliable call sequence number for this object
@@ -522,9 +550,8 @@ func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 
 			base.Logger.Infof("Processing reliable call: seq=%d, call_id=%s, method=%s", call.Seq, call.CallID, call.MethodName)
 
-			// Process the call
+			// Process the call (now updates nextRcseq inside the lock)
 			base.processReliableCall(provider, call)
-			base.SetNextRcseq(call.Seq + 1)
 
 			// Notify waiters for this seq
 			base.notifyWaiters(call.Seq, call)
@@ -533,7 +560,11 @@ func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 }
 
 // processReliableCall executes a single reliable call
+// Holds stateMu.Lock() during execution to ensure atomic state mutation + nextRcseq update
 func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *ReliableCall) {
+	base.stateMu.Lock()
+	defer base.stateMu.Unlock()
+
 	// Unmarshal the request data to proto.Message
 	requestMsg, err := protohelper.BytesToMsg(call.RequestData)
 	if err != nil {
@@ -546,8 +577,12 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 		return
 	}
 
-	// Invoke the method on the object
+	// Invoke the method on the object (state mutation happens here)
 	result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
+
+	// Update nextRcseq INSIDE the lock (after state mutation)
+	base.nextRcseq.Store(call.Seq + 1)
+
 	if err != nil {
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
 		call.Status = "failed"
