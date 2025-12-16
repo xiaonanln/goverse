@@ -20,8 +20,8 @@ func TestProcessReliableCall_SavesPersistentObject(t *testing.T) {
 	obj.SetNextRcseq(5)
 
 	provider := &mockSaveTrackingProvider{
-		storage:    make(map[int64]*ReliableCall),
-		saves:      make([]SaveRecord, 0),
+		storage: make(map[int64]*ReliableCall),
+		saves:   make([]SaveRecord, 0),
 	}
 
 	// Create a reliable call using protohelper
@@ -94,8 +94,8 @@ func TestProcessReliableCall_SkipsNonPersistentObject(t *testing.T) {
 	obj.SetNextRcseq(5)
 
 	provider := &mockSaveTrackingProvider{
-		storage:    make(map[int64]*ReliableCall),
-		saves:      make([]SaveRecord, 0),
+		storage: make(map[int64]*ReliableCall),
+		saves:   make([]SaveRecord, 0),
 	}
 
 	// Create a reliable call
