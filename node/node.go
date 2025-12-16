@@ -479,6 +479,10 @@ func (node *Node) ReliableCallObject(
 				node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
 				return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
 			}
+
+			node.logger.Infof("DEBUG: Call seq=%d status is %q after %d retries (call_id=%s, object_id=%s, method=%s)",
+				seq, call.Status, i+1, call.CallID, call.ObjectID, call.MethodName)
+
 			if call.Status != "pending" {
 				break
 			}
