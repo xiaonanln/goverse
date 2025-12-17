@@ -12,6 +12,7 @@ import (
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -725,11 +726,11 @@ func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, obj
 	c.mu.RLock()
 	if c.closed {
 		c.mu.RUnlock()
-		return nil, "", ErrClientClosed
+		return nil, "SKIPPED", ErrClientClosed
 	}
 	if !c.connected {
 		c.mu.RUnlock()
-		return nil, "", ErrNotConnected
+		return nil, "SKIPPED", ErrNotConnected
 	}
 	client := c.client
 	c.mu.RUnlock()
@@ -741,13 +742,13 @@ func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, obj
 		defer cancel()
 	}
 
-	// Marshal request to Any
+	// Marshal request to Any using protohelper
 	var requestAny *anypb.Any
 	if request != nil {
 		var err error
-		requestAny, err = anypb.New(request)
+		requestAny, err = protohelper.MsgToAny(request)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to marshal request: %w", err)
+			return nil, "SKIPPED", fmt.Errorf("failed to marshal request: %w", err)
 		}
 	}
 
@@ -761,7 +762,7 @@ func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, obj
 
 	resp, err := client.ReliableCallObject(ctx, req)
 	if err != nil {
-		return nil, "", fmt.Errorf("ReliableCallObject RPC failed: %w", err)
+		return nil, "unknown", fmt.Errorf("ReliableCallObject RPC failed: %w", err)
 	}
 
 	// Check if the response contains an error
@@ -769,9 +770,9 @@ func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, obj
 		return nil, resp.Status, fmt.Errorf("%s", resp.Error)
 	}
 
-	// Unmarshal response if present
+	// Unmarshal response if present using protohelper
 	if resp.Response != nil {
-		result, err := resp.Response.UnmarshalNew()
+		result, err := protohelper.AnyToMsg(resp.Response)
 		if err != nil {
 			return nil, resp.Status, fmt.Errorf("failed to unmarshal response: %w", err)
 		}

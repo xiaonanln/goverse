@@ -356,14 +356,22 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	if s.accessValidator != nil {
 		if err := s.accessValidator.CheckClientAccess(req.Type, req.Id, req.Method); err != nil {
 			s.logger.Warnf("Access denied for client reliable call: type=%s, id=%s, method=%s: %v", req.Type, req.Id, req.Method, err)
-			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+			// Return response with SKIPPED status - method was not executed
+			return &gate_pb.ReliableCallObjectResponse{
+				Error:  err.Error(),
+				Status: "SKIPPED",
+			}, nil
 		}
 	}
 
 	// Determine which node hosts this object
 	nodeAddr, err := s.cluster.GetCurrentNodeForObject(ctx, req.Id)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot determine node for object %s: %v", req.Id, err)
+		// Return response with SKIPPED status - method was not executed
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  fmt.Sprintf("cannot determine node for object %s: %v", req.Id, err),
+			Status: "SKIPPED",
+		}, nil
 	}
 
 	s.logger.Infof("Routing ReliableCallObject for %s.%s to node %s (callID: %s)", req.Id, req.Method, nodeAddr, req.CallId)
@@ -371,7 +379,11 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	// Get connection to the target node
 	nodeClient, err := s.cluster.GetNodeConnections().GetConnection(nodeAddr)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get connection to node %s: %v", nodeAddr, err)
+		// Return response with SKIPPED status - method was not executed
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  fmt.Sprintf("failed to get connection to node %s: %v", nodeAddr, err),
+			Status: "SKIPPED",
+		}, nil
 	}
 
 	// Convert request data to bytes for node RPC
@@ -379,7 +391,11 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	if req.Request != nil {
 		requestData, err = proto.Marshal(req.Request)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to marshal request: %v", err)
+			// Return response with SKIPPED status - method was not executed
+			return &gate_pb.ReliableCallObjectResponse{
+				Error:  fmt.Sprintf("failed to marshal request: %v", err),
+				Status: "SKIPPED",
+			}, nil
 		}
 	}
 
@@ -394,7 +410,11 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 
 	nodeResp, err := nodeClient.ReliableCallObject(ctx, nodeReq)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "remote ReliableCallObject failed on node %s: %v", nodeAddr, err)
+		// RPC error - we don't know if the call was executed, set status to "unknown"
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  fmt.Sprintf("remote ReliableCallObject failed on node %s: %v", nodeAddr, err),
+			Status: "unknown",
+		}, nil
 	}
 
 	// Convert the response back to gate format
