@@ -380,25 +380,27 @@ func (node *Node) ReliableCallObject(
 	defer node.stopMu.RUnlock()
 
 	// Check if node is stopped after acquiring lock
+	// Pre-execution error - method never executed, so SKIPPED
 	if node.stopped.Load() {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("node is stopped")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("node is stopped")
 	}
 
 	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s, method=%s",
 		callID, objectType, objectID, methodName)
 
 	// Validate input parameters
+	// Pre-execution validation errors - method never executed, so SKIPPED
 	if callID == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("callID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("callID cannot be empty")
 	}
 	if objectType == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectType cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("objectType cannot be empty")
 	}
 	if objectID == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("objectID cannot be empty")
 	}
 	if methodName == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("methodName cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("methodName cannot be empty")
 	}
 
 	// Get the persistence provider to access reliable calls
@@ -408,15 +410,17 @@ func (node *Node) ReliableCallObject(
 
 	if provider == nil {
 		// No persistence provider configured - cannot process reliable calls
+		// Pre-execution error - method never executed, so SKIPPED
 		node.logger.Warnf("ReliableCallObject: no persistence provider configured")
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("no persistence provider configured")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("no persistence provider configured")
 	}
 
 	// Auto-create object first if it doesn't exist (needed to access object's seqWriteMu)
+	// Pre-execution error - method never executed, so SKIPPED
 	err := node.createObject(ctx, objectType, objectID)
 	if err != nil {
 		node.logger.Errorf("ReliableCallObject: failed to auto-create object %s: %v", objectID, err)
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
 	// Acquire per-key read lock for the entire operation.
@@ -431,14 +435,16 @@ func (node *Node) ReliableCallObject(
 	node.objectsMu.RUnlock()
 
 	if !ok {
+		// Pre-execution error - method never executed, so SKIPPED
 		node.logger.Errorf("ReliableCallObject: object %s was not found", objectID)
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("object %s was not found", objectID)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("object %s was not found", objectID)
 	}
 
 	// Validate that the provided type matches the object's actual type
+	// Pre-execution validation error - method never executed, so SKIPPED
 	if obj.Type() != objectType {
 		node.logger.Errorf("ReliableCallObject: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
 	}
 
 	// Acquire object's sequential write lock for INSERT
@@ -454,8 +460,9 @@ func (node *Node) ReliableCallObject(
 	unlockSeqWrite()
 
 	if err != nil {
+		// INSERT failed - pre-execution error, method never executed, so SKIPPED
 		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to insert or get reliable call: %w", err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to insert or get reliable call: %w", err)
 	}
 
 	// Check if the call was already completed (idempotency)
@@ -465,10 +472,11 @@ func (node *Node) ReliableCallObject(
 		node.logger.Infof("Reliable call %s already succeeded, returning cached result", callID)
 		resultAny, err := protohelper.BytesToAny(rc.ResultData)
 		if err != nil {
-			// Deserialization failed for a successful call - this shouldn't happen
-			// Return UNKNOWN status to indicate an internal error
+			// Deserialization failed for a successful call
+			// The method WAS executed successfully, so return FAILED status
+			// This indicates a post-execution infrastructure error
 			node.logger.Errorf("Failed to deserialize result for successful call %s: %v", callID, err)
-			return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to deserialize successful call result: %w", err)
+			return nil, goverse_pb.ReliableCallStatus_FAILED, fmt.Errorf("failed to deserialize successful call result: %w", err)
 		}
 		return resultAny, status, nil
 	case "failed", "skipped":
@@ -526,8 +534,10 @@ func (node *Node) ReliableCallObject(
 	case "success":
 		resultAny, err := protohelper.BytesToAny(call.ResultData)
 		if err != nil {
+			// Deserialization failed for a successful call
+			// The method WAS executed successfully, so return FAILED status
 			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
-			return nil, status, fmt.Errorf("failed to wrap result: %w", err)
+			return nil, goverse_pb.ReliableCallStatus_FAILED, fmt.Errorf("failed to wrap result: %w", err)
 		}
 		node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
 		return resultAny, status, nil

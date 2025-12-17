@@ -801,35 +801,38 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 //	}
 func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
 	// Validate input parameters
+	// These are pre-execution validation errors - method never executed, so SKIPPED
 	if callID == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("callID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("callID cannot be empty")
 	}
 	if objectType == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectType cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("objectType cannot be empty")
 	}
 	if objectID == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("objectID cannot be empty")
 	}
 	if methodName == "" {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("methodName cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("methodName cannot be empty")
 	}
 
 	// Only node clusters should have persistence provider
 	if !c.isNode() {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
 	}
 
 	// Serialize request data BEFORE routing
+	// Pre-execution error - method never executed, so SKIPPED
 	requestData, err := protohelper.MsgToBytes(request)
 	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Find the target node FIRST (before INSERT)
 	// This ensures INSERT happens on the owner node with proper locking
+	// Pre-execution error - method never executed, so SKIPPED
 	targetNodeAddr, err := c.GetCurrentNodeForObject(ctx, objectID)
 	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
 	}
 
 	c.logger.Infof("%s - Routing reliable call %s to target node %s for object %s (type: %s, method: %s)",
@@ -852,9 +855,10 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	// Remote: send RPC with full call data to owner node
 	c.logger.Infof("%s - Routing reliable call %s to remote node %s for object %s (type: %s)", c, callID, targetNodeAddr, objectID, objectType)
 
+	// Pre-execution error - method never executed, so SKIPPED
 	client, err := c.nodeConnections.GetConnection(targetNodeAddr)
 	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
 	}
 
 	// Issue ReliableCallObject RPC to target node with full call data
@@ -866,9 +870,10 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		RequestData: requestData,
 	}
 
+	// RPC error before INSERT - pre-execution error, so SKIPPED
 	resp, err := client.ReliableCallObject(ctx, req)
 	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
 	}
 
 	// Check if the response contains an error
