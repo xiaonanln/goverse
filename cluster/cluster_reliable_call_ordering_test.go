@@ -163,7 +163,7 @@ func TestReliableCallObject_ConcurrentOrderingGuarantee(t *testing.T) {
 			callID := fmt.Sprintf("concurrent-call-%d", idx)
 			request := &counter_pb.IncrementRequest{Amount: 1}
 
-			result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+			result, _, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 			if err != nil {
 				errors <- fmt.Errorf("call %d failed: %w", idx, err)
 				return
@@ -357,7 +357,7 @@ func TestReliableCallObject_LocalVsRemoteOrdering(t *testing.T) {
 
 		t.Logf("Making call %d from %s cluster", i, location)
 
-		result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		result, _, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("Call %d failed: %v", i, err)
 		}

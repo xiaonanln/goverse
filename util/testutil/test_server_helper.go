@@ -119,7 +119,7 @@ type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	DeleteObject(ctx context.Context, id string) error
-	ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, requestData []byte) (*anypb.Any, error)
+	ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, requestData []byte) (*anypb.Any, goverse_pb.ReliableCallStatus, error)
 }
 
 type clusterInterface interface {
@@ -292,7 +292,7 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 	}
 
 	// Call ReliableCallObject on the actual node with new parameters
-	resultAny, err := node.ReliableCallObject(
+	resultAny, status, err := node.ReliableCallObject(
 		ctx,
 		req.GetCallId(),
 		req.GetObjectType(),
@@ -302,12 +302,14 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 	)
 	if err != nil {
 		return &goverse_pb.ReliableCallObjectResponse{
-			Error: err.Error(),
+			Error:  err.Error(),
+			Status: status,
 		}, nil
 	}
 
 	return &goverse_pb.ReliableCallObjectResponse{
 		Result: resultAny,
+		Status: status,
 	}, nil
 }
 
