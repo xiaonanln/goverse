@@ -141,9 +141,15 @@ func (em *EvictionManager) shouldEvictObject(obj Object) (bool, string) {
 	creation := em.creationTime[objID]
 	em.mu.RUnlock()
 
-	// If we don't have a creation time, use the object's creation time
+	// If we don't have a creation time tracked, use the object's creation time
+	// and update our tracking for future checks
 	if creation.IsZero() {
 		creation = obj.CreationTime()
+		if !creation.IsZero() {
+			em.mu.Lock()
+			em.creationTime[objID] = creation
+			em.mu.Unlock()
+		}
 	}
 
 	// Check if policy says to evict

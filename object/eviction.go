@@ -47,6 +47,11 @@ func (p *IdleTimeoutPolicy) ShouldEvict(lastAccessTime time.Time, creationTime t
 		referenceTime = creationTime
 	}
 	
+	// If both times are zero, object is not tracked properly - don't evict
+	if referenceTime.IsZero() {
+		return false
+	}
+	
 	// Check if idle timeout has elapsed
 	idleDuration := time.Since(referenceTime)
 	return idleDuration >= p.IdleTimeout
@@ -66,6 +71,10 @@ type TTLPolicy struct {
 
 // ShouldEvict returns true if the object has existed for longer than TTL.
 func (p *TTLPolicy) ShouldEvict(lastAccessTime time.Time, creationTime time.Time) bool {
+	// If creation time is zero, object is not tracked properly - don't evict
+	if creationTime.IsZero() {
+		return false
+	}
 	age := time.Since(creationTime)
 	return age >= p.TTL
 }
