@@ -11,6 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/uniqueid"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -589,6 +590,34 @@ func (base *BaseObject) cleanupProcessingLoop() {
 	base.seqWaiters = nil
 }
 
+// saveLocked saves persistent object state after RC execution to ensure consistency.
+// Must be called while holding stateMu.Lock().
+// For non-persistent objects, ToData() returns ErrNotPersistent and we skip saving.
+func (base *BaseObject) saveLocked(provider PersistenceProvider, call *ReliableCall) {
+	data, dataErr := base.self.ToData()
+	if dataErr != nil {
+		// Non-persistent object, skip saving
+		return
+	}
+
+	// Object is persistent - save state + nextRcseq
+	saveCtx, saveCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer saveCancel()
+
+	jsonData, marshalErr := protojson.Marshal(data)
+	if marshalErr != nil {
+		base.Logger.Errorf("Failed to marshal object data after RC %s (seq=%d): %v", call.CallID, call.Seq, marshalErr)
+		return
+	}
+
+	if saveErr := provider.SaveObject(saveCtx, base.id, base.self.Type(), jsonData, base.nextRcseq.Load()); saveErr != nil {
+		base.Logger.Errorf("Failed to save object after RC %s (seq=%d): %v", call.CallID, call.Seq, saveErr)
+		return
+	}
+
+	base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
+}
+
 // processReliableCall executes a single reliable call
 // Holds stateMu.Lock() during execution to ensure atomic state mutation + nextRcseq update
 func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *ReliableCall) {
@@ -597,14 +626,18 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 
 	// Helper to finalize call status and persist
 	finalize := func(status string, resultData []byte, errMsg string) {
-		// Persist to DB BEFORE updating in-memory counter
+		// Update nextRcseq INSIDE the lock (after state mutation)
+		base.nextRcseq.Store(call.Seq + 1)
+
+		// Save persistent object state after RC execution to ensure consistency
+		base.saveLocked(provider, call)
+
+		// Persist RC status to DB after saving object state
 		// This ensures other goroutines querying by seq see the updated status
 		updateCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_ = provider.UpdateReliableCallStatus(updateCtx, call.Seq, status, resultData, errMsg)
 
-		// Now safe to advance in-memory counter - DB is already updated
-		base.nextRcseq.Store(call.Seq + 1)
 		call.Status = status
 		call.ResultData = resultData
 		call.Error = errMsg

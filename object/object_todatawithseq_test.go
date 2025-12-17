@@ -114,7 +114,7 @@ func TestBaseObject_ToDataWithSeq_Consistency(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numIterations; j++ {
 				c := <-counterChan
-				
+
 				// Simulate processReliableCall behavior:
 				// Set state and nextRcseq atomically while holding stateMu.Lock()
 				obj.stateMu.Lock()
@@ -126,7 +126,7 @@ func TestBaseObject_ToDataWithSeq_Consistency(t *testing.T) {
 	}
 
 	// Reader goroutines that call ToDataWithSeq
-	var readErrors sync.Map  // map[string]bool to track unique errors
+	var readErrors sync.Map // map[string]bool to track unique errors
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -165,7 +165,7 @@ func TestBaseObject_ToDataWithSeq_Consistency(t *testing.T) {
 		}
 		return true
 	})
-	
+
 	if errorCount > 0 {
 		t.Errorf("Found %d inconsistent (data, nextRcseq) pairs - race condition detected!", errorCount)
 	}
