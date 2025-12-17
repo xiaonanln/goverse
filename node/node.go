@@ -75,6 +75,7 @@ type Node struct {
 	stopped               atomic.Bool                // Atomic flag to indicate node is stopping/stopped
 	stopMu                sync.RWMutex               // RWMutex to coordinate Stop with in-flight operations
 	lifecycleValidator    *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
+	evictionManager       *EvictionManager           // Manages automatic eviction of objects based on policies
 }
 
 // NewNode creates a new Node instance
@@ -110,6 +111,10 @@ func (node *Node) Start(ctx context.Context) error {
 		node.StartPeriodicPersistence(ctx)
 	}
 
+	// Start the eviction manager
+	node.evictionManager = newEvictionManager(node)
+	node.evictionManager.start()
+
 	// Start the inspector manager
 	return node.inspectorManager.Start(ctx)
 }
@@ -134,6 +139,12 @@ func (node *Node) Stop(ctx context.Context) error {
 
 	if hasProvider {
 		node.StopPeriodicPersistence()
+	}
+
+	// Stop the eviction manager BEFORE acquiring write lock to avoid deadlock.
+	// The eviction loop may be calling DeleteObject which needs stopMu.RLock.
+	if node.evictionManager != nil {
+		node.evictionManager.stop()
 	}
 
 	// Acquire write lock to wait for all in-flight operations to complete
@@ -297,6 +308,11 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	if obj.Type() != typ {
 		callErr = fmt.Errorf("object type mismatch: expected %s, got %s for object %s", typ, obj.Type(), id)
 		return nil, callErr
+	}
+
+	// Track object access for eviction manager
+	if node.evictionManager != nil {
+		node.evictionManager.TrackAccess(id)
 	}
 
 	// Call the method via reflection
@@ -706,6 +722,11 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 
 	node.logger.Infof("Created object %s of type %s", id, typ)
 	obj.OnCreated()
+
+	// Track object creation for eviction manager
+	if node.evictionManager != nil {
+		node.evictionManager.TrackCreation(id)
+	}
 
 	// Process any pending reliable calls for this object
 	// This ensures calls made while the object was inactive are processed upon activation
