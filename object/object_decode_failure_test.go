@@ -53,18 +53,18 @@ func TestProcessReliableCall_AdvancesNextRcseqOnDecodeFailure(t *testing.T) {
 		t.Errorf("nextRcseq not advanced on decode failure: expected 11, got %d", obj.GetNextRcseq())
 	}
 
-	// Verify the call was marked as failed
+	// Verify the call was marked as skipped (decode failures are marked as skipped, not failed)
 	status, ok := provider.statusUpdates[10]
 	if !ok {
 		t.Errorf("Status update not recorded for seq=10")
 	}
-	if status != "failed" {
-		t.Errorf("Expected status='failed', got '%s'", status)
+	if status != "skipped" {
+		t.Errorf("Expected status='skipped', got '%s'", status)
 	}
 
-	// Verify call status was updated to failed
-	if call.Status != "failed" {
-		t.Errorf("Expected call.Status='failed', got '%s'", call.Status)
+	// Verify call status was updated to skipped
+	if call.Status != "skipped" {
+		t.Errorf("Expected call.Status='skipped', got '%s'", call.Status)
 	}
 
 	// Verify error message was set
