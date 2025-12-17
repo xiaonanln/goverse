@@ -686,15 +686,17 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 	// Unmarshal the request data to proto.Message
 	requestMsg, err := protohelper.BytesToMsg(call.RequestData)
 	if err != nil {
-		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
-		finalize("failed", nil, err.Error())
+		// Pre-execution error (deserialization failed) - mark as skipped
+		base.Logger.Errorf("Reliable call %s (seq=%d) skipped due to deserialization error: %v", call.CallID, call.Seq, err)
+		finalize("skipped", nil, err.Error())
 		return
 	}
 
 	// Invoke the method on the object (state mutation happens here)
 	result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
 	if err != nil {
-		base.Logger.Errorf("Reliable call %s (seq=%d) failed: %v", call.CallID, call.Seq, err)
+		// Execution error (method invocation failed) - mark as failed
+		base.Logger.Errorf("Reliable call %s (seq=%d) failed during execution: %v", call.CallID, call.Seq, err)
 		finalize("failed", nil, err.Error())
 		return
 	}

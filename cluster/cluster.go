@@ -799,37 +799,37 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 //	} else if rc.Status == "failed" {
 //	    // Handle rc.Error
 //	}
-func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (proto.Message, error) {
+func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
 	// Validate input parameters
 	if callID == "" {
-		return nil, fmt.Errorf("callID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("callID cannot be empty")
 	}
 	if objectType == "" {
-		return nil, fmt.Errorf("objectType cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectType cannot be empty")
 	}
 	if objectID == "" {
-		return nil, fmt.Errorf("objectID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectID cannot be empty")
 	}
 	if methodName == "" {
-		return nil, fmt.Errorf("methodName cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("methodName cannot be empty")
 	}
 
 	// Only node clusters should have persistence provider
 	if !c.isNode() {
-		return nil, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
 	}
 
 	// Serialize request data BEFORE routing
 	requestData, err := protohelper.MsgToBytes(request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Find the target node FIRST (before INSERT)
 	// This ensures INSERT happens on the owner node with proper locking
 	targetNodeAddr, err := c.GetCurrentNodeForObject(ctx, objectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to determine target node for object %s: %w", objectID, err)
 	}
 
 	c.logger.Infof("%s - Routing reliable call %s to target node %s for object %s (type: %s, method: %s)",
@@ -841,11 +841,12 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	if targetNodeAddr == c.getAdvertiseAddr() {
 		// Local: INSERT + execute on this node
 		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
-		resultAny, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		resultAny, status, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to process reliable call locally: %w", err)
+			return nil, status, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
-		return protohelper.AnyToMsg(resultAny)
+		msg, err := protohelper.AnyToMsg(resultAny)
+		return msg, status, err
 	}
 
 	// Remote: send RPC with full call data to owner node
@@ -853,7 +854,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	client, err := c.nodeConnections.GetConnection(targetNodeAddr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
 	}
 
 	// Issue ReliableCallObject RPC to target node with full call data
@@ -867,16 +868,17 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	resp, err := client.ReliableCallObject(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
 	}
 
 	// Check if the response contains an error
 	if resp.Error != "" {
-		return nil, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
+		return nil, resp.Status, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
 	}
 
 	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
-	return protohelper.AnyToMsg(resp.Result)
+	msg, err := protohelper.AnyToMsg(resp.Result)
+	return msg, resp.Status, err
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it

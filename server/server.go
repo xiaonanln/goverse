@@ -520,7 +520,7 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 	}
 
 	// Route to node handler with new parameters
-	resultAny, err := server.Node.ReliableCallObject(
+	resultAny, status, err := server.Node.ReliableCallObject(
 		ctx,
 		req.GetCallId(),
 		req.GetObjectType(),
@@ -529,12 +529,18 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 		req.GetRequestData(),
 	)
 	if err != nil {
-		return nil, err
+		// Return error with status information
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  err.Error(),
+			Status: status,
+		}, nil
 	}
 
 	response := &goverse_pb.ReliableCallObjectResponse{
 		Result: resultAny,
 		Error:  "",
+		Status: status,
 	}
 	return response, nil
 }

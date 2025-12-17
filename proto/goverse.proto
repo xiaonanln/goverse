@@ -92,6 +92,15 @@ message GateMessage {
   }
 }
 
+// ReliableCallStatus represents the execution status of a reliable call
+enum ReliableCallStatus {
+  UNKNOWN = 0;   // Unknown or unspecified status
+  PENDING = 1;   // Call is pending execution
+  SUCCESS = 2;   // Call executed successfully
+  FAILED = 3;    // Call executed but method invocation failed
+  SKIPPED = 4;   // Call failed before execution (deserialization, validation errors)
+}
+
 message ReliableCallObjectRequest {
   string call_id = 1;      // Unique call identifier for deduplication
   string object_type = 2;  // Type of the target object
@@ -102,7 +111,8 @@ message ReliableCallObjectRequest {
 
 message ReliableCallObjectResponse {
   google.protobuf.Any result = 1;   // Serialized result data (populated on success)
-  string error = 2;        // Error message (populated on failure)
+  string error = 2;                 // Error message (populated on failure)
+  ReliableCallStatus status = 3;    // Execution status of the call
 }
 
 message Empty {}

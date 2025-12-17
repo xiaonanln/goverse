@@ -15,6 +15,7 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/node/inspectormanager"
 	"github.com/xiaonanln/goverse/object"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/clusterinfo"
 	"github.com/xiaonanln/goverse/util/keylock"
 	"github.com/xiaonanln/goverse/util/logger"
@@ -340,9 +341,26 @@ func (node *Node) InsertOrGetReliableCall(ctx context.Context, callID string, ob
 	return rc, nil
 }
 
+// stringToReliableCallStatus converts a string status to ReliableCallStatus enum
+func stringToReliableCallStatus(status string) goverse_pb.ReliableCallStatus {
+	switch status {
+	case "pending":
+		return goverse_pb.ReliableCallStatus_PENDING
+	case "success":
+		return goverse_pb.ReliableCallStatus_SUCCESS
+	case "failed":
+		return goverse_pb.ReliableCallStatus_FAILED
+	case "skipped":
+		return goverse_pb.ReliableCallStatus_SKIPPED
+	default:
+		return goverse_pb.ReliableCallStatus_UNKNOWN
+	}
+}
+
 // ReliableCallObject handles a reliable call request for an object.
 // It performs INSERT with the object's seqWriteMu to ensure sequential seq allocation,
 // then fetches and executes pending reliable calls from the persistence provider.
+// Returns the result, status, and error.
 func (node *Node) ReliableCallObject(
 	ctx context.Context,
 	callID string,
@@ -350,7 +368,7 @@ func (node *Node) ReliableCallObject(
 	objectID string,
 	methodName string,
 	requestData []byte,
-) (*anypb.Any, error) {
+) (*anypb.Any, goverse_pb.ReliableCallStatus, error) {
 	// Lock ordering:
 	// 1. stopMu.RLock (held throughout)
 	// 2. objectLifecycleLock.RLock (held briefly to fetch object and acquire seqWriteMu)
@@ -363,7 +381,7 @@ func (node *Node) ReliableCallObject(
 
 	// Check if node is stopped after acquiring lock
 	if node.stopped.Load() {
-		return nil, fmt.Errorf("node is stopped")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("node is stopped")
 	}
 
 	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s, method=%s",
@@ -371,16 +389,16 @@ func (node *Node) ReliableCallObject(
 
 	// Validate input parameters
 	if callID == "" {
-		return nil, fmt.Errorf("callID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("callID cannot be empty")
 	}
 	if objectType == "" {
-		return nil, fmt.Errorf("objectType cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectType cannot be empty")
 	}
 	if objectID == "" {
-		return nil, fmt.Errorf("objectID cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("objectID cannot be empty")
 	}
 	if methodName == "" {
-		return nil, fmt.Errorf("methodName cannot be empty")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("methodName cannot be empty")
 	}
 
 	// Get the persistence provider to access reliable calls
@@ -391,14 +409,14 @@ func (node *Node) ReliableCallObject(
 	if provider == nil {
 		// No persistence provider configured - cannot process reliable calls
 		node.logger.Warnf("ReliableCallObject: no persistence provider configured")
-		return nil, fmt.Errorf("no persistence provider configured")
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("no persistence provider configured")
 	}
 
 	// Auto-create object first if it doesn't exist (needed to access object's seqWriteMu)
 	err := node.createObject(ctx, objectType, objectID)
 	if err != nil {
 		node.logger.Errorf("ReliableCallObject: failed to auto-create object %s: %v", objectID, err)
-		return nil, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to auto-create object %s: %w", objectID, err)
 	}
 
 	// Acquire per-key read lock for the entire operation.
@@ -414,13 +432,13 @@ func (node *Node) ReliableCallObject(
 
 	if !ok {
 		node.logger.Errorf("ReliableCallObject: object %s was not found", objectID)
-		return nil, fmt.Errorf("object %s was not found", objectID)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("object %s was not found", objectID)
 	}
 
 	// Validate that the provided type matches the object's actual type
 	if obj.Type() != objectType {
 		node.logger.Errorf("ReliableCallObject: object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
-		return nil, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("object type mismatch: expected %s, got %s for object %s", objectType, obj.Type(), objectID)
 	}
 
 	// Acquire object's sequential write lock for INSERT
@@ -437,17 +455,19 @@ func (node *Node) ReliableCallObject(
 
 	if err != nil {
 		node.logger.Errorf("Failed to insert or get reliable call %s: %v", callID, err)
-		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to insert or get reliable call: %w", err)
 	}
 
 	// Check if the call was already completed (idempotency)
+	status := stringToReliableCallStatus(rc.Status)
 	switch rc.Status {
 	case "success":
 		node.logger.Infof("Reliable call %s already succeeded, returning cached result", callID)
-		return protohelper.BytesToAny(rc.ResultData)
-	case "failed":
-		node.logger.Infof("Reliable call %s already failed, returning cached error", callID)
-		return nil, fmt.Errorf("reliable call failed: %s", rc.Error)
+		resultAny, err := protohelper.BytesToAny(rc.ResultData)
+		return resultAny, status, err
+	case "failed", "skipped":
+		node.logger.Infof("Reliable call %s already %s, returning cached error", callID, rc.Status)
+		return nil, status, fmt.Errorf("reliable call %s: %s", rc.Status, rc.Error)
 	}
 
 	// Call is pending - continue with execution
@@ -477,7 +497,7 @@ func (node *Node) ReliableCallObject(
 			call, err = provider.GetReliableCallBySeq(ctx, seq)
 			if err != nil {
 				node.logger.Errorf("Failed to retrieve call seq=%d from database: %v", seq, err)
-				return nil, fmt.Errorf("failed to retrieve call from database: %w", err)
+				return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to retrieve call from database: %w", err)
 			}
 
 			node.logger.Infof("DEBUG: Call seq=%d status is %q after %d retries (call_id=%s, object_id=%s, method=%s)",
@@ -489,31 +509,35 @@ func (node *Node) ReliableCallObject(
 			// Still pending - auto-load might be updating DB, wait briefly
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, goverse_pb.ReliableCallStatus_UNKNOWN, ctx.Err()
 			case <-time.After(retryInterval):
 			}
 		}
 	}
 
+	status = stringToReliableCallStatus(call.Status)
 	switch call.Status {
 	case "success":
 		resultAny, err := protohelper.BytesToAny(call.ResultData)
 		if err != nil {
 			node.logger.Errorf("Failed to wrap result for call seq=%d: %v", seq, err)
-			return nil, fmt.Errorf("failed to wrap result: %w", err)
+			return nil, status, fmt.Errorf("failed to wrap result: %w", err)
 		}
 		node.logger.Infof("Successfully retrieved result for call seq=%d (call_id=%s)", seq, callID)
-		return resultAny, nil
+		return resultAny, status, nil
 	case "failed":
 		node.logger.Errorf("Reliable call seq=%d (call_id=%s) failed: %s", seq, callID, call.Error)
-		return nil, fmt.Errorf("reliable call failed: %s", call.Error)
+		return nil, status, fmt.Errorf("reliable call failed: %s", call.Error)
+	case "skipped":
+		node.logger.Errorf("Reliable call seq=%d (call_id=%s) skipped: %s", seq, callID, call.Error)
+		return nil, status, fmt.Errorf("reliable call skipped: %s", call.Error)
 	case "pending":
 		// Should not reach here since processing loop retries when new waiters are present
 		node.logger.Errorf("BUG: Reliable call seq=%d (call_id=%s) still pending after processing", seq, callID)
-		return nil, fmt.Errorf("BUG: reliable call seq=%d still pending after processing", seq)
+		return nil, status, fmt.Errorf("BUG: reliable call seq=%d still pending after processing", seq)
 	default:
 		node.logger.Errorf("Unknown status for call seq=%d: %s", seq, call.Status)
-		return nil, fmt.Errorf("unknown reliable call status: %s", call.Status)
+		return nil, status, fmt.Errorf("unknown reliable call status: %s", call.Status)
 	}
 }
 
