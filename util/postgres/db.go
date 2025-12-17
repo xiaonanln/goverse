@@ -82,14 +82,14 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		request_data BYTEA NOT NULL,
 		result_data BYTEA,
 		error_message TEXT,
-		status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
+		status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed', 'skipped')),
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		CONSTRAINT valid_success_state CHECK (
 			status != 'success' OR result_data IS NOT NULL
 		),
-		CONSTRAINT valid_failed_state CHECK (
-			status != 'failed' OR error_message IS NOT NULL
+		CONSTRAINT valid_error_state CHECK (
+			status NOT IN ('failed', 'skipped') OR error_message IS NOT NULL
 		)
 	);
 

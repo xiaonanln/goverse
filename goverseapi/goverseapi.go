@@ -9,6 +9,7 @@ import (
 	"github.com/xiaonanln/goverse/node"
 	"github.com/xiaonanln/goverse/node/serverconfig"
 	"github.com/xiaonanln/goverse/object"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/server"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/uniqueid"
@@ -89,19 +90,35 @@ func CallObject(ctx context.Context, objType, id string, method string, request 
 //   - method: The name of the method to call on the object
 //   - request: The protobuf message to pass as the method argument
 //
-// Returns the result of the method call, or an error if the call fails.
+// Returns:
+//   - proto.Message: The result of the method call (nil on error)
+//   - goverse_pb.ReliableCallStatus: The execution status (SUCCESS, FAILED, SKIPPED, etc.)
+//   - error: Error information if the call failed
 //
 // The callID is used for deduplication - if you retry with the same callID, the cached result
 // is returned without re-executing the method. This provides exactly-once semantics.
 //
+// The status indicates whether the call was executed:
+//   - SUCCESS: Call executed successfully
+//   - FAILED: Call executed but method invocation failed
+//   - SKIPPED: Call failed before execution (deserialization, validation errors)
+//
+// Callers can use the status to determine if retry is safe:
+//   - SKIPPED: Safe to retry with corrected data
+//   - FAILED: May have side effects, retry with caution
+//
 // Example:
 //
 //	callID := goverseapi.GenerateCallID()
-//	result, err := goverseapi.ReliableCallObject(ctx, callID, "OrderProcessor", "order-123", "ProcessPayment", request)
+//	result, status, err := goverseapi.ReliableCallObject(ctx, callID, "OrderProcessor", "order-123", "ProcessPayment", request)
 //	if err != nil {
-//	    // Handle error
+//	    if status == goverse_pb.ReliableCallStatus_SKIPPED {
+//	        // Safe to retry - call was never executed
+//	    } else if status == goverse_pb.ReliableCallStatus_FAILED {
+//	        // Caution - call was executed, may have side effects
+//	    }
 //	}
-func ReliableCallObject(ctx context.Context, callID string, objType, objID string, method string, request proto.Message) (proto.Message, error) {
+func ReliableCallObject(ctx context.Context, callID string, objType, objID string, method string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
 	return cluster.This().ReliableCallObject(ctx, callID, objType, objID, method, request)
 }
 

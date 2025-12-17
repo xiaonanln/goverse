@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/object"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	counter_pb "github.com/xiaonanln/goverse/samples/counter/proto"
 	"github.com/xiaonanln/goverse/util/postgres"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -100,9 +101,12 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		methodName := "Increment"
 		request := &counter_pb.IncrementRequest{Amount: 5}
 
-		result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		result, status, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
+		}
+		if status != goverse_pb.ReliableCallStatus_SUCCESS {
+			t.Fatalf("Expected status SUCCESS, got %v", status)
 		}
 
 		// Result should be a CounterResponse
@@ -191,9 +195,12 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		}
 
 		// Now actually call it - should execute the pending call and return success
-		result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		result, status, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("ReliableCallObject failed: %v", err)
+		}
+		if status != goverse_pb.ReliableCallStatus_SUCCESS {
+			t.Fatalf("Expected status SUCCESS, got %v", status)
 		}
 
 		// Verify the result
@@ -226,17 +233,23 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		request := &counter_pb.IncrementRequest{Amount: 7}
 
 		// Insert first call
-		result1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		result1, status1, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("First call failed: %v", err)
+		}
+		if status1 != goverse_pb.ReliableCallStatus_SUCCESS {
+			t.Fatalf("Expected status SUCCESS, got %v", status1)
 		}
 
 		response1 := result1.(*counter_pb.CounterResponse)
 
 		// Try to insert duplicate call - should return the cached result
-		result2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		result2, status2, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			t.Fatalf("Duplicate call failed: %v", err)
+		}
+		if status2 != goverse_pb.ReliableCallStatus_SUCCESS {
+			t.Fatalf("Expected status SUCCESS for duplicate, got %v", status2)
 		}
 
 		response2 := result2.(*counter_pb.CounterResponse)
@@ -274,9 +287,12 @@ func TestReliableCallObject_PostgresIntegration(t *testing.T) {
 		}
 
 		// Try to insert duplicate call - should return the cached error
-		_, err = cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+		_, status, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err == nil {
 			t.Fatal("Expected error for failed call, got nil")
+		}
+		if status != goverse_pb.ReliableCallStatus_FAILED {
+			t.Fatalf("Expected status FAILED, got %v", status)
 		}
 
 		// Error should contain the cached error message
@@ -357,8 +373,8 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 			callID := fmt.Sprintf("concurrent-call-%d", index)
 			request := &counter_pb.IncrementRequest{Amount: 1}
 
-			result, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
-			t.Logf("Reliable call %s completed, got result %v, error %v", callID, result, err)
+			result, status, err := cluster.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
+			t.Logf("Reliable call %s completed, got result %v, status %v, error %v", callID, result, status, err)
 			if err != nil {
 				errors[index] = err
 				return
@@ -408,7 +424,7 @@ func TestReliableCallObject_ConcurrentCalls(t *testing.T) {
 	// Verify the final counter value is exactly numGoroutines
 	finalCallID := "concurrent-final-check"
 	finalRequest := &counter_pb.IncrementRequest{Amount: 0}
-	finalResult, err := cluster.ReliableCallObject(ctx, finalCallID, objectType, objectID, methodName, finalRequest)
+	finalResult, _, err := cluster.ReliableCallObject(ctx, finalCallID, objectType, objectID, methodName, finalRequest)
 	if err != nil {
 		t.Fatalf("Final check call failed: %v", err)
 	}
@@ -558,7 +574,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 			t.Logf("Calling object %s from cluster %d (addr: %s)", objID, clusterIdx+1, callCluster.GetThisNode().GetAdvertiseAddress())
 
 			// Invoke the reliable call
-			result, err := callCluster.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+			result, _, err := callCluster.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
 			if err != nil {
 				t.Fatalf("ReliableCallObject failed for %s: %v", objID, err)
 			}
@@ -614,14 +630,14 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 		request := &counter_pb.IncrementRequest{Amount: 42}
 
 		// First call from cluster1
-		result1, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		result1, _, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
 		if err != nil {
 			t.Fatalf("First ReliableCallObject failed: %v", err)
 		}
 		response1 := result1.(*counter_pb.CounterResponse)
 
 		// Second call from cluster2 with same callID - should return cached result
-		result2, err := cluster2.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		result2, _, err := cluster2.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
 		if err != nil {
 			t.Fatalf("Second ReliableCallObject (dedup) failed: %v", err)
 		}
@@ -636,7 +652,7 @@ func TestReliableCallObject_MultiNodeDistributed(t *testing.T) {
 		}
 
 		// Third call from cluster3 - should also return cached result
-		result3, err := cluster3.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		result3, _, err := cluster3.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
 		if err != nil {
 			t.Fatalf("Third ReliableCallObject (dedup) failed: %v", err)
 		}
@@ -734,7 +750,7 @@ func TestReliableCallObject_CrossClusterWithShutdown(t *testing.T) {
 		t.Logf("Calling object %s from cluster1 (should route to cluster2)", objID)
 
 		// Invoke the reliable call from cluster1
-		result, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		result, _, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
 		if err != nil {
 			t.Fatalf("ReliableCallObject failed: %v", err)
 		}
@@ -792,7 +808,7 @@ func TestReliableCallObject_CrossClusterWithShutdown(t *testing.T) {
 		t.Logf("Calling object %s from cluster1 (target node is down)", objID)
 
 		// Invoke the reliable call from cluster1 - should fail since target node is unavailable
-		result, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
+		result, _, err := cluster1.ReliableCallObject(ctx, callID, "TestCounter", objID, methodName, request)
 		if err == nil {
 			t.Logf("Note: Call succeeded (shard may have been reassigned). Result: %v", result)
 			// This is acceptable if the leader already reassigned shards
