@@ -242,6 +242,21 @@ type Object interface {
 	//   - proto.Message: The response from the method invocation
 	//   - error: Method invocation error, validation error, or nil on success
 	InvokeMethod(ctx context.Context, method string, request proto.Message) (proto.Message, error)
+
+	// Save saves the persistent object state to the provided persistence provider.
+	// This method acquires stateMu.Lock() internally to ensure consistent state snapshots.
+	// For non-persistent objects, returns ErrNotPersistent.
+	//
+	// Thread-Safety: This method is thread-safe and can be called concurrently with
+	// object method execution. It acquires the internal state lock to ensure a consistent
+	// snapshot of object state and nextRcseq.
+	//
+	// Parameters:
+	//   - provider: PersistenceProvider for saving object state to storage
+	//
+	// Returns:
+	//   - error: ErrNotPersistent for non-persistent objects, or save error
+	Save(provider PersistenceProvider) error
 }
 
 // ErrNotPersistent is returned when an object type does not support persistence.
@@ -590,14 +605,25 @@ func (base *BaseObject) cleanupProcessingLoop() {
 	base.seqWaiters = nil
 }
 
+// Save saves persistent object state to the provided persistence provider.
+// This method acquires stateMu.Lock() to ensure consistent state snapshots.
+// For non-persistent objects, returns ErrNotPersistent.
+// For persistent objects, saves state and returns any error encountered.
+func (base *BaseObject) Save(provider PersistenceProvider) error {
+	base.stateMu.Lock()
+	defer base.stateMu.Unlock()
+	return base.saveLocked(provider, nil)
+}
+
 // saveLocked saves persistent object state after RC execution to ensure consistency.
 // Must be called while holding stateMu.Lock().
-// For non-persistent objects, ToData() returns ErrNotPersistent and we skip saving.
-func (base *BaseObject) saveLocked(provider PersistenceProvider, call *ReliableCall) {
+// For non-persistent objects, returns ErrNotPersistent.
+// The call parameter is optional (can be nil) and only used for logging context.
+func (base *BaseObject) saveLocked(provider PersistenceProvider, call *ReliableCall) error {
 	data, dataErr := base.self.ToData()
 	if dataErr != nil {
-		// Non-persistent object, skip saving
-		return
+		// Non-persistent object - return error so caller can handle appropriately
+		return dataErr
 	}
 
 	// Object is persistent - save state + nextRcseq
@@ -606,16 +632,29 @@ func (base *BaseObject) saveLocked(provider PersistenceProvider, call *ReliableC
 
 	jsonData, marshalErr := protojson.Marshal(data)
 	if marshalErr != nil {
-		base.Logger.Errorf("Failed to marshal object data after RC %s (seq=%d): %v", call.CallID, call.Seq, marshalErr)
-		return
+		if call != nil {
+			base.Logger.Errorf("Failed to marshal object data after RC %s (seq=%d): %v", call.CallID, call.Seq, marshalErr)
+		} else {
+			base.Logger.Errorf("Failed to marshal object data: %v", marshalErr)
+		}
+		return marshalErr
 	}
 
 	if saveErr := provider.SaveObject(saveCtx, base.id, base.self.Type(), jsonData, base.nextRcseq.Load()); saveErr != nil {
-		base.Logger.Errorf("Failed to save object after RC %s (seq=%d): %v", call.CallID, call.Seq, saveErr)
-		return
+		if call != nil {
+			base.Logger.Errorf("Failed to save object after RC %s (seq=%d): %v", call.CallID, call.Seq, saveErr)
+		} else {
+			base.Logger.Errorf("Failed to save object: %v", saveErr)
+		}
+		return saveErr
 	}
 
-	base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
+	if call != nil {
+		base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
+	} else {
+		base.Logger.Infof("Saved persistent object")
+	}
+	return nil
 }
 
 // processReliableCall executes a single reliable call
@@ -630,7 +669,8 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 		base.nextRcseq.Store(call.Seq + 1)
 
 		// Save persistent object state after RC execution to ensure consistency
-		base.saveLocked(provider, call)
+		// Errors are logged by saveLocked but don't fail the RC processing
+		_ = base.saveLocked(provider, call)
 
 		// Persist RC status to DB after saving object state
 		// This ensures other goroutines querying by seq see the updated status
