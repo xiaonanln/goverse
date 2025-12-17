@@ -816,20 +816,22 @@ This section outlines a series of incremental PRs to implement the reliable call
 
 ---
 
-### PR 12: High-Level API: goverseapi.ReliableCallObject
+### PR 12: High-Level API: goverseapi.ReliableCallObject ✅ DONE
 
 **Focus**: Expose reliable call functionality through the high-level API for external callers (gates, clients).
 
 **Changes**:
-- Add `ReliableCallObject()` to `goverseapi/api.go`
-- Generate `call_id` if not provided
+- Add `ReliableCallObject()` to `goverseapi/goverseapi.go`
+- Requires `call_id` parameter (callers use `GenerateCallID()`)
 - Call `cluster.ReliableCallObject()` which handles DB insert + routing
-- Return result from cluster call
+- Return result and status from cluster call
 
 **Tests**:
 - End-to-end test: external caller invokes object method via `ReliableCallObject`
 - Test deduplication: same `call_id` returns cached result
 - Test call survives node restart (persistence)
+
+**Status**: Implemented in `goverseapi/goverseapi.go` with comprehensive integration tests in `cluster/cluster_reliable_call_integration_test.go`.
 
 ---
 
@@ -901,12 +903,12 @@ This section outlines a series of incremental PRs to implement the reliable call
 | 9 | nextRcseq Tracking | Prevent re-execution | ✅ Done |
 | 10 | Cluster Insert + Route | `cluster.ReliableCallObject()` | ✅ Done |
 | 11 | Result Routing | Return result via RPC to caller | ✅ Done |
-| 12 | External Caller API | `goverseapi.ReliableCallObject()` | Not Started |
+| 12 | External Caller API | `goverseapi.ReliableCallObject()` | ✅ Done |
 | 13 | Object-to-Object API | `goverseapi.ReliableCall()` | Not Started |
 | 14 | Object Activation | Process on create/activate | ✅ Done |
 | 15 | Crash Recovery | Re-execute unsaved calls | Not Started |
 
-Each PR builds on the previous one, allowing incremental development and testing. PRs 1-11 and 14 have been completed, providing the core infrastructure for reliable calls including database layer, gRPC endpoints, node execution, cluster routing, and result return. PRs 12-13 (high-level public APIs) and PR 15 (crash recovery enhancements) remain to be implemented.
+Each PR builds on the previous one, allowing incremental development and testing. PRs 1-12 and 14 have been completed, providing the core infrastructure for reliable calls including database layer, gRPC endpoints, node execution, cluster routing, result return, and the high-level external caller API. PRs 13 (object-to-object API) and 15 (crash recovery enhancements) remain to be implemented.
 
 ## Conclusion
 
