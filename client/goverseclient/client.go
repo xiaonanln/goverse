@@ -12,6 +12,7 @@ import (
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
@@ -47,6 +48,24 @@ var (
 	// ErrConnectionFailed is returned when connection to all gates fails.
 	ErrConnectionFailed = errors.New("failed to connect to any gate server")
 )
+
+// GenerateCallID generates a unique call ID for reliable calls.
+// The generated ID is guaranteed to be unique and can be used for reliable call deduplication.
+//
+// Use this function when you need to ensure exactly-once semantics for calls to objects.
+// By providing the same call ID in retry attempts, the reliable call system ensures the
+// operation is only executed once, with cached results returned for subsequent attempts.
+//
+// Example:
+//
+//	// Generate a unique call ID
+//	callID := goverseclient.GenerateCallID()
+//
+//	// Use it with reliable call
+//	result, status, err := client.ReliableCallObject(ctx, callID, "OrderProcessor", "order-123", "ProcessPayment", request)
+func GenerateCallID() string {
+	return uniqueid.UniqueId()
+}
 
 // MessageHandler is a function type for handling pushed messages.
 type MessageHandler func(msg proto.Message)
@@ -673,4 +692,91 @@ func (c *Client) ConnectionState() connectivity.State {
 	}
 
 	return conn.GetState()
+}
+
+// ReliableCallObject performs a reliable call to an object method with exactly-once semantics.
+// This ensures the call is executed exactly once, even in the presence of failures or retries.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - callID: Unique identifier for this call (used for deduplication). Generate using GenerateCallID()
+//   - objectType: The type name of the target object
+//   - objectID: The unique identifier of the target object
+//   - method: The name of the method to call on the object
+//   - request: The protobuf message to pass as the method argument
+//
+// Returns:
+//   - proto.Message: The result of the method call (nil on error)
+//   - string: The execution status (SUCCESS, FAILED, SKIPPED, etc.)
+//   - error: Error information if the call failed
+//
+// The callID is used for deduplication - if you retry with the same callID, the cached result
+// is returned without re-executing the method. This provides exactly-once semantics.
+//
+// Example:
+//
+//	callID := goverseclient.GenerateCallID()
+//	result, status, err := client.ReliableCallObject(ctx, callID, "BankAccount", "acc-123", "Transfer", request)
+//	if err != nil {
+//	    // Safe to retry with same callID - will get cached result
+//	    result, status, err = client.ReliableCallObject(ctx, callID, "BankAccount", "acc-123", "Transfer", request)
+//	}
+func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, objectID, method string, request proto.Message) (proto.Message, string, error) {
+	c.mu.RLock()
+	if c.closed {
+		c.mu.RUnlock()
+		return nil, "", ErrClientClosed
+	}
+	if !c.connected {
+		c.mu.RUnlock()
+		return nil, "", ErrNotConnected
+	}
+	client := c.client
+	c.mu.RUnlock()
+
+	// Apply default timeout if context has no deadline
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.options.CallTimeout)
+		defer cancel()
+	}
+
+	// Marshal request to Any
+	var requestAny *anypb.Any
+	if request != nil {
+		var err error
+		requestAny, err = anypb.New(request)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to marshal request: %w", err)
+		}
+	}
+
+	req := &gate_pb.ReliableCallObjectRequest{
+		CallId:  callID,
+		Type:    objectType,
+		Id:      objectID,
+		Method:  method,
+		Request: requestAny,
+	}
+
+	resp, err := client.ReliableCallObject(ctx, req)
+	if err != nil {
+		return nil, "", fmt.Errorf("ReliableCallObject RPC failed: %w", err)
+	}
+
+	// Check if the response contains an error
+	if resp.Error != "" {
+		return nil, resp.Status, fmt.Errorf("%s", resp.Error)
+	}
+
+	// Unmarshal response if present
+	if resp.Response != nil {
+		result, err := resp.Response.UnmarshalNew()
+		if err != nil {
+			return nil, resp.Status, fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+		return result, resp.Status, nil
+	}
+
+	return nil, resp.Status, nil
 }

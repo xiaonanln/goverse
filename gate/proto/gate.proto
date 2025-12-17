@@ -11,6 +11,7 @@ service GateService {
     rpc CallObject (CallObjectRequest) returns (CallObjectResponse);
     rpc CreateObject (CreateObjectRequest) returns (CreateObjectResponse);
     rpc DeleteObject (DeleteObjectRequest) returns (DeleteObjectResponse);
+    rpc ReliableCallObject (ReliableCallObjectRequest) returns (ReliableCallObjectResponse);
 }
 
 // RegisterResponse is the first message that the client can receive from the Register stream
@@ -45,6 +46,20 @@ message DeleteObjectRequest {
 
 message DeleteObjectResponse {
   // Empty response - success is indicated by no error
+}
+
+message ReliableCallObjectRequest {
+  string call_id = 1;   // Unique call identifier for deduplication
+  string type = 2;      // Object type
+  string id = 3;        // Object ID
+  string method = 4;    // Method name
+  google.protobuf.Any request = 5; // Request payload
+}
+
+message ReliableCallObjectResponse {
+  google.protobuf.Any response = 1; // Response payload (populated on success)
+  string error = 2;                  // Error message (populated on failure)
+  string status = 3;                 // Execution status (SUCCESS, FAILED, SKIPPED, etc.)
 }
 
 message Empty {}

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -342,4 +343,58 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 	}
 
 	return &gate_pb.DeleteObjectResponse{}, nil
+}
+
+// ReliableCallObject implements the ReliableCallObject RPC
+func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.ReliableCallObjectRequest) (*gate_pb.ReliableCallObjectResponse, error) {
+	// Apply default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCallTimeout)
+	defer cancel()
+
+	// Check client access if access validator is configured
+	if s.accessValidator != nil {
+		if err := s.accessValidator.CheckClientAccess(req.Type, req.Id, req.Method); err != nil {
+			s.logger.Warnf("Access denied for client reliable call: type=%s, id=%s, method=%s: %v", req.Type, req.Id, req.Method, err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
+
+	// Convert Any request to proto.Message for cluster call
+	var requestMsg proto.Message
+	if req.Request != nil {
+		msg, err := protohelper.AnyToMsg(req.Request)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to unmarshal request: %v", err)
+		}
+		requestMsg = msg
+	}
+
+	// Call cluster's ReliableCallObject
+	result, callStatus, err := s.cluster.ReliableCallObject(ctx, req.CallId, req.Type, req.Id, req.Method, requestMsg)
+	
+	// Convert status to string for response
+	statusStr := callStatus.String()
+	
+	// If there's an error, return response with error and status
+	if err != nil {
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  err.Error(),
+			Status: statusStr,
+		}, nil
+	}
+
+	// Convert result to Any for response
+	var resultAny *anypb.Any
+	if result != nil {
+		var err error
+		resultAny, err = protohelper.MsgToAny(result)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to marshal result: %v", err)
+		}
+	}
+
+	return &gate_pb.ReliableCallObjectResponse{
+		Response: resultAny,
+		Status:   statusStr,
+	}, nil
 }
