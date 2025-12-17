@@ -257,6 +257,20 @@ type Object interface {
 	// Returns:
 	//   - error: ErrNotPersistent for non-persistent objects, or save error
 	Save(provider PersistenceProvider) error
+
+	// EvictionPolicy returns the eviction policy for this object.
+	//
+	// Objects can implement custom eviction policies by returning a non-nil policy.
+	// The default implementation in BaseObject returns nil (no eviction).
+	//
+	// Common policies include:
+	//   - IdleTimeoutPolicy: Evict after period of inactivity
+	//   - TTLPolicy: Evict after fixed duration from creation
+	//   - Custom implementations for application-specific logic
+	//
+	// Returns:
+	//   - EvictionPolicy: The eviction policy for this object, or nil to disable eviction
+	EvictionPolicy() EvictionPolicy
 }
 
 // ErrNotPersistent is returned when an object type does not support persistence.
@@ -369,6 +383,13 @@ func (base *BaseObject) Context() context.Context {
 // This method is called automatically by the node and is idempotent - multiple calls are safe.
 func (base *BaseObject) Destroy() {
 	base.cancelFunc()
+}
+
+// EvictionPolicy returns the eviction policy for this object.
+// The default implementation returns nil, meaning the object will never be evicted.
+// Override this method to provide a custom eviction policy.
+func (base *BaseObject) EvictionPolicy() EvictionPolicy {
+	return nil
 }
 
 // isConcreteProtoMessage checks if a type is a concrete proto.Message pointer
