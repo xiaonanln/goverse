@@ -66,6 +66,8 @@ type Node struct {
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
+	ctx                   context.Context        // Node's internal context, created in Start(), cancelled in Stop()
+	cancel                context.CancelFunc     // Cancel function for node's internal context
 	persistenceProvider   object.PersistenceProvider
 	persistenceProviderMu sync.RWMutex
 	persistenceInterval   time.Duration
@@ -105,6 +107,9 @@ func (node *Node) SetInspectorAddress(address string) {
 func (node *Node) Start(ctx context.Context) error {
 	node.startupTime = time.Now()
 
+	// Create node's internal context
+	node.ctx, node.cancel = context.WithCancel(ctx)
+
 	// Start periodic persistence if provider is configured
 	if node.persistenceProvider != nil {
 		node.StartPeriodicPersistence(ctx)
@@ -124,6 +129,11 @@ func (node *Node) Stop(ctx context.Context) error {
 
 	// Set the stopped flag atomically to signal that no new operations should start
 	node.stopped.Store(true)
+
+	// Cancel the node's internal context
+	if node.cancel != nil {
+		node.cancel()
+	}
 
 	// Stop periodic persistence BEFORE acquiring write lock to avoid deadlock.
 	// The periodicPersistenceLoop may be calling SaveAllObjects which needs stopMu.RLock.
@@ -178,6 +188,12 @@ func (node *Node) String() string {
 // GetAdvertiseAddress returns the advertise address of the node
 func (node *Node) GetAdvertiseAddress() string {
 	return node.advertiseAddress
+}
+
+// Context returns the node's internal context
+// Returns nil if the node has not been started yet
+func (node *Node) Context() context.Context {
+	return node.ctx
 }
 
 // GetShardID calculates the shard ID for a given object ID using the configured number of shards
