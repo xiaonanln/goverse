@@ -11,6 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -359,42 +360,47 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		}
 	}
 
-	// Convert Any request to proto.Message for cluster call
-	var requestMsg proto.Message
-	if req.Request != nil {
-		msg, err := protohelper.AnyToMsg(req.Request)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to unmarshal request: %v", err)
-		}
-		requestMsg = msg
-	}
-
-	// Call cluster's ReliableCallObject
-	result, callStatus, err := s.cluster.ReliableCallObject(ctx, req.CallId, req.Type, req.Id, req.Method, requestMsg)
-	
-	// Convert status to string for response
-	statusStr := callStatus.String()
-	
-	// If there's an error, return response with error and status
+	// Determine which node hosts this object
+	nodeAddr, err := s.cluster.GetCurrentNodeForObject(ctx, req.Id)
 	if err != nil {
-		return &gate_pb.ReliableCallObjectResponse{
-			Error:  err.Error(),
-			Status: statusStr,
-		}, nil
+		return nil, status.Errorf(codes.Internal, "cannot determine node for object %s: %v", req.Id, err)
 	}
 
-	// Convert result to Any for response
-	var resultAny *anypb.Any
-	if result != nil {
-		var err error
-		resultAny, err = protohelper.MsgToAny(result)
+	s.logger.Infof("Routing ReliableCallObject for %s.%s to node %s (callID: %s)", req.Id, req.Method, nodeAddr, req.CallId)
+
+	// Get connection to the target node
+	nodeClient, err := s.cluster.GetNodeConnections().GetConnection(nodeAddr)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get connection to node %s: %v", nodeAddr, err)
+	}
+
+	// Convert request data to bytes for node RPC
+	var requestData []byte
+	if req.Request != nil {
+		requestData, err = proto.Marshal(req.Request)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to marshal result: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "failed to marshal request: %v", err)
 		}
 	}
 
+	// Call ReliableCallObject on the remote node
+	nodeReq := &goverse_pb.ReliableCallObjectRequest{
+		CallId:      req.CallId,
+		ObjectType:  req.Type,
+		ObjectId:    req.Id,
+		MethodName:  req.Method,
+		RequestData: requestData,
+	}
+
+	nodeResp, err := nodeClient.ReliableCallObject(ctx, nodeReq)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "remote ReliableCallObject failed on node %s: %v", nodeAddr, err)
+	}
+
+	// Convert the response back to gate format
 	return &gate_pb.ReliableCallObjectResponse{
-		Response: resultAny,
-		Status:   statusStr,
+		Response: nodeResp.Result,
+		Error:    nodeResp.Error,
+		Status:   nodeResp.Status.String(),
 	}, nil
 }
