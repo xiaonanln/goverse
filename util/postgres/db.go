@@ -88,11 +88,8 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		CONSTRAINT valid_success_state CHECK (
 			status != 'success' OR result_data IS NOT NULL
 		),
-		CONSTRAINT valid_failed_state CHECK (
-			status != 'failed' OR error_message IS NOT NULL
-		),
-		CONSTRAINT valid_skipped_state CHECK (
-			status != 'skipped' OR error_message IS NOT NULL
+		CONSTRAINT valid_error_state CHECK (
+			status NOT IN ('failed', 'skipped') OR error_message IS NOT NULL
 		)
 	);
 

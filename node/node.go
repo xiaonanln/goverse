@@ -464,7 +464,13 @@ func (node *Node) ReliableCallObject(
 	case "success":
 		node.logger.Infof("Reliable call %s already succeeded, returning cached result", callID)
 		resultAny, err := protohelper.BytesToAny(rc.ResultData)
-		return resultAny, status, err
+		if err != nil {
+			// Deserialization failed for a successful call - this shouldn't happen
+			// Return UNKNOWN status to indicate an internal error
+			node.logger.Errorf("Failed to deserialize result for successful call %s: %v", callID, err)
+			return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to deserialize successful call result: %w", err)
+		}
+		return resultAny, status, nil
 	case "failed", "skipped":
 		node.logger.Infof("Reliable call %s already %s, returning cached error", callID, rc.Status)
 		return nil, status, fmt.Errorf("reliable call %s: %s", rc.Status, rc.Error)
