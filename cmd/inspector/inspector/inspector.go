@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
@@ -18,15 +19,144 @@ type GoverseNode = models.GoverseNode
 type GoverseObject = models.GoverseObject
 type GoverseGate = models.GoverseGate
 
+// callMetric represents a single call metric entry
+type callMetric struct {
+	timestamp time.Time
+	duration  int32 // duration in milliseconds
+}
+
+// objectCallMetrics tracks call metrics for an object
+type objectCallMetrics struct {
+	calls []callMetric // rolling window of calls (last 1 minute)
+	mu    sync.RWMutex
+}
+
 // Inspector implements the inspector gRPC service and manages inspector logic
 type Inspector struct {
 	inspector_pb.UnimplementedInspectorServiceServer
-	pg *graph.GoverseGraph
+	pg          *graph.GoverseGraph
+	callMetrics map[string]*objectCallMetrics // objectID -> metrics
+	metricsMu   sync.RWMutex
 }
 
 // New creates a new Inspector
 func New(pg *graph.GoverseGraph) *Inspector {
-	return &Inspector{pg: pg}
+	i := &Inspector{
+		pg:          pg,
+		callMetrics: make(map[string]*objectCallMetrics),
+	}
+
+	// Start background cleanup goroutine for old metrics
+	go i.cleanupOldMetrics()
+
+	// Start background goroutine for periodic metrics refresh
+	go i.refreshObjectMetrics()
+
+	return i
+}
+
+// refreshObjectMetrics periodically updates objects with fresh metrics
+func (i *Inspector) refreshObjectMetrics() {
+	ticker := time.NewTicker(metricsRefreshInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Get all objects
+		objects := i.pg.GetObjects()
+
+		// Update each object with fresh metrics
+		for _, obj := range objects {
+			callsPerMin, avgDur := i.getCallMetrics(obj.ID)
+
+			// Only update if metrics have changed
+			if obj.CallsPerMinute != callsPerMin || obj.AvgExecutionDurationMs != avgDur {
+				obj.CallsPerMinute = callsPerMin
+				obj.AvgExecutionDurationMs = avgDur
+				i.pg.AddOrUpdateObject(obj)
+			}
+		}
+	}
+}
+
+const (
+	// metricsCleanupInterval is how often old metrics are cleaned up
+	metricsCleanupInterval = 30 * time.Second
+	// metricsRetentionDuration is how long metrics are kept in memory
+	metricsRetentionDuration = 2 * time.Minute
+	// metricsRefreshInterval is how often object metrics are refreshed
+	metricsRefreshInterval = 15 * time.Second
+)
+
+// cleanupOldMetrics periodically removes old call metrics
+func (i *Inspector) cleanupOldMetrics() {
+	ticker := time.NewTicker(metricsCleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		cutoff := now.Add(-metricsRetentionDuration)
+
+		// Collect object IDs to delete
+		toDelete := make([]string, 0)
+
+		i.metricsMu.Lock()
+		for objectID, metrics := range i.callMetrics {
+			metrics.mu.Lock()
+			// Remove calls older than cutoff
+			validCalls := make([]callMetric, 0, len(metrics.calls))
+			for _, call := range metrics.calls {
+				if call.timestamp.After(cutoff) {
+					validCalls = append(validCalls, call)
+				}
+			}
+			metrics.calls = validCalls
+
+			// Mark for deletion if empty
+			if len(metrics.calls) == 0 {
+				toDelete = append(toDelete, objectID)
+			}
+			metrics.mu.Unlock()
+		}
+
+		// Delete empty metrics objects
+		for _, objectID := range toDelete {
+			delete(i.callMetrics, objectID)
+		}
+		i.metricsMu.Unlock()
+	}
+}
+
+// getCallMetrics calculates calls per minute and average duration for an object
+func (i *Inspector) getCallMetrics(objectID string) (callsPerMinute int, avgDuration float64) {
+	i.metricsMu.RLock()
+	metrics, exists := i.callMetrics[objectID]
+	i.metricsMu.RUnlock()
+
+	if !exists {
+		return 0, 0
+	}
+
+	metrics.mu.RLock()
+	defer metrics.mu.RUnlock()
+
+	now := time.Now()
+	oneMinuteAgo := now.Add(-1 * time.Minute)
+
+	var count int
+	var totalDuration int64
+
+	for _, call := range metrics.calls {
+		if call.timestamp.After(oneMinuteAgo) {
+			count++
+			totalDuration += int64(call.duration)
+		}
+	}
+
+	if count > 0 {
+		avgDuration = float64(totalDuration) / float64(count)
+	}
+
+	return count, avgDuration
 }
 
 // Ping handles ping requests
@@ -47,14 +177,19 @@ func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.Add
 		return nil, status.Errorf(codes.NotFound, "node not registered")
 	}
 
+	// Get call metrics for this object
+	callsPerMin, avgDur := i.getCallMetrics(o.Id)
+
 	obj := GoverseObject{
-		ID:            o.Id,
-		Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
-		Size:          10,
-		Color:         "#1f77b4",
-		Type:          o.GetClass(),
-		GoverseNodeID: nodeAddress,
-		ShardID:       int(o.ShardId),
+		ID:                     o.Id,
+		Label:                  fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
+		Size:                   10,
+		Color:                  "#1f77b4",
+		Type:                   o.GetClass(),
+		GoverseNodeID:          nodeAddress,
+		ShardID:                int(o.ShardId),
+		CallsPerMinute:         callsPerMin,
+		AvgExecutionDurationMs: avgDur,
 	}
 	i.pg.AddOrUpdateObject(obj)
 	return &inspector_pb.Empty{}, nil
@@ -110,14 +245,19 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		if o == nil || o.Id == "" {
 			continue
 		}
+		// Get call metrics for this object
+		callsPerMin, avgDur := i.getCallMetrics(o.Id)
+
 		obj := GoverseObject{
-			ID:            o.Id,
-			Label:         fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
-			Size:          10,
-			Color:         "#1f77b4",
-			Type:          o.GetClass(),
-			GoverseNodeID: addr,
-			ShardID:       int(o.ShardId),
+			ID:                     o.Id,
+			Label:                  fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
+			Size:                   10,
+			Color:                  "#1f77b4",
+			Type:                   o.GetClass(),
+			GoverseNodeID:          addr,
+			ShardID:                int(o.ShardId),
+			CallsPerMinute:         callsPerMin,
+			AvgExecutionDurationMs: avgDur,
 		}
 		i.pg.AddOrUpdateObject(obj)
 	}
@@ -254,6 +394,7 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 	objectClass := req.GetObjectClass()
 	method := req.GetMethod()
 	nodeAddress := req.GetNodeAddress()
+	duration := req.GetExecutionDurationMs()
 
 	// Check if the node is registered
 	if !i.pg.IsNodeRegistered(nodeAddress) {
@@ -261,9 +402,27 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 		return &inspector_pb.Empty{}, nil
 	}
 
+	// Record call metrics
+	i.metricsMu.Lock()
+	metrics, exists := i.callMetrics[objectID]
+	if !exists {
+		metrics = &objectCallMetrics{
+			calls: make([]callMetric, 0, 100),
+		}
+		i.callMetrics[objectID] = metrics
+	}
+	i.metricsMu.Unlock()
+
+	metrics.mu.Lock()
+	metrics.calls = append(metrics.calls, callMetric{
+		timestamp: time.Now(),
+		duration:  duration,
+	})
+	metrics.mu.Unlock()
+
 	// Broadcast the call event
 	i.pg.BroadcastObjectCall(objectID, objectClass, method, nodeAddress)
 
-	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s", objectID, objectClass, method, nodeAddress)
+	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s, duration=%dms", objectID, objectClass, method, nodeAddress, duration)
 	return &inspector_pb.Empty{}, nil
 }

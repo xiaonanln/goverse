@@ -256,3 +256,25 @@ objC := testutil.GetObjectIDForShard(10, "TestObjectC")  // Different shard
 - Exception: Use `t.Error*()` from goroutines
 - Table-driven tests with `t.Run()`
 - Skip long tests (>10s) in short mode: `if testing.Short() { t.Skip() }`
+
+## Inspector UI (cmd/inspector/web)
+
+**Data flow**: Backend → SSE events → JS `graphData` → D3 node objects → D3 rendering
+
+**Field naming consistency (CRITICAL)**:
+- JSON from backend uses snake_case (`calls_per_minute`)
+- JS node objects use camelCase (`callsPerMinute`)
+- Always verify both sides match when adding new fields
+
+**D3 data binding quirk**:
+- `.data(nodes, d => d.id)` on existing elements keeps OLD bound data
+- Click handlers receive stale data unless you either:
+  - Look up fresh data from `graphData` source array, OR
+  - Force re-binddata on updates
+- `updateGraphIncremental()` must be called to refresh visual labels
+
+**Adding new object fields to graph**:
+1. Add field in `buildGraphNodesAndLinks()` node object
+2. Add field in `updateGraphIncremental()` node object (same place)
+3. Use camelCase matching what rendering functions expect
+4. Call `updateGraphIncremental()` on SSE update events to refresh display

@@ -100,6 +100,11 @@ function ticked() {
     .attr('x', d => d.x)
     .attr('y', d => d.y + getNodeRadius(d) + 14)
 
+  // Update metric label positions (below object nodes)
+  g.select('.labels').selectAll('.object-metric-label')
+    .attr('x', d => d.x)
+    .attr('y', d => d.y + getNodeRadius(d) + 24)
+
   // Update link positions
   g.select('.links').selectAll('.graph-link')
     .attr('x1', d => d.source.x)
@@ -143,6 +148,47 @@ function focusOnNode(nodeId) {
         .translate(-node.x, -node.y)
     )
   }
+}
+
+// Helper function to update node labels (for nodes and gates)
+function updateNodeLabels(nodes) {
+  const labelSelection = g.select('.labels')
+    .selectAll('.node-label')
+    .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
+
+  labelSelection.exit().remove()
+
+  labelSelection.enter()
+    .append('text')
+    .attr('class', 'node-label')
+    .text(d => d.label)
+
+  labelSelection.text(d => d.label)
+}
+
+// Helper function to update object metric labels
+function updateObjectMetricLabels(nodes) {
+  const metricLabelSelection = g.select('.labels')
+    .selectAll('.object-metric-label')
+    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
+
+  metricLabelSelection.exit().remove()
+
+  const metricLabelEnter = metricLabelSelection.enter()
+    .append('text')
+    .attr('class', 'object-metric-label')
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '9px')
+    .attr('fill', '#888')
+    .attr('pointer-events', 'none')
+
+  // Update text for both new and existing metric labels
+  metricLabelEnter.merge(metricLabelSelection)
+    .text(d => {
+      const cpm = d.callsPerMinute || 0
+      const ms = Math.round(d.avgExecutionDurationMs) || 0
+      return `${cpm}cpm ${ms}ms`
+    })
 }
 
 // Build nodes and links from graph data
@@ -195,7 +241,9 @@ function buildGraphNodesAndLinks() {
       shardId: obj.shard_id,
       goverseNodeId: obj.goverse_node_id,
       color: obj.color,
-      size: obj.size
+      size: obj.size,
+      callsPerMinute: obj.calls_per_minute,
+      avgExecutionDurationMs: obj.avg_execution_duration_ms
     }
     nodes.push(node)
     nodeMap.set(obj.id, node)
@@ -452,18 +500,8 @@ function updateGraph() {
   applyNewObjectHighlighting(nodeEnter.merge(nodeSelection))
 
   // Update labels
-  const labelSelection = g.select('.labels')
-    .selectAll('.node-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
-
-  labelSelection.exit().remove()
-
-  labelSelection.enter()
-    .append('text')
-    .attr('class', 'node-label')
-    .text(d => d.label)
-
-  labelSelection.text(d => d.label)
+  updateNodeLabels(nodes)
+  updateObjectMetricLabels(nodes)
 
   // Restart simulation
   simulation.alpha(SIMULATION_ALPHA_FULL).restart()
@@ -543,6 +581,8 @@ function updateGraphIncremental() {
       goverseNodeId: obj.goverse_node_id,
       color: obj.color,
       size: obj.size,
+      callsPerMinute: obj.calls_per_minute,
+      avgExecutionDurationMs: obj.avg_execution_duration_ms,
       // Preserve position if exists
       x: existingPos ? existingPos.x : undefined,
       y: existingPos ? existingPos.y : undefined,
@@ -814,18 +854,8 @@ function updateGraphIncremental() {
   applyNewObjectHighlighting(nodeEnter.merge(nodeSelection))
 
   // Update labels
-  const labelSelection = g.select('.labels')
-    .selectAll('.node-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
-
-  labelSelection.exit().remove()
-
-  labelSelection.enter()
-    .append('text')
-    .attr('class', 'node-label')
-    .text(d => d.label)
-
-  labelSelection.text(d => d.label)
+  updateNodeLabels(nodes)
+  updateObjectMetricLabels(nodes)
 
   // Use very low alpha to minimize disruption
   simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()
