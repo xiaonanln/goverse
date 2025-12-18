@@ -22,6 +22,8 @@ import (
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -870,20 +872,58 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		RequestData: requestData,
 	}
 
-	// RPC error before INSERT - pre-execution error, so SKIPPED
-	resp, err := client.ReliableCallObject(ctx, req)
-	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
-	}
+	// Retry RPC with exponential backoff for transient errors
+	// Start at 1 second, double each retry
+	backoff := 1 * time.Second
+	maxBackoff := 60 * time.Second
+	attemptNum := 0
 
-	// Check if the response contains an error
-	if resp.Error != "" {
-		return nil, resp.Status, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
-	}
+	for {
+		attemptNum++
+		c.logger.Infof("%s - Reliable call %s attempt #%d to node %s", c, callID, attemptNum, targetNodeAddr)
 
-	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
-	msg, err := protohelper.AnyToMsg(resp.Result)
-	return msg, resp.Status, err
+		resp, err := client.ReliableCallObject(ctx, req)
+
+		// Success case - return result
+		if err == nil {
+			// Check if the response contains an error
+			if resp.Error != "" {
+				return nil, resp.Status, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
+			}
+			c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
+			msg, err := protohelper.AnyToMsg(resp.Result)
+			return msg, resp.Status, err
+		}
+
+		// Check if this is a transient RPC error (status code unknown)
+		st, ok := status.FromError(err)
+		shouldRetry := ok && st.Code() == codes.Unknown
+
+		if !shouldRetry {
+			// Non-retryable error - return immediately
+			c.logger.Warnf("%s - Reliable call %s non-retryable error: %v", c, callID, err)
+			return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
+		}
+
+		// Log the retry
+		c.logger.Warnf("%s - Reliable call %s RPC failed with transient error (attempt #%d): %v - will retry after %v",
+			c, callID, attemptNum, err, backoff)
+
+		// Wait with exponential backoff, respecting context cancellation
+		select {
+		case <-ctx.Done():
+			c.logger.Warnf("%s - Reliable call %s cancelled or timed out after %d attempts", c, callID, attemptNum)
+			return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
+		case <-time.After(backoff):
+			// Continue to next retry attempt
+		}
+
+		// Double the backoff for next attempt, capped at maxBackoff
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
