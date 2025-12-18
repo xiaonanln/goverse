@@ -16,12 +16,12 @@ func TestReliableCallObject_ValidationErrors(t *testing.T) {
 	// This is a unit test for validation logic only - no etcd needed
 	// Create a minimal server structure for testing validation
 	nodeAddr := testutil.GetFreeAddress()
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	n := node.NewNode(nodeAddr, testutil.TestNumShards)
-	
+
 	server := &Server{
 		Node:   n,
 		ctx:    ctx,
@@ -127,5 +127,3 @@ func TestReliableCallObject_ValidationErrors(t *testing.T) {
 		})
 	}
 }
-
-
