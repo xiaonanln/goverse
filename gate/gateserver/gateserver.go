@@ -11,6 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -18,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -342,4 +344,83 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 	}
 
 	return &gate_pb.DeleteObjectResponse{}, nil
+}
+
+// ReliableCallObject implements the ReliableCallObject RPC
+func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.ReliableCallObjectRequest) (*gate_pb.ReliableCallObjectResponse, error) {
+	// Apply default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCallTimeout)
+	defer cancel()
+
+	// Check client access if access validator is configured
+	if s.accessValidator != nil {
+		if err := s.accessValidator.CheckClientAccess(req.Type, req.Id, req.Method); err != nil {
+			s.logger.Warnf("Access denied for client reliable call: type=%s, id=%s, method=%s: %v", req.Type, req.Id, req.Method, err)
+			// Return response with skipped status - method was not executed
+			return &gate_pb.ReliableCallObjectResponse{
+				Error:  err.Error(),
+				Status: "skipped",
+			}, nil
+		}
+	}
+
+	// Determine which node hosts this object
+	nodeAddr, err := s.cluster.GetCurrentNodeForObject(ctx, req.Id)
+	if err != nil {
+		// Return response with skipped status - method was not executed
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  fmt.Sprintf("cannot determine node for object %s: %v", req.Id, err),
+			Status: "skipped",
+		}, nil
+	}
+
+	s.logger.Infof("Routing ReliableCallObject for %s.%s to node %s (callID: %s)", req.Id, req.Method, nodeAddr, req.CallId)
+
+	// Get connection to the target node
+	nodeClient, err := s.cluster.GetNodeConnections().GetConnection(nodeAddr)
+	if err != nil {
+		// Return response with skipped status - method was not executed
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  fmt.Sprintf("failed to get connection to node %s: %v", nodeAddr, err),
+			Status: "skipped",
+		}, nil
+	}
+
+	// Convert request data to bytes for node RPC
+	var requestData []byte
+	if req.Request != nil {
+		requestData, err = proto.Marshal(req.Request)
+		if err != nil {
+			// Return response with skipped status - method was not executed
+			return &gate_pb.ReliableCallObjectResponse{
+				Error:  fmt.Sprintf("failed to marshal request: %v", err),
+				Status: "skipped",
+			}, nil
+		}
+	}
+
+	// Call ReliableCallObject on the remote node
+	nodeReq := &goverse_pb.ReliableCallObjectRequest{
+		CallId:      req.CallId,
+		ObjectType:  req.Type,
+		ObjectId:    req.Id,
+		MethodName:  req.Method,
+		RequestData: requestData,
+	}
+
+	nodeResp, err := nodeClient.ReliableCallObject(ctx, nodeReq)
+	if err != nil {
+		// RPC error - we don't know if the call was executed, set status to "unknown"
+		return &gate_pb.ReliableCallObjectResponse{
+			Error:  fmt.Sprintf("remote ReliableCallObject failed on node %s: %v", nodeAddr, err),
+			Status: "unknown",
+		}, nil
+	}
+
+	// Convert the response back to gate format
+	return &gate_pb.ReliableCallObjectResponse{
+		Response: nodeResp.Result,
+		Error:    nodeResp.Error,
+		Status:   nodeResp.Status.String(),
+	}, nil
 }
