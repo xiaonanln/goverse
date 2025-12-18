@@ -43,6 +43,18 @@ function showDetailsPanel(d) {
   const title = document.getElementById('details-title')
   const content = document.getElementById('details-content')
 
+  // For objects, get fresh data from graphData to ensure we have latest metrics
+  if (d.nodeType === NODE_TYPE_OBJECT) {
+    const freshObj = graphData.goverse_objects.find(o => o.id === d.id)
+    if (freshObj) {
+      d = {
+        ...d,
+        callsPerMinute: freshObj.calls_per_minute,
+        avgExecutionDurationMs: freshObj.avg_execution_duration_ms
+      }
+    }
+  }
+
   // Set title
   title.textContent = d.label || d.id
 
@@ -186,6 +198,18 @@ function showDetailsPanel(d) {
       const hostNode = graphData.goverse_nodes.find(n => n.id === d.goverseNodeId)
       const hostLabel = hostNode?.label || d.goverseNodeId
       html += `<div class="detail-value">${hostLabel}</div>`
+      html += `</div>`
+    }
+    if (d.callsPerMinute !== undefined) {
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Calls/min:</div>`
+      html += `<div class="detail-value">${d.callsPerMinute}</div>`
+      html += `</div>`
+    }
+    if (d.avgExecutionDurationMs !== undefined) {
+      html += `<div class="detail-row">`
+      html += `<div class="detail-label">Avg Duration:</div>`
+      html += `<div class="detail-value">${d.avgExecutionDurationMs.toFixed(2)} ms</div>`
       html += `</div>`
     }
     if (d.size) {

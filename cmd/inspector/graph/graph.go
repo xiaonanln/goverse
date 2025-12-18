@@ -5,10 +5,7 @@ import (
 
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
-	"github.com/xiaonanln/goverse/util/logger"
 )
-
-var log = logger.NewLogger("graph")
 
 // EventType represents the type of graph change event
 type EventType string
@@ -85,8 +82,6 @@ func (pg *GoverseGraph) notifyObservers(event GraphEvent) {
 		observers = append(observers, obs)
 	}
 	pg.mu.RUnlock()
-
-	log.Debugf("Graph event: %s (node=%s, gate=%s, object=%s)", event.Type, event.NodeID, event.GateID, event.ObjectID)
 
 	for _, obs := range observers {
 		obs.OnGraphEvent(event)

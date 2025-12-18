@@ -185,9 +185,9 @@ function updateObjectMetricLabels(nodes) {
   // Update text for both new and existing metric labels
   metricLabelEnter.merge(metricLabelSelection)
     .text(d => {
-      const cpm = d.calls_per_minute || 0
-      const ms = Math.round(d.avg_execution_duration_ms) || 0
-      return `${cpm}cpm\n${ms}ms`
+      const cpm = d.callsPerMinute || 0
+      const ms = Math.round(d.avgExecutionDurationMs) || 0
+      return `${cpm}cpm ${ms}ms`
     })
 }
 
@@ -241,7 +241,9 @@ function buildGraphNodesAndLinks() {
       shardId: obj.shard_id,
       goverseNodeId: obj.goverse_node_id,
       color: obj.color,
-      size: obj.size
+      size: obj.size,
+      callsPerMinute: obj.calls_per_minute,
+      avgExecutionDurationMs: obj.avg_execution_duration_ms
     }
     nodes.push(node)
     nodeMap.set(obj.id, node)
@@ -579,6 +581,8 @@ function updateGraphIncremental() {
       goverseNodeId: obj.goverse_node_id,
       color: obj.color,
       size: obj.size,
+      callsPerMinute: obj.calls_per_minute,
+      avgExecutionDurationMs: obj.avg_execution_duration_ms,
       // Preserve position if exists
       x: existingPos ? existingPos.x : undefined,
       y: existingPos ? existingPos.y : undefined,

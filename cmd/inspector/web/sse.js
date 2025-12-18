@@ -139,8 +139,14 @@ function connectSSE() {
     console.log('SSE object_updated:', data)
     if (data.object) {
       upsertObject(data.object)
-      // No need to restart simulation for updates
-      // Note: Highlight status is preserved in newObjectsMap if object was recently added (within 3 seconds)
+      // Refresh the graph to show updated metrics (calls per minute, duration)
+      updateGraphIncremental()
+      if (document.getElementById('shard-view').classList.contains('active')) {
+        updateShardView()
+      }
+      if (document.getElementById('nodes-view').classList.contains('active')) {
+        updateNodesView()
+      }
     }
   })
 
