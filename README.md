@@ -175,6 +175,7 @@ Full documentation:
 | [Counter](samples/counter/) | Simple counter service demonstrating basic Goverse object operations |
 | [Tic Tac Toe](samples/tictactoe/) | Web-based game demonstrating HTTP Gate with REST API |
 | [Chat](samples/chat/) | Distributed chat application with real-time push messaging and web client |
+| [Handwriting Practice](samples/handwriting/) | Educational web app for generating custom handwriting practice sheets with SVG output |
 | [Sharding Demo](samples/sharding_demo/) | Comprehensive demo showcasing sharding, auto-load objects, and distributed object management |
 
 ---
