@@ -87,6 +87,14 @@ CLUSTER_STABILIZATION_WAIT = 20 # Seconds to wait for cluster and auto-load obje
 # Number of counters to create and manage
 NUM_COUNTERS = 100
 
+# Fatal error patterns that should cause immediate client shutdown
+FATAL_ERROR_PATTERNS = [
+    "Client is not connected",
+    "connection refused",
+    "connection reset",
+    "broken pipe",
+]
+
 
 class StressTestClient:
     """A demo server client that performs random actions for stress testing."""
@@ -108,6 +116,7 @@ class StressTestClient:
         self.create_count = 0
         self.increment_count = 0
         self.get_count = 0
+        self.fatal_error = None  # Set when a fatal error occurs
         
         # Track which counters this client knows about
         self.known_counters = []
@@ -143,6 +152,14 @@ class StressTestClient:
             traceback.print_exc()
             return False
     
+    def _is_fatal_error(self, error: Exception) -> bool:
+        """Check if an error is fatal and should stop the client."""
+        error_str = str(error).lower()
+        for pattern in FATAL_ERROR_PATTERNS:
+            if pattern.lower() in error_str:
+                return True
+        return False
+    
     def _run_actions(self):
         """Run random actions in a loop."""
         try:
@@ -173,12 +190,19 @@ class StressTestClient:
                 except Exception as e:
                     if self.running:
                         self.error_count += 1
+                        # Check for fatal errors that should stop the client immediately
+                        if self._is_fatal_error(e):
+                            self.fatal_error = str(e)
+                            print(f"❌ Client {self.client_id} fatal connection error: {e}")
+                            self.running = False
+                            break
                         print(f"⚠️  Client {self.client_id} error during action: {e}")
-                    # Continue running despite errors
+                    # Continue running despite non-fatal errors
                     time.sleep(1)
                     
         except Exception as e:
             if self.running:
+                self.fatal_error = str(e)
                 print(f"❌ Client {self.client_id} fatal error: {e}")
                 traceback.print_exc()
     
@@ -297,7 +321,12 @@ class StressTestClient:
             'create_count': self.create_count,
             'increment_count': self.increment_count,
             'get_count': self.get_count,
+            'fatal_error': self.fatal_error,
         }
+    
+    def has_fatal_error(self) -> bool:
+        """Check if this client encountered a fatal error."""
+        return self.fatal_error is not None
 
 
 def print_stats(clients: List[StressTestClient], file=sys.stdout):
@@ -514,11 +543,19 @@ Examples:
         while time.time() - start_time < duration_seconds:
             time.sleep(1)
             
+            # Check for fatal errors in clients - if all clients have fatal errors, exit early
+            fatal_count = sum(1 for c in clients if c.has_fatal_error())
+            if fatal_count > 0 and fatal_count == len(clients):
+                print(f"\n❌ All {len(clients)} clients have fatal errors, stopping test early")
+                break
+            
             # Print stats at intervals
             if time.time() >= next_stats_time:
                 elapsed = time.time() - start_time
                 remaining = duration_seconds - elapsed
                 print(f"\n⏱️  Elapsed: {elapsed:.0f}s, Remaining: {remaining:.0f}s")
+                if fatal_count > 0:
+                    print(f"⚠️  {fatal_count}/{len(clients)} clients have fatal errors")
                 print_stats(clients)
                 next_stats_time = time.time() + stats_interval
         

@@ -45,13 +45,13 @@ func New(pg *graph.GoverseGraph) *Inspector {
 		pg:          pg,
 		callMetrics: make(map[string]*objectCallMetrics),
 	}
-	
+
 	// Start background cleanup goroutine for old metrics
 	go i.cleanupOldMetrics()
-	
+
 	// Start background goroutine for periodic metrics refresh
 	go i.refreshObjectMetrics()
-	
+
 	return i
 }
 
@@ -59,15 +59,15 @@ func New(pg *graph.GoverseGraph) *Inspector {
 func (i *Inspector) refreshObjectMetrics() {
 	ticker := time.NewTicker(metricsRefreshInterval)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		// Get all objects
 		objects := i.pg.GetObjects()
-		
+
 		// Update each object with fresh metrics
 		for _, obj := range objects {
 			callsPerMin, avgDur := i.getCallMetrics(obj.ID)
-			
+
 			// Only update if metrics have changed
 			if obj.CallsPerMinute != callsPerMin || obj.AvgExecutionDurationMs != avgDur {
 				obj.CallsPerMinute = callsPerMin
@@ -91,14 +91,14 @@ const (
 func (i *Inspector) cleanupOldMetrics() {
 	ticker := time.NewTicker(metricsCleanupInterval)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		now := time.Now()
 		cutoff := now.Add(-metricsRetentionDuration)
-		
+
 		// Collect object IDs to delete
 		toDelete := make([]string, 0)
-		
+
 		i.metricsMu.Lock()
 		for objectID, metrics := range i.callMetrics {
 			metrics.mu.Lock()
@@ -110,14 +110,14 @@ func (i *Inspector) cleanupOldMetrics() {
 				}
 			}
 			metrics.calls = validCalls
-			
+
 			// Mark for deletion if empty
 			if len(metrics.calls) == 0 {
 				toDelete = append(toDelete, objectID)
 			}
 			metrics.mu.Unlock()
 		}
-		
+
 		// Delete empty metrics objects
 		for _, objectID := range toDelete {
 			delete(i.callMetrics, objectID)
@@ -131,31 +131,31 @@ func (i *Inspector) getCallMetrics(objectID string) (callsPerMinute int, avgDura
 	i.metricsMu.RLock()
 	metrics, exists := i.callMetrics[objectID]
 	i.metricsMu.RUnlock()
-	
+
 	if !exists {
 		return 0, 0
 	}
-	
+
 	metrics.mu.RLock()
 	defer metrics.mu.RUnlock()
-	
+
 	now := time.Now()
 	oneMinuteAgo := now.Add(-1 * time.Minute)
-	
+
 	var count int
 	var totalDuration int64
-	
+
 	for _, call := range metrics.calls {
 		if call.timestamp.After(oneMinuteAgo) {
 			count++
 			totalDuration += int64(call.duration)
 		}
 	}
-	
+
 	if count > 0 {
 		avgDuration = float64(totalDuration) / float64(count)
 	}
-	
+
 	return count, avgDuration
 }
 
@@ -179,7 +179,7 @@ func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.Add
 
 	// Get call metrics for this object
 	callsPerMin, avgDur := i.getCallMetrics(o.Id)
-	
+
 	obj := GoverseObject{
 		ID:                     o.Id,
 		Label:                  fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
@@ -247,7 +247,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		}
 		// Get call metrics for this object
 		callsPerMin, avgDur := i.getCallMetrics(o.Id)
-		
+
 		obj := GoverseObject{
 			ID:                     o.Id,
 			Label:                  fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
@@ -412,7 +412,7 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 		i.callMetrics[objectID] = metrics
 	}
 	i.metricsMu.Unlock()
-	
+
 	metrics.mu.Lock()
 	metrics.calls = append(metrics.calls, callMetric{
 		timestamp: time.Now(),

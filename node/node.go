@@ -66,8 +66,8 @@ type Node struct {
 	inspectorManager      *inspectormanager.InspectorManager
 	logger                *logger.Logger
 	startupTime           time.Time
-	ctx                   context.Context        // Node's internal context, created in Start(), cancelled in Stop()
-	cancel                context.CancelFunc     // Cancel function for node's internal context
+	ctx                   context.Context    // Node's internal context, created in Start(), cancelled in Stop()
+	cancel                context.CancelFunc // Cancel function for node's internal context
 	persistenceProvider   object.PersistenceProvider
 	persistenceProviderMu sync.RWMutex
 	persistenceInterval   time.Duration
@@ -319,7 +319,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	methodStartTime := time.Now()
 	resp, err := obj.InvokeMethod(ctx, method, request)
 	methodDuration := time.Since(methodStartTime)
-	
+
 	if err != nil {
 		callErr = err
 		return nil, callErr

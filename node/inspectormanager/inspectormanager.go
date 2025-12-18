@@ -495,7 +495,7 @@ func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, obje
 		return
 	}
 
-	im.logger.Debugf("Reported object call %s.%s to inspector (duration: %dms)", objectID, method, durationMs)
+	im.logger.Infof("Reported object call %s.%s to inspector (duration: %dms)", objectID, method, durationMs)
 }
 
 // UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
