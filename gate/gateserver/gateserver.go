@@ -356,10 +356,10 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	if s.accessValidator != nil {
 		if err := s.accessValidator.CheckClientAccess(req.Type, req.Id, req.Method); err != nil {
 			s.logger.Warnf("Access denied for client reliable call: type=%s, id=%s, method=%s: %v", req.Type, req.Id, req.Method, err)
-			// Return response with SKIPPED status - method was not executed
+			// Return response with skipped status - method was not executed
 			return &gate_pb.ReliableCallObjectResponse{
 				Error:  err.Error(),
-				Status: "SKIPPED",
+				Status: "skipped",
 			}, nil
 		}
 	}
@@ -367,10 +367,10 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	// Determine which node hosts this object
 	nodeAddr, err := s.cluster.GetCurrentNodeForObject(ctx, req.Id)
 	if err != nil {
-		// Return response with SKIPPED status - method was not executed
+		// Return response with skipped status - method was not executed
 		return &gate_pb.ReliableCallObjectResponse{
 			Error:  fmt.Sprintf("cannot determine node for object %s: %v", req.Id, err),
-			Status: "SKIPPED",
+			Status: "skipped",
 		}, nil
 	}
 
@@ -379,10 +379,10 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	// Get connection to the target node
 	nodeClient, err := s.cluster.GetNodeConnections().GetConnection(nodeAddr)
 	if err != nil {
-		// Return response with SKIPPED status - method was not executed
+		// Return response with skipped status - method was not executed
 		return &gate_pb.ReliableCallObjectResponse{
 			Error:  fmt.Sprintf("failed to get connection to node %s: %v", nodeAddr, err),
-			Status: "SKIPPED",
+			Status: "skipped",
 		}, nil
 	}
 
@@ -391,10 +391,10 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 	if req.Request != nil {
 		requestData, err = proto.Marshal(req.Request)
 		if err != nil {
-			// Return response with SKIPPED status - method was not executed
+			// Return response with skipped status - method was not executed
 			return &gate_pb.ReliableCallObjectResponse{
 				Error:  fmt.Sprintf("failed to marshal request: %v", err),
-				Status: "SKIPPED",
+				Status: "skipped",
 			}, nil
 		}
 	}

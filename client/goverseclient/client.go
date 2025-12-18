@@ -726,11 +726,11 @@ func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, obj
 	c.mu.RLock()
 	if c.closed {
 		c.mu.RUnlock()
-		return nil, "SKIPPED", ErrClientClosed
+		return nil, "skipped", ErrClientClosed
 	}
 	if !c.connected {
 		c.mu.RUnlock()
-		return nil, "SKIPPED", ErrNotConnected
+		return nil, "skipped", ErrNotConnected
 	}
 	client := c.client
 	c.mu.RUnlock()
@@ -748,7 +748,7 @@ func (c *Client) ReliableCallObject(ctx context.Context, callID, objectType, obj
 		var err error
 		requestAny, err = protohelper.MsgToAny(request)
 		if err != nil {
-			return nil, "SKIPPED", fmt.Errorf("failed to marshal request: %w", err)
+			return nil, "skipped", fmt.Errorf("failed to marshal request: %w", err)
 		}
 	}
 
