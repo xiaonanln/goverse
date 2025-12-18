@@ -815,11 +815,6 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("methodName cannot be empty")
 	}
 
-	// Only node clusters should have persistence provider
-	if !c.isNode() {
-		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("ReliableCallObject can only be called on node clusters, not gate clusters")
-	}
-
 	// Serialize request data BEFORE routing
 	// Pre-execution error - method never executed, so SKIPPED
 	requestData, err := protohelper.MsgToBytes(request)
@@ -838,11 +833,10 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	c.logger.Infof("%s - Routing reliable call %s to target node %s for object %s (type: %s, method: %s)",
 		c, callID, targetNodeAddr, objectID, objectType, methodName)
 
+	// Check if this is a node cluster and the object is on this node (local call)
 	node := c.GetThisNode()
-
-	// Check if the object is on this node (local call)
-	if targetNodeAddr == c.getAdvertiseAddr() {
-		// Local: INSERT + execute on this node
+	if node != nil && targetNodeAddr == c.getAdvertiseAddr() {
+		// Local: INSERT + execute on this node (node clusters only)
 		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
 		resultAny, status, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
 		if err != nil {
@@ -870,10 +864,13 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		RequestData: requestData,
 	}
 
-	// RPC error before INSERT - pre-execution error, so SKIPPED
+	// RPC transport error - we don't know if the call was executed, so UNKNOWN
+	// Note: Even if the RPC fails before reaching the node, we use UNKNOWN instead of SKIPPED
+	// because in distributed systems, RPC errors are ambiguous - the request might have been
+	// received and processed before the response was lost. This matches the gate server behavior.
 	resp, err := client.ReliableCallObject(ctx, req)
 	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
+		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
 	}
 
 	// Check if the response contains an error
