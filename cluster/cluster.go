@@ -37,6 +37,10 @@ const (
 	ShardMappingCheckInterval = 5 * time.Second
 	// DefaultNodeStabilityDuration is how long the node list must be stable before updating shard mapping
 	DefaultNodeStabilityDuration = 10 * time.Second
+	// ReliableCallInitialBackoff is the initial backoff duration for ReliableCallObject retries
+	ReliableCallInitialBackoff = 1 * time.Second
+	// ReliableCallMaxBackoff is the maximum backoff duration for ReliableCallObject retries
+	ReliableCallMaxBackoff = 60 * time.Second
 )
 
 type Cluster struct {
@@ -873,9 +877,8 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	// Retry RPC with exponential backoff for transient errors
-	// Start at 1 second, double each retry
-	backoff := 1 * time.Second
-	maxBackoff := 60 * time.Second
+	backoff := ReliableCallInitialBackoff
+	maxBackoff := ReliableCallMaxBackoff
 	attemptNum := 0
 
 	for {

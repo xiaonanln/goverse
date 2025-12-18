@@ -197,8 +197,8 @@ func TestReliableCallObject_RetryOnTransientError(t *testing.T) {
 	}
 
 	// Verify that the call took at least 3 seconds (1s + 2s backoff)
-	// Allow some tolerance for timing
-	minDuration := 2500 * time.Millisecond // 3s with some tolerance
+	// Allow some tolerance for timing variations
+	minDuration := 2800 * time.Millisecond // Expect ~3s (1s + 2s backoff), allow 200ms tolerance
 	if duration < minDuration {
 		t.Errorf("Expected call to take at least %v due to retries, but took %v", minDuration, duration)
 	}
@@ -393,9 +393,9 @@ func TestReliableCallObject_RetryRespectsContext(t *testing.T) {
 		t.Fatalf("Expected error due to context cancellation, got nil")
 	}
 
-	// Verify context cancellation error
-	if ctx.Err() == nil && ctxWithTimeout.Err() == nil {
-		t.Errorf("Expected context to be cancelled, but it wasn't")
+	// Verify context cancellation error (only the timeout context should be cancelled)
+	if ctxWithTimeout.Err() == nil {
+		t.Errorf("Expected ctxWithTimeout to be cancelled, but it wasn't")
 	}
 
 	// Verify that not all 100 attempts were made (should stop early due to context)
