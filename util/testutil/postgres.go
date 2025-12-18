@@ -65,6 +65,7 @@ func CreateTestDatabase(t *testing.T) *postgres.DB {
 		fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", dbName))
 
 	// Create fresh database
+	t.Logf("Creating test database: %s", dbName)
 	_, err = adminDB.Connection().ExecContext(context.Background(),
 		fmt.Sprintf("CREATE DATABASE %s", dbName))
 	if err != nil {

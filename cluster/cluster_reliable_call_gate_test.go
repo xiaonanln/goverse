@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/xiaonanln/goverse/gate"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
@@ -84,17 +85,28 @@ func TestReliableCallObject_GateClusterRouting(t *testing.T) {
 	}
 
 	gateCluster, err := NewClusterWithGate(Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		NumShards:   testutil.TestNumShards,
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		NumShards:                     testutil.TestNumShards,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
 	}, gw)
 	if err != nil {
 		t.Fatalf("Failed to create gate cluster: %v", err)
 	}
 	defer gateCluster.Stop(ctx)
+	t.Cleanup(func() { gw.Stop() })
+
+	// Start the gate cluster
+	err = gateCluster.Start(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to start gate cluster: %v", err)
+	}
 
 	// Wait for both clusters to be fully ready
-	testutil.WaitForClustersReady(t, nodeCluster, gateCluster)
+	// Use WaitForClustersReadyWithoutGateConnections because the gate cluster
+	// doesn't have a real gate server that can register with nodes via RegisterGate RPC
+	testutil.WaitForClustersReadyWithoutGateConnections(t, nodeCluster, gateCluster)
 
 	t.Run("Gate cluster routes reliable call to node", func(t *testing.T) {
 		callID := "gate-test-call-1"
@@ -452,14 +464,23 @@ func TestReliableCallObject_MultiGateMultiNode(t *testing.T) {
 	}
 
 	gateCluster1, err := NewClusterWithGate(Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		NumShards:   testutil.TestNumShards,
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		NumShards:                     testutil.TestNumShards,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
 	}, gw1)
 	if err != nil {
 		t.Fatalf("Failed to create gate cluster 1: %v", err)
 	}
 	defer gateCluster1.Stop(ctx)
+	t.Cleanup(func() { gw1.Stop() })
+
+	// Start the gate cluster 1
+	err = gateCluster1.Start(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to start gate cluster 1: %v", err)
+	}
 
 	gate2Config := &gate.GateConfig{
 		AdvertiseAddress: gate2Addr,
@@ -472,17 +493,28 @@ func TestReliableCallObject_MultiGateMultiNode(t *testing.T) {
 	}
 
 	gateCluster2, err := NewClusterWithGate(Config{
-		EtcdAddress: "localhost:2379",
-		EtcdPrefix:  testPrefix,
-		NumShards:   testutil.TestNumShards,
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		NumShards:                     testutil.TestNumShards,
+		ClusterStateStabilityDuration: 3 * time.Second,
+		ShardMappingCheckInterval:     1 * time.Second,
 	}, gw2)
 	if err != nil {
 		t.Fatalf("Failed to create gate cluster 2: %v", err)
 	}
 	defer gateCluster2.Stop(ctx)
+	t.Cleanup(func() { gw2.Stop() })
+
+	// Start the gate cluster 2
+	err = gateCluster2.Start(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to start gate cluster 2: %v", err)
+	}
 
 	// Wait for all clusters to be fully ready
-	testutil.WaitForClustersReady(t, nodeCluster1, nodeCluster2, gateCluster1, gateCluster2)
+	// Use WaitForClustersReadyWithoutGateConnections because the gate clusters
+	// don't have real gate servers that can register with nodes via RegisterGate RPC
+	testutil.WaitForClustersReadyWithoutGateConnections(t, nodeCluster1, nodeCluster2, gateCluster1, gateCluster2)
 
 	t.Run("Multiple gates can route to different nodes", func(t *testing.T) {
 		// Get object IDs that will be on different shards
