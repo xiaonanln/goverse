@@ -150,6 +150,47 @@ function focusOnNode(nodeId) {
   }
 }
 
+// Helper function to update node labels (for nodes and gates)
+function updateNodeLabels(nodes) {
+  const labelSelection = g.select('.labels')
+    .selectAll('.node-label')
+    .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
+
+  labelSelection.exit().remove()
+
+  labelSelection.enter()
+    .append('text')
+    .attr('class', 'node-label')
+    .text(d => d.label)
+
+  labelSelection.text(d => d.label)
+}
+
+// Helper function to update object metric labels
+function updateObjectMetricLabels(nodes) {
+  const metricLabelSelection = g.select('.labels')
+    .selectAll('.object-metric-label')
+    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
+
+  metricLabelSelection.exit().remove()
+
+  const metricLabelEnter = metricLabelSelection.enter()
+    .append('text')
+    .attr('class', 'object-metric-label')
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '9px')
+    .attr('fill', '#888')
+    .attr('pointer-events', 'none')
+
+  // Update text for both new and existing metric labels
+  metricLabelEnter.merge(metricLabelSelection)
+    .text(d => {
+      const cpm = d.calls_per_minute || 0
+      const ms = d.avg_execution_duration_ms ? Math.round(d.avg_execution_duration_ms) : 0
+      return `${cpm}cpm\n${ms}ms`
+    })
+}
+
 // Build nodes and links from graph data
 function buildGraphNodesAndLinks() {
   const nodes = []
@@ -457,41 +498,8 @@ function updateGraph() {
   applyNewObjectHighlighting(nodeEnter.merge(nodeSelection))
 
   // Update labels
-  const labelSelection = g.select('.labels')
-    .selectAll('.node-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
-
-  labelSelection.exit().remove()
-
-  labelSelection.enter()
-    .append('text')
-    .attr('class', 'node-label')
-    .text(d => d.label)
-
-  labelSelection.text(d => d.label)
-
-  // Add/update metric labels for objects
-  const metricLabelSelection = g.select('.labels')
-    .selectAll('.object-metric-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
-
-  metricLabelSelection.exit().remove()
-
-  const metricLabelEnter = metricLabelSelection.enter()
-    .append('text')
-    .attr('class', 'object-metric-label')
-    .attr('text-anchor', 'middle')
-    .attr('font-size', '9px')
-    .attr('fill', '#888')
-    .attr('pointer-events', 'none')
-
-  // Update text for both new and existing metric labels
-  metricLabelEnter.merge(metricLabelSelection)
-    .text(d => {
-      const cpm = d.calls_per_minute || 0
-      const ms = d.avg_execution_duration_ms ? Math.round(d.avg_execution_duration_ms) : 0
-      return `${cpm}cpm\n${ms}ms`
-    })
+  updateNodeLabels(nodes)
+  updateObjectMetricLabels(nodes)
 
   // Restart simulation
   simulation.alpha(SIMULATION_ALPHA_FULL).restart()
@@ -842,41 +850,8 @@ function updateGraphIncremental() {
   applyNewObjectHighlighting(nodeEnter.merge(nodeSelection))
 
   // Update labels
-  const labelSelection = g.select('.labels')
-    .selectAll('.node-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_NODE || d.nodeType === NODE_TYPE_GATE), d => d.id)
-
-  labelSelection.exit().remove()
-
-  labelSelection.enter()
-    .append('text')
-    .attr('class', 'node-label')
-    .text(d => d.label)
-
-  labelSelection.text(d => d.label)
-
-  // Add/update metric labels for objects
-  const metricLabelSelection = g.select('.labels')
-    .selectAll('.object-metric-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
-
-  metricLabelSelection.exit().remove()
-
-  const metricLabelEnter = metricLabelSelection.enter()
-    .append('text')
-    .attr('class', 'object-metric-label')
-    .attr('text-anchor', 'middle')
-    .attr('font-size', '9px')
-    .attr('fill', '#888')
-    .attr('pointer-events', 'none')
-
-  // Update text for both new and existing metric labels
-  metricLabelEnter.merge(metricLabelSelection)
-    .text(d => {
-      const cpm = d.calls_per_minute || 0
-      const ms = d.avg_execution_duration_ms ? Math.round(d.avg_execution_duration_ms) : 0
-      return `${cpm}cpm\n${ms}ms`
-    })
+  updateNodeLabels(nodes)
+  updateObjectMetricLabels(nodes)
 
   // Use very low alpha to minimize disruption
   simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()

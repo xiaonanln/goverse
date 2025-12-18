@@ -57,7 +57,7 @@ func New(pg *graph.GoverseGraph) *Inspector {
 
 // refreshObjectMetrics periodically updates objects with fresh metrics
 func (i *Inspector) refreshObjectMetrics() {
-	ticker := time.NewTicker(15 * time.Second) // Update every 15 seconds
+	ticker := time.NewTicker(metricsRefreshInterval)
 	defer ticker.Stop()
 	
 	for range ticker.C {
@@ -78,14 +78,23 @@ func (i *Inspector) refreshObjectMetrics() {
 	}
 }
 
+const (
+	// metricsCleanupInterval is how often old metrics are cleaned up
+	metricsCleanupInterval = 30 * time.Second
+	// metricsRetentionDuration is how long metrics are kept in memory
+	metricsRetentionDuration = 2 * time.Minute
+	// metricsRefreshInterval is how often object metrics are refreshed
+	metricsRefreshInterval = 15 * time.Second
+)
+
 // cleanupOldMetrics periodically removes old call metrics
 func (i *Inspector) cleanupOldMetrics() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(metricsCleanupInterval)
 	defer ticker.Stop()
 	
 	for range ticker.C {
 		now := time.Now()
-		cutoff := now.Add(-2 * time.Minute) // Keep 2 minutes of data for safety
+		cutoff := now.Add(-metricsRetentionDuration)
 		
 		i.metricsMu.Lock()
 		for objectID, metrics := range i.callMetrics {
@@ -99,11 +108,14 @@ func (i *Inspector) cleanupOldMetrics() {
 			}
 			metrics.calls = validCalls
 			
-			// Remove metrics object if empty
-			if len(metrics.calls) == 0 {
+			// Check if empty before unlocking
+			isEmpty := len(metrics.calls) == 0
+			metrics.mu.Unlock()
+			
+			// Remove metrics object if empty (after unlocking metrics.mu)
+			if isEmpty {
 				delete(i.callMetrics, objectID)
 			}
-			metrics.mu.Unlock()
 		}
 		i.metricsMu.Unlock()
 	}
