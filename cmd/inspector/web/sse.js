@@ -141,12 +141,6 @@ function connectSSE() {
       upsertObject(data.object)
       // Refresh the graph to show updated metrics (calls per minute, duration)
       updateGraphIncremental()
-      if (document.getElementById('shard-view').classList.contains('active')) {
-        updateShardView()
-      }
-      if (document.getElementById('nodes-view').classList.contains('active')) {
-        updateNodesView()
-      }
     }
   })
 
