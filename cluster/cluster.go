@@ -865,6 +865,9 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 
 	// RPC transport error - we don't know if the call was executed, so UNKNOWN
+	// Note: Even if the RPC fails before reaching the node, we use UNKNOWN instead of SKIPPED
+	// because in distributed systems, RPC errors are ambiguous - the request might have been
+	// received and processed before the response was lost. This matches the gate server behavior.
 	resp, err := client.ReliableCallObject(ctx, req)
 	if err != nil {
 		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
