@@ -498,25 +498,50 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 	server.logRPC("ReliableCallObject", req)
 
 	// Validate request parameters - require the new fields
+	// Return SKIPPED status for validation errors since method was never executed
 	if req.GetCallId() == "" {
-		return nil, fmt.Errorf("call_id must be specified in ReliableCallObject request")
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  "call_id must be specified in ReliableCallObject request",
+			Status: goverse_pb.ReliableCallStatus_SKIPPED,
+		}, nil
 	}
 	if req.GetObjectType() == "" {
-		return nil, fmt.Errorf("object_type must be specified in ReliableCallObject request")
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  "object_type must be specified in ReliableCallObject request",
+			Status: goverse_pb.ReliableCallStatus_SKIPPED,
+		}, nil
 	}
 	if req.GetObjectId() == "" {
-		return nil, fmt.Errorf("object_id must be specified in ReliableCallObject request")
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  "object_id must be specified in ReliableCallObject request",
+			Status: goverse_pb.ReliableCallStatus_SKIPPED,
+		}, nil
 	}
 	if req.GetMethodName() == "" {
-		return nil, fmt.Errorf("method_name must be specified in ReliableCallObject request")
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  "method_name must be specified in ReliableCallObject request",
+			Status: goverse_pb.ReliableCallStatus_SKIPPED,
+		}, nil
 	}
 	if req.GetRequestData() == nil {
-		return nil, fmt.Errorf("request_data must be specified in ReliableCallObject request")
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  "request_data must be specified in ReliableCallObject request",
+			Status: goverse_pb.ReliableCallStatus_SKIPPED,
+		}, nil
 	}
 
 	// Validate that this object should be on this node
 	if err := server.validateObjectShardOwnership(ctx, req.GetObjectId()); err != nil {
-		return nil, err
+		return &goverse_pb.ReliableCallObjectResponse{
+			Result: nil,
+			Error:  err.Error(),
+			Status: goverse_pb.ReliableCallStatus_SKIPPED,
+		}, nil
 	}
 
 	// Route to node handler with new parameters
