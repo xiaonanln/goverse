@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -363,6 +364,20 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		}
 	}
 
+	// Unwrap the Any request to get the actual proto.Message
+	var requestMsg proto.Message
+	if req.Request != nil {
+		var unwrapErr error
+		requestMsg, unwrapErr = protohelper.AnyToMsg(req.Request)
+		if unwrapErr != nil {
+			// Failed to unwrap request - method was not executed
+			return &gate_pb.ReliableCallObjectResponse{
+				Error:  fmt.Sprintf("failed to unwrap request: %v", unwrapErr),
+				Status: "skipped",
+			}, nil
+		}
+	}
+
 	// Call cluster's ReliableCallObject which handles all routing logic
 	result, status, err := s.cluster.ReliableCallObject(
 		ctx,
@@ -370,7 +385,7 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		req.Type,
 		req.Id,
 		req.Method,
-		req.Request,
+		requestMsg,
 	)
 
 	// Convert result to gate response format
