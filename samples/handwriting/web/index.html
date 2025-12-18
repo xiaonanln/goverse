@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handwriting Practice Sheet Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✏️ Handwriting Practice Sheet Generator</h1>
+            <p>Create custom handwriting practice sheets for kids</p>
+        </header>
+
+        <div class="generator">
+            <h2>Generate New Sheet</h2>
+            
+            <div class="form-group">
+                <label for="text-input">Text to Practice:</label>
+                <input type="text" id="text-input" placeholder="Enter text (e.g., 'Hello World')" value="Hello World">
+            </div>
+
+            <div class="form-group">
+                <label for="style-select">Style:</label>
+                <select id="style-select">
+                    <option value="lines">Lines with Guide Text</option>
+                    <option value="dotted">Dotted Text for Tracing</option>
+                    <option value="blank">Blank Lines Only</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="repetitions-input">Number of Lines:</label>
+                <input type="number" id="repetitions-input" min="1" max="20" value="5">
+            </div>
+
+            <button id="generate-btn" class="btn btn-primary">Generate Sheet</button>
+        </div>
+
+        <div id="preview-section" class="preview hidden">
+            <h2>Preview</h2>
+            <div id="sheet-preview"></div>
+            <div class="actions">
+                <button id="download-btn" class="btn btn-success">Download SVG</button>
+                <button id="print-btn" class="btn btn-secondary">Print</button>
+                <button id="new-sheet-btn" class="btn btn-secondary">Create Another</button>
+            </div>
+        </div>
+
+        <div id="my-sheets" class="my-sheets hidden">
+            <h2>My Sheets</h2>
+            <div id="sheets-list"></div>
+        </div>
+
+        <div id="status" class="status hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

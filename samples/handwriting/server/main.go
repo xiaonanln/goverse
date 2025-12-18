@@ -1,0 +1,149 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/xiaonanln/goverse/gate/gateserver"
+	"github.com/xiaonanln/goverse/goverseapi"
+	"github.com/xiaonanln/goverse/util/logger"
+)
+
+var serverLogger = logger.NewLogger("HandwritingServer")
+
+func main() {
+	// Gate-specific flags (node uses standard goverseapi flags)
+	var (
+		gateAddr = flag.String("gate-addr", "localhost:49000", "Gate gRPC listen address")
+		httpAddr = flag.String("http-addr", ":8080", "HTTP listen address for REST API")
+	)
+
+	// Create the server (this parses flags internally)
+	server := goverseapi.NewServer()
+
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	serverLogger.Infof("Starting Handwriting Practice Sheet Server...")
+	serverLogger.Infof("  Gate address: %s", *gateAddr)
+	serverLogger.Infof("  HTTP address: %s", *httpAddr)
+
+	// Start the node server in a goroutine
+	go func() {
+		// Register HandwritingService object type
+		goverseapi.RegisterObjectType((*HandwritingService)(nil))
+
+		// Keep service objects running
+		go ensureServiceObjects(ctx)
+
+		err := server.Run(ctx)
+		if err != nil {
+			serverLogger.Errorf("Server error: %v", err)
+			cancel()
+		}
+	}()
+
+	// Give the node some time to start
+	time.Sleep(2 * time.Second)
+
+	// Start the gate server
+	gateConfig := &gateserver.GateServerConfig{
+		ListenAddress:     *gateAddr,
+		AdvertiseAddress:  *gateAddr,
+		HTTPListenAddress: *httpAddr,
+		EtcdAddress:       "localhost:2379",
+	}
+
+	gateServer, err := gateserver.NewGateServer(gateConfig)
+	if err != nil {
+		serverLogger.Errorf("Failed to create gate server: %v", err)
+		return
+	}
+
+	// Start gate server in a goroutine
+	go func() {
+		err := gateServer.Start(ctx)
+		if err != nil {
+			serverLogger.Errorf("Failed to start gate server: %v", err)
+			cancel()
+		}
+	}()
+
+	// Give gate some time to start
+	time.Sleep(500 * time.Millisecond)
+
+	serverLogger.Infof("Handwriting Practice Sheet Server started successfully!")
+	serverLogger.Infof("  REST API: http://localhost%s", *httpAddr)
+	serverLogger.Infof("  Web UI: Open samples/handwriting/web/index.html in a browser")
+	fmt.Println("\nPress Ctrl+C to stop the server...")
+
+	// Wait for shutdown signal or context cancellation
+	select {
+	case <-sigCh:
+		serverLogger.Infof("Received shutdown signal, stopping servers...")
+	case <-ctx.Done():
+		serverLogger.Infof("Context cancelled, stopping servers...")
+	}
+
+	// Cancel context to stop all goroutines
+	cancel()
+
+	// Give servers time to gracefully shutdown
+	time.Sleep(500 * time.Millisecond)
+
+	serverLogger.Infof("Handwriting Practice Sheet Server stopped.")
+}
+
+// ensureServiceObjects keeps the service objects alive by periodically creating them
+func ensureServiceObjects(ctx context.Context) {
+	serverLogger.Infof("Waiting for cluster to be ready...")
+	select {
+	case <-goverseapi.ClusterReady():
+		serverLogger.Infof("Cluster is ready, starting service object maintenance...")
+	case <-ctx.Done():
+		serverLogger.Infof("Context cancelled while waiting for cluster")
+		return
+	}
+
+	// Initial delay before first creation
+	select {
+	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
+		return
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		// Create/ensure all service objects exist
+		for i := 1; i <= 5; i++ {
+			serviceID := fmt.Sprintf("HandwritingService-%d", i)
+			_, err := goverseapi.CreateObject(ctx, "HandwritingService", serviceID)
+			if err != nil {
+				// This is expected if object already exists
+				serverLogger.Debugf("CreateObject %s: %v", serviceID, err)
+			} else {
+				serverLogger.Infof("Created service object: %s", serviceID)
+			}
+		}
+
+		// Wait before next check or context cancellation
+		select {
+		case <-ticker.C:
+			// Continue to next iteration
+		case <-ctx.Done():
+			serverLogger.Infof("Service object maintenance stopped")
+			return
+		}
+	}
+}

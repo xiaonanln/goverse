@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package handwriting;
+
+option go_package = "github.com/xiaonanln/goverse/samples/handwriting/proto;handwriting";
+
+// Request to generate a new handwriting practice sheet
+message GenerateSheetRequest {
+  string sheet_id = 1;      // Unique identifier for the sheet
+  string text = 2;          // Text to practice writing
+  string style = 3;         // Style: "lines", "dotted", "blank"
+  int32 repetitions = 4;    // Number of times to repeat the text (default: 5)
+}
+
+// Response after generating a sheet
+message GenerateSheetResponse {
+  string sheet_id = 1;
+  string text = 2;
+  string style = 3;
+  int32 repetitions = 4;
+  string svg_content = 5;   // SVG content of the sheet
+  int64 created_at = 6;     // Unix timestamp
+}
+
+// Request to get an existing sheet
+message GetSheetRequest {
+  string sheet_id = 1;
+}
+
+// Response with sheet details
+message GetSheetResponse {
+  string sheet_id = 1;
+  string text = 2;
+  string style = 3;
+  int32 repetitions = 4;
+  string svg_content = 5;
+  int64 created_at = 6;
+  bool exists = 7;
+}
+
+// Request to list all sheets for a service
+message ListSheetsRequest {
+  // No parameters needed
+}
+
+// Response with list of sheet IDs
+message ListSheetsResponse {
+  repeated string sheet_ids = 1;
+}
+
+// Request to delete a sheet
+message DeleteSheetRequest {
+  string sheet_id = 1;
+}
+
+// Response after deleting a sheet
+message DeleteSheetResponse {
+  bool success = 1;
+}
