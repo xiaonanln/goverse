@@ -110,7 +110,7 @@ function resetForm() {
 
 // API Communication
 async function callObjectMethod(objectId, method, request) {
-    const url = `${API_BASE}/objects/call/${SERVICE_TYPE}/${objectId}/${method}`;
+    const url = `${API_BASE}/call/${SERVICE_TYPE}/${objectId}/${method}`;
     
     // Encode request as protobuf Any
     let requestBase64;
