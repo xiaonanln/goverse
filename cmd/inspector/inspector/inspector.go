@@ -96,6 +96,9 @@ func (i *Inspector) cleanupOldMetrics() {
 		now := time.Now()
 		cutoff := now.Add(-metricsRetentionDuration)
 		
+		// Collect object IDs to delete
+		toDelete := make([]string, 0)
+		
 		i.metricsMu.Lock()
 		for objectID, metrics := range i.callMetrics {
 			metrics.mu.Lock()
@@ -108,14 +111,16 @@ func (i *Inspector) cleanupOldMetrics() {
 			}
 			metrics.calls = validCalls
 			
-			// Check if empty before unlocking
-			isEmpty := len(metrics.calls) == 0
-			metrics.mu.Unlock()
-			
-			// Remove metrics object if empty (after unlocking metrics.mu)
-			if isEmpty {
-				delete(i.callMetrics, objectID)
+			// Mark for deletion if empty
+			if len(metrics.calls) == 0 {
+				toDelete = append(toDelete, objectID)
 			}
+			metrics.mu.Unlock()
+		}
+		
+		// Delete empty metrics objects
+		for _, objectID := range toDelete {
+			delete(i.callMetrics, objectID)
 		}
 		i.metricsMu.Unlock()
 	}

@@ -186,7 +186,7 @@ function updateObjectMetricLabels(nodes) {
   metricLabelEnter.merge(metricLabelSelection)
     .text(d => {
       const cpm = d.calls_per_minute || 0
-      const ms = d.avg_execution_duration_ms ? Math.round(d.avg_execution_duration_ms) : 0
+      const ms = Math.round(d.avg_execution_duration_ms) || 0
       return `${cpm}cpm\n${ms}ms`
     })
 }
