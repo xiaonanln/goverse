@@ -100,6 +100,11 @@ function ticked() {
     .attr('x', d => d.x)
     .attr('y', d => d.y + getNodeRadius(d) + 14)
 
+  // Update metric label positions (below object nodes)
+  g.select('.labels').selectAll('.object-metric-label')
+    .attr('x', d => d.x)
+    .attr('y', d => d.y + getNodeRadius(d) + 24)
+
   // Update link positions
   g.select('.links').selectAll('.graph-link')
     .attr('x1', d => d.source.x)
@@ -465,6 +470,29 @@ function updateGraph() {
 
   labelSelection.text(d => d.label)
 
+  // Add/update metric labels for objects
+  const metricLabelSelection = g.select('.labels')
+    .selectAll('.object-metric-label')
+    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
+
+  metricLabelSelection.exit().remove()
+
+  const metricLabelEnter = metricLabelSelection.enter()
+    .append('text')
+    .attr('class', 'object-metric-label')
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '9px')
+    .attr('fill', '#888')
+    .attr('pointer-events', 'none')
+
+  // Update text for both new and existing metric labels
+  metricLabelEnter.merge(metricLabelSelection)
+    .text(d => {
+      const cpm = d.calls_per_minute || 0
+      const ms = d.avg_execution_duration_ms ? Math.round(d.avg_execution_duration_ms) : 0
+      return `${cpm}cpm\n${ms}ms`
+    })
+
   // Restart simulation
   simulation.alpha(SIMULATION_ALPHA_FULL).restart()
 }
@@ -826,6 +854,29 @@ function updateGraphIncremental() {
     .text(d => d.label)
 
   labelSelection.text(d => d.label)
+
+  // Add/update metric labels for objects
+  const metricLabelSelection = g.select('.labels')
+    .selectAll('.object-metric-label')
+    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
+
+  metricLabelSelection.exit().remove()
+
+  const metricLabelEnter = metricLabelSelection.enter()
+    .append('text')
+    .attr('class', 'object-metric-label')
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '9px')
+    .attr('fill', '#888')
+    .attr('pointer-events', 'none')
+
+  // Update text for both new and existing metric labels
+  metricLabelEnter.merge(metricLabelSelection)
+    .text(d => {
+      const cpm = d.calls_per_minute || 0
+      const ms = d.avg_execution_duration_ms ? Math.round(d.avg_execution_duration_ms) : 0
+      return `${cpm}cpm\n${ms}ms`
+    })
 
   // Use very low alpha to minimize disruption
   simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()

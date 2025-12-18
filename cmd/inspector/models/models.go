@@ -26,11 +26,13 @@ type GoverseGate struct {
 }
 
 type GoverseObject struct {
-	ID            string  `json:"id"`
-	Label         string  `json:"label"`
-	Size          float64 `json:"size"`
-	Color         string  `json:"color"`
-	Type          string  `json:"type"`
-	GoverseNodeID string  `json:"goverse_node_id"`
-	ShardID       int     `json:"shard_id"`
+	ID                     string  `json:"id"`
+	Label                  string  `json:"label"`
+	Size                   float64 `json:"size"`
+	Color                  string  `json:"color"`
+	Type                   string  `json:"type"`
+	GoverseNodeID          string  `json:"goverse_node_id"`
+	ShardID                int     `json:"shard_id"`
+	CallsPerMinute         int     `json:"calls_per_minute"`
+	AvgExecutionDurationMs float64 `json:"avg_execution_duration_ms"`
 }
