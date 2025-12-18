@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -364,12 +363,6 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		}
 	}
 
-	// Convert gate request to proto.Message for cluster call
-	var requestMsg proto.Message
-	if req.Request != nil {
-		requestMsg = req.Request
-	}
-
 	// Call cluster's ReliableCallObject which handles all routing logic
 	result, status, err := s.cluster.ReliableCallObject(
 		ctx,
@@ -377,7 +370,7 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		req.Type,
 		req.Id,
 		req.Method,
-		requestMsg,
+		req.Request,
 	)
 
 	// Convert result to gate response format
