@@ -21,6 +21,9 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspectserver"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
+	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -107,7 +110,7 @@ func main() {
 	go simulateShardMigrations(ctx, server, *etcdAddr, *etcdPrefix)
 
 	// Start background goroutine to simulate object calls
-	go simulateObjectCalls(ctx, pg)
+	go simulateObjectCalls(ctx, pg, *grpcAddr)
 
 	// Wait for shutdown signal
 	<-sigChan
@@ -559,7 +562,17 @@ func simulateShardMigrations(ctx context.Context, server *inspectserver.Inspecto
 }
 
 // simulateObjectCalls simulates periodic object method calls for demonstration
-func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph) {
+func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorAddr string) {
+	// Connect to inspector gRPC service
+	conn, err := grpc.NewClient(inspectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("[Demo] Failed to connect to inspector gRPC: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := inspector_pb.NewInspectorServiceClient(conn)
+
 	ticker := time.NewTicker(callSimulationInterval)
 	defer ticker.Stop()
 
@@ -576,16 +589,32 @@ func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph) {
 				continue
 			}
 
-			// Pick a random object
-			obj := objects[rand.Intn(len(objects))]
+			// Pick a random object (pick multiple to generate more traffic)
+			numCalls := rand.Intn(5) + 1 // 1-5 calls per tick
+			for i := 0; i < numCalls; i++ {
+				obj := objects[rand.Intn(len(objects))]
+				method := methods[rand.Intn(len(methods))]
+				
+				// Generate random duration (10-500ms)
+				duration := int32(rand.Intn(490) + 10)
 
-			// Pick a random method
-			method := methods[rand.Intn(len(methods))]
+				// Report call to inspector with duration
+				rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				_, err := client.ReportObjectCall(rpcCtx, &inspector_pb.ReportObjectCallRequest{
+					ObjectId:            obj.ID,
+					ObjectClass:         obj.Type,
+					Method:              method,
+					NodeAddress:         obj.GoverseNodeID,
+					ExecutionDurationMs: duration,
+				})
+				cancel()
 
-			// Broadcast the call event
-			pg.BroadcastObjectCall(obj.ID, obj.Type, method, obj.GoverseNodeID)
-
-			log.Printf("[Demo] Simulated call: %s.%s on node %s", obj.ID, method, obj.GoverseNodeID)
+				if err != nil {
+					log.Printf("[Demo] Failed to report call: %v", err)
+				} else {
+					log.Printf("[Demo] Simulated call: %s.%s on node %s (duration: %dms)", obj.ID, method, obj.GoverseNodeID, duration)
+				}
+			}
 		}
 	}
 }
