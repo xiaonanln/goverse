@@ -364,63 +364,45 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		}
 	}
 
-	// Determine which node hosts this object
-	nodeAddr, err := s.cluster.GetCurrentNodeForObject(ctx, req.Id)
-	if err != nil {
-		// Return response with skipped status - method was not executed
-		return &gate_pb.ReliableCallObjectResponse{
-			Error:  fmt.Sprintf("cannot determine node for object %s: %v", req.Id, err),
-			Status: "skipped",
-		}, nil
-	}
-
-	s.logger.Infof("Routing ReliableCallObject for %s.%s to node %s (callID: %s)", req.Id, req.Method, nodeAddr, req.CallId)
-
-	// Get connection to the target node
-	nodeClient, err := s.cluster.GetNodeConnections().GetConnection(nodeAddr)
-	if err != nil {
-		// Return response with skipped status - method was not executed
-		return &gate_pb.ReliableCallObjectResponse{
-			Error:  fmt.Sprintf("failed to get connection to node %s: %v", nodeAddr, err),
-			Status: "skipped",
-		}, nil
-	}
-
-	// Convert request data to bytes for node RPC
-	var requestData []byte
+	// Convert gate request to proto.Message for cluster call
+	var requestMsg proto.Message
 	if req.Request != nil {
-		requestData, err = proto.Marshal(req.Request)
-		if err != nil {
-			// Return response with skipped status - method was not executed
+		requestMsg = req.Request
+	}
+
+	// Call cluster's ReliableCallObject which handles all routing logic
+	result, status, err := s.cluster.ReliableCallObject(
+		ctx,
+		req.CallId,
+		req.Type,
+		req.Id,
+		req.Method,
+		requestMsg,
+	)
+
+	// Convert result to gate response format
+	var resultAny *anypb.Any
+	if result != nil {
+		var convertErr error
+		resultAny, convertErr = protohelper.MsgToAny(result)
+		if convertErr != nil {
+			// Conversion error after successful execution - treat as failed
 			return &gate_pb.ReliableCallObjectResponse{
-				Error:  fmt.Sprintf("failed to marshal request: %v", err),
-				Status: "skipped",
+				Error:  fmt.Sprintf("failed to convert result: %v", convertErr),
+				Status: goverse_pb.ReliableCallStatus_FAILED.String(),
 			}, nil
 		}
 	}
 
-	// Call ReliableCallObject on the remote node
-	nodeReq := &goverse_pb.ReliableCallObjectRequest{
-		CallId:      req.CallId,
-		ObjectType:  req.Type,
-		ObjectId:    req.Id,
-		MethodName:  req.Method,
-		RequestData: requestData,
+	// Build response
+	response := &gate_pb.ReliableCallObjectResponse{
+		Response: resultAny,
+		Status:   status.String(),
 	}
 
-	nodeResp, err := nodeClient.ReliableCallObject(ctx, nodeReq)
 	if err != nil {
-		// RPC error - we don't know if the call was executed, set status to "unknown"
-		return &gate_pb.ReliableCallObjectResponse{
-			Error:  fmt.Sprintf("remote ReliableCallObject failed on node %s: %v", nodeAddr, err),
-			Status: "unknown",
-		}, nil
+		response.Error = err.Error()
 	}
 
-	// Convert the response back to gate format
-	return &gate_pb.ReliableCallObjectResponse{
-		Response: nodeResp.Result,
-		Error:    nodeResp.Error,
-		Status:   nodeResp.Status.String(),
-	}, nil
+	return response, nil
 }
