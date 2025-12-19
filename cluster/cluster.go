@@ -915,12 +915,8 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		}
 
 		// Success!
-		if attempt > 1 {
-			c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s (succeeded on attempt %d)",
-				c, callID, targetNodeAddr, attempt)
-		} else {
-			c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
-		}
+		c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s (succeeded on attempt %d)",
+			c, callID, targetNodeAddr, attempt)
 		msg, err := protohelper.AnyToMsg(resp.Result)
 		return msg, resp.Status, err
 	}
