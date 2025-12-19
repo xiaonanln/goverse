@@ -870,23 +870,63 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		Request:    requestAny,
 	}
 
-	// RPC transport error - we don't know if the call was executed, so UNKNOWN
-	// Note: Even if the RPC fails before reaching the node, we use UNKNOWN instead of SKIPPED
-	// because in distributed systems, RPC errors are ambiguous - the request might have been
-	// received and processed before the response was lost. This matches the gate server behavior.
-	resp, err := client.ReliableCallObject(ctx, req)
-	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
-	}
+	// Retry loop with exponential backoff for RPC errors
+	// Start with 1 second, double each time
+	backoff := 1 * time.Second
+	attempt := 0
 
-	// Check if the response contains an error
-	if resp.Error != "" {
-		return nil, resp.Status, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
-	}
+	for {
+		attempt++
 
-	c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
-	msg, err := protohelper.AnyToMsg(resp.Result)
-	return msg, resp.Status, err
+		// RPC transport error - we don't know if the call was executed, so UNKNOWN
+		// Note: Even if the RPC fails before reaching the node, we use UNKNOWN instead of SKIPPED
+		// because in distributed systems, RPC errors are ambiguous - the request might have been
+		// received and processed before the response was lost. This matches the gate server behavior.
+		resp, err := client.ReliableCallObject(ctx, req)
+		if err != nil {
+			// Check if context is cancelled or deadline exceeded
+			select {
+			case <-ctx.Done():
+				c.logger.Warnf("%s - Context cancelled during reliable call %s to node %s (attempt %d): %v",
+					c, callID, targetNodeAddr, attempt, ctx.Err())
+				return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
+			default:
+			}
+
+			// RPC failed, log and retry with exponential backoff
+			c.logger.Warnf("%s - Reliable call %s RPC failed on attempt %d to node %s (will retry in %v): %v",
+				c, callID, attempt, targetNodeAddr, backoff, err)
+
+			// Wait for backoff period or context cancellation
+			select {
+			case <-time.After(backoff):
+				// Continue to next retry
+				backoff *= 2
+				continue
+			case <-ctx.Done():
+				c.logger.Warnf("%s - Context cancelled while waiting to retry reliable call %s to node %s: %v",
+					c, callID, targetNodeAddr, ctx.Err())
+				return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
+			}
+		}
+
+		// RPC succeeded, check response
+		// If the response contains an error with a non-UNKNOWN status, it means the call
+		// was executed on the remote node, so we should NOT retry
+		if resp.Error != "" {
+			return nil, resp.Status, fmt.Errorf("reliable call failed on remote node: %s", resp.Error)
+		}
+
+		// Success!
+		if attempt > 1 {
+			c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s (succeeded on attempt %d)",
+				c, callID, targetNodeAddr, attempt)
+		} else {
+			c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s", c, callID, targetNodeAddr)
+		}
+		msg, err := protohelper.AnyToMsg(resp.Result)
+		return msg, resp.Status, err
+	}
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
