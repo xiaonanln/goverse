@@ -472,7 +472,8 @@ func (node *Node) ReliableCallObject(
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
 	unlockSeqWrite := obj.LockSeqWrite()
 
-	// Convert Any to bytes for persistence
+	// Convert Any to bytes for persistence layer
+	// The API uses Any for type safety, but the persistence layer requires byte serialization for database storage
 	requestData, err := protohelper.AnyToBytes(request)
 	if err != nil {
 		unlockSeqWrite()
