@@ -112,6 +112,9 @@ func main() {
 	// Start background goroutine to simulate object calls
 	go simulateObjectCalls(ctx, pg, *grpcAddr)
 
+	// Start background goroutine to simulate link calls between nodes/gates
+	go simulateLinkCalls(ctx, pg, *grpcAddr)
+
 	// Wait for shutdown signal
 	<-sigChan
 	log.Println("Shutting down...")
@@ -594,7 +597,7 @@ func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorA
 			for i := 0; i < numCalls; i++ {
 				obj := objects[rand.Intn(len(objects))]
 				method := methods[rand.Intn(len(methods))]
-				
+
 				// Generate random duration (10-500us)
 				duration := int32(rand.Intn(490) + 10)
 
@@ -613,6 +616,156 @@ func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorA
 					log.Printf("[Demo] Failed to report call: %v", err)
 				} else {
 					log.Printf("[Demo] Simulated call: %s.%s on node %s (duration: %dus)", obj.ID, method, obj.GoverseNodeID, duration)
+				}
+			}
+		}
+	}
+}
+
+// simulateLinkCalls simulates periodic link calls between nodes and gates for demonstration
+func simulateLinkCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorAddr string) {
+	// Connect to inspector gRPC service
+	conn, err := grpc.NewClient(inspectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("[Demo] Failed to connect to inspector gRPC for link calls: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := inspector_pb.NewInspectorServiceClient(conn)
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			nodes := pg.GetNodes()
+			gates := pg.GetGates()
+
+			if len(nodes) == 0 {
+				continue
+			}
+
+			// Simulate node-to-node calls (3-8 per tick)
+			numNodeCalls := rand.Intn(6) + 3
+			for i := 0; i < numNodeCalls; i++ {
+				sourceNode := nodes[rand.Intn(len(nodes))]
+				targetNode := nodes[rand.Intn(len(nodes))]
+
+				// Skip self-calls
+				if sourceNode.AdvertiseAddr == targetNode.AdvertiseAddr {
+					continue
+				}
+
+				rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				_, err := client.ReportLinkCall(rpcCtx, &inspector_pb.ReportLinkCallRequest{
+					SourceAddress: sourceNode.AdvertiseAddr,
+					TargetAddress: targetNode.AdvertiseAddr,
+					IsGateSource:  false,
+				})
+				cancel()
+
+				if err != nil {
+					log.Printf("[Demo] Failed to report node link call: %v", err)
+				}
+			}
+
+			// Simulate gate-to-node calls (2-5 per tick)
+			if len(gates) > 0 {
+				numGateCalls := rand.Intn(4) + 2
+				for i := 0; i < numGateCalls; i++ {
+					gate := gates[rand.Intn(len(gates))]
+					targetNode := nodes[rand.Intn(len(nodes))]
+
+					rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+					_, err := client.ReportLinkCall(rpcCtx, &inspector_pb.ReportLinkCallRequest{
+						SourceAddress: gate.AdvertiseAddr,
+						TargetAddress: targetNode.AdvertiseAddr,
+						IsGateSource:  true,
+					})
+					cancel()
+
+					if err != nil {
+						log.Printf("[Demo] Failed to report gate link call: %v", err)
+					}
+				}
+			}
+		}
+	}
+}
+
+// simulateLinkCalls simulates periodic link calls between nodes and gates for demonstration
+func simulateLinkCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorAddr string) {
+	// Connect to inspector gRPC service
+	conn, err := grpc.NewClient(inspectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("[Demo] Failed to connect to inspector gRPC for link calls: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := inspector_pb.NewInspectorServiceClient(conn)
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			nodes := pg.GetNodes()
+			gates := pg.GetGates()
+
+			if len(nodes) == 0 {
+				continue
+			}
+
+			// Simulate node-to-node calls (3-8 per tick)
+			numNodeCalls := rand.Intn(6) + 3
+			for i := 0; i < numNodeCalls; i++ {
+				sourceNode := nodes[rand.Intn(len(nodes))]
+				targetNode := nodes[rand.Intn(len(nodes))]
+
+				// Skip self-calls
+				if sourceNode.AdvertiseAddr == targetNode.AdvertiseAddr {
+					continue
+				}
+
+				rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				_, err := client.ReportLinkCall(rpcCtx, &inspector_pb.ReportLinkCallRequest{
+					SourceAddress: sourceNode.AdvertiseAddr,
+					TargetAddress: targetNode.AdvertiseAddr,
+					IsGateSource:  false,
+				})
+				cancel()
+
+				if err != nil {
+					log.Printf("[Demo] Failed to report node link call: %v", err)
+				}
+			}
+
+			// Simulate gate-to-node calls (2-5 per tick)
+			if len(gates) > 0 {
+				numGateCalls := rand.Intn(4) + 2
+				for i := 0; i < numGateCalls; i++ {
+					gate := gates[rand.Intn(len(gates))]
+					targetNode := nodes[rand.Intn(len(nodes))]
+
+					rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+					_, err := client.ReportLinkCall(rpcCtx, &inspector_pb.ReportLinkCallRequest{
+						SourceAddress: gate.AdvertiseAddr,
+						TargetAddress: targetNode.AdvertiseAddr,
+						IsGateSource:  true,
+					})
+					cancel()
+
+					if err != nil {
+						log.Printf("[Demo] Failed to report gate link call: %v", err)
+					}
 				}
 			}
 		}
