@@ -119,7 +119,7 @@ type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
 	DeleteObject(ctx context.Context, id string) error
-	ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, requestData []byte) (*anypb.Any, goverse_pb.ReliableCallStatus, error)
+	ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request *anypb.Any) (*anypb.Any, goverse_pb.ReliableCallStatus, error)
 }
 
 type clusterInterface interface {
@@ -287,8 +287,8 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 	if req.GetMethodName() == "" {
 		return nil, fmt.Errorf("method_name must be specified in ReliableCallObject request")
 	}
-	if req.GetRequestData() == nil {
-		return nil, fmt.Errorf("request_data must be specified in ReliableCallObject request")
+	if req.GetRequest() == nil {
+		return nil, fmt.Errorf("request must be specified in ReliableCallObject request")
 	}
 
 	// Call ReliableCallObject on the actual node with new parameters
@@ -298,7 +298,7 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 		req.GetObjectType(),
 		req.GetObjectId(),
 		req.GetMethodName(),
-		req.GetRequestData(),
+		req.GetRequest(),
 	)
 	if err != nil {
 		return &goverse_pb.ReliableCallObjectResponse{

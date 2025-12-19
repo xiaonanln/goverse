@@ -7,7 +7,9 @@ import (
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/logger"
+	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // TestReliableCallObject_ValidationErrors verifies that ReliableCallObject returns
@@ -34,6 +36,9 @@ func TestReliableCallObject_ValidationErrors(t *testing.T) {
 		},
 	}
 
+	// Create a test request Any
+	testRequestAny, _ := protohelper.MsgToAny(&emptypb.Empty{})
+
 	tests := []struct {
 		name          string
 		req           *goverse_pb.ReliableCallObjectRequest
@@ -42,57 +47,57 @@ func TestReliableCallObject_ValidationErrors(t *testing.T) {
 		{
 			name: "missing call_id",
 			req: &goverse_pb.ReliableCallObjectRequest{
-				CallId:      "",
-				ObjectType:  "TestObject",
-				ObjectId:    "test-id",
-				MethodName:  "TestMethod",
-				RequestData: []byte("test"),
+				CallId:     "",
+				ObjectType: "TestObject",
+				ObjectId:   "test-id",
+				MethodName: "TestMethod",
+				Request:    testRequestAny,
 			},
 			expectedError: "call_id must be specified in ReliableCallObject request",
 		},
 		{
 			name: "missing object_type",
 			req: &goverse_pb.ReliableCallObjectRequest{
-				CallId:      "test-call-id",
-				ObjectType:  "",
-				ObjectId:    "test-id",
-				MethodName:  "TestMethod",
-				RequestData: []byte("test"),
+				CallId:     "test-call-id",
+				ObjectType: "",
+				ObjectId:   "test-id",
+				MethodName: "TestMethod",
+				Request:    testRequestAny,
 			},
 			expectedError: "object_type must be specified in ReliableCallObject request",
 		},
 		{
 			name: "missing object_id",
 			req: &goverse_pb.ReliableCallObjectRequest{
-				CallId:      "test-call-id",
-				ObjectType:  "TestObject",
-				ObjectId:    "",
-				MethodName:  "TestMethod",
-				RequestData: []byte("test"),
+				CallId:     "test-call-id",
+				ObjectType: "TestObject",
+				ObjectId:   "",
+				MethodName: "TestMethod",
+				Request:    testRequestAny,
 			},
 			expectedError: "object_id must be specified in ReliableCallObject request",
 		},
 		{
 			name: "missing method_name",
 			req: &goverse_pb.ReliableCallObjectRequest{
-				CallId:      "test-call-id",
-				ObjectType:  "TestObject",
-				ObjectId:    "test-id",
-				MethodName:  "",
-				RequestData: []byte("test"),
+				CallId:     "test-call-id",
+				ObjectType: "TestObject",
+				ObjectId:   "test-id",
+				MethodName: "",
+				Request:    testRequestAny,
 			},
 			expectedError: "method_name must be specified in ReliableCallObject request",
 		},
 		{
-			name: "missing request_data",
+			name: "missing request",
 			req: &goverse_pb.ReliableCallObjectRequest{
-				CallId:      "test-call-id",
-				ObjectType:  "TestObject",
-				ObjectId:    "test-id",
-				MethodName:  "TestMethod",
-				RequestData: nil,
+				CallId:     "test-call-id",
+				ObjectType: "TestObject",
+				ObjectId:   "test-id",
+				MethodName: "TestMethod",
+				Request:    nil,
 			},
-			expectedError: "request_data must be specified in ReliableCallObject request",
+			expectedError: "request must be specified in ReliableCallObject request",
 		},
 	}
 

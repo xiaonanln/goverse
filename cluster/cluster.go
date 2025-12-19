@@ -815,9 +815,9 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("methodName cannot be empty")
 	}
 
-	// Serialize request data BEFORE routing
+	// Convert request to Any BEFORE routing
 	// Pre-execution error - method never executed, so SKIPPED
-	requestData, err := protohelper.MsgToBytes(request)
+	requestAny, err := protohelper.MsgToAny(request)
 	if err != nil {
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -838,7 +838,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	if node != nil && targetNodeAddr == c.getAdvertiseAddr() {
 		// Local: INSERT + execute on this node (node clusters only)
 		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
-		resultAny, status, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestData)
+		resultAny, status, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestAny)
 		if err != nil {
 			return nil, status, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
@@ -857,11 +857,11 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Issue ReliableCallObject RPC to target node with full call data
 	req := &goverse_pb.ReliableCallObjectRequest{
-		CallId:      callID,
-		ObjectType:  objectType,
-		ObjectId:    objectID,
-		MethodName:  methodName,
-		RequestData: requestData,
+		CallId:     callID,
+		ObjectType: objectType,
+		ObjectId:   objectID,
+		MethodName: methodName,
+		Request:    requestAny,
 	}
 
 	// RPC transport error - we don't know if the call was executed, so UNKNOWN
