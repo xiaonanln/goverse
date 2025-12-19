@@ -527,10 +527,10 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 			Status: goverse_pb.ReliableCallStatus_SKIPPED,
 		}, nil
 	}
-	if req.GetRequestData() == nil {
+	if req.GetRequest() == nil {
 		return &goverse_pb.ReliableCallObjectResponse{
 			Result: nil,
-			Error:  "request_data must be specified in ReliableCallObject request",
+			Error:  "request must be specified in ReliableCallObject request",
 			Status: goverse_pb.ReliableCallStatus_SKIPPED,
 		}, nil
 	}
@@ -551,7 +551,7 @@ func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.Re
 		req.GetObjectType(),
 		req.GetObjectId(),
 		req.GetMethodName(),
-		req.GetRequestData(),
+		req.GetRequest(),
 	)
 	if err != nil {
 		// Return error with status information

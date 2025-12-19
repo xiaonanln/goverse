@@ -388,7 +388,7 @@ func (node *Node) ReliableCallObject(
 	objectType string,
 	objectID string,
 	methodName string,
-	requestData []byte,
+	request *anypb.Any,
 ) (*anypb.Any, goverse_pb.ReliableCallStatus, error) {
 	// Lock ordering:
 	// 1. stopMu.RLock (held throughout)
@@ -471,6 +471,15 @@ func (node *Node) ReliableCallObject(
 	// Acquire object's sequential write lock for INSERT
 	// This serializes all INSERTs for the same object, ensuring sequential seq allocation
 	unlockSeqWrite := obj.LockSeqWrite()
+
+	// Convert Any to bytes for persistence layer
+	// The API uses Any for type safety, but the persistence layer requires byte serialization for database storage
+	requestData, err := protohelper.AnyToBytes(request)
+	if err != nil {
+		unlockSeqWrite()
+		node.logger.Errorf("Failed to serialize request for call %s: %v", callID, err)
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to serialize request: %w", err)
+	}
 
 	// INSERT or GET the reliable call while holding the object's sequential write lock
 	node.logger.Infof("INSERT or GET reliable call %s for object %s.%s (type: %s) with sequential write lock",
