@@ -11,7 +11,6 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
-	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -19,7 +18,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -364,43 +362,16 @@ func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.Reliab
 		}
 	}
 
-	// Unwrap the Any request to get the actual proto.Message
-	var requestMsg proto.Message
-	if req.Request != nil {
-		var unwrapErr error
-		requestMsg, unwrapErr = protohelper.AnyToMsg(req.Request)
-		if unwrapErr != nil {
-			// Failed to unwrap request - method was not executed
-			return &gate_pb.ReliableCallObjectResponse{
-				Error:  fmt.Sprintf("failed to unwrap request: %v", unwrapErr),
-				Status: "skipped",
-			}, nil
-		}
-	}
-
-	// Call cluster's ReliableCallObject which handles all routing logic
-	result, status, err := s.cluster.ReliableCallObject(
+	// Call cluster's ReliableCallObjectAnyRequest which handles all routing logic
+	// This avoids unnecessary conversions between anypb.Any and proto.Message
+	resultAny, status, err := s.cluster.ReliableCallObjectAnyRequest(
 		ctx,
 		req.CallId,
 		req.Type,
 		req.Id,
 		req.Method,
-		requestMsg,
+		req.Request,
 	)
-
-	// Convert result to gate response format
-	var resultAny *anypb.Any
-	if result != nil {
-		var convertErr error
-		resultAny, convertErr = protohelper.MsgToAny(result)
-		if convertErr != nil {
-			// Conversion error after successful execution - treat as failed
-			return &gate_pb.ReliableCallObjectResponse{
-				Error:  fmt.Sprintf("failed to convert result: %v", convertErr),
-				Status: goverse_pb.ReliableCallStatus_FAILED.String(),
-			}, nil
-		}
-	}
 
 	// Build response
 	response := &gate_pb.ReliableCallObjectResponse{
