@@ -76,7 +76,7 @@ python3 stress_test_demo.py --clients 5 --duration 300 --stats-interval 30
 
 The stress test uses `stress_config_demo.yml` which defines:
 
-- **Inspector**: Port 8091 (gRPC), Port 8090 (HTTP)
+- **Inspector**: Port 8081 (gRPC), Port 8080 (HTTP)
 - **10 Nodes**: Ports 9211-9220 (gRPC), 8211-8220 (HTTP)
 - **7 Gates**: Ports 10111-10117 (gRPC)
 - **64 Shards**: Reduced from production (8192) for faster testing

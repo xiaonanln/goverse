@@ -11,9 +11,9 @@ version: 1
 
 inspector:
   # Inspector provides HTTP/gRPC interface for cluster monitoring
-  http_addr: "0.0.0.0:8090"
-  grpc_addr: "0.0.0.0:8091"
-  advertise_addr: "localhost:8091"
+  http_addr: "0.0.0.0:8080"
+  grpc_addr: "0.0.0.0:8081"
+  advertise_addr: "localhost:8081"
 
 cluster:
   # Use fewer shards for testing to speed up operations
