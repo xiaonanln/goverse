@@ -264,14 +264,15 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 
 	// Defer metrics recording to ensure it happens on all return paths
 	defer func() {
-		duration := time.Since(startTime).Seconds()
+		duration := time.Since(startTime)
 		status := "success"
 		if callErr != nil {
 			status = "failure"
 		}
 		metrics.RecordMethodCall(node.advertiseAddress, typ, method, status)
-		metrics.RecordMethodCallDuration(node.advertiseAddress, typ, method, status, duration)
+		metrics.RecordMethodCallDuration(node.advertiseAddress, typ, method, status, duration.Seconds())
 		metrics.RecordShardMethodCall(shardID)
+		node.inspectorManager.NotifyObjectCall(id, typ, method, int32(duration.Microseconds()))
 	}()
 
 	// Lock ordering: stopMu.RLock → per-key RLock → objectsMu
@@ -316,19 +317,12 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	// Call the method via reflection
-	methodStartTime := time.Now()
 	resp, err := obj.InvokeMethod(ctx, method, request)
-	methodDuration := time.Since(methodStartTime)
 
 	if err != nil {
 		callErr = err
 		return nil, callErr
 	}
-
-	// Report successful call to inspector (enabled by default, no config flag)
-	// Convert duration to milliseconds
-	durationMs := int32(methodDuration.Milliseconds())
-	node.inspectorManager.NotifyObjectCall(id, typ, method, durationMs)
 
 	node.logger.Infof("Response type: %T, value: %+v", resp, resp)
 	return resp, nil

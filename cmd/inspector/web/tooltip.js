@@ -50,7 +50,7 @@ function showDetailsPanel(d) {
       d = {
         ...d,
         callsPerMinute: freshObj.calls_per_minute,
-        avgExecutionDurationMs: freshObj.avg_execution_duration_ms
+        avgExecutionDurationUs: freshObj.avg_execution_duration_us
       }
     }
   }
@@ -206,10 +206,10 @@ function showDetailsPanel(d) {
       html += `<div class="detail-value">${d.callsPerMinute}</div>`
       html += `</div>`
     }
-    if (d.avgExecutionDurationMs !== undefined) {
+    if (d.avgExecutionDurationUs !== undefined) {
       html += `<div class="detail-row">`
       html += `<div class="detail-label">Avg Duration:</div>`
-      html += `<div class="detail-value">${d.avgExecutionDurationMs.toFixed(2)} ms</div>`
+      html += `<div class="detail-value">${d.avgExecutionDurationUs.toFixed(2)} us</div>`
       html += `</div>`
     }
     if (d.size) {
