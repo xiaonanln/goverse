@@ -31,12 +31,25 @@ type objectCallMetrics struct {
 	mu    sync.RWMutex
 }
 
+// linkCallMetric represents a single link call entry
+type linkCallMetric struct {
+	timestamp time.Time
+}
+
+// linkCallMetrics tracks call metrics for a link (source -> target)
+type linkCallMetrics struct {
+	calls []linkCallMetric // rolling window of calls (last 1 minute)
+	mu    sync.RWMutex
+}
+
 // Inspector implements the inspector gRPC service and manages inspector logic
 type Inspector struct {
 	inspector_pb.UnimplementedInspectorServiceServer
 	pg          *graph.GoverseGraph
 	callMetrics map[string]*objectCallMetrics // objectID -> metrics
 	metricsMu   sync.RWMutex
+	linkMetrics map[string]*linkCallMetrics // "sourceAddr->targetAddr" -> metrics
+	linkMu      sync.RWMutex
 }
 
 // New creates a new Inspector
@@ -44,6 +57,7 @@ func New(pg *graph.GoverseGraph) *Inspector {
 	i := &Inspector{
 		pg:          pg,
 		callMetrics: make(map[string]*objectCallMetrics),
+		linkMetrics: make(map[string]*linkCallMetrics),
 	}
 
 	// Start background cleanup goroutine for old metrics
@@ -51,6 +65,12 @@ func New(pg *graph.GoverseGraph) *Inspector {
 
 	// Start background goroutine for periodic metrics refresh
 	go i.refreshObjectMetrics()
+
+	// Start background cleanup for link metrics
+	go i.cleanupOldLinkMetrics()
+
+	// Start background refresh for link metrics
+	go i.refreshLinkMetrics()
 
 	return i
 }
@@ -425,4 +445,156 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 
 	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s, duration=%dus", objectID, objectClass, method, nodeAddress, duration)
 	return &inspector_pb.Empty{}, nil
+}
+
+// ReportLinkCall handles link call reports from nodes and gates.
+func (i *Inspector) ReportLinkCall(ctx context.Context, req *inspector_pb.ReportLinkCallRequest) (*inspector_pb.Empty, error) {
+	sourceAddr := req.GetSourceAddress()
+	targetAddr := req.GetTargetAddress()
+
+	if sourceAddr == "" || targetAddr == "" {
+		return &inspector_pb.Empty{}, nil
+	}
+
+	// Verify source and target are registered
+	isGateSource := req.GetIsGateSource()
+	if isGateSource {
+		if !i.pg.IsGateRegistered(sourceAddr) {
+			// Silently ignore calls from unregistered gates
+			return &inspector_pb.Empty{}, nil
+		}
+	} else {
+		if !i.pg.IsNodeRegistered(sourceAddr) {
+			// Silently ignore calls from unregistered nodes
+			return &inspector_pb.Empty{}, nil
+		}
+	}
+
+	if !i.pg.IsNodeRegistered(targetAddr) {
+		// Silently ignore calls to unregistered nodes
+		return &inspector_pb.Empty{}, nil
+	}
+
+	// Record link call metrics
+	linkKey := fmt.Sprintf("%s->%s", sourceAddr, targetAddr)
+	i.linkMu.Lock()
+	metrics, exists := i.linkMetrics[linkKey]
+	if !exists {
+		metrics = &linkCallMetrics{
+			calls: make([]linkCallMetric, 0, 100),
+		}
+		i.linkMetrics[linkKey] = metrics
+	}
+	i.linkMu.Unlock()
+
+	metrics.mu.Lock()
+	metrics.calls = append(metrics.calls, linkCallMetric{
+		timestamp: time.Now(),
+	})
+	metrics.mu.Unlock()
+
+	return &inspector_pb.Empty{}, nil
+}
+
+// cleanupOldLinkMetrics periodically removes old link call metrics
+func (i *Inspector) cleanupOldLinkMetrics() {
+	ticker := time.NewTicker(metricsCleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		cutoff := now.Add(-metricsRetentionDuration)
+
+		// Collect link keys to delete
+		toDelete := make([]string, 0)
+
+		i.linkMu.Lock()
+		for linkKey, metrics := range i.linkMetrics {
+			metrics.mu.Lock()
+			// Remove calls older than cutoff
+			validCalls := make([]linkCallMetric, 0, len(metrics.calls))
+			for _, call := range metrics.calls {
+				if call.timestamp.After(cutoff) {
+					validCalls = append(validCalls, call)
+				}
+			}
+			metrics.calls = validCalls
+
+			// Mark for deletion if empty
+			if len(metrics.calls) == 0 {
+				toDelete = append(toDelete, linkKey)
+			}
+			metrics.mu.Unlock()
+		}
+
+		// Delete empty metrics
+		for _, linkKey := range toDelete {
+			delete(i.linkMetrics, linkKey)
+		}
+		i.linkMu.Unlock()
+	}
+}
+
+// getLinkCallsPerMinute calculates calls per minute for a specific link
+func (i *Inspector) getLinkCallsPerMinute(sourceAddr, targetAddr string) int {
+	linkKey := fmt.Sprintf("%s->%s", sourceAddr, targetAddr)
+
+	i.linkMu.RLock()
+	metrics, exists := i.linkMetrics[linkKey]
+	i.linkMu.RUnlock()
+
+	if !exists {
+		return 0
+	}
+
+	metrics.mu.RLock()
+	defer metrics.mu.RUnlock()
+
+	now := time.Now()
+	oneMinuteAgo := now.Add(-1 * time.Minute)
+
+	count := 0
+	for _, call := range metrics.calls {
+		if call.timestamp.After(oneMinuteAgo) {
+			count++
+		}
+	}
+
+	return count
+}
+
+// refreshLinkMetrics periodically updates nodes and gates with fresh link metrics
+func (i *Inspector) refreshLinkMetrics() {
+	ticker := time.NewTicker(metricsRefreshInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Get all nodes and update their link metrics
+		nodes := i.pg.GetNodes()
+		for _, node := range nodes {
+			linkMetrics := make(map[string]int)
+			for _, targetAddr := range node.ConnectedNodes {
+				cpm := i.getLinkCallsPerMinute(node.AdvertiseAddr, targetAddr)
+				if cpm > 0 {
+					linkMetrics[targetAddr] = cpm
+				}
+			}
+			node.LinkMetrics = linkMetrics
+			i.pg.AddOrUpdateNode(node)
+		}
+
+		// Get all gates and update their link metrics
+		gates := i.pg.GetGates()
+		for _, gate := range gates {
+			linkMetrics := make(map[string]int)
+			for _, targetAddr := range gate.ConnectedNodes {
+				cpm := i.getLinkCallsPerMinute(gate.AdvertiseAddr, targetAddr)
+				if cpm > 0 {
+					linkMetrics[targetAddr] = cpm
+				}
+			}
+			gate.LinkMetrics = linkMetrics
+			i.pg.AddOrUpdateGate(gate)
+		}
+	}
 }

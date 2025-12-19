@@ -498,6 +498,38 @@ func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, obje
 	im.logger.Infof("Reported object call %s.%s to inspector (duration: %dus)", objectID, method, durationUs)
 }
 
+// ReportLinkCall sends a ReportLinkCall RPC to the Inspector without holding a lock.
+// This method is safe to call from background goroutines and reports a call from this component to a target node.
+func (im *InspectorManager) ReportLinkCall(ctx context.Context, targetNodeAddr string) {
+	// If inspector is disabled, skip
+	if im.inspectorAddress == "" {
+		return
+	}
+
+	im.mu.RLock()
+	client := im.client
+	im.mu.RUnlock()
+
+	if client == nil {
+		return
+	}
+
+	req := &inspector_pb.ReportLinkCallRequest{
+		SourceAddress: im.address,
+		TargetAddress: targetNodeAddr,
+		IsGateSource:  im.mode == ModeGate,
+	}
+
+	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := client.ReportLinkCall(rpcCtx, req)
+	if err != nil {
+		im.logger.Debugf("Failed to report link call to inspector (source: %s, target: %s): %v", im.address, targetNodeAddr, err)
+		return
+	}
+}
+
 // UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
 // This is called when the component's connections change.
 // The same RPC is used for both nodes and gates - the inspector determines the type based on the address.

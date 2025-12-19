@@ -561,6 +561,9 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
 	}
 
+	// Report link call to inspector (async, non-blocking)
+	c.reportLinkCall(ctx, nodeAddr)
+
 	// Unmarshal the response
 	if resp.Response == nil {
 		return nil, nil
@@ -609,6 +612,9 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	if err != nil {
 		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
 	}
+
+	// Report link call to inspector (async, non-blocking)
+	c.reportLinkCall(ctx, nodeAddr)
 
 	return resp.Response, nil
 }
@@ -1022,6 +1028,23 @@ func (c *Cluster) GetClientCount() int {
 		return c.gate.GetClientCount()
 	}
 	return 0
+}
+
+// reportLinkCall reports a successful remote call to the inspector.
+// This is called after a successful CallObject or CallObjectAnyRequest to a remote node.
+// The report is non-blocking and failures are silently ignored.
+func (c *Cluster) reportLinkCall(ctx context.Context, targetNodeAddr string) {
+	// For node clusters, report via node's inspector manager
+	if c.isNode() && c.node != nil {
+		c.node.ReportLinkCall(ctx, targetNodeAddr)
+		return
+	}
+
+	// For gate clusters, report via gate's inspector manager
+	if c.isGate() && c.gate != nil {
+		c.gate.ReportLinkCall(ctx, targetNodeAddr)
+		return
+	}
 }
 
 // PushMessageToClient sends a message to a client by its ID
