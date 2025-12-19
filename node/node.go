@@ -232,6 +232,12 @@ func (node *Node) NotifyRegisteredGatesChanged() {
 	node.inspectorManager.UpdateRegisteredGates()
 }
 
+// ReportLinkCall reports a link call from this node to a target node.
+// This is called after successful remote object calls to track communication metrics.
+func (node *Node) ReportLinkCall(ctx context.Context, targetNodeAddr string) {
+	node.inspectorManager.ReportLinkCall(ctx, targetNodeAddr)
+}
+
 // RegisterObjectType registers a new object type with the node
 func (node *Node) RegisterObjectType(obj Object) {
 	objType := reflect.TypeOf(obj)

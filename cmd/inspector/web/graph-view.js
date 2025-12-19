@@ -37,6 +37,9 @@ function initGraph() {
   // Links group
   g.append('g').attr('class', 'links')
 
+  // Link labels group
+  g.append('g').attr('class', 'link-labels')
+
   // Nodes group
   g.append('g').attr('class', 'nodes')
 
@@ -111,6 +114,11 @@ function ticked() {
     .attr('y1', d => d.source.y)
     .attr('x2', d => d.target.x)
     .attr('y2', d => d.target.y)
+
+  // Update link label positions (centered on link)
+  g.select('.link-labels').selectAll('.link-label')
+    .attr('x', d => (d.source.x + d.target.x) / 2)
+    .attr('y', d => (d.source.y + d.target.y) / 2)
 }
 
 // Drag handlers for graph nodes
@@ -189,6 +197,32 @@ function updateObjectMetricLabels(nodes) {
       const us = Math.round(d.avgExecutionDurationUs) || 0
       return `${cpm}cpm ${us}us`
     })
+}
+
+// Helper function to update link labels
+function updateLinkLabels(links) {
+  const linkLabelsSelection = g.select('.link-labels')
+    .selectAll('.link-label')
+    .data(links.filter(d => (d.type === 'node-node' || d.type === 'gate-node') && d.callsPerMinute > 0), 
+          d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+
+  linkLabelsSelection.exit().remove()
+
+  const linkLabelsEnter = linkLabelsSelection.enter()
+    .append('text')
+    .attr('class', 'link-label')
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '10px')
+    .attr('font-weight', 'bold')
+    .attr('fill', '#333')
+    .attr('stroke', 'white')
+    .attr('stroke-width', '2px')
+    .attr('paint-order', 'stroke')
+    .attr('pointer-events', 'none')
+
+  // Update text for all link labels
+  linkLabelsEnter.merge(linkLabelsSelection)
+    .text(d => `${d.callsPerMinute}cpm`)
 }
 
 // Build nodes and links from graph data
@@ -322,7 +356,8 @@ function buildGraphNodesAndLinks() {
     clusterNodes.push({
       id: n.id,
       advertiseAddr: n.advertise_addr,
-      connectedNodes: n.connected_nodes || []
+      connectedNodes: n.connected_nodes || [],
+      linkMetrics: n.link_metrics || {}
     })
   })
 
@@ -348,11 +383,17 @@ function buildGraphNodesAndLinks() {
           linkColor = '#F44336'
         }
         
+        // Get calls per minute for this link
+        const aToBCpm = nodeA.linkMetrics[nodeB.advertiseAddr] || 0
+        const bToACpm = nodeB.linkMetrics[nodeA.advertiseAddr] || 0
+        const totalCpm = aToBCpm + bToACpm
+        
         links.push({
           source: nodeA.id,
           target: nodeB.id,
           type: 'node-node',
-          color: linkColor
+          color: linkColor,
+          callsPerMinute: totalCpm
         })
       }
     }
@@ -362,14 +403,17 @@ function buildGraphNodesAndLinks() {
   // Gates connect to nodes (gate's connectedNodes is a list of node addresses)
   graphData.goverse_gates.forEach(gate => {
     const gateConnectedNodes = gate.connected_nodes || []
+    const gateLinkMetrics = gate.link_metrics || {}
     gateConnectedNodes.forEach(nodeAddr => {
       const nodeId = addrToNodeId.get(nodeAddr)
       if (nodeId && nodeMap.has(nodeId)) {
+        const cpm = gateLinkMetrics[nodeAddr] || 0
         links.push({
           source: gate.id,
           target: nodeId,
           type: 'gate-node',
-          color: '#2196F3' // Blue for gate-to-node connections
+          color: '#2196F3', // Blue for gate-to-node connections
+          callsPerMinute: cpm
         })
       }
     })
@@ -502,6 +546,7 @@ function updateGraph() {
   // Update labels
   updateNodeLabels(nodes)
   updateObjectMetricLabels(nodes)
+  updateLinkLabels(links)
 
   // Restart simulation
   simulation.alpha(SIMULATION_ALPHA_FULL).restart()
@@ -676,7 +721,8 @@ function updateGraphIncremental() {
     clusterNodes.push({
       id: n.id,
       advertiseAddr: n.advertise_addr,
-      connectedNodes: n.connected_nodes || []
+      connectedNodes: n.connected_nodes || [],
+      linkMetrics: n.link_metrics || {}
     })
   })
 
@@ -702,11 +748,17 @@ function updateGraphIncremental() {
           linkColor = '#F44336'
         }
         
+        // Get calls per minute for this link
+        const aToBCpm = nodeA.linkMetrics[nodeB.advertiseAddr] || 0
+        const bToACpm = nodeB.linkMetrics[nodeA.advertiseAddr] || 0
+        const totalCpm = aToBCpm + bToACpm
+        
         links.push({
           source: nodeA.id,
           target: nodeB.id,
           type: 'node-node',
-          color: linkColor
+          color: linkColor,
+          callsPerMinute: totalCpm
         })
       }
     }
@@ -716,14 +768,17 @@ function updateGraphIncremental() {
   // Gates connect to nodes (gate's connectedNodes is a list of node addresses)
   graphData.goverse_gates.forEach(gate => {
     const gateConnectedNodes = gate.connected_nodes || []
+    const gateLinkMetrics = gate.link_metrics || {}
     gateConnectedNodes.forEach(nodeAddr => {
       const nodeId = addrToNodeId.get(nodeAddr)
       if (nodeId && nodeMap.has(nodeId)) {
+        const cpm = gateLinkMetrics[nodeAddr] || 0
         links.push({
           source: gate.id,
           target: nodeId,
           type: 'gate-node',
-          color: '#2196F3' // Blue for gate-to-node connections
+          color: '#2196F3', // Blue for gate-to-node connections
+          callsPerMinute: cpm
         })
       }
     })
@@ -856,6 +911,7 @@ function updateGraphIncremental() {
   // Update labels
   updateNodeLabels(nodes)
   updateObjectMetricLabels(nodes)
+  updateLinkLabels(links)
 
   // Use very low alpha to minimize disruption
   simulation.alpha(SIMULATION_ALPHA_INCREMENTAL).restart()

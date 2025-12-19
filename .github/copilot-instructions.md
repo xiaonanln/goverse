@@ -97,6 +97,14 @@ Proto files: `proto/goverse.proto`, `gate/proto/gate.proto`
 - Never hold locks across async operations or goroutine boundaries
 - Never call methods that acquire locks while holding locks (check call chain)
 
+### Map Key vs Field Lookup (CRITICAL)
+
+**Ensure consistent identifier usage in maps and lookups:**
+- When a function takes an identifier (e.g., `nodeAddress`), verify the map key matches
+- Common bug: storing by `ID` but looking up by `Address` (or vice versa)
+- Function names should match their implementation (e.g., `IsNodeRegistered(address)` should lookup by address)
+- Test with different identifier types to catch cross-identifier lookup issues
+
 ### Proto Message Conversion
 
 **Use `util/protohelper`** for converting between `proto.Message`, `anypb.Any`, and `[]byte`:

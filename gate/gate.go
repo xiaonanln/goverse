@@ -107,6 +107,12 @@ func (g *Gate) Stop() error {
 	return nil
 }
 
+// ReportLinkCall reports a link call from this gate to a target node.
+// This is called after successful remote object calls to track communication metrics.
+func (g *Gate) ReportLinkCall(ctx context.Context, targetNodeAddr string) {
+	g.inspectorManager.ReportLinkCall(ctx, targetNodeAddr)
+}
+
 // cancelAllNodeRegistrations cancels all active node registration goroutines
 func (g *Gate) cancelAllNodeRegistrations() {
 	g.nodeRegMu.Lock()

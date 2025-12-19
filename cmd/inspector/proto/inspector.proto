@@ -72,6 +72,12 @@ message ReportObjectCallRequest {
   int32 execution_duration_us = 5; // Execution duration in microseconds
 }
 
+message ReportLinkCallRequest {
+  string source_address = 1;  // Source address (node or gate) initiating the call
+  string target_address = 2;  // Target node address receiving the call
+  bool is_gate_source = 3;    // True if source is a gate, false if source is a node
+}
+
 service InspectorService {
   rpc AddOrUpdateObject(AddOrUpdateObjectRequest) returns (Empty);
   rpc RemoveObject(RemoveObjectRequest) returns (Empty);
@@ -83,5 +89,6 @@ service InspectorService {
   rpc RegisterGate(RegisterGateRequest) returns (RegisterGateResponse);
   rpc UnregisterGate(UnregisterGateRequest) returns (Empty);
   rpc ReportObjectCall(ReportObjectCallRequest) returns (Empty);
+  rpc ReportLinkCall(ReportLinkCallRequest) returns (Empty);
   rpc Ping(Empty) returns (Empty);
 }
