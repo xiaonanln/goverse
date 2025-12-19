@@ -22,7 +22,7 @@ type GoverseGate = models.GoverseGate
 // callMetric represents a single call metric entry
 type callMetric struct {
 	timestamp time.Time
-	duration  int32 // duration in milliseconds
+	duration  int32 // duration in microseconds
 }
 
 // objectCallMetrics tracks call metrics for an object
@@ -69,9 +69,9 @@ func (i *Inspector) refreshObjectMetrics() {
 			callsPerMin, avgDur := i.getCallMetrics(obj.ID)
 
 			// Only update if metrics have changed
-			if obj.CallsPerMinute != callsPerMin || obj.AvgExecutionDurationMs != avgDur {
+			if obj.CallsPerMinute != callsPerMin || obj.AvgExecutionDurationUs != avgDur {
 				obj.CallsPerMinute = callsPerMin
-				obj.AvgExecutionDurationMs = avgDur
+				obj.AvgExecutionDurationUs = avgDur
 				i.pg.AddOrUpdateObject(obj)
 			}
 		}
@@ -189,7 +189,7 @@ func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.Add
 		GoverseNodeID:          nodeAddress,
 		ShardID:                int(o.ShardId),
 		CallsPerMinute:         callsPerMin,
-		AvgExecutionDurationMs: avgDur,
+		AvgExecutionDurationUs: avgDur,
 	}
 	i.pg.AddOrUpdateObject(obj)
 	return &inspector_pb.Empty{}, nil
@@ -257,7 +257,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 			GoverseNodeID:          addr,
 			ShardID:                int(o.ShardId),
 			CallsPerMinute:         callsPerMin,
-			AvgExecutionDurationMs: avgDur,
+			AvgExecutionDurationUs: avgDur,
 		}
 		i.pg.AddOrUpdateObject(obj)
 	}
@@ -394,7 +394,7 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 	objectClass := req.GetObjectClass()
 	method := req.GetMethod()
 	nodeAddress := req.GetNodeAddress()
-	duration := req.GetExecutionDurationMs()
+	duration := req.GetExecutionDurationUs()
 
 	// Check if the node is registered
 	if !i.pg.IsNodeRegistered(nodeAddress) {
@@ -423,6 +423,6 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 	// Broadcast the call event
 	i.pg.BroadcastObjectCall(objectID, objectClass, method, nodeAddress)
 
-	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s, duration=%dms", objectID, objectClass, method, nodeAddress, duration)
+	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s, duration=%dus", objectID, objectClass, method, nodeAddress, duration)
 	return &inspector_pb.Empty{}, nil
 }

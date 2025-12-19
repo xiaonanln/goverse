@@ -34,5 +34,5 @@ type GoverseObject struct {
 	GoverseNodeID          string  `json:"goverse_node_id"`
 	ShardID                int     `json:"shard_id"`
 	CallsPerMinute         int     `json:"calls_per_minute"`
-	AvgExecutionDurationMs float64 `json:"avg_execution_duration_ms"`
+	AvgExecutionDurationUs float64 `json:"avg_execution_duration_us"`
 }

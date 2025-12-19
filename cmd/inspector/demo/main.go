@@ -595,7 +595,7 @@ func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorA
 				obj := objects[rand.Intn(len(objects))]
 				method := methods[rand.Intn(len(methods))]
 				
-				// Generate random duration (10-500ms)
+				// Generate random duration (10-500us)
 				duration := int32(rand.Intn(490) + 10)
 
 				// Report call to inspector with duration
@@ -605,14 +605,14 @@ func simulateObjectCalls(ctx context.Context, pg *graph.GoverseGraph, inspectorA
 					ObjectClass:         obj.Type,
 					Method:              method,
 					NodeAddress:         obj.GoverseNodeID,
-					ExecutionDurationMs: duration,
+					ExecutionDurationUs: duration,
 				})
 				cancel()
 
 				if err != nil {
 					log.Printf("[Demo] Failed to report call: %v", err)
 				} else {
-					log.Printf("[Demo] Simulated call: %s.%s on node %s (duration: %dms)", obj.ID, method, obj.GoverseNodeID, duration)
+					log.Printf("[Demo] Simulated call: %s.%s on node %s (duration: %dus)", obj.ID, method, obj.GoverseNodeID, duration)
 				}
 			}
 		}

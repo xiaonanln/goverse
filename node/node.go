@@ -326,9 +326,9 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 	}
 
 	// Report successful call to inspector (enabled by default, no config flag)
-	// Convert duration to milliseconds
-	durationMs := int32(methodDuration.Milliseconds())
-	node.inspectorManager.NotifyObjectCall(id, typ, method, durationMs)
+	// Convert duration to microseconds
+	durationUs := int32(methodDuration.Microseconds())
+	node.inspectorManager.NotifyObjectCall(id, typ, method, durationUs)
 
 	node.logger.Infof("Response type: %T, value: %+v", resp, resp)
 	return resp, nil

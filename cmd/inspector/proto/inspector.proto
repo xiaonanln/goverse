@@ -69,7 +69,7 @@ message ReportObjectCallRequest {
   string object_class = 2;    // Type/class of the object
   string method = 3;          // Method name being called
   string node_address = 4;    // Node address where the call occurred
-  int32 execution_duration_ms = 5; // Execution duration in milliseconds
+  int32 execution_duration_us = 5; // Execution duration in microseconds
 }
 
 service InspectorService {

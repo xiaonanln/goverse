@@ -234,8 +234,8 @@ func (im *InspectorManager) NotifyObjectRemoved(objectID string) {
 // NotifyObjectCall notifies the Inspector that an object method was called.
 // If the inspector is disabled (empty address), this is a no-op.
 // Call reporting is enabled by default with no config flag required.
-// durationMs is the execution duration in milliseconds.
-func (im *InspectorManager) NotifyObjectCall(objectID, objectType, method string, durationMs int32) {
+// durationUs is the execution duration in microseconds.
+func (im *InspectorManager) NotifyObjectCall(objectID, objectType, method string, durationUs int32) {
 	// If inspector is disabled, skip all work
 	if im.inspectorAddress == "" {
 		return
@@ -254,7 +254,7 @@ func (im *InspectorManager) NotifyObjectCall(objectID, objectType, method string
 		// since call reporting is a best-effort notification mechanism.
 		// Note: InspectorManager is per-node, so objectID is already scoped to this node's context.
 		taskpool.SubmitByKey(objectID, func(ctx context.Context) {
-			im.reportObjectCall(ctx, objectID, objectType, method, durationMs)
+			im.reportObjectCall(ctx, objectID, objectType, method, durationUs)
 		})
 	}
 }
@@ -469,7 +469,7 @@ func (im *InspectorManager) removeObject(ctx context.Context, objectID string) {
 
 // reportObjectCall sends a ReportObjectCall RPC to the Inspector without holding a lock.
 // This method is safe to call from background goroutines.
-func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, objectType, method string, durationMs int32) {
+func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, objectType, method string, durationUs int32) {
 	im.mu.RLock()
 	client := im.client
 	im.mu.RUnlock()
@@ -483,7 +483,7 @@ func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, obje
 		ObjectClass:         objectType,
 		Method:              method,
 		NodeAddress:         im.address,
-		ExecutionDurationMs: durationMs,
+		ExecutionDurationUs: durationUs,
 	}
 
 	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -495,7 +495,7 @@ func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, obje
 		return
 	}
 
-	im.logger.Infof("Reported object call %s.%s to inspector (duration: %dms)", objectID, method, durationMs)
+	im.logger.Infof("Reported object call %s.%s to inspector (duration: %dus)", objectID, method, durationUs)
 }
 
 // UpdateConnectedNodes sends an UpdateConnectedNodes RPC to the Inspector.
