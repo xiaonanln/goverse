@@ -158,8 +158,13 @@ func (pg *GoverseGraph) AddOrUpdateNode(node models.GoverseNode) {
 func (pg *GoverseGraph) IsNodeRegistered(nodeAddress string) bool {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	_, exists := pg.nodes[nodeAddress]
-	return exists
+	// Look up by AdvertiseAddr, not by ID
+	for _, node := range pg.nodes {
+		if node.AdvertiseAddr == nodeAddress {
+			return true
+		}
+	}
+	return false
 }
 
 // RemoveObject removes a specific object by ID.
@@ -271,8 +276,13 @@ func (pg *GoverseGraph) AddOrUpdateGate(gate models.GoverseGate) {
 func (pg *GoverseGraph) IsGateRegistered(gateAddress string) bool {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	_, exists := pg.gates[gateAddress]
-	return exists
+	// Look up by AdvertiseAddr, not by ID
+	for _, gate := range pg.gates {
+		if gate.AdvertiseAddr == gateAddress {
+			return true
+		}
+	}
+	return false
 }
 
 // RemoveGate removes a gate by ID.
