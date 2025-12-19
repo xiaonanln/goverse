@@ -229,3 +229,23 @@ func (nc *NodeConnections) GetConnectedNodeAddresses() []string {
 
 	return result
 }
+
+// SetConnectionForTesting replaces a connection with a custom client for testing purposes
+// This is only for use in tests to inject mock or intercepted connections
+func (nc *NodeConnections) SetConnectionForTesting(nodeAddr string, client goverse_pb.GoverseClient) {
+	nc.connectionsMu.Lock()
+	defer nc.connectionsMu.Unlock()
+
+	conn, exists := nc.connections[nodeAddr]
+	if !exists {
+		// Create a new connection entry with nil conn (test-only scenario)
+		nc.connections[nodeAddr] = &NodeConnection{
+			address: nodeAddr,
+			conn:    nil,
+			client:  client,
+		}
+	} else {
+		// Replace the client but keep the connection (for cleanup)
+		conn.client = client
+	}
+}
