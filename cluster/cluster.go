@@ -771,8 +771,8 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 }
 
 // ReliableCallObjectAnyRequest calls a method on a distributed object with reliable exactly-once semantics,
-// accepting an *anypb.Any request. This is an optimized version that avoids unnecessary marshal/unmarshal
-// cycles when the request is already in Any format (e.g., from a gate that received it from a client).
+// accepting an *anypb.Any request. This is an optimized version that avoids unnecessary conversions between
+// anypb.Any and proto.Message when the request is already in Any format (e.g., from a gate that received it from a client).
 //
 // Parameters:
 //   - ctx: Context for the operation
