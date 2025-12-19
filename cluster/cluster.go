@@ -16,6 +16,7 @@ import (
 	"github.com/xiaonanln/goverse/gate"
 	"github.com/xiaonanln/goverse/node"
 	goverse_pb "github.com/xiaonanln/goverse/proto"
+	"github.com/xiaonanln/goverse/util/backoff"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
@@ -872,8 +873,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 	// Retry loop with exponential backoff for RPC errors
 	// Start with 1 second, double each time, max 8 seconds
-	backoff := 1 * time.Second
-	maxBackoff := 8 * time.Second
+	retryBackoff := backoff.New(1*time.Second, 8*time.Second, 2.0)
 	attempt := 0
 
 	for {
@@ -896,22 +896,15 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 
 			// RPC failed, log and retry with exponential backoff
 			c.logger.Warnf("%s - Reliable call %s RPC failed on attempt %d to node %s (will retry in %v): %v",
-				c, callID, attempt, targetNodeAddr, backoff, err)
+				c, callID, attempt, targetNodeAddr, retryBackoff.CurrentDelay(), err)
 
 			// Wait for backoff period or context cancellation
-			select {
-			case <-time.After(backoff):
-				// Continue to next retry with exponential backoff (capped at maxBackoff)
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
-				continue
-			case <-ctx.Done():
+			if waitErr := retryBackoff.Wait(ctx); waitErr != nil {
 				c.logger.Warnf("%s - Context cancelled while waiting to retry reliable call %s to node %s: %v",
-					c, callID, targetNodeAddr, ctx.Err())
+					c, callID, targetNodeAddr, waitErr)
 				return nil, goverse_pb.ReliableCallStatus_UNKNOWN, fmt.Errorf("failed to call ReliableCallObject RPC on node %s: %w", targetNodeAddr, err)
 			}
+			continue
 		}
 
 		// RPC succeeded, check response
