@@ -103,9 +103,10 @@ function getNodeRadius(d) {
   
   // For objects: scale size based on workload (CPM * Duration)
   if (d.nodeType === NODE_TYPE_OBJECT) {
-    const load = (d.callsPerMinute || 0) * (d.avgExecutionDurationUs || 0)
-    const scale = 1 + (7 * Math.log10(1 + load) / Math.log10(1 + 60000000))
-    return DEFAULT_OBJECT_RADIUS * Math.min(8, scale)
+    const maxScale = 4
+    const load = (d.callsPerMinute || 0)
+    const scale = 1 + ((maxScale - 1) * Math.log10(1 + load) / Math.log10(1 + 600)) // Cap at 600 CPM
+    return DEFAULT_OBJECT_RADIUS * Math.min(maxScale, scale)
   }
   
   // Fallback for other types
