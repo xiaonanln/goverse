@@ -196,16 +196,16 @@ func TestRefreshLinkMetrics(t *testing.T) {
 
 	// Register two nodes with a connection
 	node1 := models.GoverseNode{
-		ID:              "localhost:47001",
-		AdvertiseAddr:   "localhost:47001",
-		ConnectedNodes:  []string{"localhost:47002"},
-		LinkMetrics:     make(map[string]int),
+		ID:             "localhost:47001",
+		AdvertiseAddr:  "localhost:47001",
+		ConnectedNodes: []string{"localhost:47002"},
+		LinkMetrics:    make(map[string]int),
 	}
 	node2 := models.GoverseNode{
-		ID:              "localhost:47002",
-		AdvertiseAddr:   "localhost:47002",
-		ConnectedNodes:  []string{"localhost:47001"},
-		LinkMetrics:     make(map[string]int),
+		ID:             "localhost:47002",
+		AdvertiseAddr:  "localhost:47002",
+		ConnectedNodes: []string{"localhost:47001"},
+		LinkMetrics:    make(map[string]int),
 	}
 	pg.AddOrUpdateNode(node1)
 	pg.AddOrUpdateNode(node2)
