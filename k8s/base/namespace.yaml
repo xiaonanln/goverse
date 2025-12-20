@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goverse
+  labels:
+    app.kubernetes.io/name: goverse
+    app.kubernetes.io/component: cluster
