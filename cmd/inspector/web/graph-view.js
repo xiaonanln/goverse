@@ -527,16 +527,35 @@ function updateGraph() {
     }
   })
 
-  // Update existing node colors
+  // Update existing node colors and sizes
   nodeSelection.each(function(d) {
     const el = d3.select(this)
+    const r = getNodeRadius(d)
     const shape = getNodeShape(d)
     if (shape === 'square') {
-      el.select('rect').attr('fill', getNodeColor(d))
-    } else if (shape === 'diamond' || shape === 'hexagon') {
-      el.select('polygon').attr('fill', getNodeColor(d))
+      el.select('rect')
+        .attr('fill', getNodeColor(d))
+        .attr('width', r * 2)
+        .attr('height', r * 2)
+        .attr('x', -r)
+        .attr('y', -r)
+    } else if (shape === 'diamond') {
+      el.select('polygon')
+        .attr('fill', getNodeColor(d))
+        .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
+    } else if (shape === 'hexagon') {
+      const hexPoints = []
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 2
+        hexPoints.push(`${r * Math.cos(angle)},${r * Math.sin(angle)}`)
+      }
+      el.select('polygon')
+        .attr('fill', getNodeColor(d))
+        .attr('points', hexPoints.join(' '))
     } else {
-      el.select('circle').attr('fill', getNodeColor(d))
+      el.select('circle')
+        .attr('fill', getNodeColor(d))
+        .attr('r', r)
     }
   })
 
@@ -892,16 +911,35 @@ function updateGraphIncremental() {
     }
   })
 
-  // Update existing node colors
+  // Update existing node colors and sizes
   nodeSelection.each(function(d) {
     const el = d3.select(this)
+    const r = getNodeRadius(d)
     const shape = getNodeShape(d)
     if (shape === 'square') {
-      el.select('rect').attr('fill', getNodeColor(d))
-    } else if (shape === 'diamond' || shape === 'hexagon') {
-      el.select('polygon').attr('fill', getNodeColor(d))
+      el.select('rect')
+        .attr('fill', getNodeColor(d))
+        .attr('width', r * 2)
+        .attr('height', r * 2)
+        .attr('x', -r)
+        .attr('y', -r)
+    } else if (shape === 'diamond') {
+      el.select('polygon')
+        .attr('fill', getNodeColor(d))
+        .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
+    } else if (shape === 'hexagon') {
+      const hexPoints = []
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 2
+        hexPoints.push(`${r * Math.cos(angle)},${r * Math.sin(angle)}`)
+      }
+      el.select('polygon')
+        .attr('fill', getNodeColor(d))
+        .attr('points', hexPoints.join(' '))
     } else {
-      el.select('circle').attr('fill', getNodeColor(d))
+      el.select('circle')
+        .attr('fill', getNodeColor(d))
+        .attr('r', r)
     }
   })
 
