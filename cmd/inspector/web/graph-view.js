@@ -178,7 +178,7 @@ function updateNodeLabels(nodes) {
 function updateObjectMetricLabels(nodes) {
   const metricLabelSelection = g.select('.labels')
     .selectAll('.object-metric-label')
-    .data(nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT), d => d.id)
+    .data(showObjectMetricLabels ? nodes.filter(d => d.nodeType === NODE_TYPE_OBJECT) : [], d => d.id)
 
   metricLabelSelection.exit().remove()
 
@@ -203,7 +203,7 @@ function updateObjectMetricLabels(nodes) {
 function updateLinkLabels(links) {
   const linkLabelsSelection = g.select('.link-labels')
     .selectAll('.link-label')
-    .data(links.filter(d => (d.type === 'node-node' || d.type === 'gate-node') && d.callsPerMinute > 0), 
+    .data(showLinkLabels ? links.filter(d => (d.type === 'node-node' || d.type === 'gate-node') && d.callsPerMinute > 0) : [], 
           d => `${d.source.id || d.source}-${d.target.id || d.target}`)
 
   linkLabelsSelection.exit().remove()
@@ -984,4 +984,18 @@ function showCallPopup(objectId, method, objectClass) {
       }
     }, CALL_POPUP_DURATION)
   }
+}
+
+// Toggle object metric labels visibility
+function toggleObjectMetricLabels(visible) {
+  showObjectMetricLabels = visible
+  const { nodes, links } = buildGraphNodesAndLinks()
+  updateObjectMetricLabels(nodes)
+}
+
+// Toggle link labels visibility
+function toggleLinkLabels(visible) {
+  showLinkLabels = visible
+  const { nodes, links } = buildGraphNodesAndLinks()
+  updateLinkLabels(links)
 }

@@ -20,6 +20,15 @@ document.querySelectorAll('.tab').forEach(tab => {
   })
 })
 
+// Label visibility toggle handlers
+document.getElementById('toggle-object-labels').addEventListener('change', (event) => {
+  toggleObjectMetricLabels(event.target.checked)
+})
+
+document.getElementById('toggle-link-labels').addEventListener('change', (event) => {
+  toggleLinkLabels(event.target.checked)
+})
+
 // Window resize handler for both graph and nodes views
 window.addEventListener('resize', () => {
   handleGraphResize()

@@ -313,6 +313,36 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
   background: #f0f0f0;
 }
 
+.view-controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 100;
+}
+
+.view-control-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: #333;
+}
+
+.view-control-item input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
 /* Details Panel */
 .details-panel {
   position: fixed;
