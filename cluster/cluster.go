@@ -770,8 +770,9 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	}
 }
 
-// ReliableCallObject inserts a reliable call into the database for exactly-once execution semantics.
-// This is part of PR 10: Cluster-Level ReliableCallObject (Insert to DB only).
+// ReliableCallObjectAnyRequest calls a method on a distributed object with reliable exactly-once semantics,
+// accepting an *anypb.Any request. This is an optimized version that avoids unnecessary conversions between
+// anypb.Any and proto.Message when the request is already in Any format (e.g., from a gate that received it from a client).
 //
 // Parameters:
 //   - ctx: Context for the operation
@@ -779,34 +780,13 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 //   - objectType: Type of the target object
 //   - objectID: ID of the target object
 //   - methodName: Name of the method to invoke on the object
-//   - requestData: Serialized request data (proto.Message marshaled to bytes)
+//   - request: Request payload in anypb.Any format
 //
 // Returns:
-//   - *object.ReliableCall: The inserted or existing call record
+//   - *anypb.Any: The result in Any format
+//   - goverse_pb.ReliableCallStatus: Execution status
 //   - error: Any error that occurred during the operation
-//
-// Behavior:
-//   - Inserts the call into the database via the persistence provider
-//   - If a call with the same callID already exists:
-//   - If the existing call status is NOT "pending", returns the call immediately (with cached result/error)
-//   - If the existing call status is "pending", returns the call (waiting for processing)
-//   - This method only handles database insertion; routing and execution are handled in later PRs
-//
-// Example:
-//
-//	callID := uniqueid.UniqueId()
-//	requestData, _ := proto.Marshal(myRequest)
-//	rc, err := cluster.ReliableCallObject(ctx, callID, "MyType", "obj-123", "MyMethod", requestData)
-//	if err != nil {
-//	    return err
-//	}
-//	// Check if call is already completed
-//	if rc.Status == "success" {
-//	    // Use rc.ResultData
-//	} else if rc.Status == "failed" {
-//	    // Handle rc.Error
-//	}
-func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+func (c *Cluster) ReliableCallObjectAnyRequest(ctx context.Context, callID string, objectType string, objectID string, methodName string, request *anypb.Any) (*anypb.Any, goverse_pb.ReliableCallStatus, error) {
 	// Validate input parameters
 	// These are pre-execution validation errors - method never executed, so SKIPPED
 	if callID == "" {
@@ -820,13 +800,6 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	}
 	if methodName == "" {
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("methodName cannot be empty")
-	}
-
-	// Convert request to Any BEFORE routing
-	// Pre-execution error - method never executed, so SKIPPED
-	requestAny, err := protohelper.MsgToAny(request)
-	if err != nil {
-		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Find the target node FIRST (before INSERT)
@@ -845,12 +818,11 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 	if node != nil && targetNodeAddr == c.getAdvertiseAddr() {
 		// Local: INSERT + execute on this node (node clusters only)
 		c.logger.Infof("%s - Processing reliable call %s locally for object %s (type: %s)", c, callID, objectID, objectType)
-		resultAny, status, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, requestAny)
+		resultAny, status, err := node.ReliableCallObject(ctx, callID, objectType, objectID, methodName, request)
 		if err != nil {
 			return nil, status, fmt.Errorf("failed to process reliable call locally: %w", err)
 		}
-		msg, err := protohelper.AnyToMsg(resultAny)
-		return msg, status, err
+		return resultAny, status, nil
 	}
 
 	// Remote: send RPC with full call data to owner node
@@ -868,7 +840,7 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		ObjectType: objectType,
 		ObjectId:   objectID,
 		MethodName: methodName,
-		Request:    requestAny,
+		Request:    request,
 	}
 
 	// Retry loop with exponential backoff for RPC errors
@@ -917,9 +889,63 @@ func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectT
 		// Success!
 		c.logger.Infof("%s - Reliable call %s successfully processed on remote node %s (succeeded on attempt %d)",
 			c, callID, targetNodeAddr, attempt)
-		msg, err := protohelper.AnyToMsg(resp.Result)
-		return msg, resp.Status, err
+		return resp.Result, resp.Status, nil
 	}
+}
+
+// ReliableCallObject inserts a reliable call into the database for exactly-once execution semantics.
+// This is part of PR 10: Cluster-Level ReliableCallObject (Insert to DB only).
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - callID: Unique identifier for deduplication (should be generated by caller using uniqueid.UniqueId())
+//   - objectType: Type of the target object
+//   - objectID: ID of the target object
+//   - methodName: Name of the method to invoke on the object
+//   - request: Request payload as proto.Message
+//
+// Returns:
+//   - proto.Message: The result
+//   - goverse_pb.ReliableCallStatus: Execution status
+//   - error: Any error that occurred during the operation
+//
+// Behavior:
+//   - Inserts the call into the database via the persistence provider
+//   - If a call with the same callID already exists:
+//   - If the existing call status is NOT "pending", returns the call immediately (with cached result/error)
+//   - If the existing call status is "pending", returns the call (waiting for processing)
+//   - This method only handles database insertion; routing and execution are handled in later PRs
+//
+// Example:
+//
+//	callID := uniqueid.UniqueId()
+//	requestData, _ := proto.Marshal(myRequest)
+//	rc, err := cluster.ReliableCallObject(ctx, callID, "MyType", "obj-123", "MyMethod", requestData)
+//	if err != nil {
+//	    return err
+//	}
+//	// Check if call is already completed
+//	if rc.Status == "success" {
+//	    // Use rc.ResultData
+//	} else if rc.Status == "failed" {
+//	    // Handle rc.Error
+//	}
+func (c *Cluster) ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+	// Convert request to Any
+	requestAny, err := protohelper.MsgToAny(request)
+	if err != nil {
+		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Call the Any version
+	resultAny, status, err := c.ReliableCallObjectAnyRequest(ctx, callID, objectType, objectID, methodName, requestAny)
+	if err != nil {
+		return nil, status, err
+	}
+
+	// Convert result back to proto.Message
+	msg, err := protohelper.AnyToMsg(resultAny)
+	return msg, status, err
 }
 
 // RegisterGateConnection registers a gate connection and returns a channel for sending messages to it
