@@ -49,6 +49,10 @@ const graphData = { goverse_nodes: [], goverse_gates: [], goverse_objects: [] }
 // Track newly added objects for highlighting
 const newObjectsMap = new Map() // objectId -> timestamp when added
 
+// Label visibility state
+let showObjectMetricLabels = true
+let showLinkLabels = true
+
 // Helper function to upsert a node in the goverse_nodes array
 function upsertNode(node) {
   const existingIdx = graphData.goverse_nodes.findIndex(n => n.id === node.id)
