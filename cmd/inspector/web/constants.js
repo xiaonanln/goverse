@@ -16,6 +16,9 @@ const CALL_POPUP_DURATION = 1500       // Duration for call popup animation in m
 // Pie chart dimensions
 const PIE_CHART_SIZE = 200
 
+// Object sizing constants
+const DEFAULT_OBJECT_RADIUS = 12
+
 // Type colors for nodes and gates
 const typeColors = {
   node: '#4CAF50',
@@ -97,7 +100,16 @@ function getNodeRadius(d) {
   if (d.nodeType === NODE_TYPE_NODE) return 25
   if (d.nodeType === NODE_TYPE_GATE) return 22
   if (d.nodeType === NODE_TYPE_SHARD) return 15
-  return d.size ? Math.max(8, Math.min(20, d.size / 2)) : 12
+  
+  // For objects: scale size based on workload (CPM * Duration)
+  if (d.nodeType === NODE_TYPE_OBJECT) {
+    const load = (d.callsPerMinute || 0) * (d.avgExecutionDurationUs || 0)
+    const scale = 1 + (7 * Math.log10(1 + load) / Math.log10(1 + 60000000))
+    return DEFAULT_OBJECT_RADIUS * Math.min(8, scale)
+  }
+  
+  // Fallback for other types
+  return d.size ? Math.max(8, Math.min(20, d.size / 2)) : DEFAULT_OBJECT_RADIUS
 }
 
 function getNodeColor(d) {
