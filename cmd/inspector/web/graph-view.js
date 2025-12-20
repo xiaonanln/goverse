@@ -274,7 +274,7 @@ function buildGraphNodesAndLinks() {
       type: obj.type,
       shardId: obj.shard_id,
       goverseNodeId: obj.goverse_node_id,
-      color: obj.color,
+      color: obj.type ? stringToColor(obj.type) : typeColors.default, // Compute color from type
       size: obj.size,
       callsPerMinute: obj.calls_per_minute,
       avgExecutionDurationUs: obj.avg_execution_duration_us
@@ -643,7 +643,7 @@ function updateGraphIncremental() {
       type: obj.type,
       shardId: obj.shard_id,
       goverseNodeId: obj.goverse_node_id,
-      color: obj.color,
+      color: obj.type ? stringToColor(obj.type) : typeColors.default, // Compute color from type
       size: obj.size,
       callsPerMinute: obj.calls_per_minute,
       avgExecutionDurationUs: obj.avg_execution_duration_us,

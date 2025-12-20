@@ -204,7 +204,7 @@ func (i *Inspector) AddOrUpdateObject(ctx context.Context, req *inspector_pb.Add
 		ID:                     o.Id,
 		Label:                  fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 		Size:                   10,
-		Color:                  "#1f77b4",
+		Color:                  "", // Color will be computed from type in frontend
 		Type:                   o.GetClass(),
 		GoverseNodeID:          nodeAddress,
 		ShardID:                int(o.ShardId),
@@ -272,7 +272,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 			ID:                     o.Id,
 			Label:                  fmt.Sprintf("%s (%s)", o.GetClass(), o.GetId()),
 			Size:                   10,
-			Color:                  "#1f77b4",
+			Color:                  "", // Color will be computed from type in frontend
 			Type:                   o.GetClass(),
 			GoverseNodeID:          addr,
 			ShardID:                int(o.ShardId),
