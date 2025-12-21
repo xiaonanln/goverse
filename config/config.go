@@ -56,6 +56,7 @@ type GateConfig struct {
 	GRPCAddr      string `yaml:"grpc_addr"`
 	AdvertiseAddr string `yaml:"advertise_addr"`
 	HTTPAddr      string `yaml:"http_addr"`
+	OpsAddr       string `yaml:"ops_addr"` // Optional: HTTP address for ops endpoints (health, readiness, metrics)
 }
 
 // InspectorConfig holds configuration for the inspector service

@@ -21,15 +21,16 @@ const (
 // Loader handles parsing of command-line flags and config file loading.
 // It can be instantiated with a custom FlagSet for testing.
 type Loader struct {
-	fs             *flag.FlagSet
-	configPath     *string
-	gateID         *string
-	listenAddr     *string
-	advertiseAddr  *string
-	httpListenAddr *string
-	etcdAddr       *string
-	etcdPrefix     *string
-	inspectorAddr  *string
+	fs              *flag.FlagSet
+	configPath      *string
+	gateID          *string
+	listenAddr      *string
+	advertiseAddr   *string
+	httpListenAddr  *string
+	opsListenAddr   *string
+	etcdAddr        *string
+	etcdPrefix      *string
+	inspectorAddr   *string
 }
 
 // NewLoader creates a new Loader with flags registered on the provided FlagSet.
@@ -43,7 +44,8 @@ func NewLoader(fs *flag.FlagSet) *Loader {
 	l.gateID = fs.String("gate-id", "", "Gate ID (required if config is provided, defaults to advertise address otherwise)")
 	l.listenAddr = fs.String("listen", DefaultListenAddr, "Gate listen address (cannot be used with --config)")
 	l.advertiseAddr = fs.String("advertise", DefaultAdvertiseAddr, "Gate advertise address (cannot be used with --config)")
-	l.httpListenAddr = fs.String("http-listen", "", "HTTP listen address for REST API and metrics (cannot be used with --config)")
+	l.httpListenAddr = fs.String("http-listen", "", "HTTP listen address for client API (cannot be used with --config)")
+	l.opsListenAddr = fs.String("ops-listen", "", "HTTP listen address for ops endpoints - health, readiness, metrics (cannot be used with --config)")
 	l.etcdAddr = fs.String("etcd", DefaultEtcdAddr, "Etcd address (cannot be used with --config)")
 	l.etcdPrefix = fs.String("etcd-prefix", DefaultEtcdPrefix, "Etcd key prefix (cannot be used with --config)")
 	l.inspectorAddr = fs.String("inspector-address", "", "Inspector service address (cannot be used with --config)")
@@ -77,6 +79,9 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 		if *l.httpListenAddr != "" {
 			return nil, fmt.Errorf("--http-listen cannot be used with --config; configure in config file instead")
 		}
+		if *l.opsListenAddr != "" {
+			return nil, fmt.Errorf("--ops-listen cannot be used with --config; configure in config file instead")
+		}
 		if *l.etcdAddr != DefaultEtcdAddr {
 			return nil, fmt.Errorf("--etcd cannot be used with --config; configure in config file instead")
 		}
@@ -107,6 +112,7 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 			ListenAddress:                 listenAddr,
 			AdvertiseAddress:              advertiseAddr,
 			HTTPListenAddress:             gateCfg.HTTPAddr,
+			OpsListenAddress:              gateCfg.OpsAddr,
 			EtcdAddress:                   cfg.GetEtcdAddress(),
 			EtcdPrefix:                    cfg.GetEtcdPrefix(),
 			NumShards:                     cfg.GetNumShards(),
@@ -126,6 +132,7 @@ func (l *Loader) Load(args []string) (*gateserver.GateServerConfig, error) {
 		ListenAddress:     *l.listenAddr,
 		AdvertiseAddress:  *l.advertiseAddr,
 		HTTPListenAddress: *l.httpListenAddr,
+		OpsListenAddress:  *l.opsListenAddr,
 		EtcdAddress:       *l.etcdAddr,
 		EtcdPrefix:        *l.etcdPrefix,
 		NumShards:         0, // Use default when not using config file
