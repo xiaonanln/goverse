@@ -22,9 +22,8 @@ spec:
     spec:
       containers:
       - name: goverse-gate
-        # Replace with actual image once available
-        image: goverse/gate:latest
-        imagePullPolicy: IfNotPresent
+        image: xiaonanln/goverse-gate:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 60051
           name: grpc
@@ -65,7 +64,7 @@ spec:
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /ready
+            path: /healthz
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5

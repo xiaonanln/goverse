@@ -78,6 +78,17 @@ kubectl port-forward -n goverse svc/inspector 8080:8080
 
 ## Configuration
 
+### Gate Docker Image
+
+The gate deployment (`gates/deployment.yaml`) uses the production Docker image `xiaonanln/goverse-gate:latest`, which is automatically built and pushed to Docker Hub via GitHub Actions. The image:
+
+- Uses multi-stage build (Go 1.25 → Alpine Linux)
+- Runs as non-root user (uid:gid 1000:1000)
+- Includes health check endpoint at `/healthz`
+- Exposes ports 60051 (gRPC) and 8080 (HTTP)
+
+For more details, see [docker/README.md](../docker/README.md#dockerfilegate).
+
 ### ConfigMap
 
 Edit `base/configmap.yaml` to customize cluster configuration:
