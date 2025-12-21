@@ -567,3 +567,54 @@ func TestHandleShardPin_InvalidRequest(t *testing.T) {
 		t.Fatalf("Expected status 503 (consensus check happens first), got %d", rr.Code)
 	}
 }
+
+// TestHandleHealthz tests that the /healthz endpoint returns healthy status
+func TestHandleHealthz(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", rr.Code)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+
+	if result["status"] != "healthy" {
+		t.Fatalf("Expected status 'healthy', got '%s'", result["status"])
+	}
+}
+
+// TestHandleHealthz_MethodNotAllowed tests that non-GET requests to /healthz are rejected
+func TestHandleHealthz_MethodNotAllowed(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/healthz", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405 for POST, got %d", rr.Code)
+	}
+}
