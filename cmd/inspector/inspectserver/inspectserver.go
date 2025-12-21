@@ -203,6 +203,9 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 	// SSE endpoint for push-based updates
 	mux.HandleFunc("/events/stream", s.handleEventsStream)
 
+	// Health check endpoint
+	mux.HandleFunc("/healthz", s.handleHealthz)
+
 	// pprof endpoints for profiling
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -637,6 +640,20 @@ func (s *InspectorServer) handleShardPin(w http.ResponseWriter, r *http.Request)
 		"updated":  n,
 		"shard_id": req.ShardID,
 		"pinned":   req.Pinned,
+	})
+}
+
+// handleHealthz handles GET /healthz for health checks
+func (s *InspectorServer) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "healthy",
 	})
 }
 

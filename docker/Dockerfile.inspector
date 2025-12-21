@@ -1,0 +1,59 @@
+# Multi-stage Dockerfile for Goverse Inspector
+# Stage 1: Build the inspector binary
+FROM golang:1.25-bookworm AS builder
+
+# Install protobuf compiler and update ca-certificates
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy source code (includes go.mod, go.sum, and everything else)
+COPY . .
+
+# Download dependencies, install proto tools, compile protos, and build
+RUN go mod download && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11 && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1 && \
+    ./script/compile-proto.sh && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o inspector -ldflags="-w -s" ./cmd/inspector
+
+# Stage 2: Create minimal runtime image
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS connections and wget for healthcheck
+RUN apk --no-cache add ca-certificates wget
+
+# Create non-root user
+RUN addgroup -g 1000 goverse && \
+    adduser -D -u 1000 -G goverse goverse
+
+# Set working directory
+WORKDIR /app
+
+# Copy the binary from builder
+COPY --from=builder /build/inspector /app/inspector
+
+# Copy web static files for the UI
+COPY --from=builder /build/cmd/inspector/web /app/web
+
+# Change ownership to non-root user
+RUN chown -R goverse:goverse /app
+
+# Switch to non-root user
+USER goverse
+
+# Expose gRPC and HTTP ports
+EXPOSE 8081 8080
+
+# Health check using the /healthz endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1
+
+# Run the inspector server
+ENTRYPOINT ["/app/inspector"]
+CMD ["--static-dir", "/app/web"]

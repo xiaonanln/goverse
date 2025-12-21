@@ -19,7 +19,7 @@ spec:
       containers:
       - name: inspector
         # Replace with actual image once available
-        image: goverse/inspector:latest
+        image: xiaonanln/goverse-inspector:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8081
@@ -45,13 +45,13 @@ spec:
             memory: 512Mi
         livenessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 8080
           initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5
