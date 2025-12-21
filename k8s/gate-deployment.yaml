@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goverse-gate
+  labels:
+    app: goverse-gate
+    component: gate
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: goverse-gate
+      component: gate
+  template:
+    metadata:
+      labels:
+        app: goverse-gate
+        component: gate
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: gate
+        image: xiaonanln/goverse-gate:latest
+        imagePullPolicy: Always
+        ports:
+        - name: grpc
+          containerPort: 60051
+          protocol: TCP
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: ETCD_ENDPOINTS
+          value: "etcd:2379"  # Update with your etcd service endpoint
+        - name: ETCD_PREFIX
+          value: "/goverse"
+        args:
+        - --listen=:60051
+        - --http-listen=:8080
+        - --etcd=$(ETCD_ENDPOINTS)
+        - --etcd-prefix=$(ETCD_PREFIX)
+        - --advertise=$(POD_IP):60051
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 2
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goverse-gate
+  labels:
+    app: goverse-gate
+    component: gate
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 60051
+    targetPort: grpc
+    protocol: TCP
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: goverse-gate
+    component: gate

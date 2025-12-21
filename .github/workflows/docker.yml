@@ -1,4 +1,4 @@
-name: Build Dev Docker Image
+name: Build Docker Images
 
 on:
   push:
@@ -45,6 +45,49 @@ jobs:
         run: |
           docker tag goverse-dev:latest xiaonanln/goverse:dev
           docker push xiaonanln/goverse:dev
+  
+  build-gate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Build gate Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.gate
+          push: false
+          tags: goverse-gate:latest
+          load: true
+          cache-from: type=gha,scope=gate
+          cache-to: type=gha,mode=max,scope=gate
+      
+      - name: Test gate image
+        run: |
+          docker run --rm goverse-gate:latest --help || true
+      
+      - name: Push gate image to Docker Hub
+        if: github.event_name != 'pull_request'
+        run: |
+          docker tag goverse-gate:latest xiaonanln/goverse-gate:latest
+          docker push xiaonanln/goverse-gate:latest
+          
+          # Also tag with short commit SHA
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          docker tag goverse-gate:latest xiaonanln/goverse-gate:${SHORT_SHA}
+          docker push xiaonanln/goverse-gate:${SHORT_SHA}
   
   test-in-docker-dev:
     runs-on: ubuntu-latest
