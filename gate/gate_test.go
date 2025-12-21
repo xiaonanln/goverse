@@ -536,7 +536,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 		}
 
 		envelope1 := &goverse_pb.ClientMessageEnvelope{
-			ClientId: clientID1,
+			ClientIds: []string{clientID1},
 			Message:  anyMsg1,
 		}
 
@@ -555,7 +555,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 		}
 
 		envelope2 := &goverse_pb.ClientMessageEnvelope{
-			ClientId: clientID2,
+			ClientIds: []string{clientID2},
 			Message:  anyMsg2,
 		}
 
@@ -637,7 +637,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 		}
 
 		envelope := &goverse_pb.ClientMessageEnvelope{
-			ClientId: "non-existent-client",
+			ClientIds: []string{"non-existent-client"},
 			Message:  anyMsg,
 		}
 
@@ -669,7 +669,7 @@ func TestGateHandleGateMessage(t *testing.T) {
 	t.Run("ClientMessage_NilMessage", func(t *testing.T) {
 		// Create envelope with nil message
 		envelope := &goverse_pb.ClientMessageEnvelope{
-			ClientId: clientID1,
+			ClientIds: []string{clientID1},
 			Message:  nil,
 		}
 

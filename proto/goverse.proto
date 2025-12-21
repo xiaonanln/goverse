@@ -79,10 +79,10 @@ message RegisterGateRequest {
 message RegisterGateResponse {
 }
 
-// ClientMessageEnvelope wraps a message for a specific client
+// ClientMessageEnvelope wraps a message for one or more clients
 message ClientMessageEnvelope {
-  string client_id = 1;
-  google.protobuf.Any message = 2;
+  repeated string client_ids = 1; // List of client IDs to receive the message (can be single or multiple)
+  google.protobuf.Any message = 2; // The message payload (same for all clients)
 }
 
 message GateMessage {

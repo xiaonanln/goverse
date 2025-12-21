@@ -802,7 +802,7 @@ func TestClientIntegrationPushMessages(t *testing.T) {
 			},
 		}
 
-		err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+		err = nodeCluster.PushMessageToClient(ctx, []string{clientID}, pushMsg)
 		if err != nil {
 			t.Fatalf("PushMessageToClient failed: %v", err)
 		}
@@ -874,7 +874,7 @@ func TestClientIntegrationPushMessages(t *testing.T) {
 			},
 		}
 
-		err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+		err = nodeCluster.PushMessageToClient(ctx, []string{clientID}, pushMsg)
 		if err != nil {
 			t.Fatalf("PushMessageToClient failed: %v", err)
 		}
@@ -942,7 +942,7 @@ func TestClientIntegrationPushMessages(t *testing.T) {
 				},
 			}
 
-			err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+			err = nodeCluster.PushMessageToClient(ctx, []string{clientID}, pushMsg)
 			if err != nil {
 				t.Fatalf("PushMessageToClient failed for message %d: %v", i, err)
 			}
@@ -1035,7 +1035,7 @@ func TestClientIntegrationPushMessages(t *testing.T) {
 			},
 		}
 
-		err = nodeCluster.PushMessageToClient(ctx, clientID, pushMsg)
+		err = nodeCluster.PushMessageToClient(ctx, []string{clientID}, pushMsg)
 		if err != nil {
 			t.Fatalf("PushMessageToClient failed: %v", err)
 		}

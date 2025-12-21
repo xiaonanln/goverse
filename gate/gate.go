@@ -337,32 +337,35 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 	case *goverse_pb.GateMessage_RegisterGateResponse:
 		g.logger.Debugf("Received RegisterGateResponse from node %s", nodeAddr)
 	case *goverse_pb.GateMessage_ClientMessage:
-		// Extract client ID and message from envelope
+		// Extract client IDs and message from envelope
 		envelope := m.ClientMessage
-		clientID := envelope.GetClientId()
+		clientIDs := envelope.GetClientIds()
 
-		g.logger.Debugf("Received client message from node %s for client %s", nodeAddr, clientID)
+		g.logger.Debugf("Received client message from node %s for %d client(s)", nodeAddr, len(clientIDs))
 
-		// Find the target client
-		client, exists := g.GetClient(clientID)
-		if !exists {
-			g.logger.Warnf("Client %s not found, dropping message from node %s", clientID, nodeAddr)
-			// Record dropped message metric
-			metrics.RecordGateDroppedMessage(g.advertiseAddress)
-			return
-		}
+		// Handle both single and multiple clients by iterating over client_ids
+		for _, clientID := range clientIDs {
+			// Find the target client
+			client, exists := g.GetClient(clientID)
+			if !exists {
+				g.logger.Warnf("Client %s not found, may have disconnected", clientID)
+				// Record dropped message metric
+				metrics.RecordGateDroppedMessage(g.advertiseAddress)
+				continue
+			}
 
-		// Forward the Any message directly without unmarshaling
-		// The client is responsible for unmarshaling based on the application proto types
-		if envelope.Message != nil {
-			// Send the google.protobuf.Any directly to client's message channel
-			client.PushMessageAny(envelope.Message)
-			// Record metric for pushed message
-			metrics.RecordGatePushedMessage(g.advertiseAddress)
-		} else {
-			g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
-			// Record dropped message metric for nil message
-			metrics.RecordGateDroppedMessage(g.advertiseAddress)
+			// Forward the Any message directly without unmarshaling
+			// The client is responsible for unmarshaling based on the application proto types
+			if envelope.Message != nil {
+				// Send the google.protobuf.Any directly to client's message channel
+				client.PushMessageAny(envelope.Message)
+				// Record metric for pushed message
+				metrics.RecordGatePushedMessage(g.advertiseAddress)
+			} else {
+				g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
+				// Record dropped message metric for nil message
+				metrics.RecordGateDroppedMessage(g.advertiseAddress)
+			}
 		}
 	default:
 		g.logger.Warnf("Received unknown message type %v from node %s", msg.Message, nodeAddr)

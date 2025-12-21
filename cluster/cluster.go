@@ -1110,57 +1110,69 @@ func (c *Cluster) reportLinkCall(ctx context.Context, targetNodeAddr string) {
 // Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target gate and routes the message accordingly
 // This method can only be called on a node cluster, not a gate cluster
-func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
+func (c *Cluster) PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error {
 	// This method can only be called on node clusters
 	if c.isGate() {
 		return fmt.Errorf("PushMessageToClient can only be called on node clusters, not gate clusters")
 	}
 
-	// Parse client ID to extract gate address
-	// Client ID format: gateAddress/uniqueId
-	parts := strings.SplitN(clientID, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return fmt.Errorf("invalid client ID format: %s (expected format: gateAddress/uniqueId)", clientID)
+	// Empty client list is a no-op
+	if len(clientIDs) == 0 {
+		return nil
 	}
 
-	gateAddr := parts[0]
+	// Group clients by gate address
+	// Client ID format: gateAddress/uniqueId
+	clientsByGate := make(map[string][]string)
+	for _, clientID := range clientIDs {
+		parts := strings.SplitN(clientID, "/", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf("invalid client ID format: %s (expected format: gateAddress/uniqueId)", clientID)
+		}
+		gateAddr := parts[0]
+		clientsByGate[gateAddr] = append(clientsByGate[gateAddr], clientID)
+	}
 
-	// Check if the client is on a connected gate
+	// Serialize message once
+	anyMsg, err := protohelper.MsgToAny(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	// Send envelope to each gate with its clients
 	c.gateChannelsMu.RLock()
-	gateCh, isGateConnected := c.gateChannels[gateAddr]
+	defer c.gateChannelsMu.RUnlock()
 
-	if isGateConnected {
-		c.logger.Infof("%s - Pushing message to client %s via connected gate %s", c, clientID, gateAddr)
-
-		// Wrap message in ClientMessageEnvelope with client ID
-		anyMsg, err := protohelper.MsgToAny(message)
-		if err != nil {
-			c.gateChannelsMu.RUnlock()
-			return fmt.Errorf("failed to marshal message for gate: %w", err)
+	var lastErr error
+	for gateAddr, clients := range clientsByGate {
+		gateCh, isGateConnected := c.gateChannels[gateAddr]
+		if !isGateConnected {
+			lastErr = fmt.Errorf("gate %s not connected to this node, cannot push message to %d client(s)", gateAddr, len(clients))
+			c.logger.Warnf("%s", lastErr)
+			continue
 		}
 
+		c.logger.Infof("%s - Pushing message to %d client(s) via connected gate %s", c, len(clients), gateAddr)
+
+		// Create envelope with list of client IDs for this gate
 		envelope := &goverse_pb.ClientMessageEnvelope{
-			ClientId: clientID,
-			Message:  anyMsg,
+			ClientIds: clients,
+			Message:   anyMsg,
 		}
 
 		select {
 		case gateCh <- envelope:
 			// Record metric for pushed message
 			metrics.RecordNodePushedMessage(c.node.GetAdvertiseAddress(), gateAddr)
-			c.gateChannelsMu.RUnlock()
-			return nil
 		default:
 			// Record dropped message metric when channel is full
 			metrics.RecordNodeDroppedMessage(c.node.GetAdvertiseAddress(), gateAddr)
-			c.gateChannelsMu.RUnlock()
-			return fmt.Errorf("gate %s message channel is full", gateAddr)
+			lastErr = fmt.Errorf("gate %s message channel is full", gateAddr)
+			c.logger.Warnf("%s", lastErr)
 		}
 	}
-	c.gateChannelsMu.RUnlock()
 
-	// Gate not connected to this node
-	return fmt.Errorf("gate %s not connected to this node, cannot push message to client %s", gateAddr, clientID)
+	return lastErr
 }
 
 // GetEtcdManagerForTesting returns the cluster's etcd manager
