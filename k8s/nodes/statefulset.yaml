@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: goverse-node
+  namespace: goverse
+  labels:
+    app.kubernetes.io/name: goverse-node
+    app.kubernetes.io/component: node
+spec:
+  serviceName: goverse-node-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: goverse-node
+  template:
+    metadata:
+      labels:
+        app: goverse-node
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: goverse-node
+        # Replace with actual image once available
+        image: goverse/node:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 50051
+          name: grpc
+        - containerPort: 8080
+          name: http
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_ID
+          value: "$(POD_NAME)"
+        - name: GRPC_ADDR
+          value: "0.0.0.0:50051"
+        - name: ADVERTISE_ADDR
+          value: "$(POD_NAME).goverse-node-headless.$(POD_NAMESPACE).svc.cluster.local:50051"
+        - name: HTTP_ADDR
+          value: "0.0.0.0:8080"
+        - name: CONFIG_FILE
+          value: "/etc/goverse/config.yaml"
+        envFrom:
+        - secretRef:
+            name: goverse-postgres-secret
+        volumeMounts:
+        - name: config
+          mountPath: /etc/goverse
+        - name: data
+          mountPath: /var/lib/goverse
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: goverse-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 20Gi

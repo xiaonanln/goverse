@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: goverse-node-headless
+  namespace: goverse
+  labels:
+    app.kubernetes.io/name: goverse-node
+    app.kubernetes.io/component: node
+spec:
+  clusterIP: None
+  selector:
+    app: goverse-node
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+  - name: http
+    port: 8080
+    targetPort: 8080

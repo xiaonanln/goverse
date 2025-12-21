@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inspector-ingress
+  namespace: goverse
+  labels:
+    app.kubernetes.io/name: inspector
+    app.kubernetes.io/component: monitoring
+  annotations:
+    # For cert-manager (optional)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  # Uncomment for TLS
+  # tls:
+  # - hosts:
+  #   - inspector.goverse.example.com
+  #   secretName: inspector-tls
+  rules:
+  - host: inspector.goverse.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: inspector
+            port:
+              number: 8080

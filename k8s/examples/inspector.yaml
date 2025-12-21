@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: inspector
+  namespace: goverse
+  labels:
+    app.kubernetes.io/name: inspector
+    app.kubernetes.io/component: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: inspector
+  ports:
+  - name: grpc
+    port: 8081
+    targetPort: 8081
+  - name: http
+    port: 8080
+    targetPort: 8080
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inspector
+  namespace: goverse
+  labels:
+    app.kubernetes.io/name: inspector
+    app.kubernetes.io/component: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inspector
+  template:
+    metadata:
+      labels:
+        app: inspector
+    spec:
+      containers:
+      - name: inspector
+        # Replace with actual image once available
+        image: goverse/inspector:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+          name: grpc
+        - containerPort: 8080
+          name: http
+        env:
+        - name: GRPC_ADDR
+          value: "0.0.0.0:8081"
+        - name: HTTP_ADDR
+          value: "0.0.0.0:8080"
+        - name: CONFIG_FILE
+          value: "/etc/goverse/config.yaml"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/goverse
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: goverse-config

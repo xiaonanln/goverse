@@ -156,6 +156,7 @@ Full documentation:
 - [Reliable Calls](docs/RELIABLE_CALLS_DESIGN.md) - Exactly-once semantics for inter-object calls
 - [Object Model & Architecture](docs/GET_STARTED.md#core-concepts) - Understanding virtual actors
 - [Cluster Configuration](docs/CONFIGURATION.md) - YAML config and cluster settings
+- [Kubernetes Deployment](docs/KUBERNETES_DEPLOYMENT.md) - Deploy Goverse on Kubernetes
 - [Object Persistence](docs/PERSISTENCE_IMPLEMENTATION.md) - PostgreSQL integration
 - [PostgreSQL Setup](docs/POSTGRES_SETUP.md) - Database setup and configuration
 - [Push Messaging](docs/PUSH_MESSAGING.md) - Real-time server-to-client delivery
