@@ -88,7 +88,7 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 	
 	// Single API call with automatic fan-out optimization
 	if len(clientIDs) > 0 {
-		err := goverseapi.PushMessageToClient(ctx, clientIDs, notification)
+		err := goverseapi.PushMessageToClients(ctx, clientIDs, notification)
 		if err != nil {
 			room.Logger.Warnf("Failed to push to clients: %v", err)
 		} else {

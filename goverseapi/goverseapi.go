@@ -122,7 +122,7 @@ func ReliableCallObject(ctx context.Context, callID string, objType, objID strin
 	return cluster.This().ReliableCallObject(ctx, callID, objType, objID, method, request)
 }
 
-// PushMessageToClient sends a message to one or more clients via the gate connection.
+// PushMessageToClients sends a message to one or more clients via the gate connection.
 // This allows distributed objects to push notifications/messages to connected clients.
 // This is efficient whether pushing to a single client or multiple clients
 // on the same gate due to automatic fan-out optimization.
@@ -137,14 +137,14 @@ func ReliableCallObject(ctx context.Context, callID string, objType, objID strin
 //
 // Example (single client):
 //
-//	err := goverseapi.PushMessageToClient(ctx, []string{"localhost:7001/user1"}, notification)
+//	err := goverseapi.PushMessageToClients(ctx, []string{"localhost:7001/user1"}, notification)
 //
 // Example (multiple clients):
 //
 //	clientIDs := []string{"localhost:7001/user1", "localhost:7001/user2"}
-//	err := goverseapi.PushMessageToClient(ctx, clientIDs, notification)
-func PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error {
-	return cluster.This().PushMessageToClient(ctx, clientIDs, message)
+//	err := goverseapi.PushMessageToClients(ctx, clientIDs, notification)
+func PushMessageToClients(ctx context.Context, clientIDs []string, message proto.Message) error {
+	return cluster.This().PushMessageToClients(ctx, clientIDs, message)
 }
 
 // ClusterReady returns a channel that will be closed when the cluster is ready.

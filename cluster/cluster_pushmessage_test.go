@@ -22,7 +22,7 @@ func TestPushMessageToClient_NoNode(t *testing.T) {
 		},
 	}
 
-	err := c.PushMessageToClient(ctx, []string{"localhost:7001/test-client"}, testMsg)
+	err := c.PushMessageToClients(ctx, []string{"localhost:7001/test-client"}, testMsg)
 	if err == nil {
 		t.Fatal("PushMessageToClient should fail when thisNode is not set")
 	}
@@ -57,7 +57,7 @@ func TestPushMessageToClient_InvalidClientID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := c.PushMessageToClient(ctx, []string{tt.clientID}, testMsg)
+			err := c.PushMessageToClients(ctx, []string{tt.clientID}, testMsg)
 			if err == nil {
 				t.Fatalf("PushMessageToClient should fail with invalid client ID: %s", tt.clientID)
 			}
@@ -80,7 +80,7 @@ func TestPushMessageToClient_ClientNotFound(t *testing.T) {
 	}
 
 	// Try to push to a client that doesn't exist (but with valid format for local node)
-	err := c.PushMessageToClient(ctx, []string{"localhost:7000/non-existent-client"}, testMsg)
+	err := c.PushMessageToClients(ctx, []string{"localhost:7000/non-existent-client"}, testMsg)
 	if err == nil {
 		t.Fatal("Expected error when pushing to non-existent client")
 	}
@@ -101,7 +101,7 @@ func TestPushMessageToClient_EmptyClientList(t *testing.T) {
 	}
 
 	// Empty client list should be a no-op and return nil
-	err := c.PushMessageToClient(ctx, []string{}, testMsg)
+	err := c.PushMessageToClients(ctx, []string{}, testMsg)
 	if err != nil {
 		t.Fatalf("PushMessageToClient should succeed with empty client list, got error: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestPushMessageToClient_MultipleClients(t *testing.T) {
 	}
 
 	// Should fail since gates are not connected, but should not panic
-	err := c.PushMessageToClient(ctx, clientIDs, testMsg)
+	err := c.PushMessageToClients(ctx, clientIDs, testMsg)
 	// We expect an error since the gates are not actually connected
 	if err == nil {
 		t.Fatal("Expected error when pushing to unconnected gates")

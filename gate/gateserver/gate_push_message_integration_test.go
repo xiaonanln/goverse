@@ -172,7 +172,7 @@ func TestPushMessageToClientViaGate(t *testing.T) {
 	}
 
 	// Push message via cluster (which will route to the gate)
-	err = nodeCluster.PushMessageToClient(ctx, []string{clientID}, testMessage)
+	err = nodeCluster.PushMessageToClients(ctx, []string{clientID}, testMessage)
 	if err != nil {
 		t.Fatalf("Failed to push message from node: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestPushMessageToMultipleClients(t *testing.T) {
 			},
 		}
 
-		err = nodeCluster.PushMessageToClient(ctx, []string{client.id}, testMessage)
+		err = nodeCluster.PushMessageToClients(ctx, []string{client.id}, testMessage)
 		if err != nil {
 			t.Fatalf("Failed to push message to client %d: %v", i, err)
 		}

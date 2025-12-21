@@ -1110,10 +1110,10 @@ func (c *Cluster) reportLinkCall(ctx context.Context, targetNodeAddr string) {
 // Client IDs have the format: {gateAddress}/{uniqueId} (e.g., "localhost:7001/abc123")
 // This method parses the client ID to determine the target gate and routes the message accordingly
 // This method can only be called on a node cluster, not a gate cluster
-func (c *Cluster) PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error {
+func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, message proto.Message) error {
 	// This method can only be called on node clusters
 	if c.isGate() {
-		return fmt.Errorf("PushMessageToClient can only be called on node clusters, not gate clusters")
+		return fmt.Errorf("PushMessageToClients can only be called on node clusters, not gate clusters")
 	}
 
 	// Empty client list is a no-op
