@@ -404,6 +404,12 @@ func (s *GateServer) handleReady(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if cluster is ready
+	if !s.cluster.IsReady() {
+		s.writeError(w, http.StatusServiceUnavailable, "NOT_READY", "Cluster is not ready")
+		return
+	}
+
 	// Return OK status
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -430,31 +436,13 @@ func (s *GateServer) writeError(w http.ResponseWriter, statusCode int, code stri
 
 // startHTTPServer starts the HTTP servers for client API and ops
 func (s *GateServer) startHTTPServer(ctx context.Context) error {
-	// Backward compatibility: If only HTTPListenAddress is set, serve both client API and ops
-	// If both are set, serve them separately (recommended)
-	// If only OpsListenAddress is set, only serve ops
-	
-	if s.config.HTTPListenAddress != "" && s.config.OpsListenAddress == "" {
-		// Backward compatibility mode: serve both client API and ops on same port
-		combinedMux := http.NewServeMux()
-		
-		// Register client API routes
+	// Start client API server if configured
+	if s.config.HTTPListenAddress != "" {
 		clientMux := s.setupHTTPClientRoutes()
-		combinedMux.Handle("/api/v1/", http.StripPrefix("", clientMux))
-		
-		// Register ops routes directly
-		combinedMux.Handle("/healthz", http.HandlerFunc(s.handleHealthz))
-		combinedMux.Handle("/ready", http.HandlerFunc(s.handleReady))
-		combinedMux.Handle("/metrics", promhttp.Handler())
-		combinedMux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
-		combinedMux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-		combinedMux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-		combinedMux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-		combinedMux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
-		
+
 		s.httpServer = &http.Server{
 			Addr:              s.config.HTTPListenAddress,
-			Handler:           combinedMux,
+			Handler:           clientMux,
 			ReadTimeout:       30 * time.Second,
 			WriteTimeout:      30 * time.Second,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -462,58 +450,34 @@ func (s *GateServer) startHTTPServer(ctx context.Context) error {
 		}
 
 		go func() {
-			s.logger.Infof("HTTP server listening on %s (client API + ops - backward compatibility mode)", s.config.HTTPListenAddress)
+			s.logger.Infof("HTTP client API server listening on %s", s.config.HTTPListenAddress)
 			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				s.logger.Errorf("HTTP server error: %v", err)
+				s.logger.Errorf("HTTP client API server error: %v", err)
 			}
-			s.logger.Infof("HTTP server stopped")
+			s.logger.Infof("HTTP client API server stopped")
 		}()
-	} else {
-		// Split mode: serve client API and ops on separate ports if configured
-		
-		// Start client API server if configured
-		if s.config.HTTPListenAddress != "" {
-			clientMux := s.setupHTTPClientRoutes()
+	}
 
-			s.httpServer = &http.Server{
-				Addr:              s.config.HTTPListenAddress,
-				Handler:           clientMux,
-				ReadTimeout:       30 * time.Second,
-				WriteTimeout:      30 * time.Second,
-				ReadHeaderTimeout: 10 * time.Second,
-				IdleTimeout:       120 * time.Second,
-			}
+	// Start ops server if configured
+	if s.config.OpsListenAddress != "" {
+		opsMux := s.setupHTTPOpsRoutes()
 
-			go func() {
-				s.logger.Infof("HTTP client API server listening on %s", s.config.HTTPListenAddress)
-				if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					s.logger.Errorf("HTTP client API server error: %v", err)
-				}
-				s.logger.Infof("HTTP client API server stopped")
-			}()
+		s.opsServer = &http.Server{
+			Addr:              s.config.OpsListenAddress,
+			Handler:           opsMux,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
-		// Start ops server if configured
-		if s.config.OpsListenAddress != "" {
-			opsMux := s.setupHTTPOpsRoutes()
-
-			s.opsServer = &http.Server{
-				Addr:              s.config.OpsListenAddress,
-				Handler:           opsMux,
-				ReadTimeout:       30 * time.Second,
-				WriteTimeout:      30 * time.Second,
-				ReadHeaderTimeout: 10 * time.Second,
-				IdleTimeout:       120 * time.Second,
+		go func() {
+			s.logger.Infof("HTTP ops server listening on %s", s.config.OpsListenAddress)
+			if err := s.opsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				s.logger.Errorf("HTTP ops server error: %v", err)
 			}
-
-			go func() {
-				s.logger.Infof("HTTP ops server listening on %s", s.config.OpsListenAddress)
-				if err := s.opsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					s.logger.Errorf("HTTP ops server error: %v", err)
-				}
-				s.logger.Infof("HTTP ops server stopped")
-			}()
-		}
+			s.logger.Infof("HTTP ops server stopped")
+		}()
 	}
 
 	return nil
