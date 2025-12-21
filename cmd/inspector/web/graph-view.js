@@ -20,7 +20,7 @@ function getLinkStrokeWidth(link) {
   }
   
   // For node-node and gate-node links, add dynamic width based on CPM
-  if ((link.type === 'node-node' || link.type === 'gate-node') && link.callsPerMinute) {
+  if (link.type === 'node-node' || link.type === 'gate-node') {
     const cpm = link.callsPerMinute || 0
     // Dynamic formula: Math.min(baseWidth + cpm / 10, 10)
     return Math.min(baseWidth + cpm / 10, 10)
