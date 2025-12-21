@@ -370,11 +370,7 @@ func (s *GateServer) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if gate server is running
-	s.stopMu.RLock()
-	stopped := s.stopped
-	s.stopMu.RUnlock()
-
-	if stopped {
+	if s.stopped.Load() {
 		s.writeError(w, http.StatusServiceUnavailable, "NOT_READY", "Gate server is stopped")
 		return
 	}

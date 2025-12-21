@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/xiaonanln/goverse/cluster"
@@ -56,6 +58,8 @@ type GateServer struct {
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator
 	lifecycleValidator *config.LifecycleValidator
+	stopMu             sync.RWMutex
+	stopped            atomic.Bool
 }
 
 // NewGateServer creates a new gate server instance
@@ -184,6 +188,13 @@ func (s *GateServer) Start(ctx context.Context) error {
 
 // Stop gracefully stops the gate server
 func (s *GateServer) Stop() error {
+	s.stopMu.Lock()
+	defer s.stopMu.Unlock()
+
+	if s.stopped.Swap(true) {
+		return nil
+	}
+
 	s.logger.Infof("Stopping gate server")
 
 	if s.grpcServer != nil {
@@ -236,6 +247,13 @@ func (s *GateServer) Stop() error {
 
 // Register implements the Register RPC
 func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingServer[anypb.Any]) error {
+	s.stopMu.RLock()
+	defer s.stopMu.RUnlock()
+
+	if s.stopped.Load() {
+		return status.Errorf(codes.Unavailable, "gate server is stopped")
+	}
+
 	ctx := stream.Context()
 	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
@@ -279,6 +297,13 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 
 // CallObject implements the CallObject RPC
 func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequest) (*gate_pb.CallObjectResponse, error) {
+	s.stopMu.RLock()
+	defer s.stopMu.RUnlock()
+
+	if s.stopped.Load() {
+		return nil, status.Errorf(codes.Unavailable, "gate server is stopped")
+	}
+
 	// Apply default timeout if context has no deadline
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCallTimeout)
 	defer cancel()
@@ -308,6 +333,13 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 
 // CreateObject implements the CreateObject RPC
 func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObjectRequest) (*gate_pb.CreateObjectResponse, error) {
+	s.stopMu.RLock()
+	defer s.stopMu.RUnlock()
+
+	if s.stopped.Load() {
+		return nil, status.Errorf(codes.Unavailable, "gate server is stopped")
+	}
+
 	// Apply default timeout if context has no deadline
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCreateTimeout)
 	defer cancel()
@@ -331,6 +363,13 @@ func (s *GateServer) CreateObject(ctx context.Context, req *gate_pb.CreateObject
 
 // DeleteObject implements the DeleteObject RPC
 func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObjectRequest) (*gate_pb.DeleteObjectResponse, error) {
+	s.stopMu.RLock()
+	defer s.stopMu.RUnlock()
+
+	if s.stopped.Load() {
+		return nil, status.Errorf(codes.Unavailable, "gate server is stopped")
+	}
+
 	// Apply default timeout if context has no deadline
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultDeleteTimeout)
 	defer cancel()
@@ -346,6 +385,13 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 
 // ReliableCallObject implements the ReliableCallObject RPC
 func (s *GateServer) ReliableCallObject(ctx context.Context, req *gate_pb.ReliableCallObjectRequest) (*gate_pb.ReliableCallObjectResponse, error) {
+	s.stopMu.RLock()
+	defer s.stopMu.RUnlock()
+
+	if s.stopped.Load() {
+		return nil, status.Errorf(codes.Unavailable, "gate server is stopped")
+	}
+
 	// Apply default timeout if context has no deadline
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultCallTimeout)
 	defer cancel()
