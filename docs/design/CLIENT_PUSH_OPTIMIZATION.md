@@ -34,7 +34,7 @@ Optimize the push message mechanism to send a single message per gate when pushi
 
 **Optimized flow for N clients on the same gate:**
 ```
-Object → PushMessageToClients → 1 × serialize → 1 × network message → Gate → N × fan-out
+Object → PushMessageToClient([...]) → 1 × serialize → 1 × network message → Gate → N × fan-out
 ```
 
 **Key benefits:**
@@ -53,79 +53,89 @@ Object → PushMessageToClients → 1 × serialize → 1 × network message → 
 
 ## 3. Protocol Changes
 
-Update `proto/goverse.proto` to support multi-client push messages.
+Refactor `proto/goverse.proto` to support both single and multi-client push messages using a unified approach.
 
-### 3.1 New Message Type
+### 3.1 Refactor ClientMessageEnvelope
 
-Add `ClientMessageFanOutEnvelope` to wrap messages for multiple clients:
+Update the existing `ClientMessageEnvelope` to support multiple clients:
 
 ```proto
-// ClientMessageFanOutEnvelope wraps a message for multiple clients on the same gate
-message ClientMessageFanOutEnvelope {
-  repeated string client_ids = 1;  // List of client IDs to receive the message
+// ClientMessageEnvelope wraps a message for one or more clients
+message ClientMessageEnvelope {
+  repeated string client_ids = 1; // List of client IDs to receive the message (can be single or multiple)
   google.protobuf.Any message = 2; // The message payload (same for all clients)
 }
 ```
 
-### 3.2 Update GateMessage
+**Key changes:**
+- Changed `client_id` (singular) to `client_ids` (repeated)
+- Supports both single-client (`client_ids` with one element) and multi-client scenarios
+- Unified message type eliminates complexity
 
-Extend `GateMessage` to include the new fan-out envelope type:
+### 3.2 GateMessage (No Changes Needed)
+
+The existing `GateMessage` structure remains unchanged:
 
 ```proto
 message GateMessage {
   oneof message {
     RegisterGateResponse register_gate_response = 1;
-    ClientMessageEnvelope client_message = 2;           // Existing: single client
-    ClientMessageFanOutEnvelope client_fanout_message = 3; // New: multiple clients
+    ClientMessageEnvelope client_message = 2;  // Now supports both single and multiple clients
   }
 }
 ```
 
-**Note**: This maintains backward compatibility. Existing single-client messages continue to use `client_message` field.
+**Note**: By refactoring `ClientMessageEnvelope` instead of adding a new message type, we maintain a simpler protocol with no additional complexity.
 
 ---
 
 ## 4. API Changes
 
-Add new APIs to `goverseapi` and `cluster` to support pushing to multiple clients.
+Refactor the existing API to support pushing to multiple clients efficiently.
 
 ### 4.1 goverseapi
 
+Refactor the existing `PushMessageToClient` to accept multiple clients:
+
 ```go
-// PushMessageToClients sends a message to multiple clients.
-// This is more efficient than calling PushMessageToClient multiple times
-// when clients are connected to the same gate.
-//
-// The implementation automatically groups clients by gate and uses
-// fan-out optimization for clients on the same gate.
+// PushMessageToClient sends a message to one or more clients.
+// This is efficient whether pushing to a single client or multiple clients
+// on the same gate due to automatic fan-out optimization.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - clientIDs: List of client IDs (format: "gateAddress/uniqueId")
+//   - clientIDs: List of client IDs (format: "gateAddress/uniqueId"). Can be a single client or multiple clients.
 //   - message: The protobuf message to push to all clients
 //
 // Returns:
 //   - error: Non-nil if any push operation fails
 //
-// Example:
+// Example (single client):
+//   err := goverseapi.PushMessageToClient(ctx, []string{"localhost:7001/user1"}, notification)
+//
+// Example (multiple clients):
 //   clientIDs := []string{"localhost:7001/user1", "localhost:7001/user2"}
-//   err := goverseapi.PushMessageToClients(ctx, clientIDs, notification)
-func PushMessageToClients(ctx context.Context, clientIDs []string, message proto.Message) error
+//   err := goverseapi.PushMessageToClient(ctx, clientIDs, notification)
+func PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error
 ```
+
+**Breaking change**: The signature changes from `(ctx, clientID string, message)` to `(ctx, clientIDs []string, message)`.
 
 ### 4.2 cluster.Cluster
 
+Refactor the cluster method similarly:
+
 ```go
-// PushMessageToClients sends a message to multiple clients by their IDs.
+// PushMessageToClient sends a message to one or more clients by their IDs.
 // Automatically groups clients by gate address and uses fan-out optimization.
-func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, message proto.Message) error
+func (c *Cluster) PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error
 ```
 
 ---
 
 ## 5. Implementation Details
 
-### 5.1 Node Side (`cluster.Cluster.PushMessageToClients`)
+### 5.1 Node Side (`cluster.Cluster.PushMessageToClient`)
 
 **Algorithm:**
 
@@ -133,19 +143,17 @@ func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, 
    - Parse each `clientID` to extract gate address (format: `gateAddress/uniqueId`)
    - Group client IDs by their gate address using a map
 
-2. **For each gate, optimize envelope type:**
-   - If **one client** for this gate → use existing `ClientMessageEnvelope`
-   - If **multiple clients** for this gate → use new `ClientMessageFanOutEnvelope`
+2. **For each gate, create envelope:**
+   - Use `ClientMessageEnvelope` with the list of client IDs for that gate
+   - Serialize message to `google.protobuf.Any` once per gate
 
 3. **Send to gate stream:**
-   - Serialize message to `google.protobuf.Any` once per gate
-   - Wrap in appropriate envelope type
-   - Send via gate's registered stream channel
+   - Send the envelope via gate's registered stream channel
 
 **Pseudocode:**
 
 ```go
-func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, message proto.Message) error {
+func (c *Cluster) PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error {
     // Group clients by gate address
     clientsByGate := make(map[string][]string)
     for _, clientID := range clientIDs {
@@ -162,22 +170,11 @@ func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, 
         return err
     }
     
-    // Send optimized envelope to each gate
+    // Send envelope to each gate
     for gateAddr, clients := range clientsByGate {
-        var envelope proto.Message
-        
-        if len(clients) == 1 {
-            // Single client - use existing envelope
-            envelope = &goverse_pb.ClientMessageEnvelope{
-                ClientId: clients[0],
-                Message:  anyMsg,
-            }
-        } else {
-            // Multiple clients - use fan-out envelope
-            envelope = &goverse_pb.ClientMessageFanOutEnvelope{
-                ClientIds: clients,
-                Message:   anyMsg,
-            }
+        envelope := &goverse_pb.ClientMessageEnvelope{
+            ClientIds: clients,  // Can be single or multiple clients
+            Message:   anyMsg,
         }
         
         // Send to gate channel
@@ -194,9 +191,8 @@ func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, 
 
 **Algorithm:**
 
-1. **Update gate message handler** to handle both envelope types
-2. **For `ClientMessageFanOutEnvelope`:**
-   - Iterate over `client_ids` in the envelope
+1. **Handle `ClientMessageEnvelope`:**
+   - Iterate over `client_ids` in the envelope (can be single or multiple)
    - For each client ID:
      - Look up client proxy: `g.GetClient(clientID)`
      - If found, push message: `client.PushMessageAny(envelope.Message)`
@@ -208,18 +204,11 @@ func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, 
 func (g *Gate) handleGateMessage(msg *goverse_pb.GateMessage) {
     switch m := msg.Message.(type) {
     case *goverse_pb.GateMessage_ClientMessage:
-        // Existing: single client
-        client := g.GetClient(m.ClientMessage.ClientId)
-        if client != nil {
-            client.PushMessageAny(m.ClientMessage.Message)
-        }
-        
-    case *goverse_pb.GateMessage_ClientFanoutMessage:
-        // New: multiple clients (fan-out)
-        for _, clientID := range m.ClientFanoutMessage.ClientIds {
+        // Handle both single and multiple clients
+        for _, clientID := range m.ClientMessage.ClientIds {
             client := g.GetClient(clientID)
             if client != nil {
-                client.PushMessageAny(m.ClientFanoutMessage.Message)
+                client.PushMessageAny(m.ClientMessage.Message)
             } else {
                 g.logger.Warnf("Client %s not found, may have disconnected", clientID)
             }
@@ -230,28 +219,11 @@ func (g *Gate) handleGateMessage(msg *goverse_pb.GateMessage) {
 
 ---
 
-## 6. Backward Compatibility
+## 6. Example Usage
 
-The existing `PushMessageToClient` API and `ClientMessageEnvelope` will be **preserved** to maintain backward compatibility:
+### 6.1 Chat Room (Before)
 
-- **Old code continues to work:** No breaking changes to existing applications
-- **Gradual migration:** Applications can migrate to `PushMessageToClients` incrementally
-- **Performance improvement:** Even with single client, new API uses same efficient code path
-
-**Migration path:**
-1. Implement new protocol and APIs
-2. Update internal examples (chat sample)
-3. Document benefits in migration guide
-4. Applications migrate at their own pace
-5. Consider deprecating `PushMessageToClient` in future major version (not immediately)
-
----
-
-## 7. Example Usage
-
-### 7.1 Chat Room (Before)
-
-Current implementation using `PushMessageToClient`:
+Current implementation calling `PushMessageToClient` individually for each client:
 
 ```go
 func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom_SendChatMessageRequest) (*chat_pb.Client_SendChatMessageResponse, error) {
@@ -269,7 +241,7 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
         Message: chatMsg,
     }
     
-    // Current: Send individually to each client (inefficient)
+    // Current: Call individually for each client (inefficient)
     for _, clientID := range room.clientIDs {
         err := goverseapi.PushMessageToClient(ctx, clientID, notification)
         if err != nil {
@@ -281,9 +253,9 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 }
 ```
 
-### 7.2 Chat Room (After)
+### 6.2 Chat Room (After)
 
-Optimized implementation using `PushMessageToClients`:
+Refactored implementation passing all client IDs at once:
 
 ```go
 func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom_SendChatMessageRequest) (*chat_pb.Client_SendChatMessageResponse, error) {
@@ -301,14 +273,14 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
         Message: chatMsg,
     }
     
-    // Optimized: Collect all client IDs and send in batch
+    // Refactored: Collect all client IDs and send in one call
     clientIDs := make([]string, 0, len(room.clientIDs))
     for _, clientID := range room.clientIDs {
         clientIDs = append(clientIDs, clientID)
     }
     
-    // Single call with automatic fan-out optimization
-    err := goverseapi.PushMessageToClients(ctx, clientIDs, notification)
+    // Single API call with automatic fan-out optimization
+    err := goverseapi.PushMessageToClient(ctx, clientIDs, notification)
     if err != nil {
         room.Logger.Warnf("Failed to push to clients: %v", err)
     }
@@ -317,7 +289,7 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 }
 ```
 
-### 7.3 Selective Broadcasting
+### 6.3 Selective Broadcasting
 
 Example: Send to all clients except the sender:
 
@@ -334,21 +306,21 @@ func (room *ChatRoom) BroadcastExceptSender(ctx context.Context, senderUserName 
         }
     }
     
-    // Optimized batch send
-    return goverseapi.PushMessageToClients(ctx, clientIDs, msg)
+    // Refactored API call
+    return goverseapi.PushMessageToClient(ctx, clientIDs, msg)
 }
 ```
 
 ---
 
-## 8. Performance Considerations
+## 7. Performance Considerations
 
-### 8.1 Expected Improvements
+### 7.1 Expected Improvements
 
 **Scenario: 1000 clients on same gate**
 
-| Metric | Current (PushMessageToClient) | Optimized (PushMessageToClients) | Improvement |
-|--------|-------------------------------|----------------------------------|-------------|
+| Metric | Current (individual calls) | Refactored (batch call) | Improvement |
+|--------|---------------------------|-------------------------|-------------|
 | Network messages | 1000 | 1 | **1000x** |
 | Serialization ops | 1000 | 1 | **1000x** |
 | Deserialization ops | 1000 | 1 | **1000x** |
@@ -356,23 +328,23 @@ func (room *ChatRoom) BroadcastExceptSender(ctx context.Context, senderUserName 
 
 **Scenario: 1000 clients across 10 gates (100 each)**
 
-| Metric | Current | Optimized | Improvement |
+| Metric | Current | Refactored | Improvement |
 |--------|---------|-----------|-------------|
 | Network messages | 1000 | 10 | **100x** |
 | Serialization ops | 1000 | 10 | **100x** |
 
-### 8.2 When to Use
+### 7.2 API Usage Guidelines
 
-**Use `PushMessageToClients` when:**
+**The refactored API is optimal for:**
 - Broadcasting to multiple clients (2+)
 - Clients likely on same gate (e.g., same region, same server)
 - High-frequency broadcasts (chat, game state updates)
 
-**Use `PushMessageToClient` when:**
-- Sending to exactly one client
-- Different messages per client (cannot be batched)
+**Single client use case:**
+- Pass a single-element slice: `PushMessageToClient(ctx, []string{clientID}, msg)`
+- No performance penalty compared to previous API
 
-### 8.3 Memory Impact
+### 7.3 Memory Impact
 
 - **Temporary memory:** Group map scales with O(gates × clients_per_gate)
 - **Typically negligible:** Even 10K clients = small map overhead
@@ -380,11 +352,11 @@ func (room *ChatRoom) BroadcastExceptSender(ctx context.Context, senderUserName 
 
 ---
 
-## 9. Edge Cases and Error Handling
+## 8. Edge Cases and Error Handling
 
-### 9.1 Client Disconnection
+### 8.1 Client Disconnection
 
-**Scenario:** Client disconnects between when `PushMessageToClients` is called and when gate receives message.
+**Scenario:** Client disconnects between when `PushMessageToClient` is called and when gate receives message.
 
 **Handling:**
 - Gate logs warning for missing client
@@ -409,67 +381,64 @@ func (room *ChatRoom) BroadcastExceptSender(ctx context.Context, senderUserName 
 - Error returned to caller
 - Caller can retry or handle gracefully
 
-### 9.4 Empty Client List
+### 8.4 Empty Client List
 
-**Scenario:** `PushMessageToClients` called with empty `clientIDs` slice.
+**Scenario:** `PushMessageToClient` called with empty `clientIDs` slice.
 
 **Handling:**
 - Return success immediately (no-op)
 - No network traffic generated
 - No error (empty broadcast is valid)
 
-### 9.5 Mixed Gate Distribution
+### 8.5 Mixed Gate Distribution
 
 **Scenario:** Clients span multiple gates.
 
 **Handling:**
 - Automatic optimization per gate
-- Each gate receives optimized envelope
+- Each gate receives envelope with its subset of clients
 - Transparent to caller
 
 ---
 
-## 10. Testing Strategy
+## 9. Testing Strategy
 
-### 10.1 Unit Tests
+### 9.1 Unit Tests
 
 **`cluster/cluster_pushmessage_test.go`:**
 - Test grouping logic (clients by gate)
-- Test single client → `ClientMessageEnvelope`
-- Test multiple clients → `ClientMessageFanOutEnvelope`
+- Test single client → `ClientMessageEnvelope` with one element
+- Test multiple clients → `ClientMessageEnvelope` with multiple elements
 - Test invalid client ID formats
 - Test empty client list
 - Test error handling (gate not found)
 
 **`gate/gate_message_test.go`:**
-- Test fan-out envelope handling
+- Test envelope handling with single client
+- Test envelope handling with multiple clients
 - Test client lookup (found vs. not found)
 - Test message delivery to multiple clients
 - Test partial failures (some clients disconnected)
 
-### 10.2 Integration Tests
+### 9.2 Integration Tests
 
 **`tests/integration/push_fanout_test.go`:**
 - Test end-to-end: Object → Node → Gate → Clients
 - Test multiple clients on same gate receive message
 - Test clients on different gates receive message
 - Test performance improvement (measure network calls)
-- Test backward compatibility (mix old and new APIs)
 
-### 10.3 Performance Tests
+### 9.3 Performance Tests
 
 **Benchmarks:**
 ```go
-// Benchmark current implementation
+// Benchmark refactored implementation with multiple clients
 func BenchmarkPushMessageToClient_1000Clients(b *testing.B)
-
-// Benchmark optimized implementation
-func BenchmarkPushMessageToClients_1000Clients(b *testing.B)
 
 // Expected: 100x-1000x improvement for same-gate scenarios
 ```
 
-### 10.4 Manual Testing
+### 9.4 Manual Testing
 
 **Chat Sample:**
 1. Run chat server with multiple nodes and gates
@@ -477,29 +446,29 @@ func BenchmarkPushMessageToClients_1000Clients(b *testing.B)
 3. Send messages in chat room
 4. Verify all clients receive messages
 5. Monitor network traffic (should see reduction)
-6. Check logs for fan-out envelope usage
+6. Check logs for envelope usage
 
 ---
 
-## 11. Implementation Phases
+## 10. Implementation Phases
 
-### Phase 1: Protocol and Infrastructure
-- [ ] Add `ClientMessageFanOutEnvelope` to `proto/goverse.proto`
+### Phase 1: Protocol Refactor
+- [ ] Refactor `ClientMessageEnvelope` in `proto/goverse.proto` (change `client_id` to `client_ids`)
 - [ ] Compile protos
-- [ ] Update `GateMessage` definition
+- [ ] Update generated code
 
 ### Phase 2: Gate-side Implementation
-- [ ] Update `gate.Gate.handleGateMessage` to handle fan-out envelopes
-- [ ] Add unit tests for gate-side fan-out logic
+- [ ] Update `gate.Gate.handleGateMessage` to iterate over `client_ids`
+- [ ] Add unit tests for multi-client handling
 - [ ] Add logging for fan-out operations
 
 ### Phase 3: Cluster-side Implementation
-- [ ] Implement `cluster.Cluster.PushMessageToClients`
+- [ ] Refactor `cluster.Cluster.PushMessageToClient` to accept `[]string`
 - [ ] Add client grouping logic by gate address
 - [ ] Add unit tests for cluster-side logic
 
-### Phase 4: API Exposure
-- [ ] Add `goverseapi.PushMessageToClients`
+### Phase 4: API Refactor
+- [ ] Refactor `goverseapi.PushMessageToClient` signature to accept `[]string`
 - [ ] Update API documentation
 - [ ] Add usage examples
 
@@ -508,41 +477,40 @@ func BenchmarkPushMessageToClients_1000Clients(b *testing.B)
 - [ ] Add performance benchmarks
 - [ ] Update chat sample to use new API
 
-### Phase 6: Documentation
-- [ ] Update user guide
-- [ ] Add migration guide
-- [ ] Document performance characteristics
+### Phase 6: Sample Applications
+- [ ] Update chat sample to use refactored API
+- [ ] Document migration patterns
 
 ---
 
-## 12. Future Enhancements
+## 11. Future Enhancements
 
-### 12.1 Automatic API Selection
+### 11.1 Automatic Batching Window
 
-Future enhancement: Make `PushMessageToClient` automatically batch when called multiple times in quick succession.
+Future enhancement: Automatically batch multiple individual `PushMessageToClient` calls within a time window.
 
 ```go
 // Potential future optimization
-func (c *Cluster) PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
-    // Check if in batching window
+func (c *Cluster) PushMessageToClient(ctx context.Context, clientIDs []string, message proto.Message) error {
+    // Check if in batching window for additional optimization
     if c.shouldBatch(ctx) {
-        c.addToBatch(clientID, message)
+        c.addToBatch(clientIDs, message)
         return nil
     }
     // ... existing implementation
 }
 ```
 
-### 12.2 Configurable Batching Window
+### 11.2 Configurable Batching
 
-Allow configuration of batching window for automatic optimization:
+Allow configuration of batching window:
 
 ```yaml
 cluster:
   push_batching_window_ms: 10  # Batch pushes within 10ms window
 ```
 
-### 12.3 Metrics and Monitoring
+### 11.3 Metrics and Monitoring
 
 Add metrics to track optimization effectiveness:
 - `push_messages_sent`: Total push messages
@@ -551,19 +519,18 @@ Add metrics to track optimization effectiveness:
 
 ---
 
-## 13. Summary
+## 12. Summary
 
 **Benefits:**
 - ✅ **Reduced Network Traffic**: O(gates) instead of O(clients)
 - ✅ **Lower CPU Usage**: Fewer serialization/deserialization operations
 - ✅ **Improved Scalability**: Handle large-scale broadcasts efficiently
-- ✅ **Backward Compatible**: Existing code continues to work
-- ✅ **Simple API**: Easy migration path for applications
+- ✅ **Simple Refactor**: Unified API with slice parameter
 
 **Impact:**
 - **High-impact** for chat, game, notification systems
-- **Low-risk** due to backward compatibility
-- **Easy adoption** through incremental migration
+- **Breaking change** requires code updates in applications
+- **Clear migration** path with better performance
 
 **Next Steps:**
 1. Prototype implementation
