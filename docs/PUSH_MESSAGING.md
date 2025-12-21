@@ -177,3 +177,4 @@ Possible improvements:
 - Configurable channel buffer size
 - Metrics for push success/failure rates
 - Automatic reconnection on stream failure
+- **Fan-out Optimization**: Reduce network traffic by sending a single message per gate for multiple clients (see [Client Push Optimization Design](design/CLIENT_PUSH_OPTIMIZATION.md))
