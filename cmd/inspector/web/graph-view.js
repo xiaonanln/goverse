@@ -189,6 +189,8 @@ function updateObjectMetricLabels(nodes) {
     .attr('font-size', '9px')
     .attr('fill', '#888')
     .attr('pointer-events', 'none')
+    .attr('x', d => d.x)
+    .attr('y', d => d.y + getNodeRadius(d) + 24)
 
   // Update text for both new and existing metric labels
   metricLabelEnter.merge(metricLabelSelection)
@@ -219,6 +221,8 @@ function updateLinkLabels(links) {
     .attr('stroke-width', '2px')
     .attr('paint-order', 'stroke')
     .attr('pointer-events', 'none')
+    .attr('x', d => (d.source.x + d.target.x) / 2)
+    .attr('y', d => (d.source.y + d.target.y) / 2)
 
   // Update text for all link labels
   linkLabelsEnter.merge(linkLabelsSelection)
