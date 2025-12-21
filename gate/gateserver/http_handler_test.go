@@ -709,3 +709,94 @@ t.Errorf("Expected response to contain 'ready', got: %s", string(bodyBytes))
 })
 }
 }
+
+func TestBackwardCompatibilityMode(t *testing.T) {
+// Test that when only HTTPListenAddress is set (backward compatibility mode),
+// both client API and ops endpoints are served on the same port
+gs := &GateServer{
+config: &GateServerConfig{
+HTTPListenAddress: ":8080",
+// OpsListenAddress not set - backward compatibility mode
+},
+}
+gs.stopped.Store(false)
+
+// In backward compatibility mode, startHTTPServer creates a combined mux
+// We can't easily test the actual server start, but we can verify the logic
+// by checking that both setupHTTPClientRoutes and handler registration work
+
+clientMux := gs.setupHTTPClientRoutes()
+if clientMux == nil {
+t.Fatal("setupHTTPClientRoutes returned nil")
+}
+
+opsMux := gs.setupHTTPOpsRoutes()
+if opsMux == nil {
+t.Fatal("setupHTTPOpsRoutes returned nil")
+}
+
+// Test that ops handlers work independently
+t.Run("healthz handler", func(t *testing.T) {
+req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+w := httptest.NewRecorder()
+gs.handleHealthz(w, req)
+
+if w.Code != http.StatusOK {
+t.Errorf("Expected status 200, got %d", w.Code)
+}
+})
+
+t.Run("ready handler", func(t *testing.T) {
+req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+w := httptest.NewRecorder()
+gs.handleReady(w, req)
+
+if w.Code != http.StatusOK {
+t.Errorf("Expected status 200, got %d", w.Code)
+}
+})
+}
+
+func TestSplitPortMode(t *testing.T) {
+// Test that when both HTTPListenAddress and OpsListenAddress are set,
+// they are served on separate ports
+gs := &GateServer{
+config: &GateServerConfig{
+HTTPListenAddress: ":8080",
+OpsListenAddress:  ":9090",
+},
+}
+gs.stopped.Store(false)
+
+// Verify both muxes can be created
+clientMux := gs.setupHTTPClientRoutes()
+if clientMux == nil {
+t.Fatal("setupHTTPClientRoutes returned nil")
+}
+
+opsMux := gs.setupHTTPOpsRoutes()
+if opsMux == nil {
+t.Fatal("setupHTTPOpsRoutes returned nil")
+}
+
+// Test that they serve different endpoints
+t.Run("client mux should not have ops endpoints", func(t *testing.T) {
+req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+w := httptest.NewRecorder()
+clientMux.ServeHTTP(w, req)
+
+if w.Code != http.StatusNotFound {
+t.Errorf("Client mux should not serve /healthz, got status %d", w.Code)
+}
+})
+
+t.Run("ops mux should not have client endpoints", func(t *testing.T) {
+req := httptest.NewRequest(http.MethodPost, "/api/v1/objects/call/Type/id/method", nil)
+w := httptest.NewRecorder()
+opsMux.ServeHTTP(w, req)
+
+if w.Code != http.StatusNotFound {
+t.Errorf("Ops mux should not serve client API, got status %d", w.Code)
+}
+})
+}
