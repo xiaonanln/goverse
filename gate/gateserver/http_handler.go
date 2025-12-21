@@ -62,8 +62,8 @@ type SSEHeartbeatEvent struct {
 // sseHeartbeatInterval is the interval between SSE heartbeat events
 const sseHeartbeatInterval = 30 * time.Second
 
-// setupHTTPRoutes configures HTTP routes for the gate server
-func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
+// setupHTTPClientRoutes configures HTTP routes for the client API
+func (s *GateServer) setupHTTPClientRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Object operations with CORS support
@@ -74,8 +74,18 @@ func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
 	// SSE events stream for push messaging
 	mux.HandleFunc("/api/v1/events/stream", s.corsMiddleware(s.handleEventsStream))
 
+	return mux
+}
+
+// setupHTTPOpsRoutes configures HTTP routes for operational endpoints
+func (s *GateServer) setupHTTPOpsRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+
 	// Health check endpoint
 	mux.HandleFunc("/healthz", s.handleHealthz)
+
+	// Readiness check endpoint
+	mux.HandleFunc("/ready", s.handleReady)
 
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
@@ -381,6 +391,25 @@ func (s *GateServer) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok"}`))
 }
 
+// handleReady handles GET /ready for readiness checks
+func (s *GateServer) handleReady(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only GET method is allowed")
+		return
+	}
+
+	// Check if gate server is running
+	if s.stopped.Load() {
+		s.writeError(w, http.StatusServiceUnavailable, "NOT_READY", "Gate server is stopped")
+		return
+	}
+
+	// Return OK status
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ready"}`))
+}
+
 // writeJSON writes a JSON response with the given status code
 func (s *GateServer) writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -399,47 +428,77 @@ func (s *GateServer) writeError(w http.ResponseWriter, statusCode int, code stri
 	s.writeJSON(w, statusCode, errResp)
 }
 
-// startHTTPServer starts the HTTP server for REST API
+// startHTTPServer starts the HTTP servers for client API and ops
 func (s *GateServer) startHTTPServer(ctx context.Context) error {
-	if s.config.HTTPListenAddress == "" {
-		return nil // HTTP not enabled
-	}
+	// Start client API server if configured
+	if s.config.HTTPListenAddress != "" {
+		clientMux := s.setupHTTPClientRoutes()
 
-	mux := s.setupHTTPRoutes()
-
-	s.httpServer = &http.Server{
-		Addr:              s.config.HTTPListenAddress,
-		Handler:           mux,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-
-	go func() {
-		s.logger.Infof("HTTP gate server listening on %s", s.config.HTTPListenAddress)
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.logger.Errorf("HTTP server error: %v", err)
+		s.httpServer = &http.Server{
+			Addr:              s.config.HTTPListenAddress,
+			Handler:           clientMux,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
-		s.logger.Infof("HTTP gate server stopped")
-	}()
+
+		go func() {
+			s.logger.Infof("HTTP client API server listening on %s", s.config.HTTPListenAddress)
+			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				s.logger.Errorf("HTTP client API server error: %v", err)
+			}
+			s.logger.Infof("HTTP client API server stopped")
+		}()
+	}
+
+	// Start ops server if configured
+	if s.config.OpsListenAddress != "" {
+		opsMux := s.setupHTTPOpsRoutes()
+
+		s.opsServer = &http.Server{
+			Addr:              s.config.OpsListenAddress,
+			Handler:           opsMux,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+
+		go func() {
+			s.logger.Infof("HTTP ops server listening on %s", s.config.OpsListenAddress)
+			if err := s.opsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				s.logger.Errorf("HTTP ops server error: %v", err)
+			}
+			s.logger.Infof("HTTP ops server stopped")
+		}()
+	}
 
 	return nil
 }
 
-// stopHTTPServer stops the HTTP server
+// stopHTTPServer stops the HTTP servers
 func (s *GateServer) stopHTTPServer() error {
-	if s.httpServer == nil {
-		return nil
-	}
-
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.logger.Errorf("HTTP server shutdown error: %v", err)
-		return err
+	var lastErr error
+
+	// Stop client API server
+	if s.httpServer != nil {
+		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
+			s.logger.Errorf("HTTP client API server shutdown error: %v", err)
+			lastErr = err
+		}
 	}
 
-	return nil
+	// Stop ops server
+	if s.opsServer != nil {
+		if err := s.opsServer.Shutdown(shutdownCtx); err != nil {
+			s.logger.Errorf("HTTP ops server shutdown error: %v", err)
+			lastErr = err
+		}
+	}
+
+	return lastErr
 }

@@ -27,7 +27,8 @@ import (
 type GateServerConfig struct {
 	ListenAddress     string // Address to listen on for client connections (e.g., ":49000")
 	AdvertiseAddress  string // Address to advertise to the cluster (e.g., "localhost:49000")
-	HTTPListenAddress string // Optional: HTTP address for REST API and metrics (e.g., ":8080")
+	HTTPListenAddress string // Optional: HTTP address for REST API (e.g., ":8080")
+	OpsListenAddress  string // Optional: HTTP address for ops endpoints - health, readiness, metrics (e.g., ":9090")
 	EtcdAddress       string // Address of etcd for cluster state
 	EtcdPrefix        string // Optional: etcd key prefix (default: "/goverse")
 	NumShards         int    // Optional: number of shards in the cluster (default: 8192)
@@ -54,6 +55,7 @@ type GateServer struct {
 	logger             *logger.Logger
 	grpcServer         *grpc.Server
 	httpServer         *http.Server
+	opsServer          *http.Server
 	gate               *gate.Gate
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator

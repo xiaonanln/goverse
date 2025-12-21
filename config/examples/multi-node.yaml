@@ -53,3 +53,9 @@ nodes:
 gates:
   - id: "gate-1"
     grpc_addr: "10.0.2.10:60051"
+    # Optional: advertise_addr (defaults to grpc_addr if not specified)
+    # advertise_addr: "gate-1.cluster.example.com:60051"
+    # Optional: http_addr for HTTP client API (e.g., "10.0.2.10:8080")
+    # http_addr: "10.0.2.10:8080"
+    # Optional: ops_addr for ops endpoints - health, readiness, metrics (e.g., "10.0.2.10:9090")
+    # ops_addr: "10.0.2.10:9090"
