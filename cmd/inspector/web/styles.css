@@ -192,7 +192,23 @@ html, body { margin: 0; height: 100%; width: 100%; font-family: Arial, sans-seri
 .graph-link {
   /* stroke color set by JavaScript */
   /* stroke-opacity set by JavaScript */
+  transition: stroke-width 0.3s ease, stroke 0.3s ease;
 }
+
+/* Active links with traffic - pulsing animation */
+.graph-link.link-active {
+  animation: link-pulse 2s ease-in-out infinite;
+}
+
+@keyframes link-pulse {
+  0%, 100% {
+    stroke-opacity: 0.8;
+  }
+  50% {
+    stroke-opacity: 0.95;
+  }
+}
+
 .node-label {
   font-size: 14px;
   fill: #333;

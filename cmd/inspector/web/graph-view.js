@@ -11,6 +11,73 @@ function applyNewObjectHighlighting(nodeSelection) {
   nodeSelection.classed('new-object', d => d.nodeType === NODE_TYPE_OBJECT && isNewObject(d.id))
 }
 
+// Helper function to calculate dynamic stroke width based on CPM
+function getLinkStrokeWidth(link) {
+  // Base width for different link types
+  let baseWidth = 1.5
+  if (link.type === 'node-node' || link.type === 'gate-node') {
+    baseWidth = 2
+  }
+  
+  // For node-node and gate-node links, add dynamic width based on CPM
+  if (link.type === 'node-node' || link.type === 'gate-node') {
+    const cpm = link.callsPerMinute || 0
+    // Dynamic formula: Math.min(baseWidth + cpm / 10, 10)
+    return Math.min(baseWidth + cpm / 10, 10)
+  }
+  
+  return baseWidth
+}
+
+// Helper function to get link color with gradient based on CPM
+function getLinkColor(link) {
+  // Use base color for non-traffic links
+  if (link.type !== 'node-node' && link.type !== 'gate-node') {
+    return link.color || '#999'
+  }
+  
+  const cpm = link.callsPerMinute || 0
+  
+  // If no traffic, use base color
+  if (cpm === 0) {
+    return link.color || '#999'
+  }
+  
+  // Color gradient based on CPM
+  // Low traffic (0-10 CPM): blue
+  // Medium traffic (10-50 CPM): green to yellow
+  // High traffic (50-100+ CPM): orange to red
+  
+  if (cpm < 10) {
+    // Blue for low traffic
+    return '#2196F3'
+  } else if (cpm < 30) {
+    // Green to yellow for medium-low traffic
+    return '#4CAF50'
+  } else if (cpm < 60) {
+    // Yellow for medium traffic
+    return '#FFC107'
+  } else if (cpm < 100) {
+    // Orange for medium-high traffic
+    return '#FF9800'
+  } else {
+    // Red for high traffic
+    return '#F44336'
+  }
+}
+
+// Helper function to determine link CSS classes
+function getLinkClasses(link) {
+  const classes = ['graph-link']
+  
+  // Add active class for links with traffic
+  if ((link.type === 'node-node' || link.type === 'gate-node') && link.callsPerMinute > 0) {
+    classes.push('link-active')
+  }
+  
+  return classes.join(' ')
+}
+
 // Initialize D3 graph for Objects View
 function initGraph() {
   const container = document.getElementById('graph-container')
@@ -30,6 +97,22 @@ function initGraph() {
     })
 
   svg.call(zoom)
+
+  // Add defs for arrow markers
+  const defs = svg.append('defs')
+  
+  // Arrow marker for bidirectional links
+  defs.append('marker')
+    .attr('id', 'arrow')
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 8)
+    .attr('refY', 0)
+    .attr('markerWidth', 6)
+    .attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#666')
 
   // Main group for zoom/pan
   g = svg.append('g')
@@ -439,13 +522,26 @@ function updateGraph() {
 
   const linkEnter = linkSelection.enter()
     .append('line')
-    .attr('class', 'graph-link')
 
-  // Merge and update all links
+  // Merge and update all links with dynamic styling
   linkEnter.merge(linkSelection)
-    .attr('stroke', d => d.color || '#999')
-    .attr('stroke-width', d => (d.type === 'node-node' || d.type === 'gate-node') ? 2 : 1.5)
-    .attr('stroke-opacity', d => (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1)
+    .attr('class', d => getLinkClasses(d))
+    .attr('stroke', d => getLinkColor(d))
+    .attr('stroke-width', d => getLinkStrokeWidth(d))
+    .attr('stroke-opacity', d => {
+      // Higher opacity for active links
+      if ((d.type === 'node-node' || d.type === 'gate-node') && d.callsPerMinute > 0) {
+        return 0.8
+      }
+      return (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1
+    })
+    .attr('marker-end', d => {
+      // Add arrow markers for bidirectional node-node links
+      if (d.type === 'node-node' && d.callsPerMinute > 0) {
+        return 'url(#arrow)'
+      }
+      return null
+    })
 
   // Update nodes
   const nodeSelection = g.select('.nodes')
@@ -816,13 +912,26 @@ function updateGraphIncremental() {
 
   const linkEnter = linkSelection.enter()
     .append('line')
-    .attr('class', 'graph-link')
 
-  // Merge and update all links
+  // Merge and update all links with dynamic styling
   linkEnter.merge(linkSelection)
-    .attr('stroke', d => d.color || '#999')
-    .attr('stroke-width', d => (d.type === 'node-node' || d.type === 'gate-node') ? 2 : 1.5)
-    .attr('stroke-opacity', d => (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1)
+    .attr('class', d => getLinkClasses(d))
+    .attr('stroke', d => getLinkColor(d))
+    .attr('stroke-width', d => getLinkStrokeWidth(d))
+    .attr('stroke-opacity', d => {
+      // Higher opacity for active links
+      if ((d.type === 'node-node' || d.type === 'gate-node') && d.callsPerMinute > 0) {
+        return 0.8
+      }
+      return (d.type === 'node-node' || d.type === 'gate-node') ? 0.6 : 1
+    })
+    .attr('marker-end', d => {
+      // Add arrow markers for bidirectional node-node links
+      if (d.type === 'node-node' && d.callsPerMinute > 0) {
+        return 'url(#arrow)'
+      }
+      return null
+    })
 
   // Update nodes
   const nodeSelection = g.select('.nodes')
