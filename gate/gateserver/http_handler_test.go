@@ -483,3 +483,66 @@ func TestPprofEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleHealthz(t *testing.T) {
+	// Test the healthz endpoint
+	tests := []struct {
+		name           string
+		method         string
+		stopped        bool
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "GET - server running",
+			method:         http.MethodGet,
+			stopped:        false,
+			expectedStatus: http.StatusOK,
+			expectedBody:   `{"status":"ok"}`,
+		},
+		{
+			name:           "GET - server stopped",
+			method:         http.MethodGet,
+			stopped:        true,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedBody:   "",
+		},
+		{
+			name:           "POST - method not allowed",
+			method:         http.MethodPost,
+			stopped:        false,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gs := &GateServer{}
+			gs.stopped.Store(tt.stopped)
+
+			req := httptest.NewRequest(tt.method, "/healthz", nil)
+			w := httptest.NewRecorder()
+
+			gs.handleHealthz(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Fatalf("Expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+
+			if tt.expectedBody != "" {
+				bodyBytes, err := io.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("Failed to read response body: %v", err)
+				}
+				bodyStr := strings.TrimSpace(string(bodyBytes))
+				if bodyStr != tt.expectedBody {
+					t.Fatalf("Expected body %q, got %q", tt.expectedBody, bodyStr)
+				}
+			}
+		})
+	}
+}

@@ -173,3 +173,96 @@ etcd &
 - Protocol buffers are pre-compiled
 - All shell scripts in `/app/script` are executable
 - The working directory is set to `/app`
+
+## Dockerfile.gate
+
+The `Dockerfile.gate` provides a production-ready container for the Goverse gate component.
+
+### Features
+
+- **Multi-stage build**: Uses Go 1.25 for compilation and Alpine Linux for minimal runtime
+- **Security**: Runs as non-root user (uid/gid 1000)
+- **Health checks**: Includes built-in health check using `/healthz` endpoint
+- **Small size**: ~20MB final image (Alpine + static binary)
+- **Ports**:
+  - 60051: gRPC port for client connections
+  - 8080: HTTP port for REST API and health checks
+
+### Building the Gate Image
+
+```bash
+docker build -f docker/Dockerfile.gate -t xiaonanln/goverse-gate:latest .
+```
+
+### Running the Gate Container
+
+Basic run:
+```bash
+docker run -d \
+  --name goverse-gate \
+  -p 60051:60051 \
+  -p 8080:8080 \
+  xiaonanln/goverse-gate:latest \
+  --listen=:60051 \
+  --http-listen=:8080 \
+  --etcd=etcd:2379 \
+  --etcd-prefix=/goverse
+```
+
+With custom configuration:
+```bash
+docker run -d \
+  --name goverse-gate \
+  -p 60051:60051 \
+  -p 8080:8080 \
+  xiaonanln/goverse-gate:latest \
+  --listen=:60051 \
+  --http-listen=:8080 \
+  --etcd=etcd1:2379,etcd2:2379 \
+  --advertise=gate.example.com:60051
+```
+
+### Health Checks
+
+The gate image includes a built-in health check that queries the `/healthz` endpoint:
+
+```bash
+# Check health status
+curl http://localhost:8080/healthz
+# Expected response: {"status":"ok"}
+```
+
+Docker will automatically use the `HEALTHCHECK` directive to monitor container health.
+
+### Available Gate Endpoints
+
+When HTTP is enabled (`--http-listen`), the gate exposes:
+
+- `/healthz` - Health check endpoint
+- `/metrics` - Prometheus metrics
+- `/api/v1/objects/call/{type}/{id}/{method}` - Call object methods
+- `/api/v1/objects/create/{type}/{id}` - Create objects
+- `/api/v1/objects/delete/{id}` - Delete objects
+- `/api/v1/events/stream` - SSE event stream for push messages
+- `/debug/pprof/*` - pprof profiling endpoints
+
+### CI/CD
+
+The gate image is automatically built and pushed to Docker Hub via GitHub Actions (`.github/workflows/docker.yml`) on every push to `main` or `develop` branches.
+
+Images are tagged with:
+- `latest` - Latest build from the branch
+- `<short-sha>` - Specific commit (first 7 chars of commit SHA)
+
+### Kubernetes Deployment
+
+See `k8s/gate-deployment.yaml` for Kubernetes deployment manifests with proper security settings.
+
+### Security Considerations
+
+- Container runs as non-root user (goverse:goverse, uid:gid 1000:1000)
+- Read-only root filesystem in Kubernetes deployments
+- No privilege escalation
+- All Linux capabilities dropped
+- Only exposes necessary ports
+

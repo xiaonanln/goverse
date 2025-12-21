@@ -74,6 +74,9 @@ func (s *GateServer) setupHTTPRoutes() *http.ServeMux {
 	// SSE events stream for push messaging
 	mux.HandleFunc("/api/v1/events/stream", s.corsMiddleware(s.handleEventsStream))
 
+	// Health check endpoint
+	mux.HandleFunc("/healthz", s.handleHealthz)
+
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
@@ -357,6 +360,25 @@ func (s *GateServer) writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, 
 
 	flusher.Flush()
 	return nil
+}
+
+// handleHealthz handles GET /healthz for health checks
+func (s *GateServer) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only GET method is allowed")
+		return
+	}
+
+	// Check if gate server is running
+	if s.stopped.Load() {
+		s.writeError(w, http.StatusServiceUnavailable, "NOT_READY", "Gate server is stopped")
+		return
+	}
+
+	// Return OK status
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 // writeJSON writes a JSON response with the given status code
