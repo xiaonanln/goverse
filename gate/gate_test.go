@@ -759,6 +759,81 @@ func containsHelper(s, substr string) bool {
 	return false
 }
 
+// TestGateHandleGateMessage_MultiClientFanout tests that a single envelope with multiple client IDs fans out correctly
+func TestGateHandleGateMessage_MultiClientFanout(t *testing.T) {
+	gate, err := NewGate(&GateConfig{
+		AdvertiseAddress: "localhost:42079",
+		EtcdAddress:      "localhost:2379",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create gate: %v", err)
+	}
+
+	ctx := context.Background()
+	err = gate.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start gate: %v", err)
+	}
+	defer gate.Stop()
+
+	// Register 3 clients
+	clientProxy1 := gate.Register(ctx)
+	clientProxy2 := gate.Register(ctx)
+	clientProxy3 := gate.Register(ctx)
+
+	clientID1 := clientProxy1.GetID()
+	clientID2 := clientProxy2.GetID()
+	clientID3 := clientProxy3.GetID()
+
+	// Create a message to send to all 3 clients
+	testMessage := &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"text":   structpb.NewStringValue("Broadcast to all clients"),
+			"client": structpb.NewStringValue("all"),
+		},
+	}
+
+	anyMsg, err := protohelper.MsgToAny(testMessage)
+	if err != nil {
+		t.Fatalf("Failed to create Any message: %v", err)
+	}
+
+	// Create envelope with all 3 client IDs (fan-out)
+	envelope := &goverse_pb.ClientMessageEnvelope{
+		ClientIds: []string{clientID1, clientID2, clientID3},
+		Message:   anyMsg,
+	}
+
+	gateMsg := &goverse_pb.GateMessage{
+		Message: &goverse_pb.GateMessage_ClientMessage{
+			ClientMessage: envelope,
+		},
+	}
+
+	// Handle the message - should fan out to all 3 clients
+	gate.handleGateMessage("test-node", gateMsg)
+
+	// Verify all 3 clients receive the same message
+	for i, clientProxy := range []*ClientProxy{clientProxy1, clientProxy2, clientProxy3} {
+		select {
+		case receivedAny := <-clientProxy.MessageChan():
+			if receivedAny == nil {
+				t.Fatalf("Client %d: Received nil message", i+1)
+			}
+			receivedStruct := &structpb.Struct{}
+			if err := receivedAny.UnmarshalTo(receivedStruct); err != nil {
+				t.Fatalf("Client %d: Failed to unmarshal Any to Struct: %v", i+1, err)
+			}
+			if receivedStruct.Fields["text"].GetStringValue() != "Broadcast to all clients" {
+				t.Fatalf("Client %d: Expected 'Broadcast to all clients', got %q", i+1, receivedStruct.Fields["text"].GetStringValue())
+			}
+			t.Logf("Client %d received broadcast message successfully", i+1)
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("Timeout waiting for message on client %d channel", i+1)
+		}
+	}
+}
+
 func TestGateGetClientCount(t *testing.T) {
 	config := &GateConfig{
 		AdvertiseAddress: testutil.GetFreeAddress(),
