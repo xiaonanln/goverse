@@ -9,6 +9,7 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -99,7 +100,6 @@ func TestBroadcastToAllClientsIntegration(t *testing.T) {
 	testData := map[string]interface{}{
 		"type":    "server_announcement",
 		"message": "This is a broadcast test message",
-		"timestamp": time.Now().Unix(),
 	}
 
 	testStruct, err := structpb.NewStruct(testData)
@@ -116,32 +116,44 @@ func TestBroadcastToAllClientsIntegration(t *testing.T) {
 
 	// Verify all clients received the broadcast message
 	for i := 0; i < numClients; i++ {
+		// Create a timeout context for receiving
+		recvCtx, recvCancel := context.WithTimeout(ctx, 5*time.Second)
+		defer recvCancel()
+
+		// Receive message from stream
+		done := make(chan error, 1)
+		var anyMsg *anypb.Any
+		go func() {
+			var err error
+			anyMsg, err = clients[i].Recv()
+			done <- err
+		}()
+
 		select {
-		case <-time.After(5 * time.Second):
-			t.Fatalf("Timeout waiting for broadcast message on client %d", i)
-		default:
-			// Receive message from stream
-			anyMsg, err := clients[i].Recv()
+		case err := <-done:
 			if err != nil {
 				t.Fatalf("Failed to receive broadcast message on client %d: %v", i, err)
 			}
+		case <-recvCtx.Done():
+			t.Fatalf("Timeout waiting for broadcast message on client %d", i)
+		}
 
-			// Verify the message content
-			var receivedStruct structpb.Struct
-			err = anyMsg.UnmarshalTo(&receivedStruct)
-			if err != nil {
-				t.Fatalf("Failed to unmarshal broadcast message on client %d: %v", i, err)
-			}
+		// Verify the message content
+		var receivedStruct structpb.Struct
+		err = anyMsg.UnmarshalTo(&receivedStruct)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal broadcast message on client %d: %v", i, err)
+		}
 
-			if receivedStruct.Fields["type"].GetStringValue() != "server_announcement" {
-				t.Errorf("Client %d: expected type 'server_announcement', got '%s'",
-					i, receivedStruct.Fields["type"].GetStringValue())
-			}
+		if receivedStruct.Fields["type"].GetStringValue() != "server_announcement" {
+			t.Errorf("Client %d: expected type 'server_announcement', got '%s'",
+				i, receivedStruct.Fields["type"].GetStringValue())
+		}
 
-			if receivedStruct.Fields["message"].GetStringValue() != "This is a broadcast test message" {
-				t.Errorf("Client %d: expected message 'This is a broadcast test message', got '%s'",
-					i, receivedStruct.Fields["message"].GetStringValue())
-			}
+		if receivedStruct.Fields["message"].GetStringValue() != "This is a broadcast test message" {
+			t.Errorf("Client %d: expected message 'This is a broadcast test message', got '%s'",
+				i, receivedStruct.Fields["message"].GetStringValue())
+		}
 
 			t.Logf("Client %d successfully received broadcast message", i)
 		}
@@ -259,28 +271,40 @@ func TestBroadcastToAllClients_MultipleGates(t *testing.T) {
 
 	// Verify all clients received the broadcast message
 	for i := 0; i < totalClients; i++ {
+		// Create a timeout context for receiving
+		recvCtx, recvCancel := context.WithTimeout(ctx, 5*time.Second)
+		defer recvCancel()
+
+		// Receive message from stream
+		done := make(chan error, 1)
+		var anyMsg *anypb.Any
+		go func() {
+			var err error
+			anyMsg, err = clients[i].Recv()
+			done <- err
+		}()
+
 		select {
-		case <-time.After(5 * time.Second):
-			t.Fatalf("Timeout waiting for broadcast message on client %d", i)
-		default:
-			anyMsg, err := clients[i].Recv()
+		case err := <-done:
 			if err != nil {
 				t.Fatalf("Failed to receive broadcast message on client %d: %v", i, err)
 			}
-
-			var receivedStruct structpb.Struct
-			err = anyMsg.UnmarshalTo(&receivedStruct)
-			if err != nil {
-				t.Fatalf("Failed to unmarshal broadcast message on client %d: %v", i, err)
-			}
-
-			if receivedStruct.Fields["type"].GetStringValue() != "multi_gate_broadcast" {
-				t.Errorf("Client %d: expected type 'multi_gate_broadcast', got '%s'",
-					i, receivedStruct.Fields["type"].GetStringValue())
-			}
-
-			t.Logf("Client %d successfully received broadcast message", i)
+		case <-recvCtx.Done():
+			t.Fatalf("Timeout waiting for broadcast message on client %d", i)
 		}
+
+		var receivedStruct structpb.Struct
+		err = anyMsg.UnmarshalTo(&receivedStruct)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal broadcast message on client %d: %v", i, err)
+		}
+
+		if receivedStruct.Fields["type"].GetStringValue() != "multi_gate_broadcast" {
+			t.Errorf("Client %d: expected type 'multi_gate_broadcast', got '%s'",
+				i, receivedStruct.Fields["type"].GetStringValue())
+		}
+
+		t.Logf("Client %d successfully received broadcast message", i)
 	}
 
 	t.Logf("All %d clients across %d gates successfully received the broadcast message", totalClients, numGates)

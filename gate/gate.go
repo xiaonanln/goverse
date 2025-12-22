@@ -392,17 +392,12 @@ func (g *Gate) broadcastToAllClients(message *anypb.Any) {
 	clientCount := len(g.clients)
 	g.logger.Infof("Broadcasting message to %d connected client(s)", clientCount)
 
-	pushedCount := 0
 	for clientID, client := range g.clients {
 		client.PushMessageAny(message)
-		pushedCount++
 		g.logger.Debugf("Broadcast to client %s", clientID)
-	}
-
-	// Record metrics for all pushed messages
-	for i := 0; i < pushedCount; i++ {
+		// Record metric for each pushed message
 		metrics.RecordGatePushedMessage(g.advertiseAddress)
 	}
 
-	g.logger.Infof("Broadcast complete: %d messages pushed", pushedCount)
+	g.logger.Infof("Broadcast complete: %d messages pushed", clientCount)
 }
