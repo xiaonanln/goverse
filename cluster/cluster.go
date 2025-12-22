@@ -1175,6 +1175,72 @@ func (c *Cluster) PushMessageToClients(ctx context.Context, clientIDs []string, 
 	return lastErr
 }
 
+// BroadcastToAllClients sends a message to all clients connected to all gates.
+// The message is sent to all connected gates, and each gate fans out the message
+// to all its connected clients.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - message: The protobuf message to broadcast to all clients
+//
+// Returns:
+//   - error: Non-nil if any gate push operation fails
+//
+// Example:
+//
+//	notification := &MyNotification{Text: "Server announcement"}
+//	err := goverseapi.BroadcastToAllClients(ctx, notification)
+func (c *Cluster) BroadcastToAllClients(ctx context.Context, message proto.Message) error {
+	// This method can only be called on node clusters
+	if c.isGate() {
+		return fmt.Errorf("BroadcastToAllClients can only be called on node clusters, not gate clusters")
+	}
+
+	// Serialize message once
+	anyMsg, err := protohelper.MsgToAny(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	// Send broadcast envelope to all connected gates
+	c.gateChannelsMu.RLock()
+	defer c.gateChannelsMu.RUnlock()
+
+	gateCount := len(c.gateChannels)
+	if gateCount == 0 {
+		c.logger.Warnf("No gates connected, broadcast message not sent")
+		return fmt.Errorf("no gates connected")
+	}
+
+	c.logger.Infof("%s - Broadcasting message to all clients via %d connected gate(s)", c, gateCount)
+
+	var lastErr error
+	pushedGates := 0
+	for gateAddr, gateCh := range c.gateChannels {
+		// Create envelope with empty client_ids to signal broadcast
+		envelope := &goverse_pb.ClientMessageEnvelope{
+			ClientIds: []string{}, // Empty list signals broadcast to all clients on this gate
+			Message:   anyMsg,
+		}
+
+		select {
+		case gateCh <- envelope:
+			pushedGates++
+			c.logger.Debugf("Sent broadcast message to gate %s", gateAddr)
+			// Record metric for pushed message
+			metrics.RecordNodePushedMessage(c.node.GetAdvertiseAddress(), gateAddr)
+		default:
+			// Record dropped message metric when channel is full
+			metrics.RecordNodeDroppedMessage(c.node.GetAdvertiseAddress(), gateAddr)
+			lastErr = fmt.Errorf("gate %s message channel is full", gateAddr)
+			c.logger.Warnf("%s", lastErr)
+		}
+	}
+
+	c.logger.Infof("Broadcast complete: sent to %d/%d gate(s)", pushedGates, gateCount)
+	return lastErr
+}
+
 // GetEtcdManagerForTesting returns the cluster's etcd manager
 // WARNING: This should only be used in tests
 func (c *Cluster) GetEtcdManagerForTesting() *etcdmanager.EtcdManager {

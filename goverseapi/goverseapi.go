@@ -147,6 +147,34 @@ func PushMessageToClients(ctx context.Context, clientIDs []string, message proto
 	return cluster.This().PushMessageToClients(ctx, clientIDs, message)
 }
 
+// BroadcastToAllClients sends a message to all clients connected to all gates.
+// The message is sent to all connected gates, and each gate fans out the message
+// to all its connected clients.
+//
+// This is useful for server-wide announcements, notifications, or events that
+// should be delivered to every connected client regardless of their state or location.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - message: The protobuf message to broadcast to all clients
+//
+// Returns:
+//   - error: Non-nil if no gates are connected or if push operations fail
+//
+// Example:
+//
+//	announcement := &MyNotification{
+//	    Type: "server_announcement",
+//	    Text: "Server maintenance in 5 minutes",
+//	}
+//	err := goverseapi.BroadcastToAllClients(ctx, announcement)
+//	if err != nil {
+//	    log.Printf("Failed to broadcast: %v", err)
+//	}
+func BroadcastToAllClients(ctx context.Context, message proto.Message) error {
+	return cluster.This().BroadcastToAllClients(ctx, message)
+}
+
 // ClusterReady returns a channel that will be closed when the cluster is ready.
 // The cluster is considered ready when:
 // - Nodes are connected
