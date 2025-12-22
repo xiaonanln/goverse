@@ -76,14 +76,23 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 	notification := &chat_pb.Client_NewMessageNotification{
 		Message: chatMsg,
 	}
-	// Log clientIDs: how many and the list
-	room.Logger.Infof("Active clientIDs in room %s: count=%d ids=%v", room.Id(), len(room.clientIDs), room.clientIDs)
+	
+	// Collect all client IDs
+	clientIDs := make([]string, 0, len(room.clientIDs))
 	for _, clientID := range room.clientIDs {
-		err := goverseapi.PushMessageToClient(ctx, clientID, notification)
+		clientIDs = append(clientIDs, clientID)
+	}
+	
+	// Log clientIDs: how many and the list
+	room.Logger.Infof("Active clientIDs in room %s: count=%d ids=%v", room.Id(), len(clientIDs), clientIDs)
+	
+	// Single API call with automatic fan-out optimization
+	if len(clientIDs) > 0 {
+		err := goverseapi.PushMessageToClients(ctx, clientIDs, notification)
 		if err != nil {
-			room.Logger.Warnf("Failed to push message to client %s: %v", clientID, err)
+			room.Logger.Warnf("Failed to push to clients: %v", err)
 		} else {
-			room.Logger.Infof("Pushed message to client %s", clientID)
+			room.Logger.Infof("Pushed message to %d client(s)", len(clientIDs))
 		}
 	}
 

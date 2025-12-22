@@ -122,11 +122,29 @@ func ReliableCallObject(ctx context.Context, callID string, objType, objID strin
 	return cluster.This().ReliableCallObject(ctx, callID, objType, objID, method, request)
 }
 
-// PushMessageToClient sends a message to a client via the gate connection
-// This allows distributed objects to push notifications/messages to connected clients
-// The client ID has the format: gateAddress/uniqueId (e.g., "localhost:7001/abc123")
-func PushMessageToClient(ctx context.Context, clientID string, message proto.Message) error {
-	return cluster.This().PushMessageToClient(ctx, clientID, message)
+// PushMessageToClients sends a message to one or more clients via the gate connection.
+// This allows distributed objects to push notifications/messages to connected clients.
+// This is efficient whether pushing to a single client or multiple clients
+// on the same gate due to automatic fan-out optimization.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - clientIDs: List of client IDs (format: "gateAddress/uniqueId"). Can be a single client or multiple clients.
+//   - message: The protobuf message to push to all clients
+//
+// Returns:
+//   - error: Non-nil if any push operation fails
+//
+// Example (single client):
+//
+//	err := goverseapi.PushMessageToClients(ctx, []string{"localhost:7001/user1"}, notification)
+//
+// Example (multiple clients):
+//
+//	clientIDs := []string{"localhost:7001/user1", "localhost:7001/user2"}
+//	err := goverseapi.PushMessageToClients(ctx, clientIDs, notification)
+func PushMessageToClients(ctx context.Context, clientIDs []string, message proto.Message) error {
+	return cluster.This().PushMessageToClients(ctx, clientIDs, message)
 }
 
 // ClusterReady returns a channel that will be closed when the cluster is ready.

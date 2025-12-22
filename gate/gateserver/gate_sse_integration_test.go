@@ -163,7 +163,7 @@ func TestGateSSEIntegration(t *testing.T) {
 		},
 	}
 
-	err = nodeCluster.PushMessageToClient(ctx, regEvent.ClientID, testMessage)
+	err = nodeCluster.PushMessageToClients(ctx, []string{regEvent.ClientID}, testMessage)
 	if err != nil {
 		t.Fatalf("Failed to push message from node: %v", err)
 	}
@@ -390,7 +390,7 @@ func TestSSEMultipleClients(t *testing.T) {
 			},
 		}
 
-		err = nodeCluster.PushMessageToClient(ctx, client.clientID, testMessage)
+		err = nodeCluster.PushMessageToClients(ctx, []string{client.clientID}, testMessage)
 		if err != nil {
 			t.Fatalf("Failed to push message to client %d: %v", i, err)
 		}
