@@ -17,7 +17,7 @@ spec:
         app: goverse-gate
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
+        prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
     spec:
       containers:
@@ -29,6 +29,8 @@ spec:
           name: grpc
         - containerPort: 8080
           name: http
+        - containerPort: 9090
+          name: ops
         env:
         - name: POD_NAME
           valueFrom:
@@ -44,6 +46,8 @@ spec:
           value: "0.0.0.0:60051"
         - name: HTTP_ADDR
           value: "0.0.0.0:8080"
+        - name: OPS_ADDR
+          value: "0.0.0.0:9090"
         - name: CONFIG_FILE
           value: "/etc/goverse/config.yaml"
         volumeMounts:
@@ -59,13 +63,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8080
+            port: 9090
           initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /healthz
-            port: 8080
+            path: /ready
+            port: 9090
           initialDelaySeconds: 5
           periodSeconds: 5
       volumes:

@@ -29,3 +29,37 @@ spec:
             name: goverse-gate
             port:
               number: 60051
+---
+# HTTP client API ingress (safe to expose publicly)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: goverse-gate-http-ingress
+  namespace: goverse
+  labels:
+    app.kubernetes.io/name: goverse-gate
+    app.kubernetes.io/component: gate-http
+  annotations:
+    # For NGINX ingress controller
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    # For cert-manager (optional)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  # Uncomment for TLS
+  # tls:
+  # - hosts:
+  #   - api.goverse.example.com
+  #   secretName: goverse-http-tls
+  rules:
+  - host: api.goverse.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: goverse-gate
+            port:
+              number: 8080
+
