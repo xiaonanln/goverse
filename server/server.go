@@ -473,17 +473,26 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 				server.logger.Infof("Gate %s message channel closed, stopping stream", gateAddr)
 				return nil
 			}
-			// The message should be a ClientMessageEnvelope
-			envelope, ok := msg.(*goverse_pb.ClientMessageEnvelope)
-			if !ok {
-				server.logger.Errorf("Received non-envelope message for gate %s: %T", gateAddr, msg)
+			
+			var gateMsg *goverse_pb.GateMessage
+			
+			// Handle both ClientMessageEnvelope and BroadcastMessageEnvelope
+			switch m := msg.(type) {
+			case *goverse_pb.ClientMessageEnvelope:
+				gateMsg = &goverse_pb.GateMessage{
+					Message: &goverse_pb.GateMessage_ClientMessage{
+						ClientMessage: m,
+					},
+				}
+			case *goverse_pb.BroadcastMessageEnvelope:
+				gateMsg = &goverse_pb.GateMessage{
+					Message: &goverse_pb.GateMessage_BroadcastMessage{
+						BroadcastMessage: m,
+					},
+				}
+			default:
+				server.logger.Errorf("Received unknown message type for gate %s: %T", gateAddr, msg)
 				continue
-			}
-
-			gateMsg := &goverse_pb.GateMessage{
-				Message: &goverse_pb.GateMessage_ClientMessage{
-					ClientMessage: envelope,
-				},
 			}
 
 			if err := stream.Send(gateMsg); err != nil {
