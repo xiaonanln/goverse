@@ -85,10 +85,16 @@ message ClientMessageEnvelope {
   google.protobuf.Any message = 2; // The message payload (same for all clients)
 }
 
+// BroadcastMessageEnvelope wraps a message to be broadcast to all connected clients
+message BroadcastMessageEnvelope {
+  google.protobuf.Any message = 1; // The message payload to broadcast to all clients
+}
+
 message GateMessage {
   oneof message {
     RegisterGateResponse register_gate_response = 1;
     ClientMessageEnvelope client_message = 2;
+    BroadcastMessageEnvelope broadcast_message = 3;
   }
 }
 

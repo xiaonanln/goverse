@@ -1217,10 +1217,9 @@ func (c *Cluster) BroadcastToAllClients(ctx context.Context, message proto.Messa
 	var lastErr error
 	pushedGates := 0
 	for gateAddr, gateCh := range c.gateChannels {
-		// Create envelope with empty client_ids to signal broadcast
-		envelope := &goverse_pb.ClientMessageEnvelope{
-			ClientIds: []string{}, // Empty list signals broadcast to all clients on this gate
-			Message:   anyMsg,
+		// Create broadcast envelope
+		envelope := &goverse_pb.BroadcastMessageEnvelope{
+			Message: anyMsg,
 		}
 
 		select {

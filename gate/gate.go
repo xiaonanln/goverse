@@ -337,41 +337,40 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 	switch m := msg.Message.(type) {
 	case *goverse_pb.GateMessage_RegisterGateResponse:
 		g.logger.Debugf("Received RegisterGateResponse from node %s", nodeAddr)
+	case *goverse_pb.GateMessage_BroadcastMessage:
+		// Handle broadcast message to all connected clients
+		envelope := m.BroadcastMessage
+		g.logger.Debugf("Received broadcast message from node %s", nodeAddr)
+		g.broadcastToAllClients(envelope.Message)
 	case *goverse_pb.GateMessage_ClientMessage:
 		// Extract client IDs and message from envelope
 		envelope := m.ClientMessage
 		clientIDs := envelope.GetClientIds()
 
-		// Special case: empty client_ids means broadcast to all connected clients
-		if len(clientIDs) == 0 {
-			g.logger.Debugf("Received broadcast message from node %s", nodeAddr)
-			g.broadcastToAllClients(envelope.Message)
-		} else {
-			g.logger.Debugf("Received client message from node %s for %d client(s)", nodeAddr, len(clientIDs))
+		g.logger.Debugf("Received client message from node %s for %d client(s)", nodeAddr, len(clientIDs))
 
-			// Handle both single and multiple clients by iterating over client_ids
-			for _, clientID := range clientIDs {
-				// Find the target client
-				client, exists := g.GetClient(clientID)
-				if !exists {
-					g.logger.Warnf("Client %s not found, may have disconnected", clientID)
-					// Record dropped message metric
-					metrics.RecordGateDroppedMessage(g.advertiseAddress)
-					continue
-				}
+		// Handle both single and multiple clients by iterating over client_ids
+		for _, clientID := range clientIDs {
+			// Find the target client
+			client, exists := g.GetClient(clientID)
+			if !exists {
+				g.logger.Warnf("Client %s not found, may have disconnected", clientID)
+				// Record dropped message metric
+				metrics.RecordGateDroppedMessage(g.advertiseAddress)
+				continue
+			}
 
-				// Forward the Any message directly without unmarshaling
-				// The client is responsible for unmarshaling based on the application proto types
-				if envelope.Message != nil {
-					// Send the google.protobuf.Any directly to client's message channel
-					client.PushMessageAny(envelope.Message)
-					// Record metric for pushed message
-					metrics.RecordGatePushedMessage(g.advertiseAddress)
-				} else {
-					g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
-					// Record dropped message metric for nil message
-					metrics.RecordGateDroppedMessage(g.advertiseAddress)
-				}
+			// Forward the Any message directly without unmarshaling
+			// The client is responsible for unmarshaling based on the application proto types
+			if envelope.Message != nil {
+				// Send the google.protobuf.Any directly to client's message channel
+				client.PushMessageAny(envelope.Message)
+				// Record metric for pushed message
+				metrics.RecordGatePushedMessage(g.advertiseAddress)
+			} else {
+				g.logger.Warnf("Received nil message for client %s from node %s", clientID, nodeAddr)
+				// Record dropped message metric for nil message
+				metrics.RecordGateDroppedMessage(g.advertiseAddress)
 			}
 		}
 	default:

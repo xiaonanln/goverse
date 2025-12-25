@@ -72,20 +72,37 @@ message ClientMessageEnvelope {
 - Supports both single-client (`client_ids` with one element) and multi-client scenarios
 - Unified message type eliminates complexity
 
-### 3.2 GateMessage (No Changes Needed)
+### 3.2 BroadcastMessageEnvelope
 
-The existing `GateMessage` structure remains unchanged:
+Added a dedicated message type for broadcast operations:
+
+```proto
+// BroadcastMessageEnvelope wraps a message to be broadcast to all connected clients
+message BroadcastMessageEnvelope {
+  google.protobuf.Any message = 1; // The message payload to broadcast to all clients
+}
+```
+
+**Key features:**
+- Dedicated message type for broadcast operations
+- Clear semantic distinction from targeted client messages
+- Type-safe protocol design
+
+### 3.3 GateMessage
+
+Updated `GateMessage` to include the new broadcast message:
 
 ```proto
 message GateMessage {
   oneof message {
     RegisterGateResponse register_gate_response = 1;
-    ClientMessageEnvelope client_message = 2;  // Now supports both single and multiple clients
+    ClientMessageEnvelope client_message = 2;  // Supports both single and multiple clients
+    BroadcastMessageEnvelope broadcast_message = 3;  // Broadcast to all clients
   }
 }
 ```
 
-**Note**: By refactoring `ClientMessageEnvelope` instead of adding a new message type, we maintain a simpler protocol with no additional complexity.
+**Note**: The separate message type provides better type safety and makes the protocol intention explicit.
 
 ---
 
@@ -556,14 +573,15 @@ if err != nil {
 
 ### 12.3 Implementation
 
-The broadcast feature leverages the existing client push optimization:
+The broadcast feature uses a dedicated message type for clarity and type safety:
 
-1. **Node sends to all gates**: Uses empty `client_ids` list as a special broadcast signal
+1. **Node sends to all gates**: Uses `BroadcastMessageEnvelope` message type
 2. **Gate fans out to all clients**: Each gate broadcasts to all its connected clients locally
 
 **Protocol:**
-- When `ClientMessageEnvelope.client_ids` is empty, the gate interprets it as a broadcast
-- Each gate iterates through all its connected clients and pushes the message
+- Added `BroadcastMessageEnvelope` message type in `proto/goverse.proto`
+- `GateMessage` oneof includes `broadcast_message` field
+- Each gate handles the broadcast message by iterating through all connected clients
 
 **Flow:**
 ```
