@@ -337,11 +337,6 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 	switch m := msg.Message.(type) {
 	case *goverse_pb.GateMessage_RegisterGateResponse:
 		g.logger.Debugf("Received RegisterGateResponse from node %s", nodeAddr)
-	case *goverse_pb.GateMessage_BroadcastMessage:
-		// Handle broadcast message to all connected clients
-		envelope := m.BroadcastMessage
-		g.logger.Debugf("Received broadcast message from node %s", nodeAddr)
-		g.broadcastToAllClients(envelope.Message)
 	case *goverse_pb.GateMessage_ClientMessage:
 		// Extract client IDs and message from envelope
 		envelope := m.ClientMessage
@@ -373,6 +368,11 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 				metrics.RecordGateDroppedMessage(g.advertiseAddress)
 			}
 		}
+	case *goverse_pb.GateMessage_BroadcastMessage:
+		// Handle broadcast message to all connected clients
+		envelope := m.BroadcastMessage
+		g.logger.Debugf("Received broadcast message from node %s", nodeAddr)
+		g.broadcastToAllClients(envelope.Message)
 	default:
 		g.logger.Warnf("Received unknown message type %v from node %s", msg.Message, nodeAddr)
 	}

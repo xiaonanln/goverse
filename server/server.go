@@ -473,9 +473,9 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 				server.logger.Infof("Gate %s message channel closed, stopping stream", gateAddr)
 				return nil
 			}
-			
+
 			var gateMsg *goverse_pb.GateMessage
-			
+
 			// Handle both ClientMessageEnvelope and BroadcastMessageEnvelope
 			switch m := msg.(type) {
 			case *goverse_pb.ClientMessageEnvelope:
