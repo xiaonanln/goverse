@@ -155,8 +155,7 @@ func TestBroadcastToAllClientsIntegration(t *testing.T) {
 				i, receivedStruct.Fields["message"].GetStringValue())
 		}
 
-			t.Logf("Client %d successfully received broadcast message", i)
-		}
+		t.Logf("Client %d successfully received broadcast message", i)
 	}
 
 	t.Logf("All %d clients successfully received the broadcast message", numClients)
