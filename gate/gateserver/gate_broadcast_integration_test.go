@@ -32,6 +32,18 @@ func TestBroadcastToAllClientsIntegration(t *testing.T) {
 	// Create and start node cluster
 	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
+	defer nodeCluster.Stop(ctx)
+
+	// Start mock gRPC server for the node
+	mockNodeServer := testutil.NewMockGoverseServer()
+	mockNodeServer.SetNode(nodeCluster.GetThisNode())
+	mockNodeServer.SetCluster(nodeCluster)
+	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
+	err := nodeServer.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer.Stop() })
 
 	// Create and start gate server
 	gateAddr := testutil.GetFreeAddress()
@@ -123,9 +135,10 @@ func TestBroadcastToAllClientsIntegration(t *testing.T) {
 		// Receive message from stream
 		done := make(chan error, 1)
 		var anyMsg *anypb.Any
+		clientIdx := i // Capture the loop variable
 		go func() {
 			var err error
-			anyMsg, err = clients[i].Recv()
+			anyMsg, err = clients[clientIdx].Recv()
 			done <- err
 		}()
 
@@ -175,6 +188,18 @@ func TestBroadcastToAllClients_MultipleGates(t *testing.T) {
 	// Create and start node cluster
 	nodeAddr := testutil.GetFreeAddress()
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
+	defer nodeCluster.Stop(ctx)
+
+	// Start mock gRPC server for the node
+	mockNodeServer := testutil.NewMockGoverseServer()
+	mockNodeServer.SetNode(nodeCluster.GetThisNode())
+	mockNodeServer.SetCluster(nodeCluster)
+	nodeServer := testutil.NewTestServerHelper(nodeAddr, mockNodeServer)
+	err := nodeServer.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node mock server: %v", err)
+	}
+	t.Cleanup(func() { nodeServer.Stop() })
 
 	// Create and start two gate servers
 	numGates := 2
@@ -277,9 +302,10 @@ func TestBroadcastToAllClients_MultipleGates(t *testing.T) {
 		// Receive message from stream
 		done := make(chan error, 1)
 		var anyMsg *anypb.Any
+		clientIdx := i // Capture the loop variable
 		go func() {
 			var err error
-			anyMsg, err = clients[i].Recv()
+			anyMsg, err = clients[clientIdx].Recv()
 			done <- err
 		}()
 
