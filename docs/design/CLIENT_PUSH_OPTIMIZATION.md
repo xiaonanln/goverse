@@ -1,7 +1,7 @@
 # Client Push Message Fan-out Optimization
 
-> **Status**: Draft / Planned  
-> This document describes the proposed optimization for client push messaging to reduce network traffic and CPU usage when pushing to multiple clients.
+> **Status**: Implemented  
+> This document describes the client push messaging optimization to reduce network traffic and CPU usage when pushing to multiple clients, including broadcast functionality.
 
 ---
 
@@ -72,20 +72,37 @@ message ClientMessageEnvelope {
 - Supports both single-client (`client_ids` with one element) and multi-client scenarios
 - Unified message type eliminates complexity
 
-### 3.2 GateMessage (No Changes Needed)
+### 3.2 BroadcastMessageEnvelope
 
-The existing `GateMessage` structure remains unchanged:
+Added a dedicated message type for broadcast operations:
+
+```proto
+// BroadcastMessageEnvelope wraps a message to be broadcast to all connected clients
+message BroadcastMessageEnvelope {
+  google.protobuf.Any message = 1; // The message payload to broadcast to all clients
+}
+```
+
+**Key features:**
+- Dedicated message type for broadcast operations
+- Clear semantic distinction from targeted client messages
+- Type-safe protocol design
+
+### 3.3 GateMessage
+
+Updated `GateMessage` to include the new broadcast message:
 
 ```proto
 message GateMessage {
   oneof message {
     RegisterGateResponse register_gate_response = 1;
-    ClientMessageEnvelope client_message = 2;  // Now supports both single and multiple clients
+    ClientMessageEnvelope client_message = 2;  // Supports both single and multiple clients
+    BroadcastMessageEnvelope broadcast_message = 3;  // Broadcast to all clients
   }
 }
 ```
 
-**Note**: By refactoring `ClientMessageEnvelope` instead of adding a new message type, we maintain a simpler protocol with no additional complexity.
+**Note**: The separate message type provides better type safety and makes the protocol intention explicit.
 
 ---
 
@@ -519,21 +536,118 @@ Add metrics to track optimization effectiveness:
 
 ---
 
-## 12. Summary
+## 12. Broadcast to All Clients
+
+### 12.1 Feature Overview
+
+In addition to targeted client push, Goverse now supports broadcasting messages to all connected clients across all gates. This is useful for:
+- Server-wide announcements
+- Maintenance notifications
+- Global events or updates
+- System-wide alerts
+
+### 12.2 API
+
+**goverseapi.BroadcastToAllClients**
+
+```go
+// BroadcastToAllClients sends a message to all clients connected to all gates.
+// The message is sent to all connected gates, and each gate fans out the message
+// to all its connected clients.
+func BroadcastToAllClients(ctx context.Context, message proto.Message) error
+```
+
+**Example usage:**
+
+```go
+// Server announcement
+announcement := &MyNotification{
+    Type: "server_announcement",
+    Text: "Server maintenance in 5 minutes",
+}
+err := goverseapi.BroadcastToAllClients(ctx, announcement)
+if err != nil {
+    log.Printf("Failed to broadcast: %v", err)
+}
+```
+
+### 12.3 Implementation
+
+The broadcast feature uses a dedicated message type for clarity and type safety:
+
+1. **Node sends to all gates**: Uses `BroadcastMessageEnvelope` message type
+2. **Gate fans out to all clients**: Each gate broadcasts to all its connected clients locally
+
+**Protocol:**
+- Added `BroadcastMessageEnvelope` message type in `proto/goverse.proto`
+- `GateMessage` oneof includes `broadcast_message` field
+- Each gate handles the broadcast message by iterating through all connected clients
+
+**Flow:**
+```
+Object → BroadcastToAllClients → 1 × serialize → N gates × network message → Each gate → M clients
+```
+
+Where N = number of connected gates, M = clients per gate
+
+### 12.4 Performance Characteristics
+
+**Network efficiency:**
+- **O(gates)** network messages from node to gates
+- **O(1)** local fan-out at each gate (in-memory iteration)
+
+**Example scenario:**
+- 10 gates, 100 clients per gate (1000 total clients)
+- Broadcast: 10 network messages (1 per gate)
+- Each gate: local iteration over 100 clients
+- Result: **100x reduction** in network traffic vs. sending 1000 individual messages
+
+### 12.5 Error Handling
+
+**No gates connected:**
+- Returns error: `"no gates connected"`
+- No messages sent
+
+**Gate channel full:**
+- Logs warning for affected gate
+- Continues with other gates
+- Returns last error encountered
+
+**Client disconnection:**
+- Gate skips disconnected clients
+- No error returned (best-effort delivery)
+
+### 12.6 Testing
+
+**Unit tests:**
+- `cluster/cluster_broadcast_test.go`: Tests cluster-level broadcast
+- `gate/gate_test.go`: Tests gate-level broadcast and fan-out
+
+**Integration tests:**
+- End-to-end broadcast validation across multiple gates and clients
+
+---
+
+## 13. Summary
 
 **Benefits:**
 - ✅ **Reduced Network Traffic**: O(gates) instead of O(clients)
 - ✅ **Lower CPU Usage**: Fewer serialization/deserialization operations
 - ✅ **Improved Scalability**: Handle large-scale broadcasts efficiently
 - ✅ **Simple Refactor**: Unified API with slice parameter
+- ✅ **Broadcast Support**: Easy server-wide announcements
 
 **Impact:**
 - **High-impact** for chat, game, notification systems
 - **Breaking change** requires code updates in applications
 - **Clear migration** path with better performance
+- **Broadcast feature** enables efficient global messaging
 
-**Next Steps:**
-1. Prototype implementation
-2. Performance benchmarking
-3. Review and approval
-4. Phased rollout
+**Implementation Status:**
+- ✅ Protocol changes (ClientMessageEnvelope with repeated client_ids)
+- ✅ Gate-side implementation (fan-out to clients)
+- ✅ Cluster-side implementation (grouping by gate)
+- ✅ API refactor (PushMessageToClients with []string)
+- ✅ Broadcast API (BroadcastToAllClients)
+- ✅ Unit tests and integration tests
+- ✅ Sample applications updated (chat)

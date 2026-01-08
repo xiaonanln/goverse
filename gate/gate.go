@@ -11,6 +11,7 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/uniqueid"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // GateConfig holds configuration for the gate
@@ -367,7 +368,35 @@ func (g *Gate) handleGateMessage(nodeAddr string, msg *goverse_pb.GateMessage) {
 				metrics.RecordGateDroppedMessage(g.advertiseAddress)
 			}
 		}
+	case *goverse_pb.GateMessage_BroadcastMessage:
+		// Handle broadcast message to all connected clients
+		envelope := m.BroadcastMessage
+		g.logger.Debugf("Received broadcast message from node %s", nodeAddr)
+		g.broadcastToAllClients(envelope.Message)
 	default:
 		g.logger.Warnf("Received unknown message type %v from node %s", msg.Message, nodeAddr)
 	}
+}
+
+// broadcastToAllClients sends a message to all connected clients on this gate
+func (g *Gate) broadcastToAllClients(message *anypb.Any) {
+	if message == nil {
+		g.logger.Warnf("Received nil broadcast message")
+		return
+	}
+
+	g.clientsMu.RLock()
+	defer g.clientsMu.RUnlock()
+
+	clientCount := len(g.clients)
+	g.logger.Infof("Broadcasting message to %d connected client(s)", clientCount)
+
+	for clientID, client := range g.clients {
+		client.PushMessageAny(message)
+		g.logger.Debugf("Broadcast to client %s", clientID)
+		// Record metric for each pushed message
+		metrics.RecordGatePushedMessage(g.advertiseAddress)
+	}
+
+	g.logger.Infof("Broadcast complete: %d messages pushed", clientCount)
 }
