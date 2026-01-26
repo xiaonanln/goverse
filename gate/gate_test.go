@@ -8,6 +8,7 @@ import (
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -924,4 +925,104 @@ func TestGateNotifyClientCountChanged(t *testing.T) {
 	if count := gate.GetClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after unregistration, got %d", count)
 	}
+}
+
+// TestBroadcastToAllClients tests the broadcast functionality
+func TestBroadcastToAllClients(t *testing.T) {
+	t.Parallel()
+
+	gate, err := NewGate(&GateConfig{
+		AdvertiseAddress: "localhost:49999",
+		EtcdAddress:      "localhost:2379",
+	})
+	if err != nil {
+		t.Fatalf("NewGate() returned error: %v", err)
+	}
+	defer gate.Stop()
+
+	ctx := context.Background()
+	err = gate.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gate.Start() returned error: %v", err)
+	}
+
+	// Register multiple clients
+	client1 := gate.Register(ctx)
+	client2 := gate.Register(ctx)
+	client3 := gate.Register(ctx)
+
+	if client1 == nil || client2 == nil || client3 == nil {
+		t.Fatal("Expected client proxies, got nil")
+	}
+
+	// Prepare a test message
+	testMessage := &anypb.Any{
+		TypeUrl: "type.googleapis.com/test.Message",
+		Value:   []byte("broadcast test message"),
+	}
+
+	// Call broadcastToAllClients
+	gate.broadcastToAllClients(testMessage)
+
+	// Verify all clients received the message
+	select {
+	case msg := <-client1.MessageChan():
+		if msg.TypeUrl != testMessage.TypeUrl {
+			t.Errorf("Client1: expected TypeUrl %s, got %s", testMessage.TypeUrl, msg.TypeUrl)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Client1: timeout waiting for broadcast message")
+	}
+
+	select {
+	case msg := <-client2.MessageChan():
+		if msg.TypeUrl != testMessage.TypeUrl {
+			t.Errorf("Client2: expected TypeUrl %s, got %s", testMessage.TypeUrl, msg.TypeUrl)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Client2: timeout waiting for broadcast message")
+	}
+
+	select {
+	case msg := <-client3.MessageChan():
+		if msg.TypeUrl != testMessage.TypeUrl {
+			t.Errorf("Client3: expected TypeUrl %s, got %s", testMessage.TypeUrl, msg.TypeUrl)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Client3: timeout waiting for broadcast message")
+	}
+
+	// Cleanup
+	gate.Unregister(client1.GetID())
+	gate.Unregister(client2.GetID())
+	gate.Unregister(client3.GetID())
+}
+
+// TestBroadcastToAllClients_NoClients tests broadcast with no connected clients
+func TestBroadcastToAllClients_NoClients(t *testing.T) {
+	t.Parallel()
+
+	gate, err := NewGate(&GateConfig{
+		AdvertiseAddress: "localhost:49998",
+		EtcdAddress:      "localhost:2379",
+	})
+	if err != nil {
+		t.Fatalf("NewGate() returned error: %v", err)
+	}
+	defer gate.Stop()
+
+	ctx := context.Background()
+	err = gate.Start(ctx)
+	if err != nil {
+		t.Fatalf("Gate.Start() returned error: %v", err)
+	}
+
+	// Prepare a test message
+	testMessage := &anypb.Any{
+		TypeUrl: "type.googleapis.com/test.Message",
+		Value:   []byte("broadcast test message"),
+	}
+
+	// Call broadcastToAllClients with no clients - should not panic
+	gate.broadcastToAllClients(testMessage)
 }
