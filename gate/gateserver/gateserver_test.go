@@ -420,14 +420,14 @@ func TestGateServerMetrics(t *testing.T) {
 	t.Parallel()
 
 	listenAddr := testutil.GetFreeAddress()
-	httpAddr := testutil.GetFreeAddress()
+	opsAddr := testutil.GetFreeAddress()
 
 	config := &GateServerConfig{
-		ListenAddress:     listenAddr,
-		AdvertiseAddress:  listenAddr,
-		HTTPListenAddress: httpAddr,
-		EtcdAddress:       "localhost:2379",
-		EtcdPrefix:        "/test-gate-metrics",
+		ListenAddress:    listenAddr,
+		AdvertiseAddress: listenAddr,
+		OpsListenAddress: opsAddr,
+		EtcdAddress:      "localhost:2379",
+		EtcdPrefix:       "/test-gate-metrics",
 	}
 
 	server, err := NewGateServer(config)
@@ -446,7 +446,7 @@ func TestGateServerMetrics(t *testing.T) {
 	var resp *http.Response
 	maxRetries := 20
 	for i := 0; i < maxRetries; i++ {
-		resp, err = http.Get("http://" + httpAddr + "/metrics")
+		resp, err = http.Get("http://" + opsAddr + "/metrics")
 		if err == nil {
 			break
 		}

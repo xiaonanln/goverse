@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xiaonanln/goverse/cluster"
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -264,13 +265,21 @@ func TestHandleDeleteObject_PathParsing(t *testing.T) {
 func TestSetupHTTPRoutes(t *testing.T) {
 	gs := &GateServer{}
 
-	mux := gs.setupHTTPRoutes()
-	if mux == nil {
-		t.Fatalf("setupHTTPRoutes returned nil")
-	}
+	t.Run("setupHTTPClientRoutes", func(t *testing.T) {
+		mux := gs.setupHTTPClientRoutes()
+		if mux == nil {
+			t.Fatalf("setupHTTPClientRoutes returned nil")
+		}
+		// Verify the mux is not nil - actual route handlers are tested in other test functions
+	})
 
-	// Verify the mux is not nil - that's all we can test without a full setup
-	// The actual route handlers are tested in other test functions
+	t.Run("setupHTTPOpsRoutes", func(t *testing.T) {
+		mux := gs.setupHTTPOpsRoutes()
+		if mux == nil {
+			t.Fatalf("setupHTTPOpsRoutes returned nil")
+		}
+		// Verify the mux is not nil - actual route handlers are tested in other test functions
+	})
 }
 
 func TestHandleEventsStream_MethodNotAllowed(t *testing.T) {
@@ -440,9 +449,9 @@ func TestWriteSSEEvent(t *testing.T) {
 }
 
 func TestPprofEndpoints(t *testing.T) {
-	// Test that pprof endpoints are properly registered
+	// Test that pprof endpoints are properly registered in ops routes
 	gs := &GateServer{}
-	mux := gs.setupHTTPRoutes()
+	mux := gs.setupHTTPOpsRoutes()
 
 	tests := []struct {
 		name           string
@@ -545,4 +554,180 @@ func TestHandleHealthz(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSeparateServerRoutes(t *testing.T) {
+	// Test that client API and ops endpoints are properly separated by checking
+	// that routes are registered in the appropriate mux
+	gs := &GateServer{
+		cluster: &cluster.Cluster{}, // Need cluster for ready endpoint
+	}
+	gs.stopped.Store(false) // Mark as running for healthz/ready tests
+
+	t.Run("client API routes registered", func(t *testing.T) {
+		mux := gs.setupHTTPClientRoutes()
+		
+		// Verify mux is created
+		if mux == nil {
+			t.Fatal("setupHTTPClientRoutes returned nil")
+		}
+	})
+
+	t.Run("ops routes registered", func(t *testing.T) {
+		mux := gs.setupHTTPOpsRoutes()
+		
+		// Verify mux is created
+		if mux == nil {
+			t.Fatal("setupHTTPOpsRoutes returned nil")
+		}
+		
+		// Test only healthz endpoint as ready requires cluster to be ready
+		t.Run("healthz", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			
+			if w.Code != http.StatusOK {
+				t.Errorf("healthz: expected status %d, got %d", http.StatusOK, w.Code)
+			}
+		})
+	})
+
+	t.Run("client API should not have ops endpoints", func(t *testing.T) {
+		mux := gs.setupHTTPClientRoutes()
+
+		// Test that ops endpoints are NOT in client API
+		opsEndpoints := []string{
+			"/healthz",
+			"/ready",
+			"/metrics",
+		}
+
+		for _, endpoint := range opsEndpoints {
+			req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			// We expect 404 for ops endpoints in client API mux
+			if w.Code != http.StatusNotFound {
+				t.Errorf("Client API should not have ops endpoint %s, but got status %d", endpoint, w.Code)
+			}
+		}
+	})
+
+	t.Run("ops should not have client API endpoints", func(t *testing.T) {
+		mux := gs.setupHTTPOpsRoutes()
+
+		// Test that client API endpoints are NOT in ops
+		clientEndpoints := []string{
+			"/api/v1/objects/call/Type/id/method",
+			"/api/v1/objects/create/Type/id",
+			"/api/v1/objects/delete/id",
+			"/api/v1/events/stream",
+		}
+
+		for _, endpoint := range clientEndpoints {
+			req := httptest.NewRequest(http.MethodPost, endpoint, nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			// We expect 404 for client API endpoints in ops mux
+			if w.Code != http.StatusNotFound {
+				t.Errorf("Ops should not have client API endpoint %s, but got status %d", endpoint, w.Code)
+			}
+		}
+	})
+}
+
+func TestHandleReady(t *testing.T) {
+	// Test the /ready endpoint
+	// Note: Full cluster readiness testing is done in integration tests
+	// as it requires a real cluster with etcd
+	tests := []struct {
+		name           string
+		method         string
+		stopped        bool
+		expectedStatus int
+	}{
+		{
+			name:           "GET when stopped",
+			method:         http.MethodGet,
+			stopped:        true,
+			expectedStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name:           "POST not allowed",
+			method:         http.MethodPost,
+			stopped:        false,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gs := &GateServer{
+				cluster: &cluster.Cluster{}, // Empty cluster for unit testing
+			}
+			if tt.stopped {
+				gs.stopped.Store(true)
+			}
+
+			req := httptest.NewRequest(tt.method, "/ready", nil)
+			w := httptest.NewRecorder()
+
+			gs.handleReady(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				t.Fatalf("Expected status %d, got %d. Body: %s", tt.expectedStatus, resp.StatusCode, string(bodyBytes))
+			}
+		})
+	}
+}
+
+func TestSeparatePortMode(t *testing.T) {
+	// Test that when both HTTPListenAddress and OpsListenAddress are set,
+	// they are served on separate ports
+	gs := &GateServer{
+		config: &GateServerConfig{
+			HTTPListenAddress: ":8080",
+			OpsListenAddress:  ":9090",
+		},
+	}
+	gs.stopped.Store(false)
+
+	// Verify both muxes can be created
+	clientMux := gs.setupHTTPClientRoutes()
+	if clientMux == nil {
+		t.Fatal("setupHTTPClientRoutes returned nil")
+	}
+	
+	opsMux := gs.setupHTTPOpsRoutes()
+	if opsMux == nil {
+		t.Fatal("setupHTTPOpsRoutes returned nil")
+	}
+	
+	// Test that they serve different endpoints
+	t.Run("client mux should not have ops endpoints", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		w := httptest.NewRecorder()
+		clientMux.ServeHTTP(w, req)
+		
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Client mux should not serve /healthz, got status %d", w.Code)
+		}
+	})
+	
+	t.Run("ops mux should not have client endpoints", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/objects/call/Type/id/method", nil)
+		w := httptest.NewRecorder()
+		opsMux.ServeHTTP(w, req)
+		
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Ops mux should not serve client API, got status %d", w.Code)
+		}
+	})
 }
