@@ -14,9 +14,9 @@ These must be fixed before any K8s deployment can work correctly.
 
 **Problem**: K8s node manifests (`k8s/nodes/statefulset.yaml`) reference `/healthz` and `/ready` on port 8080, but the node server (`server/server.go`) only exposes `/metrics` on its HTTP listener. Liveness and readiness probes will fail.
 
-- [ ] Add `/healthz` endpoint to node's metrics HTTP server (simple alive check, return 200)
-- [ ] Add `/ready` endpoint to node's metrics HTTP server (check cluster connection, shard ownership, not shutting down)
-- [ ] Add `/ready` endpoint to inspector (`cmd/inspector/inspectserver/`) — currently only has `/healthz`
+- [x] Add `/healthz` endpoint to node's metrics HTTP server (simple alive check, return 200)
+- [x] Add `/ready` endpoint to node's metrics HTTP server (check cluster connection, shard ownership, not shutting down)
+- [x] Add `/ready` endpoint to inspector (`cmd/inspector/inspectserver/`) — currently only has `/healthz`
 
 Gate already has both `/healthz` and `/ready` on its ops port (`gate/gateserver/http_handler.go`).
 

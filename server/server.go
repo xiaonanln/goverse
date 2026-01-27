@@ -182,6 +182,26 @@ func (server *Server) Run(ctx context.Context) error {
 	if server.config.MetricsListenAddress != "" {
 		mux := http.NewServeMux()
 
+		// Health check endpoint (liveness probe)
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+		})
+
+		// Readiness check endpoint (readiness probe)
+		mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+			if !server.cluster.IsReady() {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte(`{"status":"not ready"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ready"}`))
+		})
+
 		// Prometheus metrics endpoint
 		mux.Handle("/metrics", promhttp.Handler())
 
