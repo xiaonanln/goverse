@@ -1,28 +1,60 @@
-# Goverse - Claude Code Rules
+# CLAUDE.md
 
-Goverse is a **distributed object runtime for Go** implementing the **virtual actor model**. Objects are stateful entities with unique IDs. The runtime handles placement, routing, lifecycle, and fault-tolerance using etcd for coordination and a fixed 8192-shard model.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Key Components
+## Project Overview
 
+Goverse is a **distributed object runtime for Go** implementing the **virtual actor model** (inspired by Orleans). Objects are stateful entities with unique IDs. The runtime handles placement, routing, lifecycle, and fault-tolerance using etcd for coordination and a fixed 8192-shard model.
+
+## Architecture
+
+**Node + Gate** architecture:
+- **Node** hosts distributed objects, manages lifecycle, handles inter-node routing via gRPC
+- **Gate** accepts client connections (gRPC and HTTP REST), routes calls to the correct node
+- **Cluster** orchestrates nodes/gates, manages leadership election via etcd, maintains shard-to-node mapping
+- **Sharding** uses FNV-1a hash: `hash(objectID) % numShards` to determine object placement
+
+Key packages:
 - **node/** - Object lifecycle, management, per-object locking
-- **cluster/** - Leadership, shard mapping, node coordination
-- **gate/** - Gate for client connections (separate from node)
-- **server/** - Node gRPC server (Goverse service only)
-- **goverseapi/** - High-level API wrappers
-- **proto/** - Protocol definitions
-- **docs/RELIABLE_CALLS_DESIGN.md** - Reliable call design doc
+- **cluster/** - Leadership, shard mapping, node coordination (sub-packages: `consensusmanager/`, `sharding/`, `nodeconnections/`, `shardlock/`)
+- **gate/** - Client connections, separate binary (`cmd/gate`)
+- **server/** - High-level node server wrapper (Node + Cluster + metrics + pprof)
+- **goverseapi/** - Public API: `RegisterObjectType()`, `CreateObject()`, `CallObject()`, `NewServerWithConfig()`
+- **object/** - Base object types, persistence interface
+- **proto/** - Core protobuf definitions
+- **util/testutil/** - Test helpers (ports, clusters, sharding, mocks)
+- **util/protohelper/** - Proto message conversion utilities
+
+Object model:
+```go
+type MyObject struct {
+    goverseapi.BaseObject
+    mu sync.Mutex
+}
+goverseapi.RegisterObjectType((*MyObject)(nil))
+goverseapi.CreateObject(ctx, "MyObject", "uniqueId", nil)
+resp, _ := goverseapi.CallObject(ctx, "MyObject-id", "Method", req)
+```
 
 ## Build & Test
 
 **Always compile protos first** before building or testing:
 ```bash
-# Windows (this is a Windows project)
+# Windows (primary dev environment)
 .\script\win\compile-proto.cmd
 go build ./...
 go test -v -p 1 ./...
+
+# Linux/macOS
+./script/compile-proto.sh
 ```
 
-Proto files: `proto/goverse.proto`, `gate/proto/gate.proto`
+Run a single test:
+```bash
+go test -v -run TestName ./package/...
+```
+
+Proto files: `proto/goverse.proto`, `gate/proto/gate.proto`, `cmd/inspector/proto/inspector.proto`
 
 ## Code Conventions
 
@@ -30,7 +62,7 @@ Proto files: `proto/goverse.proto`, `gate/proto/gate.proto`
 - Remove deprecated methods entirely (no deprecation notices)
 - Use `sync.Mutex` in objects, lock at method start with `defer unlock()`
 - Use `context.Context` for cancellation/timeouts
-- Log via `util/logger`
+- Log via `util/logger` (e.g., `logger.NewLogger("ComponentName")`)
 - Keep code robust, simple, no over-design
 - Watch out for concurrency issues - review all shared state access
 
@@ -120,3 +152,11 @@ Use `testutil.WaitForClustersReady()` to ensure all clusters are fully ready bef
 - JSON from backend uses snake_case; JS uses camelCase - verify both sides match
 - D3 `.data()` with key function keeps OLD bound data on existing elements; look up fresh data from `graphData` source array or force re-bind
 - When adding new object fields: update both `buildGraphNodesAndLinks()` and `updateGraphIncremental()`
+
+## Key Documentation
+
+- **docs/RELIABLE_CALLS_DESIGN.md** - Exactly-once call semantics design
+- **docs/GET_STARTED.md** - Core concepts and quick start
+- **docs/GOVERSEAPI.md** - Public API reference
+- **docs/CONFIGURATION.md** - YAML configuration reference
+- **docs/design/HTTP_GATE.md** - REST/HTTP endpoint details
