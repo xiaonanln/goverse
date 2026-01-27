@@ -174,6 +174,124 @@ etcd &
 - All shell scripts in `/app/script` are executable
 - The working directory is set to `/app`
 
+## Dockerfile.node
+
+The `Dockerfile.node` provides a production-ready container for Goverse node applications.
+
+Unlike gate and inspector, there is no pre-built node binary. A goverse node is **your own Go application** that imports goverse as a library, registers object types, and runs a server. This Dockerfile builds your application and packages it into a minimal container.
+
+### How It Works
+
+The Dockerfile uses a build argument `APP_PATH` to specify which Go package to compile. Point it at your application's `main` package:
+
+```bash
+docker build -f docker/Dockerfile.node \
+  --build-arg APP_PATH=./cmd/myapp \
+  -t my-goverse-node .
+```
+
+If no `APP_PATH` is provided, it defaults to `./samples/chat/server`.
+
+### Writing a Node Application
+
+A minimal node application looks like this:
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/xiaonanln/goverse/goverseapi"
+)
+
+type MyObject struct {
+    goverseapi.BaseObject
+}
+
+func main() {
+    goverseapi.RegisterObjectType((*MyObject)(nil))
+    server := goverseapi.NewServer()
+    if err := server.Run(context.Background()); err != nil {
+        panic(err)
+    }
+}
+```
+
+Place this in your project (e.g. `cmd/myapp/main.go`), then build:
+
+```bash
+docker build -f docker/Dockerfile.node \
+  --build-arg APP_PATH=./cmd/myapp \
+  -t myapp-node .
+```
+
+### Features
+
+- **Multi-stage build**: Uses Go 1.25 for compilation and Alpine Linux for minimal runtime
+- **Security**: Runs as non-root user (uid/gid 1000)
+- **Health checks**: Includes built-in health check using `/healthz` endpoint
+- **Small size**: Alpine + static binary
+- **Ports**:
+  - 50051: gRPC port for inter-node communication
+  - 8080: HTTP port for metrics, health checks, and pprof
+
+### Building the Default Image
+
+```bash
+docker build -f docker/Dockerfile.node -t goverse-node:latest .
+```
+
+This builds the chat sample server (`samples/chat/server`).
+
+### Running the Node Container
+
+```bash
+docker run -d \
+  --name goverse-node \
+  -p 50051:50051 \
+  -p 8080:8080 \
+  -v /path/to/config.yaml:/etc/goverse/config.yaml \
+  goverse-node:latest \
+  --config=/etc/goverse/config.yaml
+```
+
+### Health Checks
+
+The node server exposes health endpoints on its HTTP port:
+
+```bash
+# Liveness probe — returns 200 if the process is alive
+curl http://localhost:8080/healthz
+
+# Readiness probe — returns 200 when the node has joined the cluster
+curl http://localhost:8080/ready
+```
+
+### Available Node Endpoints
+
+- `/healthz` - Liveness check (always 200 when running)
+- `/ready` - Readiness check (200 when cluster is joined and node is not shutting down)
+- `/metrics` - Prometheus metrics
+- `/debug/pprof/*` - pprof profiling endpoints
+
+### CI/CD
+
+The node image is automatically built and pushed to Docker Hub via GitHub Actions (`.github/workflows/docker.yml`) on every push to `main` or `develop` branches.
+
+Images are tagged with:
+- `latest` - Latest build from the branch
+- `<short-sha>` - Specific commit (first 7 chars of commit SHA)
+
+### Kubernetes Deployment
+
+See `k8s/nodes/statefulset.yaml` for Kubernetes deployment manifests. The K8s manifests inject environment variables for node identity and advertise addresses via the downward API.
+
+### Security Considerations
+
+- Container runs as non-root user (goverse:goverse, uid:gid 1000:1000)
+- Only exposes necessary ports
+- Static binary with stripped symbols
+
 ## Dockerfile.gate
 
 The `Dockerfile.gate` provides a production-ready container for the Goverse gate component.
