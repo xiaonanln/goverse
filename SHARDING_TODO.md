@@ -8,33 +8,28 @@ Tasks for improving the sharding system in Goverse, sorted by priority.
 
 ## P0 — Correctness & Reliability
 
-### Detect and recover stuck shard migrations
-
-**Problem**: If a shard's `TargetNode` is changed but the old node crashes before releasing and the new node can't claim (e.g., it also crashes), the shard stays in a limbo state (`TargetNode != CurrentNode`, `CurrentNode` dead) with no automatic recovery beyond the leader reassigning target. There is no alerting or detection for shards stuck in migration for an extended period.
-
-- [ ] Add a metric tracking how long each shard has been in migration state (`TargetNode != CurrentNode`)
-- [ ] Add a configurable timeout after which stuck migrations are logged at error level
-- [ ] Consider automatic leader intervention for shards stuck beyond the timeout (reassign target to an alive node that can claim)
-
-### Add shard release during graceful shutdown
-
-**Problem**: `Cluster.Stop()` cancels the management loop and unregisters from etcd, but does not explicitly release shard ownership before shutting down. The current `ReleaseShardsForNode` only runs during the management loop when `TargetNode != localNode`. On shutdown, shard ownership transfers rely entirely on the leader detecting the dead node and reassigning.
-
-- [ ] Call `ReleaseShardsForNode` (or equivalent) during `Cluster.Stop()` before unregistering, so other nodes can claim shards faster
-- [ ] Add a timeout to the release operation so shutdown is not blocked indefinitely
-- [ ] Ensure no new objects can be created on this node while shard release is in progress
-
-### Add retry logic for etcd shard mapping writes
-
-**Problem**: `storeShardMapping` makes a single attempt per shard using an etcd transaction with `ModRevision` check. On conflict or transient failure, the write is logged and skipped with no retry. This can leave shard state inconsistent until the next management cycle.
-
-- [ ] Add configurable retry with backoff for transient etcd errors (connection issues, timeouts)
-- [ ] Distinguish between transient errors (retry) and ModRevision conflicts (skip, will resolve next cycle)
-- [ ] Add a metric for shard write failures by error category
+(No critical correctness issues identified)
 
 ---
 
 ## P1 — Observability
+
+### Add optional shard release for permanent shutdown
+
+**Problem**: `Cluster.Stop()` does not distinguish between temporary shutdown (restart/upgrade) and permanent shutdown (scale-down). For temporary shutdowns, keeping shard assignments in etcd allows fast reclaim on restart. For permanent shutdowns, proactively releasing shards would reduce recovery time. Currently all shutdowns rely on leader detection and reassignment.
+
+- [ ] Add a shutdown mode parameter: `graceful` (release shards) vs `fast` (keep assignments for restart)
+- [ ] For graceful shutdown, release shards before unregistering, with configurable timeout
+- [ ] Ensure no new objects can be created on this node during graceful shutdown
+- [ ] Document when to use each shutdown mode (K8s rolling updates use fast, scale-down uses graceful)
+
+### Detect and monitor stuck shard migrations
+
+**Problem**: While the leader automatically reassigns shards from dead nodes, there is no visibility into how long shards spend in migration state or alerting when migrations take abnormally long. This makes it difficult to detect slow migrations or debug migration issues.
+
+- [ ] Add a metric tracking how long each shard has been in migration state (`TargetNode != CurrentNode`)
+- [ ] Add a configurable timeout after which stuck migrations are logged at error level
+- [ ] Add histogram tracking migration duration distribution across all shards
 
 ### Add shard operation latency metrics
 
@@ -70,6 +65,12 @@ Tasks for improving the sharding system in Goverse, sorted by priority.
 ---
 
 ## P2 — Feature Improvements
+
+### Add metrics for etcd shard mapping write failures
+
+**Problem**: `storeShardMapping` can fail due to `ModRevision` conflicts or transient etcd errors. Failures are logged but not tracked in metrics, making it difficult to monitor the health of shard mapping operations.
+
+- [ ] Add a metric for shard write failures by error category (ModRevision conflict, connection error, timeout, etc.)
 
 ### Load-aware shard rebalancing
 
