@@ -206,6 +206,9 @@ func (s *InspectorServer) createHTTPHandler() http.Handler {
 	// Health check endpoint
 	mux.HandleFunc("/healthz", s.handleHealthz)
 
+	// Readiness check endpoint
+	mux.HandleFunc("/ready", s.handleReady)
+
 	// pprof endpoints for profiling
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -654,6 +657,30 @@ func (s *InspectorServer) handleHealthz(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "healthy",
+	})
+}
+
+// handleReady handles GET /ready for readiness checks
+func (s *InspectorServer) handleReady(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if consensus manager is available and ready
+	if s.consensusManager == nil || !s.consensusManager.IsReady() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status": "not ready",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "ready",
 	})
 }
 

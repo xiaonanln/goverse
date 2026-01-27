@@ -598,6 +598,57 @@ func TestHandleHealthz(t *testing.T) {
 	}
 }
 
+// TestHandleReady_NoConsensusManager tests that /ready returns 503 when consensusManager is nil
+func TestHandleReady_NoConsensusManager(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503, got %d", rr.Code)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+
+	if result["status"] != "not ready" {
+		t.Fatalf("Expected status 'not ready', got '%s'", result["status"])
+	}
+}
+
+// TestHandleReady_MethodNotAllowed tests that non-GET requests to /ready are rejected
+func TestHandleReady_MethodNotAllowed(t *testing.T) {
+	pg := graph.NewGoverseGraph()
+
+	server := New(pg, Config{
+		GRPCAddr:  ":0",
+		HTTPAddr:  ":0",
+		StaticDir: ".",
+	})
+
+	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/ready", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405 for POST, got %d", rr.Code)
+	}
+}
+
 // TestHandleHealthz_MethodNotAllowed tests that non-GET requests to /healthz are rejected
 func TestHandleHealthz_MethodNotAllowed(t *testing.T) {
 	pg := graph.NewGoverseGraph()
