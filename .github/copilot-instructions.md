@@ -263,7 +263,8 @@ objC := testutil.GetObjectIDForShard(10, "TestObjectC")  // Different shard
 - Use `t.Fatalf()` not `t.Errorf()` (fail fast)
 - Exception: Use `t.Error*()` from goroutines
 - Table-driven tests with `t.Run()`
-- Skip long tests (>10s) in short mode: `if testing.Short() { t.Skip() }`
+- Skip long tests (>1s) in short mode: `if testing.Short() { t.Skip() }`. Do NOT skip fast tests (<1s) even if they use etcd.
+- **Prefer real dependencies over mocks**: When a constructor already wires up a component (e.g., inspector's `New()` creates a `ConsensusManager` when given `EtcdAddr`), pass the real config in integration tests instead of introducing mock interfaces or test-only abstractions.
 
 ## Inspector UI (cmd/inspector/web)
 
