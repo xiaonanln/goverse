@@ -135,4 +135,3 @@ func TestPushMessageToClient_MultipleClients(t *testing.T) {
 		t.Fatal("Expected error when pushing to unconnected gates")
 	}
 }
-

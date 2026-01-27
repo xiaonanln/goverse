@@ -1026,7 +1026,7 @@ func categorizeEtcdError(err error) string {
 	if err == nil {
 		return "other"
 	}
-	
+
 	// Check for context errors (timeout/cancellation)
 	if err == context.DeadlineExceeded {
 		return "timeout"
@@ -1034,7 +1034,7 @@ func categorizeEtcdError(err error) string {
 	if err == context.Canceled {
 		return "timeout"
 	}
-	
+
 	// Check error message for common connection errors
 	errMsg := err.Error()
 	if strings.Contains(errMsg, "connection refused") ||
@@ -1045,13 +1045,13 @@ func categorizeEtcdError(err error) string {
 		strings.Contains(errMsg, "etcd client not connected") {
 		return "connection_error"
 	}
-	
+
 	// Check for context deadline exceeded in error message
 	if strings.Contains(errMsg, "deadline exceeded") ||
 		strings.Contains(errMsg, "context deadline exceeded") {
 		return "timeout"
 	}
-	
+
 	return "other"
 }
 
@@ -1130,7 +1130,7 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 				// The condition failed - the shard was modified by another process
 				// Record ModRevision conflict metric
 				metrics.RecordShardMappingWriteFailure("modrevision_conflict")
-				
+
 				// Retrieve current ModRevision for diagnostics with deadline
 				getCtx, getCancel := etcdmanager.WithEtcdDeadline(ctx)
 				defer getCancel()
