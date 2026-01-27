@@ -48,3 +48,4 @@ etcd-*/
 *.log
 *.zip
 .vscode/**
+/nul
