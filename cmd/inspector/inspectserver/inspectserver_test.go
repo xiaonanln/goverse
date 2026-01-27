@@ -12,6 +12,8 @@ import (
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
+	"github.com/xiaonanln/goverse/server"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 // TestSSEEndpoint_InitialState tests that the SSE endpoint sends initial state
@@ -579,6 +581,129 @@ func TestHandleHealthz(t *testing.T) {
 	})
 
 	handler := server.createHTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", rr.Code)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+
+	if result["status"] != "healthy" {
+		t.Fatalf("Expected status 'healthy', got '%s'", result["status"])
+	}
+}
+
+// TestHandleReady_WithEtcd tests that /ready returns 200 when connected to etcd and cluster is ready
+func TestHandleReady_WithEtcd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	// Start a node server so the cluster assigns shards and becomes ready
+	listenAddr := testutil.GetFreeAddress()
+	srv, err := server.NewServer(&server.ServerConfig{
+		ListenAddress:             listenAddr,
+		AdvertiseAddress:          listenAddr,
+		EtcdAddress:               "localhost:2379",
+		EtcdPrefix:                etcdPrefix,
+		NodeStabilityDuration:     3 * time.Second,
+		ShardMappingCheckInterval: 1 * time.Second,
+		NumShards:                 testutil.TestNumShards,
+	})
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- srv.Run(ctx)
+	}()
+
+	// Create inspector server connected to the same etcd
+	pg := graph.NewGoverseGraph()
+	inspectorSrv := New(pg, Config{
+		GRPCAddr:   ":0",
+		HTTPAddr:   ":0",
+		StaticDir:  ".",
+		EtcdAddr:   "localhost:2379",
+		EtcdPrefix: etcdPrefix,
+		NumShards:  testutil.TestNumShards,
+	})
+	defer inspectorSrv.Shutdown()
+
+	handler := inspectorSrv.createHTTPHandler()
+
+	// Poll /ready until the cluster becomes ready
+	var lastStatus int
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		lastStatus = rr.Code
+		if lastStatus == http.StatusOK {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if lastStatus != http.StatusOK {
+		t.Fatalf("Expected /ready to return 200 after cluster is ready, got %d", lastStatus)
+	}
+
+	// Verify the response body
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	var result map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+
+	if result["status"] != "ready" {
+		t.Fatalf("Expected status 'ready', got '%s'", result["status"])
+	}
+
+	cancel()
+	select {
+	case err := <-serverDone:
+		if err != nil && err != context.Canceled {
+			t.Logf("Server stopped with error: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Server did not stop within timeout")
+	}
+}
+
+// TestHandleHealthz_WithEtcd tests that /healthz returns 200 when connected to etcd
+func TestHandleHealthz_WithEtcd(t *testing.T) {
+	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	pg := graph.NewGoverseGraph()
+	inspectorSrv := New(pg, Config{
+		GRPCAddr:   ":0",
+		HTTPAddr:   ":0",
+		StaticDir:  ".",
+		EtcdAddr:   "localhost:2379",
+		EtcdPrefix: etcdPrefix,
+		NumShards:  testutil.TestNumShards,
+	})
+	defer inspectorSrv.Shutdown()
+
+	handler := inspectorSrv.createHTTPHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rr := httptest.NewRecorder()
