@@ -1020,6 +1020,41 @@ func (cm *ConsensusManager) GetNodeForShard(shardID int) (string, error) {
 	return shardInfo.CurrentNode, nil
 }
 
+// categorizeEtcdError categorizes an etcd error into one of the predefined error types
+// for metrics tracking: timeout, connection_error, or other
+func categorizeEtcdError(err error) string {
+	if err == nil {
+		return "other"
+	}
+	
+	// Check for context errors (timeout/cancellation)
+	if err == context.DeadlineExceeded {
+		return "timeout"
+	}
+	if err == context.Canceled {
+		return "timeout"
+	}
+	
+	// Check error message for common connection errors
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "connection refused") ||
+		strings.Contains(errMsg, "connection reset") ||
+		strings.Contains(errMsg, "broken pipe") ||
+		strings.Contains(errMsg, "no such host") ||
+		strings.Contains(errMsg, "network is unreachable") ||
+		strings.Contains(errMsg, "etcd client not connected") {
+		return "connection_error"
+	}
+	
+	// Check for context deadline exceeded in error message
+	if strings.Contains(errMsg, "deadline exceeded") ||
+		strings.Contains(errMsg, "context deadline exceeded") {
+		return "timeout"
+	}
+	
+	return "other"
+}
+
 // storeShardMapping stores a new shard mapping in etcd and updates the in-memory state
 // Each shard is stored as an individual key: /goverse/shard/<shard-id> with value in format "targetNode,currentNode"
 // The function uses conditional puts based on ModRevision to ensure consistency.
@@ -1082,6 +1117,9 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 			resp, err := txn.Commit()
 
 			if err != nil {
+				// Categorize error and record metric
+				errorType := categorizeEtcdError(err)
+				metrics.RecordShardMappingWriteFailure(errorType)
 				return fmt.Errorf("failed to store shard %d: %w", id, err)
 			}
 
@@ -1090,6 +1128,9 @@ func (cm *ConsensusManager) storeShardMapping(ctx context.Context, updateShards 
 
 			if !resp.Succeeded {
 				// The condition failed - the shard was modified by another process
+				// Record ModRevision conflict metric
+				metrics.RecordShardMappingWriteFailure("modrevision_conflict")
+				
 				// Retrieve current ModRevision for diagnostics with deadline
 				getCtx, getCancel := etcdmanager.WithEtcdDeadline(ctx)
 				defer getCancel()
