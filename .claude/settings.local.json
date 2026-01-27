@@ -3,7 +3,10 @@
     "allow": [
       "Bash(go test:*)",
       "Bash(go build:*)",
-      "Bash(gh issue:*)"
+      "Bash(gh issue:*)",
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(git add:*)"
     ]
   }
 }
