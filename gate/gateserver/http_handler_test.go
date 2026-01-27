@@ -566,7 +566,7 @@ func TestSeparateServerRoutes(t *testing.T) {
 
 	t.Run("client API routes registered", func(t *testing.T) {
 		mux := gs.setupHTTPClientRoutes()
-		
+
 		// Verify mux is created
 		if mux == nil {
 			t.Fatal("setupHTTPClientRoutes returned nil")
@@ -575,18 +575,18 @@ func TestSeparateServerRoutes(t *testing.T) {
 
 	t.Run("ops routes registered", func(t *testing.T) {
 		mux := gs.setupHTTPOpsRoutes()
-		
+
 		// Verify mux is created
 		if mux == nil {
 			t.Fatal("setupHTTPOpsRoutes returned nil")
 		}
-		
+
 		// Test only healthz endpoint as ready requires cluster to be ready
 		t.Run("healthz", func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-			
+
 			if w.Code != http.StatusOK {
 				t.Errorf("healthz: expected status %d, got %d", http.StatusOK, w.Code)
 			}
@@ -704,28 +704,28 @@ func TestSeparatePortMode(t *testing.T) {
 	if clientMux == nil {
 		t.Fatal("setupHTTPClientRoutes returned nil")
 	}
-	
+
 	opsMux := gs.setupHTTPOpsRoutes()
 	if opsMux == nil {
 		t.Fatal("setupHTTPOpsRoutes returned nil")
 	}
-	
+
 	// Test that they serve different endpoints
 	t.Run("client mux should not have ops endpoints", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 		w := httptest.NewRecorder()
 		clientMux.ServeHTTP(w, req)
-		
+
 		if w.Code != http.StatusNotFound {
 			t.Errorf("Client mux should not serve /healthz, got status %d", w.Code)
 		}
 	})
-	
+
 	t.Run("ops mux should not have client endpoints", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/objects/call/Type/id/method", nil)
 		w := httptest.NewRecorder()
 		opsMux.ServeHTTP(w, req)
-		
+
 		if w.Code != http.StatusNotFound {
 			t.Errorf("Ops mux should not serve client API, got status %d", w.Code)
 		}

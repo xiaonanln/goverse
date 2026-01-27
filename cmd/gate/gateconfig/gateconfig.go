@@ -21,16 +21,16 @@ const (
 // Loader handles parsing of command-line flags and config file loading.
 // It can be instantiated with a custom FlagSet for testing.
 type Loader struct {
-	fs              *flag.FlagSet
-	configPath      *string
-	gateID          *string
-	listenAddr      *string
-	advertiseAddr   *string
-	httpListenAddr  *string
-	opsListenAddr   *string
-	etcdAddr        *string
-	etcdPrefix      *string
-	inspectorAddr   *string
+	fs             *flag.FlagSet
+	configPath     *string
+	gateID         *string
+	listenAddr     *string
+	advertiseAddr  *string
+	httpListenAddr *string
+	opsListenAddr  *string
+	etcdAddr       *string
+	etcdPrefix     *string
+	inspectorAddr  *string
 }
 
 // NewLoader creates a new Loader with flags registered on the provided FlagSet.

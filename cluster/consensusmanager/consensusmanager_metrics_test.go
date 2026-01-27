@@ -258,3 +258,60 @@ func TestUpdateShardMetrics_MultipleMigrations(t *testing.T) {
 		t.Fatalf("Expected migrating shards count to be 3.0, got %f", migratingCount)
 	}
 }
+
+func TestShardMappingWriteFailureMetrics_ModRevisionConflict(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+
+	// Record a ModRevision conflict
+	metrics.RecordShardMappingWriteFailure("modrevision_conflict")
+
+	// Verify the metric was incremented
+	count := testutil.ToFloat64(metrics.ShardMappingWriteFailuresTotal.WithLabelValues("modrevision_conflict"))
+	if count != 1.0 {
+		t.Fatalf("Expected modrevision_conflict count to be 1.0, got %f", count)
+	}
+}
+
+func TestShardMappingWriteFailureMetrics_ConnectionError(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+
+	// Record connection errors
+	metrics.RecordShardMappingWriteFailure("connection_error")
+	metrics.RecordShardMappingWriteFailure("connection_error")
+
+	// Verify the metric was incremented twice
+	count := testutil.ToFloat64(metrics.ShardMappingWriteFailuresTotal.WithLabelValues("connection_error"))
+	if count != 2.0 {
+		t.Fatalf("Expected connection_error count to be 2.0, got %f", count)
+	}
+}
+
+func TestShardMappingWriteFailureMetrics_Timeout(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+
+	// Record timeout errors
+	metrics.RecordShardMappingWriteFailure("timeout")
+
+	// Verify the metric was incremented
+	count := testutil.ToFloat64(metrics.ShardMappingWriteFailuresTotal.WithLabelValues("timeout"))
+	if count != 1.0 {
+		t.Fatalf("Expected timeout count to be 1.0, got %f", count)
+	}
+}
+
+func TestShardMappingWriteFailureMetrics_Other(t *testing.T) {
+	// Lock metrics to prevent parallel execution with other metrics tests
+	testutilpkg.LockMetrics(t)
+
+	// Record other errors
+	metrics.RecordShardMappingWriteFailure("other")
+
+	// Verify the metric was incremented
+	count := testutil.ToFloat64(metrics.ShardMappingWriteFailuresTotal.WithLabelValues("other"))
+	if count != 1.0 {
+		t.Fatalf("Expected other count to be 1.0, got %f", count)
+	}
+}

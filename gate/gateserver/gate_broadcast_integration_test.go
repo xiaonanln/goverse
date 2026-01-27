@@ -72,7 +72,7 @@ func TestBroadcastToAllClientsIntegration(t *testing.T) {
 	// Connect multiple clients to the gate
 	numClients := 5
 	clients := make([]gate_pb.GateService_RegisterClient, numClients)
-	
+
 	for i := 0; i < numClients; i++ {
 		conn, err := grpc.NewClient(gateAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -209,7 +209,7 @@ func TestBroadcastToAllClients_MultipleGates(t *testing.T) {
 	for i := 0; i < numGates; i++ {
 		gateAddr := testutil.GetFreeAddress()
 		gateAddrs[i] = gateAddr
-		
+
 		gateConfig := &GateServerConfig{
 			AdvertiseAddress: gateAddr,
 			ListenAddress:    gateAddr,
@@ -244,7 +244,7 @@ func TestBroadcastToAllClients_MultipleGates(t *testing.T) {
 	for gateIdx := 0; gateIdx < numGates; gateIdx++ {
 		for clientIdx := 0; clientIdx < clientsPerGate; clientIdx++ {
 			idx := gateIdx*clientsPerGate + clientIdx
-			
+
 			conn, err := grpc.NewClient(gateAddrs[gateIdx], grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("Failed to create grpc client %d: %v", idx, err)

@@ -151,6 +151,15 @@ var (
 		},
 		[]string{"shard"},
 	)
+
+	// ShardMappingWriteFailuresTotal tracks the total number of shard mapping write failures by error type
+	ShardMappingWriteFailuresTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_shard_mapping_write_failures_total",
+			Help: "Total number of shard mapping write failures by error type (modrevision_conflict, connection_error, timeout, other)",
+		},
+		[]string{"error_type"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -253,4 +262,9 @@ func RecordNodeDroppedMessage(node, gate string) {
 // RecordShardMethodCall increments the method call counter for a given shard
 func RecordShardMethodCall(shard int) {
 	ShardMethodCallsTotal.WithLabelValues(fmt.Sprintf("%d", shard)).Inc()
+}
+
+// RecordShardMappingWriteFailure increments the shard mapping write failure counter by error type
+func RecordShardMappingWriteFailure(errorType string) {
+	ShardMappingWriteFailuresTotal.WithLabelValues(errorType).Inc()
 }
