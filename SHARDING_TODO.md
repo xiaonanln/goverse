@@ -66,12 +66,6 @@ Tasks for improving the sharding system in Goverse, sorted by priority.
 
 ## P2 — Feature Improvements
 
-### Add metrics for etcd shard mapping write failures
-
-**Problem**: `storeShardMapping` can fail due to `ModRevision` conflicts or transient etcd errors. Failures are logged but not tracked in metrics, making it difficult to monitor the health of shard mapping operations.
-
-- [ ] Add a metric for shard write failures by error category (ModRevision conflict, connection error, timeout, etc.)
-
 ### Load-aware shard rebalancing
 
 **Problem**: Rebalancing only considers shard count per node. All shards are treated as equal load. A node with 100 shards each holding 1 object is treated the same as a node with 100 shards each holding 1000 objects.
