@@ -15,7 +15,7 @@
 FROM golang:1.25-bookworm AS builder
 
 # Application package path (relative to module root)
-ARG APP_PATH=./examples/cluster_info
+ARG APP_PATH=./samples/chat/server
 
 # Install protobuf compiler
 RUN apt-get update && apt-get install -y \
