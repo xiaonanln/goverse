@@ -24,8 +24,8 @@ Gate already has both `/healthz` and `/ready` on its ops port (`gate/gateserver/
 
 **Problem**: `k8s/nodes/statefulset.yaml` references `goverse/node:latest` but no `docker/Dockerfile.node` exists. Only `Dockerfile.gate` and `Dockerfile.inspector` exist as production images.
 
-- [ ] Create `docker/Dockerfile.node` following the same pattern as `Dockerfile.gate` (multi-stage build, Go 1.25 → Alpine, non-root user goverse:1000, strip symbols)
-- [ ] The node binary entry point is the user's application (not a `cmd/node/` — there is no `cmd/node`). Document how users should build their node image using goverse as a library, or provide a base image pattern.
+- [x] Create `docker/Dockerfile.node` following the same pattern as `Dockerfile.gate` (multi-stage build, Go 1.25 → Alpine, non-root user goverse:1000, strip symbols)
+- [x] The node binary entry point is the user's application (not a `cmd/node/` — there is no `cmd/node`). Document how users should build their node image using goverse as a library, or provide a base image pattern.
 
 ### Create .dockerignore
 
@@ -205,7 +205,7 @@ These items from the original TODO are already implemented:
 ## References
 
 - Existing k8s manifests: `k8s/`
-- Production Dockerfiles: `docker/Dockerfile.gate`, `docker/Dockerfile.inspector`
+- Production Dockerfiles: `docker/Dockerfile.gate`, `docker/Dockerfile.node`, `docker/Dockerfile.inspector`
 - Dev Dockerfile: `docker/Dockerfile.dev`
 - Prometheus metrics: `util/metrics/metrics.go`
 - Server shutdown: `server/server.go`

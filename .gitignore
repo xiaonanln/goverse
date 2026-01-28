@@ -49,3 +49,4 @@ etcd-*/
 *.zip
 .vscode/**
 /nul
+.claude/**

@@ -1,0 +1,68 @@
+# Multi-stage Dockerfile for Goverse Node
+#
+# Unlike gate and inspector, there is no cmd/node/ binary. A goverse node is
+# the user's own Go application that imports goverse as a library. This
+# Dockerfile provides a production-ready build template that users can
+# customise by setting the APP_PATH build argument to their application's
+# Go package path.
+#
+# Usage:
+#   docker build -f docker/Dockerfile.node \
+#     --build-arg APP_PATH=./cmd/myapp \
+#     -t myapp-node .
+
+# Stage 1: Build the node binary
+FROM golang:1.25-bookworm AS builder
+
+# Application package path (relative to module root)
+ARG APP_PATH=./samples/chat/server
+
+# Install protobuf compiler
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy source code (includes go.mod, go.sum, and everything else)
+COPY . .
+
+# Download dependencies, install proto tools, compile protos, and build
+RUN go mod download && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11 && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1 && \
+    ./script/compile-proto.sh && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o node -ldflags="-w -s" ${APP_PATH}
+
+# Stage 2: Create minimal runtime image
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS connections and wget for healthcheck
+RUN apk --no-cache add ca-certificates wget
+
+# Create non-root user
+RUN addgroup -g 1000 goverse && \
+    adduser -D -u 1000 -G goverse goverse
+
+# Set working directory
+WORKDIR /app
+
+# Copy the binary from builder
+COPY --from=builder /build/node /app/node
+
+# Change ownership to non-root user
+RUN chown -R goverse:goverse /app
+
+# Switch to non-root user
+USER goverse
+
+# Expose gRPC and HTTP ports
+EXPOSE 50051 8080
+
+# Health check using the /healthz endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1
+
+# Run the node server
+ENTRYPOINT ["/app/node"]
