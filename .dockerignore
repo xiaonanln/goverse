@@ -9,9 +9,8 @@ docs
 *.md
 !README.md
 
-# Examples and samples
+# Examples (samples are needed for Dockerfile.node default build)
 examples
-samples
 
 # Tests
 tests
@@ -51,10 +50,6 @@ temp
 *.test
 coverage.txt
 coverage.html
-
-# Configuration that shouldn't be in images
-config/*.yaml
-!config/config.yaml.example
 
 # Other development files
 Makefile
