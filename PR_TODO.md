@@ -4,14 +4,67 @@ This document lists pull requests (PRs) that need to be developed for Goverse. E
 
 PRs are organized by category and priority. Cross-references to related TODO files and design documents are included where applicable.
 
+**Important**: This file only contains **pending PRs**. Completed PRs are removed entirely, not marked as done. Design documents track completion status.
+
+## PR Format Guidelines
+
+Each PR should include:
+1. **Title**: Should include priority level (P0/P1/P2/P3) - see priority definitions below
+2. **What**: Brief description of what needs to be done
+3. **Current Situation**: How Goverse currently handles this (or doesn't), key limitations, relevant code locations
+4. **Problems This Causes**: Specific issues numbered list (what breaks, what's inefficient, what's risky)
+5. **Why**: High-level justification for the change
+6. **Suggested Approach**: Brief, directional guidance on addressing the issue (not implementation details)
+7. **Reference**: Related docs/files
+
+**Priority Levels**:
+- **P0**: Critical - Blocks production use or causes data loss/corruption
+- **P1**: High - Significantly impacts production operations or user experience
+- **P2**: Medium - Important for production but has workarounds
+- **P3**: Low - Nice to have, quality of life improvements
+
+See "[P1] Reliable Call Timeout and Expiration" below for reference format.
+
 ---
 
 ## Core System Improvements
 
-### Reliable Calls - Complete Implementation
-**What**: Complete the reliable calls implementation for exactly-once call semantics between objects.  
-**Why**: Distributed systems need exactly-once guarantees to prevent duplicate processing during failures, retries, or network issues. This is critical for operations like financial transactions, inventory updates, or any stateful operation where duplicates cause data corruption.  
-**Reference**: `docs/RELIABLE_CALLS_DESIGN.md` contains full architecture and PR plan.
+### [P1] Reliable Call Timeout and Expiration
+**What**: Add configurable timeout and automatic cleanup for old pending reliable calls (completed, expired, or abandoned).  
+
+**Why**: Without expiration, the `goverse_reliable_calls` table grows indefinitely. Old completed/failed calls consume database storage and slow down queries. Pending calls stuck forever (e.g., object deleted, bad request data) should timeout with clear errors rather than accumulate indefinitely.
+
+**Current Situation - How Timeouts Work Today**:
+- **Context-based timeout**: Reliable calls respect the `context.Context` deadline passed to `ReliableCallObject()`. If the context times out during processing, the caller receives a timeout error.
+- **No database-level timeout**: Once a call is inserted into `goverse_reliable_calls` with status "pending", it stays there forever unless explicitly processed or manually deleted.
+- **Processing timeout with retries**: After triggering `ProcessPendingReliableCalls()`, the node waits for the result with a hardcoded retry mechanism (50 retries × 100ms = 5 seconds max) before querying the database to check call status.
+- **No automatic cleanup**: Completed calls (status "success" or "failed") remain in the database forever. There is no background job to clean up old records.
+- **No TTL for pending calls**: A pending call that never gets processed (e.g., object permanently deleted, corrupted request data, database unavailable during execution) will remain as "pending" indefinitely, consuming storage and appearing in every `GetPendingReliableCalls()` query.
+
+**Problems This Causes**:
+1. **Unbounded table growth**: Every reliable call ever made is stored forever, leading to multi-GB tables in production.
+2. **Query performance degradation**: `GetPendingReliableCalls()` must scan through all pending calls (including very old abandoned ones) to find recent calls for an object.
+3. **No visibility into stuck calls**: Operators cannot distinguish between "call is legitimately waiting to execute" vs "call is abandoned and will never execute".
+4. **Resource leaks**: Long-running or abandoned calls hold database rows indefinitely.
+5. **No operational cleanup tools**: Operators must manually write SQL to delete old records, risking data corruption if they delete pending calls that should still execute.
+
+**Suggested Approach**:
+- Add `expires_at` timestamp column to `goverse_reliable_calls` table (calculated as `created_at + configurable_ttl`)
+- Implement background cleanup job that deletes completed calls older than retention period (e.g., 7 days) and marks expired pending calls as "failed" with timeout error
+- Add configuration for TTL values (separate for pending vs completed calls)
+- Expose cleanup metrics (records deleted, expired calls) for monitoring
+
+**Reference**: `docs/RELIABLE_CALLS_DESIGN.md` documents the current implementation. `node/node.go:536-557` shows the retry logic. `util/postgres/persistence.go` contains all database operations without any cleanup logic.
+
+### Reliable Call Metrics and Observability
+**What**: Add Prometheus metrics for reliable calls: pending count per object, processing latency, success/failure rates, database operation durations, and deduplication hit rate.  
+**Why**: Operators have no visibility into reliable call performance. Metrics enable monitoring queue depth, detecting stuck calls, identifying slow methods, and capacity planning for database resources.  
+**Reference**: Related to general observability improvements in README.md TODO section.
+
+### Alternative Reliable Call Storage Backends
+**What**: Implement alternative `PersistenceProvider` backends for reliable calls beyond PostgreSQL (e.g., MySQL, CockroachDB, or distributed KV stores).  
+**Why**: PostgreSQL is a single point of failure and scaling bottleneck. Alternative backends enable broader deployment scenarios, especially for users who already operate different databases or need geo-distributed storage.  
+**Reference**: `object/persistence.go` defines the `PersistenceProvider` interface designed for this extensibility.
 
 ### Configuration Hot Reload
 **What**: Support runtime configuration updates without cluster restart for access control rules, lifecycle policies, and other non-structural settings.  
