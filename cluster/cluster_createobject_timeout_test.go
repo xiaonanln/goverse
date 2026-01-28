@@ -56,7 +56,7 @@ func TestCreateObjectEnforcesDefaultTimeout(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClusterReady(t, cluster)
 
-	// Test 1: Verify timeout is applied when no deadline exists
+	// Verify timeout is applied when no deadline exists
 	ctxNoDeadline := context.Background()
 	_, hasDeadline := ctxNoDeadline.Deadline()
 	if hasDeadline {
@@ -138,7 +138,7 @@ func TestCreateObjectRespectsExistingDeadline(t *testing.T) {
 	defer cancel()
 
 	// Verify it has a deadline
-	deadline, hasDeadline := ctxWithDeadline.Deadline()
+	_, hasDeadline := ctxWithDeadline.Deadline()
 	if !hasDeadline {
 		t.Fatal("Context should have a deadline")
 	}
@@ -152,17 +152,6 @@ func TestCreateObjectRespectsExistingDeadline(t *testing.T) {
 
 	if createdID != objID {
 		t.Errorf("Expected object ID %s, got %s", objID, createdID)
-	}
-
-	// Verify the deadline wasn't changed (still roughly 30s from now)
-	// The CreateObject shouldn't add a new timeout on top
-	newDeadline, _ := ctxWithDeadline.Deadline()
-	if !deadline.Equal(newDeadline) {
-		// Some variation is OK due to execution time, but should be minimal
-		diff := newDeadline.Sub(deadline)
-		if diff > 100*time.Millisecond || diff < -100*time.Millisecond {
-			t.Errorf("Deadline changed significantly: was %v, now %v (diff: %v)", deadline, newDeadline, diff)
-		}
 	}
 
 	// Wait for async creation
