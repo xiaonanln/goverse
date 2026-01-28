@@ -520,6 +520,10 @@ func (c *Cluster) checkAndMarkReady() {
 }
 
 func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+	// Enforce default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, DefaultCallTimeout)
+	defer cancel()
+
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
@@ -585,6 +589,11 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	if !c.isGate() {
 		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gate clusters")
 	}
+
+	// Enforce default timeout if context has no deadline
+	ctx, cancel := callcontext.WithDefaultTimeout(ctx, DefaultCallTimeout)
+	defer cancel()
+
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
