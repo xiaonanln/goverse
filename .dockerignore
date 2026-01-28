@@ -1,0 +1,63 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+.github
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Examples and samples
+examples
+samples
+
+# Tests
+tests
+*_test.go
+
+# Kubernetes manifests
+k8s
+
+# Scripts (only compile-proto.sh is needed, but Docker build copies specific files)
+script/*
+!script/compile-proto.sh
+
+# Development and IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Claude AI assistant files
+.claude
+
+# Coverage and test artifacts
+*.out
+*.test
+coverage.txt
+coverage.html
+
+# Configuration that shouldn't be in images
+config/*.yaml
+!config/config.yaml.example
+
+# Other development files
+Makefile
+codecov.yml
+docker/test-postgres.sh
+docker/README.md

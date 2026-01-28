@@ -31,7 +31,7 @@ Gate already has both `/healthz` and `/ready` on its ops port (`gate/gateserver/
 
 **Problem**: No `.dockerignore` exists. Docker builds send the entire repo as context including `.git`, `docs`, `samples`, `tests`, etc.
 
-- [ ] Create `.dockerignore` excluding `.git`, `.github`, `docs`, `examples`, `samples`, `tests`, `*.md`, `script`, `k8s`
+- [x] Create `.dockerignore` excluding `.git`, `.github`, `docs`, `examples`, `samples`, `tests`, `*.md`, `script`, `k8s`
 
 ---
 
