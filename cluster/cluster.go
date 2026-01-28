@@ -36,6 +36,9 @@ const (
 	ShardMappingCheckInterval = 5 * time.Second
 	// DefaultNodeStabilityDuration is how long the node list must be stable before updating shard mapping
 	DefaultNodeStabilityDuration = 10 * time.Second
+	// DefaultCreateTimeout is the default timeout for CreateObject operations when no deadline is provided.
+	// This prevents indefinite hangs when gates make synchronous gRPC calls to nodes.
+	DefaultCreateTimeout = 10 * time.Second
 )
 
 type Cluster struct {
@@ -624,6 +627,14 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
 func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
+	// Enforce default timeout if context has no deadline
+	// This prevents indefinite hangs when gates make synchronous gRPC calls to nodes
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
+		defer cancel()
+	}
+
 	// If objID is not provided, generate one locally
 	// We need to know the ID to determine which node should create it
 	if objID == "" {
