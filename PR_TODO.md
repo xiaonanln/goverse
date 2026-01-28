@@ -29,32 +29,44 @@ See "[P1] Reliable Call Timeout and Expiration" below for reference format.
 
 ## Core System Improvements
 
-### [P1] Reliable Call Timeout and Expiration
-**What**: Add configurable timeout and automatic cleanup for old pending reliable calls (completed, expired, or abandoned).  
+### [P2] Reliable Call Cleanup Documentation and Tooling
+**What**: Provide documentation and tooling for users to safely clean up old completed/failed reliable calls when needed.
 
-**Why**: Without expiration, the `goverse_reliable_calls` table grows indefinitely. Old completed/failed calls consume database storage and slow down queries. Pending calls stuck forever (e.g., object deleted, bad request data) should timeout with clear errors rather than accumulate indefinitely.
-
-**Current Situation - How Timeouts Work Today**:
-- **Context-based timeout**: Reliable calls respect the `context.Context` deadline passed to `ReliableCallObject()`. If the context times out during processing, the caller receives a timeout error.
-- **No database-level timeout**: Once a call is inserted into `goverse_reliable_calls` with status "pending", it stays there forever unless explicitly processed or manually deleted.
-- **Processing timeout with retries**: After triggering `ProcessPendingReliableCalls()`, the node waits for the result with a hardcoded retry mechanism (50 retries × 100ms = 5 seconds max) before querying the database to check call status.
-- **No automatic cleanup**: Completed calls (status "success" or "failed") remain in the database forever. There is no background job to clean up old records.
-- **No TTL for pending calls**: A pending call that never gets processed (e.g., object permanently deleted, corrupted request data, database unavailable during execution) will remain as "pending" indefinitely, consuming storage and appearing in every `GetPendingReliableCalls()` query.
+**Current Situation**:
+- **Completed/failed calls are kept as logs**: Once a reliable call completes (status = 'success' or 'failed'), it remains in `goverse_reliable_calls` table indefinitely. This is intentional - they serve as an audit log of all reliable calls made.
+- **No cleanup guidance**: There is no documentation on how users should clean up old calls when the table grows too large.
+- **No safety tooling**: Users who want to clean up old records must write raw SQL, risking deletion of pending calls that should still execute.
+- **No cleanup metrics**: There's no visibility into how many records exist by status or age.
 
 **Problems This Causes**:
-1. **Unbounded table growth**: Every reliable call ever made is stored forever, leading to multi-GB tables in production.
-2. **Query performance degradation**: `GetPendingReliableCalls()` must scan through all pending calls (including very old abandoned ones) to find recent calls for an object.
-3. **No visibility into stuck calls**: Operators cannot distinguish between "call is legitimately waiting to execute" vs "call is abandoned and will never execute".
-4. **Resource leaks**: Long-running or abandoned calls hold database rows indefinitely.
-5. **No operational cleanup tools**: Operators must manually write SQL to delete old records, risking data corruption if they delete pending calls that should still execute.
+1. **Unbounded table growth**: In high-throughput systems, the `goverse_reliable_calls` table can grow to millions of records over time.
+2. **Query performance degradation**: While `GetPendingReliableCalls()` filters by status, large tables slow down all operations including inserts.
+3. **Index bloat**: Database indexes grow unbounded, affecting overall database performance.
+4. **Unclear retention policy**: Users don't know how long to keep completed calls or when it's safe to delete them.
+5. **Risk of manual errors**: Without tooling, users might accidentally delete pending calls, breaking exactly-once guarantees.
+
+**Why**: While completed/failed calls serve as valuable audit logs, production systems need guidance on managing table growth. Users should have safe tools and clear documentation for cleanup when needed.
 
 **Suggested Approach**:
-- Add `expires_at` timestamp column to `goverse_reliable_calls` table (calculated as `created_at + configurable_ttl`)
-- Implement background cleanup job that deletes completed calls older than retention period (e.g., 7 days) and marks expired pending calls as "failed" with timeout error
-- Add configuration for TTL values (separate for pending vs completed calls)
-- Expose cleanup metrics (records deleted, expired calls) for monitoring
+- **Add documentation** (`docs/RELIABLE_CALLS_CLEANUP.md`) explaining:
+  - Why completed/failed calls are kept (audit log)
+  - When and how to clean them up safely
+  - SQL queries to check table size and record counts by status
+  - Safe deletion query that only removes completed/failed calls older than X days
+  - Recommendation to take database backup before cleanup
+- **Add helper SQL scripts** (`scripts/cleanup-reliable-calls.sql`):
+  - Query to check table statistics (count by status, oldest/newest records, table size)
+  - Safe deletion query with date parameter
+  - Example: `DELETE FROM goverse_reliable_calls WHERE status IN ('success', 'failed') AND updated_at < NOW() - INTERVAL '30 days'`
+- **Add metrics/monitoring guidance**:
+  - Prometheus queries to monitor table size
+  - Alert thresholds for when cleanup might be needed
+- **Optional: Add admin gRPC endpoint** for cleanup (future enhancement):
+  - Could add `/admin/cleanup-reliable-calls?older_than=30d&dry_run=true`
+  - Returns count of records that would be deleted
+  - Requires authentication and authorization
 
-**Reference**: `docs/RELIABLE_CALLS_DESIGN.md` documents the current implementation. `node/node.go:536-557` shows the retry logic. `util/postgres/persistence.go` contains all database operations without any cleanup logic.
+**Reference**: `docs/RELIABLE_CALLS_DESIGN.md` documents the current implementation. `util/postgres/persistence.go` contains database operations.
 
 ### Reliable Call Metrics and Observability
 **What**: Add Prometheus metrics for reliable calls: pending count per object, processing latency, success/failure rates, database operation durations, and deduplication hit rate.  
@@ -71,9 +83,57 @@ See "[P1] Reliable Call Timeout and Expiration" below for reference format.
 **Why**: Production systems cannot afford downtime for configuration changes. Operators need to adjust policies (rate limits, access rules, timeouts) dynamically as traffic patterns and security requirements evolve.  
 **Reference**: Mentioned in `README.md` TODO section.
 
-### Default Timeout Enforcement
-**What**: Add default timeouts for all operations (CallObject, CreateObject, DeleteObject) when client doesn't provide context deadlines.  
-**Why**: Operations without timeouts can hang indefinitely during network issues or node failures, exhausting resources and blocking user requests. Default timeouts ensure graceful degradation with clear error messages.  
+### [P1] Default Timeout Enforcement
+**What**: Add default timeouts for critical operations (CallObject, CreateObject, etcd, gRPC connections) when client doesn't provide context deadlines.
+
+**Current Situation**:
+- **Context-based only**: Operations rely entirely on client-provided `context.WithTimeout()` or `context.WithDeadline()`
+- **No default fallback**: If client passes `context.Background()` without deadline, operations can hang indefinitely
+- **Inconsistent timeout values**: Different parts of codebase use different timeout values (or none)
+- **Critical operations affected**:
+  - `Cluster.CallObject()` - Calls object methods (potentially remote nodes)
+  - `Cluster.CreateObject()` - Creates and activates objects
+  - Etcd operations in `cluster/consensusmanager/` - Reads, writes, watches for cluster state
+  - gRPC connection establishment in `cluster/nodeconnections/` - Dialing other nodes
+- **DeleteObject is async**: Most DeleteObject calls run in goroutines and return immediately, so timeout doesn't help (only synchronous gate->node calls would benefit, which is rare)
+
+**Problems This Causes**:
+1. **Indefinite hangs on CallObject**: If object method hangs or node is unreachable, caller waits forever, blocking goroutines and exhausting resources
+2. **CreateObject deadlocks**: Object creation can hang if node is down or during shard migration, preventing activation of dependent objects
+3. **Etcd hangs freeze cluster**: Slow etcd operations (network partition, disk issues) block all cluster operations since etcd is used for shard mapping, node registration, and coordination
+4. **Connection hangs block startup**: Nodes attempting to connect to unreachable nodes during startup hang indefinitely, preventing cluster formation
+5. **Resource exhaustion**: Hanging operations accumulate goroutines, file descriptors, and memory until OOM
+6. **No graceful degradation**: Operations fail silently by hanging instead of returning clear timeout errors
+
+**Why**: Production systems need predictable failure modes. Operations without timeouts can hang forever during network issues, node failures, or slow operations. Default timeouts ensure graceful degradation even when clients forget to set deadlines.
+
+**Suggested Approach**:
+- **Phase 1: Add configuration fields** to `ServerConfig`, `GateServerConfig`, `ClusterConfig`:
+  - `DefaultCallTimeout` (default: 30s) - For CallObject operations
+  - `DefaultCreateTimeout` (default: 10s) - For CreateObject operations  
+  - `EtcdOperationTimeout` (default: 60s) - For all etcd reads/writes/watches
+  - `ConnectionTimeout` (default: 30s) - For gRPC dial operations
+- **Phase 2: Create timeout error types** in `util/errors`:
+  - Define `TimeoutError` struct with operation type, object ID, wrapped context error
+  - Add `IsTimeout(err)` helper function for error detection
+- **Phase 3: Enforce at entry points** - Wrap public APIs to check if context has deadline:
+  ```go
+  if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+      ctx, cancel = context.WithTimeout(ctx, config.DefaultCallTimeout)
+      defer cancel()
+  }
+  ```
+  - Apply to `Cluster.CallObject()` and `Cluster.CreateObject()`
+  - Apply to etcd operations in `EtcdManager.Get()`, `Put()`, `Watch()`
+  - Apply to `grpc.DialContext()` in `nodeconnections`
+- **Phase 4: Add metrics** for monitoring timeout rates:
+  - `goverse_operation_timeouts_total` counter (by operation, node)
+  - `goverse_operation_duration_seconds` histogram (by operation, status)
+
+**Operations NOT needing timeouts**:
+- `DeleteObject` - Already async (fire-and-forget), returns immediately
+- `PushMessageToClient` - Non-blocking (uses buffered channel with immediate return on full)
+
 **Reference**: `docs/TIMEOUT_DESIGN.md` describes the complete design.
 
 ### Runtime Shard Count Reconfiguration
