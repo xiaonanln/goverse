@@ -12,9 +12,9 @@ docs
 # Examples (samples are needed for Dockerfile.node default build)
 examples
 
-# Tests
-tests
-*_test.go
+# Tests are kept to support dev container workflow (docker/Dockerfile.dev)
+# The dev container README recommends running 'go test ./...' inside the container
+# which requires test files to be present in the image when built locally
 
 # Kubernetes manifests
 k8s
