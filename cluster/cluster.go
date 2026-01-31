@@ -36,9 +36,10 @@ const (
 	ShardMappingCheckInterval = 5 * time.Second
 	// DefaultNodeStabilityDuration is how long the node list must be stable before updating shard mapping
 	DefaultNodeStabilityDuration = 10 * time.Second
-	// DefaultCreateTimeout is the default timeout for CreateObject operations when no deadline is provided.
+	// DefaultCreateTimeout is the default timeout for CreateObject operations.
 	// This prevents indefinite hangs when gates make synchronous gRPC calls to nodes.
-	DefaultCreateTimeout = 10 * time.Second
+	// If the context has an existing deadline longer than this, it will be limited to this timeout.
+	DefaultCreateTimeout = 30 * time.Second
 )
 
 type Cluster struct {
@@ -627,9 +628,20 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
 func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
-	// Enforce default timeout if context has no deadline
+	// Enforce default timeout, respecting existing deadline but limiting to DefaultCreateTimeout
 	// This prevents indefinite hangs when gates make synchronous gRPC calls to nodes
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
+		// If existing deadline is shorter than default timeout, use it
+		if time.Until(deadline) <= DefaultCreateTimeout {
+			// Existing deadline is acceptable, no need to modify context
+		} else {
+			// Existing deadline is too long, limit it to DefaultCreateTimeout
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
+			defer cancel()
+		}
+	} else {
+		// No deadline, apply default timeout
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
 		defer cancel()

@@ -133,8 +133,8 @@ func TestCreateObjectRespectsExistingDeadline(t *testing.T) {
 	// Wait for cluster to be ready
 	testutil.WaitForClusterReady(t, cluster)
 
-	// Create a context with a 30-second deadline
-	ctxWithDeadline, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Create a context with a 5-second deadline (shorter than the 30s default)
+	ctxWithDeadline, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	// Verify it has a deadline
@@ -143,7 +143,7 @@ func TestCreateObjectRespectsExistingDeadline(t *testing.T) {
 		t.Fatal("Context should have a deadline")
 	}
 
-	// Create object - should succeed and respect the existing deadline
+	// Create object - should succeed and respect the existing 5s deadline
 	objID := testutil.GetObjectIDForShard(0, "deadline-test-obj")
 	createdID, err := cluster.CreateObject(ctxWithDeadline, "SimpleTimeoutTestObject", objID)
 	if err != nil {
@@ -175,9 +175,97 @@ func TestCreateObjectRespectsExistingDeadline(t *testing.T) {
 func TestCreateObjectTimeoutConstant(t *testing.T) {
 	t.Parallel()
 
-	expectedTimeout := 10 * time.Second
+	expectedTimeout := 30 * time.Second
 	if DefaultCreateTimeout != expectedTimeout {
 		t.Errorf("DefaultCreateTimeout should be %v, got %v", expectedTimeout, DefaultCreateTimeout)
+	}
+}
+
+// TestCreateObjectLimitsLongDeadline verifies that CreateObject limits long deadlines to DefaultCreateTimeout
+func TestCreateObjectLimitsLongDeadline(t *testing.T) {
+	t.Parallel()
+
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	// Create a simple node cluster
+	nodeAddr := testutil.GetFreeAddress()
+	n := node.NewNode(nodeAddr, testutil.TestNumShards)
+
+	err := n.Start(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start node: %v", err)
+	}
+	t.Cleanup(func() { n.Stop(ctx) })
+
+	// Create cluster config
+	cfg := Config{
+		EtcdAddress:                   "localhost:2379",
+		EtcdPrefix:                    testPrefix,
+		MinQuorum:                     1,
+		ClusterStateStabilityDuration: 50 * time.Millisecond,
+		ShardMappingCheckInterval:     100 * time.Millisecond,
+		NumShards:                     testutil.TestNumShards,
+	}
+
+	cluster, err := NewClusterWithNode(cfg, n)
+	if err != nil {
+		t.Skipf("Skipping test: etcd not available: %v", err)
+		return
+	}
+
+	err = cluster.Start(ctx, n)
+	if err != nil {
+		t.Fatalf("Failed to start cluster: %v", err)
+	}
+	t.Cleanup(func() { cluster.Stop(ctx) })
+
+	// Register a simple test object
+	n.RegisterObjectType((*SimpleTimeoutTestObject)(nil))
+
+	// Wait for cluster to be ready
+	testutil.WaitForClusterReady(t, cluster)
+
+	// Create a context with a very long deadline (5 minutes)
+	ctxWithLongDeadline, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	// Verify it has a deadline
+	originalDeadline, hasDeadline := ctxWithLongDeadline.Deadline()
+	if !hasDeadline {
+		t.Fatal("Context should have a deadline")
+	}
+
+	// The original deadline should be ~5 minutes from now
+	if time.Until(originalDeadline) < 4*time.Minute {
+		t.Fatalf("Expected original deadline to be ~5 minutes from now, got %v", time.Until(originalDeadline))
+	}
+
+	// Create object - should succeed but with deadline limited to 30 seconds
+	objID := testutil.GetObjectIDForShard(0, "long-deadline-test-obj")
+	createdID, err := cluster.CreateObject(ctxWithLongDeadline, "SimpleTimeoutTestObject", objID)
+	if err != nil {
+		t.Fatalf("CreateObject failed: %v", err)
+	}
+
+	if createdID != objID {
+		t.Errorf("Expected object ID %s, got %s", objID, createdID)
+	}
+
+	// Wait for async creation
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify object was created
+	objects := n.ListObjects()
+	found := false
+	for _, obj := range objects {
+		if obj.Id == objID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected object %s to be created", objID)
 	}
 }
 
