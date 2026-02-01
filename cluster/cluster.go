@@ -630,22 +630,10 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
 	// Enforce default timeout, respecting existing deadline but limiting to DefaultCreateTimeout
 	// This prevents indefinite hangs when gates make synchronous gRPC calls to nodes
-	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
-		// If existing deadline is shorter than default timeout, use it
-		if time.Until(deadline) <= DefaultCreateTimeout {
-			// Existing deadline is acceptable, no need to modify context
-		} else {
-			// Existing deadline is too long, limit it to DefaultCreateTimeout
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
-			defer cancel()
-		}
-	} else {
-		// No deadline, apply default timeout
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
-		defer cancel()
-	}
+	// context.WithTimeout automatically respects shorter existing deadlines
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
+	defer cancel()
 
 	// If objID is not provided, generate one locally
 	// We need to know the ID to determine which node should create it
