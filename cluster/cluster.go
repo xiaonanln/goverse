@@ -631,9 +631,15 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Enforce default timeout, respecting existing deadline but limiting to DefaultCreateTimeout
 	// This prevents indefinite hangs when gates make synchronous gRPC calls to nodes
 	// context.WithTimeout automatically respects shorter existing deadlines
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, DefaultCreateTimeout)
-	defer cancel()
+	// 
+	// For gates (synchronous execution), we cancel when function returns.
+	// For nodes (async execution in goroutines), we don't cancel here - the timeout
+	// will naturally apply to the goroutine operations and expire after 30s if needed.
+	ctx, cancel := context.WithTimeout(ctx, DefaultCreateTimeout)
+	if c.isGate() {
+		defer cancel()
+	}
+	// For nodes, don't defer cancel() - let the goroutines use the timeout context
 
 	// If objID is not provided, generate one locally
 	// We need to know the ID to determine which node should create it
