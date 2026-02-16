@@ -486,9 +486,13 @@ func (cm *ConsensusManager) StartWatch(ctx context.Context) error {
 	cm.watchCtx, cm.watchCancel = context.WithCancel(ctx)
 	cm.watchStarted = true
 
+	// Capture the context for this watch session so the goroutine is tied
+	// to a single lifecycle even if StopWatch/StartWatch is called quickly.
+	watchCtx := cm.watchCtx
+
 	// Start watching the entire /goverse prefix
 	prefix := cm.etcdManager.GetPrefix()
-	go cm.watchPrefix(prefix)
+	go cm.watchPrefix(watchCtx, prefix)
 
 	return nil
 }
@@ -506,7 +510,7 @@ func (cm *ConsensusManager) StopWatch() {
 // watchPrefix watches the entire etcd prefix for changes.
 // If the watch channel closes (e.g. network disconnect, etcd restart, compaction),
 // it reloads the full cluster state and re-establishes the watch with exponential backoff.
-func (cm *ConsensusManager) watchPrefix(prefix string) {
+func (cm *ConsensusManager) watchPrefix(ctx context.Context, prefix string) {
 	const (
 		initialBackoff = 1 * time.Second
 		maxBackoff     = 30 * time.Second
@@ -514,7 +518,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	backoff := initialBackoff
 
 	for {
-		err := cm.watchPrefixOnce(prefix)
+		err := cm.watchPrefixOnce(ctx, prefix)
 		if err == nil {
 			// Context was cancelled — clean shutdown
 			return
@@ -522,7 +526,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 
 		// Check if context is done before retrying
 		select {
-		case <-cm.watchCtx.Done():
+		case <-ctx.Done():
 			cm.logger.Infof("Watch stopped during reconnection")
 			return
 		default:
@@ -533,7 +537,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 		// Wait with backoff
 		timer := time.NewTimer(backoff)
 		select {
-		case <-cm.watchCtx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			cm.logger.Infof("Watch stopped during backoff")
 			return
@@ -542,7 +546,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 
 		// Reload full state before re-establishing watch
 		cm.logger.Infof("Reloading cluster state before watch reconnection")
-		state, loadErr := cm.loadClusterStateFromEtcd(cm.watchCtx)
+		state, loadErr := cm.loadClusterStateFromEtcd(ctx)
 		if loadErr != nil {
 			cm.logger.Errorf("Failed to reload cluster state: %v", loadErr)
 			// Increase backoff and retry
@@ -568,7 +572,7 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 
 // watchPrefixOnce runs a single watch session. Returns nil if context was cancelled
 // (clean shutdown), or an error describing why the watch ended.
-func (cm *ConsensusManager) watchPrefixOnce(prefix string) error {
+func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string) error {
 	client := cm.etcdManager.GetClient()
 	if client == nil {
 		return fmt.Errorf("etcd client not available")
@@ -585,12 +589,12 @@ func (cm *ConsensusManager) watchPrefixOnce(prefix string) error {
 	leaderKey := prefix + "/leader"
 
 	// Watch from the next revision after our load to prevent missing events
-	watchChan := client.Watch(cm.watchCtx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
+	watchChan := client.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
 
 	cm.logger.Infof("Started watching prefix %s from revision %d", prefix, revision+1)
 	for {
 		select {
-		case <-cm.watchCtx.Done():
+		case <-ctx.Done():
 			cm.logger.Infof("Watch stopped")
 			return nil
 		case watchResp, ok := <-watchChan:
