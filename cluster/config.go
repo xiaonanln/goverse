@@ -41,6 +41,18 @@ type Config struct {
 	// AutoLoadObjects is the list of objects to automatically load when the node starts
 	AutoLoadObjects []config.AutoLoadObjectConfig
 
+	// DefaultCallTimeout is the default timeout for CallObject operations.
+	// Default: 30s
+	DefaultCallTimeout time.Duration
+
+	// DefaultCreateTimeout is the default timeout for CreateObject operations.
+	// Default: 30s
+	DefaultCreateTimeout time.Duration
+
+	// DefaultDeleteTimeout is the default timeout for DeleteObject operations.
+	// Default: 30s
+	DefaultDeleteTimeout time.Duration
+
 	// ConfigFile is the loaded config file (if any)
 	// If nil, the cluster was started with CLI flags instead of a config file
 	ConfigFile *config.Config
@@ -56,5 +68,8 @@ func DefaultConfig() Config {
 		NumShards:                     numShards,
 		RebalanceShardsBatchSize:      max(1, numShards/128),
 		ImbalanceThreshold:            0.2,
+		DefaultCallTimeout:            30 * time.Second,
+		DefaultCreateTimeout:          30 * time.Second,
+		DefaultDeleteTimeout:          30 * time.Second,
 	}
 }

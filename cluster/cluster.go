@@ -18,6 +18,7 @@ import (
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/backoff"
 	"github.com/xiaonanln/goverse/util/callcontext"
+	goverseerrors "github.com/xiaonanln/goverse/util/errors"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -525,11 +526,26 @@ func (c *Cluster) checkAndMarkReady() {
 	c.markClusterReady()
 }
 
-func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (resp proto.Message, err error) {
+	start := time.Now()
 	// Enforce default call timeout. context.WithTimeout uses the sooner of
 	// the existing deadline and the new timeout, so this is always safe.
-	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultCallTimeout)
 	defer cancel()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		status := "success"
+		if err != nil {
+			if goverseerrors.IsTimeout(err) {
+				status = "timeout"
+				metrics.RecordOperationTimeout(c.getAdvertiseAddr(), "CallObject")
+				err = goverseerrors.NewTimeoutError("CallObject", id, err)
+			} else {
+				status = "error"
+			}
+		}
+		metrics.RecordOperationDuration(c.getAdvertiseAddr(), "CallObject", status, duration)
+	}()
 
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
@@ -592,14 +608,29 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 // CallObjectAnyRequest calls a method on a distributed object, accepting an *anypb.Any request.
 // This is an optimized version that avoids unnecessary marshal/unmarshal cycles when the request
 // is already in Any format (e.g., from a gate that received it from a client).
-func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (*anypb.Any, error) {
+func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (_ *anypb.Any, err error) {
 	if !c.isGate() {
 		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gate clusters")
 	}
 
+	start := time.Now()
 	// Enforce default call timeout
-	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultCallTimeout)
 	defer cancel()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		status := "success"
+		if err != nil {
+			if goverseerrors.IsTimeout(err) {
+				status = "timeout"
+				metrics.RecordOperationTimeout(c.getAdvertiseAddr(), "CallObject")
+				err = goverseerrors.NewTimeoutError("CallObject", id, err)
+			} else {
+				status = "error"
+			}
+		}
+		metrics.RecordOperationDuration(c.getAdvertiseAddr(), "CallObject", status, duration)
+	}()
 
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
@@ -639,12 +670,27 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 // CreateObject creates a distributed object on the appropriate node based on sharding
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
-func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
+func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (_ string, err error) {
+	start := time.Now()
 	// Enforce default create timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
-	ctx, cancel := context.WithTimeout(ctx, DefaultCreateTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultCreateTimeout)
 	defer cancel()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		status := "success"
+		if err != nil {
+			if goverseerrors.IsTimeout(err) {
+				status = "timeout"
+				metrics.RecordOperationTimeout(c.getAdvertiseAddr(), "CreateObject")
+				err = goverseerrors.NewTimeoutError("CreateObject", objID, err)
+			} else {
+				status = "error"
+			}
+		}
+		metrics.RecordOperationDuration(c.getAdvertiseAddr(), "CreateObject", status, duration)
+	}()
 
 	// If objID is not provided, generate one locally
 	// We need to know the ID to determine which node should create it
@@ -661,7 +707,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultCreateTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultCreateTimeout)
 			defer asyncCancel()
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(asyncCtx, objType, objID)
@@ -708,7 +754,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultCreateTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultCreateTimeout)
 			defer asyncCancel()
 			_, err = client.CreateObject(asyncCtx, req)
 			if err != nil {
@@ -728,12 +774,27 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 // It determines which node hosts the object and routes the deletion request accordingly.
 // For gates, the deletion is performed synchronously. For nodes, it is performed
 // asynchronously to prevent deadlocks when called from within object methods.
-func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
+func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
+	start := time.Now()
 	// Enforce default delete timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
-	ctx, cancel := context.WithTimeout(ctx, DefaultDeleteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultDeleteTimeout)
 	defer cancel()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		status := "success"
+		if err != nil {
+			if goverseerrors.IsTimeout(err) {
+				status = "timeout"
+				metrics.RecordOperationTimeout(c.getAdvertiseAddr(), "DeleteObject")
+				err = goverseerrors.NewTimeoutError("DeleteObject", objID, err)
+			} else {
+				status = "error"
+			}
+		}
+		metrics.RecordOperationDuration(c.getAdvertiseAddr(), "DeleteObject", status, duration)
+	}()
 
 	if objID == "" {
 		return fmt.Errorf("object ID must be specified")
@@ -747,7 +808,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultDeleteTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultDeleteTimeout)
 			defer asyncCancel()
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -790,7 +851,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultDeleteTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultDeleteTimeout)
 			defer asyncCancel()
 			_, err = client.DeleteObject(asyncCtx, req)
 			if err != nil {

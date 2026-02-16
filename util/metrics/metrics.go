@@ -152,6 +152,25 @@ var (
 		[]string{"shard"},
 	)
 
+	// OperationTimeoutsTotal tracks the total number of operation timeouts
+	OperationTimeoutsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_operation_timeouts_total",
+			Help: "Total number of operation timeouts by operation type and node",
+		},
+		[]string{"node", "operation"},
+	)
+
+	// OperationDurationSeconds tracks the duration of high-level operations
+	OperationDurationSeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "goverse_operation_duration_seconds",
+			Help:    "Duration of high-level operations (CallObject, CreateObject, DeleteObject) in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30},
+		},
+		[]string{"node", "operation", "status"},
+	)
+
 	// ShardMappingWriteFailuresTotal tracks the total number of shard mapping write failures by error type
 	ShardMappingWriteFailuresTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -267,4 +286,14 @@ func RecordShardMethodCall(shard int) {
 // RecordShardMappingWriteFailure increments the shard mapping write failure counter by error type
 func RecordShardMappingWriteFailure(errorType string) {
 	ShardMappingWriteFailuresTotal.WithLabelValues(errorType).Inc()
+}
+
+// RecordOperationTimeout increments the operation timeout counter
+func RecordOperationTimeout(node, operation string) {
+	OperationTimeoutsTotal.WithLabelValues(node, operation).Inc()
+}
+
+// RecordOperationDuration records the duration of a high-level operation
+func RecordOperationDuration(node, operation, status string, durationSeconds float64) {
+	OperationDurationSeconds.WithLabelValues(node, operation, status).Observe(durationSeconds)
 }
