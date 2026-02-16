@@ -83,6 +83,9 @@ These were prerequisites — now complete:
 #### Migration-Period Unavailability
 During shard migration (TargetNode ≠ CurrentNode), `GetCurrentNodeForObject` returns an error even though CurrentNode is still alive and holding the data. This means every rebalance causes brief unavailability for affected shards. The fix is to route to CurrentNode during migration instead of failing, but this requires careful handling of the handoff race. Tracked for a future release.
 
+#### Shard Lock Has No Timeout
+Shard lock acquisition (`AcquireRead`/`AcquireWrite`) has no context or timeout. In theory a stuck holder could block all operations on that shard forever. In practice, all etcd operations under the lock already have `WithEtcdDeadline` (60s), so the lock holder won't hang indefinitely. Adding context-aware locking is a nice-to-have but not required for v0.1.0.
+
 ### 🚫 Explicitly Out of Scope
 
 These are important but deferred to future milestones:
