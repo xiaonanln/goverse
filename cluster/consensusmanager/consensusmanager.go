@@ -599,6 +599,13 @@ func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string) 
 			return nil
 		case watchResp, ok := <-watchChan:
 			if !ok {
+				// etcd closes the watch channel when the context is cancelled,
+				// so check whether this is a clean shutdown before treating it
+				// as an unexpected disconnect.
+				if ctx.Err() != nil {
+					cm.logger.Infof("Watch stopped (context cancelled)")
+					return nil
+				}
 				return fmt.Errorf("watch channel closed")
 			}
 			if watchResp.Err() != nil {
