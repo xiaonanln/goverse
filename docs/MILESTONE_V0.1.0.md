@@ -78,6 +78,11 @@ These were prerequisites — now complete:
 
 ---
 
+### 📋 Known Issues (Deferred)
+
+#### Migration-Period Unavailability
+During shard migration (TargetNode ≠ CurrentNode), `GetCurrentNodeForObject` returns an error even though CurrentNode is still alive and holding the data. This means every rebalance causes brief unavailability for affected shards. The fix is to route to CurrentNode during migration instead of failing, but this requires careful handling of the handoff race. Tracked for a future release.
+
 ### 🚫 Explicitly Out of Scope
 
 These are important but deferred to future milestones:
