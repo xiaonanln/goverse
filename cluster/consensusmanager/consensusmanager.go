@@ -486,9 +486,13 @@ func (cm *ConsensusManager) StartWatch(ctx context.Context) error {
 	cm.watchCtx, cm.watchCancel = context.WithCancel(ctx)
 	cm.watchStarted = true
 
+	// Capture the context for this watch session so the goroutine is tied
+	// to a single lifecycle even if StopWatch/StartWatch is called quickly.
+	watchCtx := cm.watchCtx
+
 	// Start watching the entire /goverse prefix
 	prefix := cm.etcdManager.GetPrefix()
-	go cm.watchPrefix(prefix)
+	go cm.watchPrefix(watchCtx, prefix)
 
 	return nil
 }
@@ -503,12 +507,75 @@ func (cm *ConsensusManager) StopWatch() {
 	cm.logger.Infof("Stopped watching")
 }
 
-// watchPrefix watches the entire etcd prefix for changes
-func (cm *ConsensusManager) watchPrefix(prefix string) {
+// watchPrefix watches the entire etcd prefix for changes.
+// If the watch channel closes (e.g. network disconnect, etcd restart, compaction),
+// it reloads the full cluster state and re-establishes the watch with exponential backoff.
+func (cm *ConsensusManager) watchPrefix(ctx context.Context, prefix string) {
+	const (
+		initialBackoff = 1 * time.Second
+		maxBackoff     = 30 * time.Second
+	)
+	backoff := initialBackoff
+
+	for {
+		err := cm.watchPrefixOnce(ctx, prefix)
+		if err == nil {
+			// Context was cancelled — clean shutdown
+			return
+		}
+
+		// Check if context is done before retrying
+		select {
+		case <-ctx.Done():
+			cm.logger.Infof("Watch stopped during reconnection")
+			return
+		default:
+		}
+
+		cm.logger.Errorf("Watch disconnected: %v — reconnecting in %v", err, backoff)
+
+		// Wait with backoff
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			cm.logger.Infof("Watch stopped during backoff")
+			return
+		case <-timer.C:
+		}
+
+		// Reload full state before re-establishing watch
+		cm.logger.Infof("Reloading cluster state before watch reconnection")
+		state, loadErr := cm.loadClusterStateFromEtcd(ctx)
+		if loadErr != nil {
+			cm.logger.Errorf("Failed to reload cluster state: %v", loadErr)
+			// Increase backoff and retry
+			backoff = backoff * 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+
+		cm.mu.Lock()
+		cm.state = state
+		cm.mu.Unlock()
+		cm.logger.Infof("Cluster state reloaded at revision %d", state.Revision)
+
+		// Notify listeners of the refreshed state
+		cm.notifyStateChanged()
+
+		// Reset backoff on successful reload
+		backoff = initialBackoff
+	}
+}
+
+// watchPrefixOnce runs a single watch session. Returns nil if context was cancelled
+// (clean shutdown), or an error describing why the watch ended.
+func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string) error {
 	client := cm.etcdManager.GetClient()
 	if client == nil {
-		cm.logger.Errorf("etcd client not available")
-		return
+		return fmt.Errorf("etcd client not available")
 	}
 
 	// Get the revision from the loaded state to prevent missing events
@@ -522,22 +589,27 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 	leaderKey := prefix + "/leader"
 
 	// Watch from the next revision after our load to prevent missing events
-	watchChan := client.Watch(cm.watchCtx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
+	watchChan := client.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
 
 	cm.logger.Infof("Started watching prefix %s from revision %d", prefix, revision+1)
 	for {
 		select {
-		case <-cm.watchCtx.Done():
+		case <-ctx.Done():
 			cm.logger.Infof("Watch stopped")
-			return
+			return nil
 		case watchResp, ok := <-watchChan:
 			if !ok {
-				cm.logger.Warnf("Watch channel closed")
-				return
+				// etcd closes the watch channel when the context is cancelled,
+				// so check whether this is a clean shutdown before treating it
+				// as an unexpected disconnect.
+				if ctx.Err() != nil {
+					cm.logger.Infof("Watch stopped (context cancelled)")
+					return nil
+				}
+				return fmt.Errorf("watch channel closed")
 			}
 			if watchResp.Err() != nil {
-				cm.logger.Errorf("Watch error: %v", watchResp.Err())
-				continue
+				return fmt.Errorf("watch error: %w", watchResp.Err())
 			}
 
 			for _, event := range watchResp.Events {
