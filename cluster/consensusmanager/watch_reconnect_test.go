@@ -108,10 +108,10 @@ func TestWatchPrefixOnceReturnsNilOnCancel(t *testing.T) {
 	}
 
 	// Set up watch context and cancel it to force watchPrefixOnce to return nil (clean shutdown)
-	cm.watchCtx, cm.watchCancel = context.WithCancel(ctx)
-	cm.watchCancel() // cancel immediately
+	watchCtx, watchCancel := context.WithCancel(ctx)
+	watchCancel() // cancel immediately
 
-	result := cm.watchPrefixOnce(testPrefix)
+	result := cm.watchPrefixOnce(watchCtx, testPrefix)
 	if result != nil {
 		t.Fatalf("Expected nil (clean shutdown) but got error: %v", result)
 	}
