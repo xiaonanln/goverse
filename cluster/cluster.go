@@ -45,6 +45,16 @@ const (
 	DefaultDeleteTimeout = 30 * time.Second
 )
 
+// effectiveTimeout returns the configured timeout if positive, otherwise the
+// provided fallback. This lets callers pass a zero-value Config (e.g. gate
+// server) and still get sensible defaults.
+func effectiveTimeout(configured, fallback time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	return fallback
+}
+
 type Cluster struct {
 	node                      *node.Node
 	gate                      *gate.Gate
@@ -201,19 +211,6 @@ func (c *Cluster) init(cfg Config) error {
 		c.consensusManager.SetImbalanceThreshold(cfg.ImbalanceThreshold)
 	}
 
-	// Ensure timeout config values have sane defaults when callers pass
-	// a Config literal without the new timeout fields (e.g. gate server).
-	// A zero or negative timeout would create an already-expired context.
-	if c.config.DefaultCallTimeout <= 0 {
-		c.config.DefaultCallTimeout = DefaultCallTimeout
-	}
-	if c.config.DefaultCreateTimeout <= 0 {
-		c.config.DefaultCreateTimeout = DefaultCreateTimeout
-	}
-	if c.config.DefaultDeleteTimeout <= 0 {
-		c.config.DefaultDeleteTimeout = DefaultDeleteTimeout
-	}
-
 	return nil
 }
 
@@ -230,11 +227,6 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
 		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", numShards),
-		config: Config{
-			DefaultCallTimeout:   DefaultCallTimeout,
-			DefaultCreateTimeout: DefaultCreateTimeout,
-			DefaultDeleteTimeout: DefaultDeleteTimeout,
-		},
 		minQuorum:                 1,
 		numShards:                 numShards,
 		shardMappingCheckInterval: 1 * time.Second,
@@ -549,7 +541,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	start := time.Now()
 	// Enforce default call timeout. context.WithTimeout uses the sooner of
 	// the existing deadline and the new timeout, so this is always safe.
-	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
 	defer cancel()
 	defer func() {
 		duration := time.Since(start).Seconds()
@@ -634,7 +626,7 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 
 	start := time.Now()
 	// Enforce default call timeout
-	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
 	defer cancel()
 	defer func() {
 		duration := time.Since(start).Seconds()
@@ -694,7 +686,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (_ st
 	// Enforce default create timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
-	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultCreateTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 	defer cancel()
 	defer func() {
 		duration := time.Since(start).Seconds()
@@ -798,7 +790,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	// Enforce default delete timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
-	ctx, cancel := context.WithTimeout(ctx, c.config.DefaultDeleteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 	defer cancel()
 	defer func() {
 		duration := time.Since(start).Seconds()

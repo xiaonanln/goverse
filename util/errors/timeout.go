@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // TimeoutError represents an operation that failed due to a timeout.
@@ -37,7 +40,15 @@ func IsTimeout(err error) bool {
 	if errors.As(err, &te) {
 		return true
 	}
-	return errors.Is(err, context.DeadlineExceeded)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// gRPC wraps deadline exceeded as a status error that doesn't satisfy
+	// errors.Is(context.DeadlineExceeded), so check the gRPC status code.
+	if s, ok := status.FromError(err); ok && s.Code() == codes.DeadlineExceeded {
+		return true
+	}
+	return false
 }
 
 // NewTimeoutError creates a new TimeoutError for the given operation and object.

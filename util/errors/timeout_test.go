@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestTimeoutErrorMessage(t *testing.T) {
@@ -98,6 +101,31 @@ func TestIsTimeout_RegularError(t *testing.T) {
 	t.Parallel()
 	if IsTimeout(fmt.Errorf("some other error")) {
 		t.Fatalf("Expected IsTimeout on regular error to be false")
+	}
+}
+
+func TestIsTimeout_GRPCDeadlineExceeded(t *testing.T) {
+	t.Parallel()
+	grpcErr := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
+	if !IsTimeout(grpcErr) {
+		t.Fatalf("Expected IsTimeout on gRPC DeadlineExceeded to be true")
+	}
+}
+
+func TestIsTimeout_WrappedGRPCDeadlineExceeded(t *testing.T) {
+	t.Parallel()
+	grpcErr := status.Error(codes.DeadlineExceeded, "deadline")
+	wrapped := fmt.Errorf("remote call: %w", grpcErr)
+	if !IsTimeout(wrapped) {
+		t.Fatalf("Expected IsTimeout on wrapped gRPC DeadlineExceeded to be true")
+	}
+}
+
+func TestIsTimeout_GRPCNonDeadline(t *testing.T) {
+	t.Parallel()
+	grpcErr := status.Error(codes.Unavailable, "connection refused")
+	if IsTimeout(grpcErr) {
+		t.Fatalf("Expected IsTimeout on gRPC Unavailable to be false")
 	}
 }
 
