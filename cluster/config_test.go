@@ -39,6 +39,19 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatalf("Expected default ImbalanceThreshold to be 0.2, got %f", cfg.ImbalanceThreshold)
 	}
 
+	// Timeout defaults
+	if cfg.DefaultCallTimeout != 30*time.Second {
+		t.Fatalf("Expected default DefaultCallTimeout to be 30s, got %v", cfg.DefaultCallTimeout)
+	}
+
+	if cfg.DefaultCreateTimeout != 30*time.Second {
+		t.Fatalf("Expected default DefaultCreateTimeout to be 30s, got %v", cfg.DefaultCreateTimeout)
+	}
+
+	if cfg.DefaultDeleteTimeout != 30*time.Second {
+		t.Fatalf("Expected default DefaultDeleteTimeout to be 30s, got %v", cfg.DefaultDeleteTimeout)
+	}
+
 	// EtcdAddress and EtcdPrefix should be empty by default
 	if cfg.EtcdAddress != "" {
 		t.Fatalf("Expected default EtcdAddress to be empty, got %s", cfg.EtcdAddress)
@@ -61,6 +74,9 @@ func TestConfigCustomization(t *testing.T) {
 	cfg.NumShards = 4096
 	cfg.RebalanceShardsBatchSize = 50
 	cfg.ImbalanceThreshold = 0.3
+	cfg.DefaultCallTimeout = 10 * time.Second
+	cfg.DefaultCreateTimeout = 15 * time.Second
+	cfg.DefaultDeleteTimeout = 20 * time.Second
 
 	// Verify customizations
 	if cfg.EtcdAddress != "localhost:2379" {
@@ -93,6 +109,18 @@ func TestConfigCustomization(t *testing.T) {
 
 	if cfg.ImbalanceThreshold != 0.3 {
 		t.Fatalf("Expected ImbalanceThreshold to be 0.3, got %f", cfg.ImbalanceThreshold)
+	}
+
+	if cfg.DefaultCallTimeout != 10*time.Second {
+		t.Fatalf("Expected DefaultCallTimeout to be 10s, got %v", cfg.DefaultCallTimeout)
+	}
+
+	if cfg.DefaultCreateTimeout != 15*time.Second {
+		t.Fatalf("Expected DefaultCreateTimeout to be 15s, got %v", cfg.DefaultCreateTimeout)
+	}
+
+	if cfg.DefaultDeleteTimeout != 20*time.Second {
+		t.Fatalf("Expected DefaultDeleteTimeout to be 20s, got %v", cfg.DefaultDeleteTimeout)
 	}
 }
 

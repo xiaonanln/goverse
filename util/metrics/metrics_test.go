@@ -1179,6 +1179,66 @@ func TestShardMethodCallMetricsRegistration(t *testing.T) {
 	}
 }
 
+func TestRecordOperationTimeout(t *testing.T) {
+	// Reset metrics before test
+	OperationTimeoutsTotal.Reset()
+
+	// Record a timeout
+	RecordOperationTimeout("localhost:47000", "CallObject")
+
+	// Verify the metric was recorded
+	count := testutil.ToFloat64(OperationTimeoutsTotal.WithLabelValues("localhost:47000", "CallObject"))
+	if count != 1.0 {
+		t.Fatalf("Expected count to be 1.0, got %f", count)
+	}
+
+	// Record more timeouts
+	RecordOperationTimeout("localhost:47000", "CallObject")
+	RecordOperationTimeout("localhost:47000", "CreateObject")
+	RecordOperationTimeout("localhost:47001", "DeleteObject")
+
+	count = testutil.ToFloat64(OperationTimeoutsTotal.WithLabelValues("localhost:47000", "CallObject"))
+	if count != 2.0 {
+		t.Fatalf("Expected count to be 2.0, got %f", count)
+	}
+
+	count = testutil.ToFloat64(OperationTimeoutsTotal.WithLabelValues("localhost:47000", "CreateObject"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for CreateObject to be 1.0, got %f", count)
+	}
+
+	count = testutil.ToFloat64(OperationTimeoutsTotal.WithLabelValues("localhost:47001", "DeleteObject"))
+	if count != 1.0 {
+		t.Fatalf("Expected count for node 47001 DeleteObject to be 1.0, got %f", count)
+	}
+}
+
+func TestRecordOperationDuration(t *testing.T) {
+	// Reset metrics before test
+	OperationDurationSeconds.Reset()
+
+	// Record durations for different operations and statuses
+	RecordOperationDuration("localhost:47000", "CallObject", "success", 0.05)
+	RecordOperationDuration("localhost:47000", "CallObject", "timeout", 30.0)
+	RecordOperationDuration("localhost:47000", "CreateObject", "error", 0.1)
+
+	// Verify the histogram has recorded observations
+	count := testutil.CollectAndCount(OperationDurationSeconds)
+	if count < 1 {
+		t.Fatalf("Expected at least 1 metric, got %d", count)
+	}
+}
+
+func TestOperationMetricsRegistration(t *testing.T) {
+	if OperationTimeoutsTotal == nil {
+		t.Fatal("OperationTimeoutsTotal metric should not be nil")
+	}
+
+	if OperationDurationSeconds == nil {
+		t.Fatal("OperationDurationSeconds metric should not be nil")
+	}
+}
+
 func TestShardMethodCallsAccumulation(t *testing.T) {
 	// Reset metrics before test
 	ShardMethodCallsTotal.Reset()
