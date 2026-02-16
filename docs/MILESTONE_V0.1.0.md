@@ -67,7 +67,19 @@ These were prerequisites — now complete:
 - Create PDBs for nodes, gates, and etcd
 - `minAvailable: 1` for gates and etcd, appropriate values for nodes based on shard coverage
 
-#### 5. Getting Started Guide
+#### 5. Watch Reconnection on Disconnect (P1)
+
+**Why**: If the etcd watch channel closes (network blip, etcd restart, compaction), the `watchPrefix` goroutine exits and is never restarted. The node's in-memory cluster state becomes permanently stale — it stops seeing node joins/leaves, shard changes, and leader updates. This silently breaks the entire cluster from that node's perspective.
+
+**Scope**:
+- Add retry loop around `watchPrefix`: on channel close or compaction error, reload full state via `loadClusterStateFromEtcd`, then re-establish watch from the new revision
+- Add exponential backoff between reconnection attempts to avoid hammering etcd
+- Add metric for watch reconnection events
+- Log at error level when watch disconnects, info level on successful reconnect
+
+**Reference**: `cluster/consensusmanager/consensusmanager.go` `watchPrefix()`
+
+#### 6. Getting Started Guide
 
 **Why**: No amount of code quality matters if people can't figure out how to use it. Currently README has a quick start, but no end-to-end tutorial.
 
@@ -110,10 +122,11 @@ These are important but deferred to future milestones:
 | # | Item | Est. Complexity | Dependencies |
 |---|------|-----------------|--------------|
 | 1 | Default Timeout Enforcement | Large | None |
-| 2 | Graceful Shutdown Mode | Medium | None |
-| 3 | SecurityContext + PDB | Small | None |
-| 4 | Getting Started Guide + Sample App | Medium | 1, 2 (need stable behavior to document) |
-| 5 | Tag v0.1.0 | — | All above |
+| 2 | Watch Reconnection on Disconnect | Small-Medium | None |
+| 3 | Graceful Shutdown Mode | Medium | None |
+| 4 | SecurityContext + PDB | Small | None |
+| 5 | Getting Started Guide + Sample App | Medium | 1-3 (need stable behavior to document) |
+| 6 | Tag v0.1.0 | — | All above |
 
 ---
 
