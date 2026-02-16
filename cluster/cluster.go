@@ -603,7 +603,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		ClientId: callcontext.ClientID(ctx),
 	}
 
-	resp, err := client.CallObject(ctx, req)
+	callResp, err := client.CallObject(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("remote CallObject failed on node %s: %w", nodeAddr, err)
 	}
@@ -612,11 +612,11 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	c.reportLinkCall(ctx, nodeAddr)
 
 	// Unmarshal the response
-	if resp.Response == nil {
+	if callResp.Response == nil {
 		return nil, nil
 	}
 
-	response, err := resp.Response.UnmarshalNew()
+	response, err := callResp.Response.UnmarshalNew()
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
