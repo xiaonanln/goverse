@@ -718,7 +718,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (_ st
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultCreateTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(asyncCtx, objType, objID)
@@ -765,7 +765,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (_ st
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultCreateTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			_, err = client.CreateObject(asyncCtx, req)
 			if err != nil {
@@ -819,7 +819,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultDeleteTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -862,7 +862,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), c.config.DefaultDeleteTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			_, err = client.DeleteObject(asyncCtx, req)
 			if err != nil {
