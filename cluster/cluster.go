@@ -36,6 +36,12 @@ const (
 	ShardMappingCheckInterval = 5 * time.Second
 	// DefaultNodeStabilityDuration is how long the node list must be stable before updating shard mapping
 	DefaultNodeStabilityDuration = 10 * time.Second
+	// DefaultCallTimeout is the default timeout for CallObject operations.
+	DefaultCallTimeout = 30 * time.Second
+	// DefaultCreateTimeout is the default timeout for CreateObject operations.
+	DefaultCreateTimeout = 30 * time.Second
+	// DefaultDeleteTimeout is the default timeout for DeleteObject operations.
+	DefaultDeleteTimeout = 30 * time.Second
 )
 
 type Cluster struct {
@@ -520,6 +526,11 @@ func (c *Cluster) checkAndMarkReady() {
 }
 
 func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+	// Enforce default call timeout. context.WithTimeout uses the sooner of
+	// the existing deadline and the new timeout, so this is always safe.
+	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	defer cancel()
+
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
@@ -585,6 +596,11 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	if !c.isGate() {
 		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gate clusters")
 	}
+
+	// Enforce default call timeout
+	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	defer cancel()
+
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, id)
 	if err != nil {
@@ -624,6 +640,12 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
 func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
+	// Enforce default create timeout for synchronous operations in this function.
+	// Async goroutines create their own timeout context because this one is
+	// cancelled by defer when the function returns.
+	ctx, cancel := context.WithTimeout(ctx, DefaultCreateTimeout)
+	defer cancel()
+
 	// If objID is not provided, generate one locally
 	// We need to know the ID to determine which node should create it
 	if objID == "" {
@@ -639,8 +661,10 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultCreateTimeout)
+			defer asyncCancel()
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
-			_, err := c.node.CreateObject(ctx, objType, objID)
+			_, err := c.node.CreateObject(asyncCtx, objType, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed: %v", c, objID, err)
 			} else {
@@ -684,7 +708,9 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			_, err = client.CreateObject(ctx, req)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultCreateTimeout)
+			defer asyncCancel()
+			_, err = client.CreateObject(asyncCtx, req)
 			if err != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
 			} else {
@@ -703,6 +729,12 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 // For gates, the deletion is performed synchronously. For nodes, it is performed
 // asynchronously to prevent deadlocks when called from within object methods.
 func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
+	// Enforce default delete timeout for synchronous operations in this function.
+	// Async goroutines create their own timeout context because this one is
+	// cancelled by defer when the function returns.
+	ctx, cancel := context.WithTimeout(ctx, DefaultDeleteTimeout)
+	defer cancel()
+
 	if objID == "" {
 		return fmt.Errorf("object ID must be specified")
 	}
@@ -715,9 +747,11 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultDeleteTimeout)
+			defer asyncCancel()
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
-			err := c.node.DeleteObject(ctx, objID)
+			err := c.node.DeleteObject(asyncCtx, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
 			} else {
@@ -756,7 +790,9 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			_, err = client.DeleteObject(ctx, req)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultDeleteTimeout)
+			defer asyncCancel()
+			_, err = client.DeleteObject(asyncCtx, req)
 			if err != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
 			} else {
