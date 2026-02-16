@@ -200,6 +200,20 @@ func (c *Cluster) init(cfg Config) error {
 	if cfg.ImbalanceThreshold > 0 {
 		c.consensusManager.SetImbalanceThreshold(cfg.ImbalanceThreshold)
 	}
+
+	// Ensure timeout config values have sane defaults when callers pass
+	// a Config literal without the new timeout fields (e.g. gate server).
+	// A zero or negative timeout would create an already-expired context.
+	if c.config.DefaultCallTimeout <= 0 {
+		c.config.DefaultCallTimeout = DefaultCallTimeout
+	}
+	if c.config.DefaultCreateTimeout <= 0 {
+		c.config.DefaultCreateTimeout = DefaultCreateTimeout
+	}
+	if c.config.DefaultDeleteTimeout <= 0 {
+		c.config.DefaultDeleteTimeout = DefaultDeleteTimeout
+	}
+
 	return nil
 }
 
@@ -216,6 +230,11 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		clusterReadyChan:          make(chan bool),
 		nodeConnections:           nodeconnections.New(),
 		consensusManager:          consensusmanager.NewConsensusManager(nil, shardLock, 3*time.Second, "", numShards),
+		config: Config{
+			DefaultCallTimeout:   DefaultCallTimeout,
+			DefaultCreateTimeout: DefaultCreateTimeout,
+			DefaultDeleteTimeout: DefaultDeleteTimeout,
+		},
 		minQuorum:                 1,
 		numShards:                 numShards,
 		shardMappingCheckInterval: 1 * time.Second,
