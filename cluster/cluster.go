@@ -44,6 +44,15 @@ const (
 	DefaultDeleteTimeout = 30 * time.Second
 )
 
+// effectiveTimeout returns configured if it is positive, otherwise returns fallback.
+// This allows zero-value configs to fall back to hardcoded defaults.
+func effectiveTimeout(configured, fallback time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	return fallback
+}
+
 type Cluster struct {
 	node                      *node.Node
 	gate                      *gate.Gate
@@ -528,7 +537,7 @@ func (c *Cluster) checkAndMarkReady() {
 func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
 	// Enforce default call timeout. context.WithTimeout uses the sooner of
 	// the existing deadline and the new timeout, so this is always safe.
-	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
 	defer cancel()
 
 	// Determine which node hosts this object
@@ -598,7 +607,7 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	}
 
 	// Enforce default call timeout
-	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
 	defer cancel()
 
 	// Determine which node hosts this object
@@ -643,7 +652,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Enforce default create timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
-	ctx, cancel := context.WithTimeout(ctx, DefaultCreateTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 	defer cancel()
 
 	// If objID is not provided, generate one locally
@@ -661,7 +670,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultCreateTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(asyncCtx, objType, objID)
@@ -708,7 +717,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultCreateTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			_, err = client.CreateObject(asyncCtx, req)
 			if err != nil {
@@ -732,7 +741,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	// Enforce default delete timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
-	ctx, cancel := context.WithTimeout(ctx, DefaultDeleteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 	defer cancel()
 
 	if objID == "" {
@@ -747,7 +756,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultDeleteTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -790,7 +799,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), DefaultDeleteTimeout)
+			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			_, err = client.DeleteObject(asyncCtx, req)
 			if err != nil {
