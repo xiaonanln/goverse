@@ -503,12 +503,75 @@ func (cm *ConsensusManager) StopWatch() {
 	cm.logger.Infof("Stopped watching")
 }
 
-// watchPrefix watches the entire etcd prefix for changes
+// watchPrefix watches the entire etcd prefix for changes.
+// If the watch channel closes (e.g. network disconnect, etcd restart, compaction),
+// it reloads the full cluster state and re-establishes the watch with exponential backoff.
 func (cm *ConsensusManager) watchPrefix(prefix string) {
+	const (
+		initialBackoff = 1 * time.Second
+		maxBackoff     = 30 * time.Second
+	)
+	backoff := initialBackoff
+
+	for {
+		err := cm.watchPrefixOnce(prefix)
+		if err == nil {
+			// Context was cancelled — clean shutdown
+			return
+		}
+
+		// Check if context is done before retrying
+		select {
+		case <-cm.watchCtx.Done():
+			cm.logger.Infof("Watch stopped during reconnection")
+			return
+		default:
+		}
+
+		cm.logger.Errorf("Watch disconnected: %v — reconnecting in %v", err, backoff)
+
+		// Wait with backoff
+		timer := time.NewTimer(backoff)
+		select {
+		case <-cm.watchCtx.Done():
+			timer.Stop()
+			cm.logger.Infof("Watch stopped during backoff")
+			return
+		case <-timer.C:
+		}
+
+		// Reload full state before re-establishing watch
+		cm.logger.Infof("Reloading cluster state before watch reconnection")
+		state, loadErr := cm.loadClusterStateFromEtcd(cm.watchCtx)
+		if loadErr != nil {
+			cm.logger.Errorf("Failed to reload cluster state: %v", loadErr)
+			// Increase backoff and retry
+			backoff = backoff * 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+
+		cm.mu.Lock()
+		cm.state = state
+		cm.mu.Unlock()
+		cm.logger.Infof("Cluster state reloaded at revision %d", state.Revision)
+
+		// Notify listeners of the refreshed state
+		cm.notifyStateChanged()
+
+		// Reset backoff on successful reload
+		backoff = initialBackoff
+	}
+}
+
+// watchPrefixOnce runs a single watch session. Returns nil if context was cancelled
+// (clean shutdown), or an error describing why the watch ended.
+func (cm *ConsensusManager) watchPrefixOnce(prefix string) error {
 	client := cm.etcdManager.GetClient()
 	if client == nil {
-		cm.logger.Errorf("etcd client not available")
-		return
+		return fmt.Errorf("etcd client not available")
 	}
 
 	// Get the revision from the loaded state to prevent missing events
@@ -529,15 +592,13 @@ func (cm *ConsensusManager) watchPrefix(prefix string) {
 		select {
 		case <-cm.watchCtx.Done():
 			cm.logger.Infof("Watch stopped")
-			return
+			return nil
 		case watchResp, ok := <-watchChan:
 			if !ok {
-				cm.logger.Warnf("Watch channel closed")
-				return
+				return fmt.Errorf("watch channel closed")
 			}
 			if watchResp.Err() != nil {
-				cm.logger.Errorf("Watch error: %v", watchResp.Err())
-				continue
+				return fmt.Errorf("watch error: %w", watchResp.Err())
 			}
 
 			for _, event := range watchResp.Events {
