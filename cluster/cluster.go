@@ -328,7 +328,31 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 // 4. Unregisters the node from etcd
 // 5. Closes the etcd connection
 func (c *Cluster) Stop(ctx context.Context) error {
-	c.logger.Infof("%s - Stopping cluster...", c)
+	return c.StopWithMode(ctx, consensusmanager.ShutdownModeQuick)
+}
+
+// StopWithMode gracefully stops the cluster with the specified shutdown mode.
+//
+// ShutdownModeQuick: Stop immediately, keeping shard assignments for fast restart
+// ShutdownModeClean: Release owned shards, wait for handoff, then unregister
+//
+// The cleanup order is:
+// 1. Perform shutdown mode-specific actions (for clean mode: release shards)
+// 2. Stop shard mapping management
+// 3. Stop node connections
+// 4. Stop watching cluster state  
+// 5. Unregister from etcd
+// 6. Close etcd connection
+func (c *Cluster) StopWithMode(ctx context.Context, mode consensusmanager.ShutdownMode) error {
+	c.logger.Infof("%s - Stopping cluster in %s mode...", c, mode)
+
+	// Perform shutdown mode-specific actions for nodes
+	if c.isNode() {
+		if err := c.consensusManager.Shutdown(ctx, mode); err != nil {
+			c.logger.Errorf("%s - Failed to complete %s shutdown: %v", c, mode, err)
+			// Continue with normal shutdown process even if graceful shutdown fails
+		}
+	}
 
 	// Stop node connections
 	c.stopNodeConnections()
