@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/xiaonanln/goverse/node"
+	"github.com/xiaonanln/goverse/util/testutil"
 )
 
 func TestClusterReadyChannel(t *testing.T) {
@@ -86,4 +87,51 @@ func TestMarkClusterReadyIsIdempotent(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Channel should be closed after markClusterReady")
 	}
+}
+
+// TestClusterReadyRequiresConnectionsAndShardMapping verifies that the cluster
+// is only marked ready when BOTH node connections are established AND shard mapping is available.
+func TestClusterReadyRequiresConnectionsAndShardMapping(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	c := mustNewCluster(ctx, t, "localhost:47201", testPrefix)
+	testutil.WaitForClusterReady(t, c)
+
+	if !c.IsReady() {
+		t.Fatal("Cluster.IsReady() should return true")
+	}
+	if c.GetNodeConnections() == nil {
+		t.Fatal("Node connections should be established")
+	}
+	_ = c.GetShardMapping(ctx)
+}
+
+// TestClusterReadyMultiNode verifies cluster readiness in a multi-node setup.
+func TestClusterReadyMultiNode(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("Skipping long-running integration test in short mode")
+	}
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+	ctx := context.Background()
+
+	cluster1 := mustNewCluster(ctx, t, "localhost:47111", testPrefix)
+	cluster2 := mustNewCluster(ctx, t, "localhost:47112", testPrefix)
+
+	testutil.WaitForClustersReady(t, cluster1, cluster2)
+
+	if !cluster1.IsReady() {
+		t.Fatal("Cluster1 should be ready")
+	}
+	if !cluster2.IsReady() {
+		t.Fatal("Cluster2 should be ready")
+	}
+
+	_ = cluster1.GetShardMapping(ctx)
+	_ = cluster2.GetShardMapping(ctx)
 }
