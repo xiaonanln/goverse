@@ -1913,11 +1913,10 @@ func (cm *ConsensusManager) identifyOwnedShards(localNode string) map[int]ShardI
 	shardsToRelease := make(map[int]ShardInfo)
 	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
 		if shardInfo.CurrentNode == localNode {
-			// Release this shard by clearing both CurrentNode and TargetNode
-			// so other nodes can claim it via ClaimShardsForNode
-			released := shardInfo.WithCurrentNode("")
-			released.TargetNode = ""
-			shardsToRelease[shardID] = released
+			// Release this shard by clearing CurrentNode only.
+			// TargetNode is managed by the leader — after this node unregisters,
+			// the leader will detect TargetNode pointing to a dead node and reassign.
+			shardsToRelease[shardID] = shardInfo.WithCurrentNode("")
 		}
 	}
 	
