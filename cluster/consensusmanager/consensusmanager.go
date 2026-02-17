@@ -1874,10 +1874,18 @@ func (cm *ConsensusManager) performCleanShutdown(ctx context.Context) error {
 	}
 	
 	// Step 3: Wait for other nodes to claim the released shards
+	// Only wait for shards that were actually written to etcd successfully
 	if releasedCount > 0 {
-		releasedShardIDs := make([]int, 0, len(shardsToRelease))
+		releasedShardIDs := make([]int, 0, releasedCount)
 		for shardID := range shardsToRelease {
-			releasedShardIDs = append(releasedShardIDs, shardID)
+			// Check if this shard was actually released (CurrentNode is now empty in our state)
+			cm.mu.RLock()
+			if cm.state.ShardMapping != nil {
+				if info, ok := cm.state.ShardMapping.Shards[shardID]; ok && info.CurrentNode == "" {
+					releasedShardIDs = append(releasedShardIDs, shardID)
+				}
+			}
+			cm.mu.RUnlock()
 		}
 		
 		err := cm.waitForShardHandoff(ctx, releasedShardIDs)
@@ -1905,9 +1913,11 @@ func (cm *ConsensusManager) identifyOwnedShards(localNode string) map[int]ShardI
 	shardsToRelease := make(map[int]ShardInfo)
 	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
 		if shardInfo.CurrentNode == localNode {
-			// Release this shard by setting CurrentNode to empty
-			// Keep TargetNode unchanged so leader can reassign appropriately
-			shardsToRelease[shardID] = shardInfo.WithCurrentNode("")
+			// Release this shard by clearing both CurrentNode and TargetNode
+			// so other nodes can claim it via ClaimShardsForNode
+			released := shardInfo.WithCurrentNode("")
+			released.TargetNode = ""
+			shardsToRelease[shardID] = released
 		}
 	}
 	
