@@ -27,7 +27,31 @@ import (
 const (
 	// defaultClusterStateStabilityDuration is the default duration to consider the cluster state stable
 	defaultClusterStateStabilityDuration = 10 * time.Second
+	// defaultCleanShutdownTimeout is the default timeout for clean shutdown operations
+	defaultCleanShutdownTimeout = 30 * time.Second
 )
+
+// ShutdownMode specifies how the node should shutdown
+type ShutdownMode int
+
+const (
+	// ShutdownModeQuick keeps shard assignments and node registration for fast restart (default)
+	ShutdownModeQuick ShutdownMode = iota
+	// ShutdownModeClean releases shards and waits for handoff before unregistering
+	ShutdownModeClean
+)
+
+// String returns the string representation of the shutdown mode
+func (m ShutdownMode) String() string {
+	switch m {
+	case ShutdownModeQuick:
+		return "quick"
+	case ShutdownModeClean:
+		return "clean"
+	default:
+		return "unknown"
+	}
+}
 
 // ShardInfo contains information about a shard's node assignment
 type ShardInfo struct {
@@ -1782,4 +1806,164 @@ func (cm *ConsensusManager) GetObjectsToEvict(localAddr string, objectIDs []stri
 
 func (cm *ConsensusManager) GetClusterStateStabilityDurationForTesting() time.Duration {
 	return cm.clusterStateStabilityDuration
+}
+
+// Shutdown gracefully shuts down the consensus manager with the specified mode.
+// 
+// ShutdownModeQuick: Stop immediately, keeping shard assignments for fast restart
+// ShutdownModeClean: Release owned shards, wait for handoff, then allow normal shutdown
+//
+// For clean shutdown, this method will:
+// 1. Release all shards owned by this node (set CurrentNode to empty)
+// 2. Wait for other nodes to claim them (with timeout)  
+// 3. Return to allow normal unregistration to proceed
+//
+// The method respects context cancellation and has a built-in timeout for clean shutdowns.
+func (cm *ConsensusManager) Shutdown(ctx context.Context, mode ShutdownMode) error {
+	cm.logger.Infof("Starting shutdown in %s mode", mode)
+	
+	if mode == ShutdownModeQuick {
+		cm.logger.Infof("Quick shutdown: no shard release needed")
+		return nil
+	}
+	
+	if mode != ShutdownModeClean {
+		return fmt.Errorf("unsupported shutdown mode: %s", mode)
+	}
+	
+	// Clean shutdown: release shards and wait for handoff
+	return cm.performCleanShutdown(ctx)
+}
+
+// performCleanShutdown releases all shards owned by this node and waits for handoff
+func (cm *ConsensusManager) performCleanShutdown(ctx context.Context) error {
+	cm.mu.RLock()
+	localNode := cm.localNodeAddress
+	cm.mu.RUnlock()
+	
+	if localNode == "" {
+		return fmt.Errorf("local node address not set")
+	}
+	
+	// Add timeout to context if none exists
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultCleanShutdownTimeout)
+		defer cancel()
+	}
+	
+	cm.logger.Infof("Clean shutdown: releasing shards owned by node %s", localNode)
+	
+	// Step 1: Identify and release shards owned by this node
+	shardsToRelease := cm.identifyOwnedShards(localNode)
+	if len(shardsToRelease) == 0 {
+		cm.logger.Infof("Clean shutdown: no shards to release")
+		return nil
+	}
+	
+	cm.logger.Infof("Clean shutdown: releasing %d shards", len(shardsToRelease))
+	
+	// Step 2: Release the shards (set CurrentNode to empty)
+	releasedCount, err := cm.storeShardMapping(ctx, shardsToRelease)
+	if err != nil {
+		cm.logger.Warnf("Clean shutdown: failed to release some shards: %d/%d released, error: %v", 
+			releasedCount, len(shardsToRelease), err)
+		// Continue with waiting for whatever we did release
+	} else {
+		cm.logger.Infof("Clean shutdown: successfully released %d shards", releasedCount)
+	}
+	
+	// Step 3: Wait for other nodes to claim the released shards
+	// Only wait for shards that were actually written to etcd successfully
+	if releasedCount > 0 {
+		releasedShardIDs := make([]int, 0, releasedCount)
+		for shardID := range shardsToRelease {
+			// Check if this shard was actually released (CurrentNode is now empty in our state)
+			cm.mu.RLock()
+			if cm.state.ShardMapping != nil {
+				if info, ok := cm.state.ShardMapping.Shards[shardID]; ok && info.CurrentNode == "" {
+					releasedShardIDs = append(releasedShardIDs, shardID)
+				}
+			}
+			cm.mu.RUnlock()
+		}
+		
+		err := cm.waitForShardHandoff(ctx, releasedShardIDs)
+		if err != nil {
+			cm.logger.Warnf("Clean shutdown: handoff wait completed with issues: %v", err)
+			// Don't fail shutdown due to handoff timeout - allow unregistration to proceed
+		} else {
+			cm.logger.Infof("Clean shutdown: all released shards have been claimed")
+		}
+	}
+	
+	cm.logger.Infof("Clean shutdown: shard release phase completed")
+	return nil
+}
+
+// identifyOwnedShards finds all shards where CurrentNode matches the local node
+func (cm *ConsensusManager) identifyOwnedShards(localNode string) map[int]ShardInfo {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	
+	if cm.state.ShardMapping == nil {
+		return nil
+	}
+	
+	shardsToRelease := make(map[int]ShardInfo)
+	for shardID, shardInfo := range cm.state.ShardMapping.Shards {
+		if shardInfo.CurrentNode == localNode {
+			// Release this shard by clearing CurrentNode only.
+			// TargetNode is managed by the leader — after this node unregisters,
+			// the leader will detect TargetNode pointing to a dead node and reassign.
+			shardsToRelease[shardID] = shardInfo.WithCurrentNode("")
+		}
+	}
+	
+	return shardsToRelease
+}
+
+// waitForShardHandoff waits for other nodes to claim the released shards
+func (cm *ConsensusManager) waitForShardHandoff(ctx context.Context, releasedShardIDs []int) error {
+	cm.logger.Infof("Clean shutdown: waiting for %d shards to be claimed by other nodes", len(releasedShardIDs))
+	
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ctx.Done():
+			unclaimed := cm.countUnclaimedShards(releasedShardIDs)
+			cm.logger.Warnf("Clean shutdown: handoff timeout - %d shards still unclaimed", unclaimed)
+			return fmt.Errorf("handoff timeout: %d shards still unclaimed", unclaimed)
+			
+		case <-ticker.C:
+			unclaimed := cm.countUnclaimedShards(releasedShardIDs)
+			if unclaimed == 0 {
+				cm.logger.Infof("Clean shutdown: all %d shards have been claimed", len(releasedShardIDs))
+				return nil
+			}
+			cm.logger.Debugf("Clean shutdown: %d shards still unclaimed", unclaimed)
+		}
+	}
+}
+
+// countUnclaimedShards returns the number of shards that are still unclaimed (CurrentNode is empty)
+func (cm *ConsensusManager) countUnclaimedShards(shardIDs []int) int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	
+	if cm.state.ShardMapping == nil {
+		return len(shardIDs)
+	}
+	
+	unclaimed := 0
+	for _, shardID := range shardIDs {
+		shardInfo, exists := cm.state.ShardMapping.Shards[shardID]
+		if !exists || shardInfo.CurrentNode == "" {
+			unclaimed++
+		}
+	}
+	
+	return unclaimed
 }
