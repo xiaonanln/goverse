@@ -47,7 +47,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-chat.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-chat.out
           flags: chat-integration
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-chat-clustered.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-chat-clustered.out
           flags: chat-clustered
@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-counter.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-counter.out
           flags: counter-integration
@@ -192,7 +192,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-counter-clustered.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-counter-clustered.out
           flags: counter-clustered
@@ -234,7 +234,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-tictactoe.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-tictactoe.out
           flags: tictactoe-integration
@@ -276,7 +276,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-tictactoe-clustered.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-tictactoe-clustered.out
           flags: tictactoe-clustered

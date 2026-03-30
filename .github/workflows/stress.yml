@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-chat-stress.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-chat-stress.out
           flags: stress-chat
@@ -95,7 +95,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ hashFiles('coverage-demo-stress.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-demo-stress.out
           flags: stress-demo
