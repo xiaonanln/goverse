@@ -39,7 +39,7 @@ jobs:
           POSTGRES_DB: postgres
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.out
           flags: unittests
@@ -48,7 +48,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload etcd restart tests coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-etcd-restart.out
           flags: etcd_restart
@@ -101,7 +101,7 @@ jobs:
           POSTGRES_DB: postgres
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage-parallel.out
           flags: parallel-tests
