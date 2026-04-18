@@ -154,6 +154,11 @@ Use `testutil.WaitForClustersReady()` to ensure all clusters are fully ready bef
 - D3 `.data()` with key function keeps OLD bound data on existing elements; look up fresh data from `graphData` source array or force re-bind
 - When adding new object fields: update both `buildGraphNodesAndLinks()` and `updateGraphIncremental()`
 
+## PR Workflow
+
+- **Always create a PR** for any code change — never push directly to main
+- When the user says **"lgtm"**: squash and merge the PR, then delete the branch
+
 ## Key Documentation
 
 - **docs/RELIABLE_CALLS_DESIGN.md** - Exactly-once call semantics design
