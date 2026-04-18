@@ -93,6 +93,9 @@ Cluster-level configuration for distributed coordination.
 | `provider` | string | Yes | - | Cluster coordination provider. Currently only `"etcd"` is supported. |
 | `etcd` | object | Yes | - | etcd-specific configuration. |
 | `cluster_state_stability_duration` | duration | No | `10s` | How long the node list must be stable before updating shard mapping. |
+| `default_call_timeout` | duration | No | `30s` | Default timeout applied to `CallObject` when the caller context has no deadline. |
+| `default_create_timeout` | duration | No | `30s` | Default timeout applied to `CreateObject` when the caller context has no deadline. |
+| `default_delete_timeout` | duration | No | `30s` | Default timeout applied to `DeleteObject` when the caller context has no deadline. |
 | `auto_load_objects` | array | No | `[]` | List of objects to automatically load when a node starts. See [cluster.auto_load_objects](#clusterauto_load_objects). |
 
 #### cluster.etcd
