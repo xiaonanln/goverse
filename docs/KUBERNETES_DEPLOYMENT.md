@@ -1,7 +1,7 @@
 # Kubernetes Deployment Design for Goverse
 
-> **Status**: Design Document  
-> This document describes the design for deploying Goverse clusters on Kubernetes, providing a scalable, production-ready approach to running distributed Goverse applications.
+> **Status: Reference design document, not officially supported.**
+> This document describes one way to deploy Goverse on Kubernetes. It is kept for reference but is **not part of the v1 stability guarantee**; some sections describe features or roadmap items that are not implemented. Manifests live in `k8s/` and should be treated as examples. Community contributions are welcome.
 
 ---
 
@@ -1701,60 +1701,7 @@ spec:
 
 ---
 
-## 15. Next Steps
-
-### 15.1 Implementation Roadmap
-
-**Phase 1: Core Manifests** (Week 1-2)
-- Create base Kubernetes manifests
-- Implement ConfigMap and Secret management
-- Deploy etcd StatefulSet
-- Deploy Node StatefulSet
-- Deploy Gate Deployment
-
-**Phase 2: Helm Chart** (Week 3-4)
-- Create Helm chart structure
-- Parameterize all configurations
-- Add values.yaml with sensible defaults
-- Test Helm deployment
-
-**Phase 3: Monitoring Integration** (Week 5)
-- Add Prometheus ServiceMonitor
-- Create Grafana dashboards
-- Implement health check endpoints
-- Configure logging
-
-**Phase 4: Production Hardening** (Week 6-7)
-- Implement security policies
-- Add backup/restore procedures
-- Test disaster recovery
-- Performance tuning
-- Documentation
-
-**Phase 5: CI/CD Integration** (Week 8)
-- Create container images with CI/CD
-- Automate testing in Kubernetes
-- Implement GitOps workflows
-- Publish Helm charts
-
-### 15.2 Documentation Requirements
-
-- **User Guide**: Step-by-step deployment instructions
-- **Operations Guide**: Monitoring, scaling, troubleshooting
-- **Reference**: Complete configuration options
-- **Examples**: Sample applications deployed on Kubernetes
-
-### 15.3 Testing Strategy
-
-- Unit tests for Helm chart templating
-- Integration tests with Kind/Minikube
-- E2E tests with sample applications
-- Load testing to validate scaling
-- Chaos engineering (pod failures, network partitions)
-
----
-
-## 16. Conclusion
+## 15. Conclusion
 
 This design provides a comprehensive approach to deploying Goverse clusters on Kubernetes, leveraging cloud-native patterns and Kubernetes primitives for scalability, reliability, and operational excellence.
 
