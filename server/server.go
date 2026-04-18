@@ -43,7 +43,11 @@ type ServerConfig struct {
 	AccessValidator           *config.AccessValidator       // Optional: access validator for node access control
 	LifecycleValidator        *config.LifecycleValidator    // Optional: lifecycle validator for CREATE/DELETE control
 	AutoLoadObjects           []config.AutoLoadObjectConfig // Optional: objects to auto-load when node starts and claims shards
-	ConfigFile                *config.Config                // Optional: loaded config file (if config file was used)
+	// Default timeouts applied when caller context has no deadline. Zero means use built-in defaults.
+	DefaultCallTimeout   time.Duration
+	DefaultCreateTimeout time.Duration
+	DefaultDeleteTimeout time.Duration
+	ConfigFile           *config.Config // Optional: loaded config file (if config file was used)
 }
 
 type Server struct {
@@ -101,6 +105,15 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	if len(config.AutoLoadObjects) > 0 {
 		clusterCfg.AutoLoadObjects = config.AutoLoadObjects
+	}
+	if config.DefaultCallTimeout > 0 {
+		clusterCfg.DefaultCallTimeout = config.DefaultCallTimeout
+	}
+	if config.DefaultCreateTimeout > 0 {
+		clusterCfg.DefaultCreateTimeout = config.DefaultCreateTimeout
+	}
+	if config.DefaultDeleteTimeout > 0 {
+		clusterCfg.DefaultDeleteTimeout = config.DefaultDeleteTimeout
 	}
 	if config.ConfigFile != nil {
 		clusterCfg.ConfigFile = config.ConfigFile

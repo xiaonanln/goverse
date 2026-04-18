@@ -10,12 +10,21 @@ import (
 
 // ClusterConfig holds cluster-level configuration
 type ClusterConfig struct {
-	Shards                        int                    `yaml:"shards"`
-	Provider                      string                 `yaml:"provider"`
-	Etcd                          EtcdConfig             `yaml:"etcd"`
-	ImbalanceThreshold            float64                `yaml:"imbalance_threshold,omitempty"`
-	ClusterStateStabilityDuration time.Duration          `yaml:"cluster_state_stability_duration,omitempty"`
-	AutoLoadObjects               []AutoLoadObjectConfig `yaml:"auto_load_objects,omitempty"`
+	Shards                        int           `yaml:"shards"`
+	Provider                      string        `yaml:"provider"`
+	Etcd                          EtcdConfig    `yaml:"etcd"`
+	ImbalanceThreshold            float64       `yaml:"imbalance_threshold,omitempty"`
+	ClusterStateStabilityDuration time.Duration `yaml:"cluster_state_stability_duration,omitempty"`
+	// DefaultCallTimeout is the default timeout applied to CallObject when the
+	// caller context has no deadline. Zero means use the built-in default.
+	DefaultCallTimeout time.Duration `yaml:"default_call_timeout,omitempty"`
+	// DefaultCreateTimeout is the default timeout applied to CreateObject when the
+	// caller context has no deadline. Zero means use the built-in default.
+	DefaultCreateTimeout time.Duration `yaml:"default_create_timeout,omitempty"`
+	// DefaultDeleteTimeout is the default timeout applied to DeleteObject when the
+	// caller context has no deadline. Zero means use the built-in default.
+	DefaultDeleteTimeout time.Duration          `yaml:"default_delete_timeout,omitempty"`
+	AutoLoadObjects      []AutoLoadObjectConfig `yaml:"auto_load_objects,omitempty"`
 }
 
 // AutoLoadObjectConfig specifies an object to auto-load when a node starts
@@ -216,6 +225,24 @@ func (c *Config) GetNumShards() int {
 // Returns 0 if not configured (caller should use default).
 func (c *Config) GetClusterStateStabilityDuration() time.Duration {
 	return c.Cluster.ClusterStateStabilityDuration
+}
+
+// GetDefaultCallTimeout returns the configured default CallObject timeout.
+// Returns 0 if not configured (caller should use default).
+func (c *Config) GetDefaultCallTimeout() time.Duration {
+	return c.Cluster.DefaultCallTimeout
+}
+
+// GetDefaultCreateTimeout returns the configured default CreateObject timeout.
+// Returns 0 if not configured (caller should use default).
+func (c *Config) GetDefaultCreateTimeout() time.Duration {
+	return c.Cluster.DefaultCreateTimeout
+}
+
+// GetDefaultDeleteTimeout returns the configured default DeleteObject timeout.
+// Returns 0 if not configured (caller should use default).
+func (c *Config) GetDefaultDeleteTimeout() time.Duration {
+	return c.Cluster.DefaultDeleteTimeout
 }
 
 // GetInspectorAdvertiseAddress returns the inspector advertise address.

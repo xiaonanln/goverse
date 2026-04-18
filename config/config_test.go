@@ -730,6 +730,87 @@ nodes:
 	}
 }
 
+func TestDefaultOperationTimeouts(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+  default_call_timeout: 45s
+  default_create_timeout: 12s
+  default_delete_timeout: 7s
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if got := cfg.GetDefaultCallTimeout(); got != 45*time.Second {
+		t.Fatalf("GetDefaultCallTimeout() = %v, want 45s", got)
+	}
+	if got := cfg.GetDefaultCreateTimeout(); got != 12*time.Second {
+		t.Fatalf("GetDefaultCreateTimeout() = %v, want 12s", got)
+	}
+	if got := cfg.GetDefaultDeleteTimeout(); got != 7*time.Second {
+		t.Fatalf("GetDefaultDeleteTimeout() = %v, want 7s", got)
+	}
+}
+
+func TestDefaultOperationTimeoutsOptional(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 8192
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse"
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if got := cfg.GetDefaultCallTimeout(); got != 0 {
+		t.Fatalf("GetDefaultCallTimeout() = %v, want 0", got)
+	}
+	if got := cfg.GetDefaultCreateTimeout(); got != 0 {
+		t.Fatalf("GetDefaultCreateTimeout() = %v, want 0", got)
+	}
+	if got := cfg.GetDefaultDeleteTimeout(); got != 0 {
+		t.Fatalf("GetDefaultDeleteTimeout() = %v, want 0", got)
+	}
+}
+
 func TestGetInspectorAdvertiseAddress(t *testing.T) {
 	tests := []struct {
 		name         string
