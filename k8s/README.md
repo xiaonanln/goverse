@@ -1,5 +1,8 @@
 # Goverse Kubernetes Deployment
 
+> **Status: Reference example, not officially supported.**
+> These manifests demonstrate one way to deploy Goverse on Kubernetes. They are kept for reference but are **not part of the v1 stability guarantee** and may lag behind the core project. Production use is at your own risk; community contributions are welcome.
+
 This directory contains Kubernetes manifests for deploying Goverse clusters.
 
 ## Directory Structure

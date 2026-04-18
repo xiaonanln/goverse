@@ -1,6 +1,6 @@
 # Milestone v0.1.0 — "Production-Ready Core"
 
-**Goal**: A stable release where an external user can deploy GoVerse on Kubernetes, run a distributed application, and trust it won't hang or silently fail under normal operating conditions.
+**Goal**: A stable release where an external user can deploy GoVerse (on bare hardware, Docker, or Kubernetes), run a distributed application, and trust it won't hang or silently fail under normal operating conditions.
 
 **Target**: When all items below are complete.
 
@@ -37,37 +37,17 @@ These were prerequisites — now complete:
 
 #### 2. Graceful Shutdown Mode (P1)
 
-**Why**: K8s rolling updates and scale-down behave differently. Restart should keep shard assignments for fast reclaim; scale-down should release shards proactively.
+**Why**: Restart and scale-down behave differently. Restart should keep shard assignments for fast reclaim; scale-down should release shards proactively. (Rolling updates and drains in any orchestrator — systemd, Docker, Kubernetes — rely on this distinction.)
 
 **Scope**:
 - Add shutdown mode parameter: `graceful` (release shards) vs `fast` (keep assignments)
 - For graceful mode: release shards before unregistering, with configurable timeout
 - Block new object creation during graceful shutdown
-- Document when to use each mode (rolling updates → fast, scale-down → graceful)
+- Document when to use each mode (restart → fast, permanent scale-down → graceful)
 
 **Reference**: `SHARDING_TODO.md` P1
 
-#### 3. K8s SecurityContext (P1)
-
-**Why**: Dockerfiles create non-root users but K8s manifests don't enforce it. Basic security hygiene.
-
-**Scope**:
-- Add `securityContext` to all pod specs:
-  - `runAsNonRoot: true`, `runAsUser: 1000`, `runAsGroup: 1000`
-  - `readOnlyRootFilesystem: true`
-  - `allowPrivilegeEscalation: false`
-  - `capabilities.drop: ["ALL"]`
-- Add seccomp profile where supported
-
-#### 4. PodDisruptionBudgets (P1)
-
-**Why**: Without PDBs, `kubectl drain` can take down all nodes/gates at once.
-
-**Scope**:
-- Create PDBs for nodes, gates, and etcd
-- `minAvailable: 1` for gates and etcd, appropriate values for nodes based on shard coverage
-
-#### 5. Watch Reconnection on Disconnect (P1)
+#### 3. Watch Reconnection on Disconnect (P1)
 
 **Why**: If the etcd watch channel closes (network blip, etcd restart, compaction), the `watchPrefix` goroutine exits and is never restarted. The node's in-memory cluster state becomes permanently stale — it stops seeing node joins/leaves, shard changes, and leader updates. This silently breaks the entire cluster from that node's perspective.
 
@@ -79,13 +59,13 @@ These were prerequisites — now complete:
 
 **Reference**: `cluster/consensusmanager/consensusmanager.go` `watchPrefix()`
 
-#### 6. Getting Started Guide
+#### 4. Getting Started Guide
 
 **Why**: No amount of code quality matters if people can't figure out how to use it. Currently README has a quick start, but no end-to-end tutorial.
 
 **Scope**:
 - Step-by-step guide: prerequisites → local setup → define an object → run node + gate → call via HTTP → observe in Inspector
-- Cover both local (docker-compose) and K8s deployment paths
+- Focus on the local `docker-compose` path; link to `k8s/` manifests as a reference example
 - Include a complete sample app (more substantial than current examples)
 
 ---
@@ -106,11 +86,10 @@ These are important but deferred to future milestones:
 |---------|-----------|
 | Access Control / Auth | Workaround: deploy in private network |
 | TLS/mTLS | Workaround: service mesh or private network |
-| Helm Chart | Raw manifests + Kustomize work for now |
+| First-class Kubernetes support (Helm chart, Operator, PDBs, securityContext, HPA) | `k8s/` manifests are a reference example, not part of the v1 contract |
 | Load-aware rebalancing | Count-based rebalancing is sufficient at this scale |
 | Runtime shard reconfiguration | 8192 shards handles most use cases |
 | Consistent hashing | Round-robin is fine for initial deployments |
-| K8s Operator / CRD | Too complex for v0.1.0 |
 | OpenTelemetry tracing | Prometheus metrics + logs are enough to start |
 | Chaos engineering | Manual testing sufficient for now |
 | Alternative storage backends | PostgreSQL is the supported backend |
@@ -124,9 +103,8 @@ These are important but deferred to future milestones:
 | 1 | Default Timeout Enforcement | Large | None |
 | 2 | Watch Reconnection on Disconnect | Small-Medium | None |
 | 3 | Graceful Shutdown Mode | Medium | None |
-| 4 | SecurityContext + PDB | Small | None |
-| 5 | Getting Started Guide + Sample App | Medium | 1-3 (need stable behavior to document) |
-| 6 | Tag v0.1.0 | — | All above |
+| 4 | Getting Started Guide + Sample App | Medium | 1-3 (need stable behavior to document) |
+| 5 | Tag v0.1.0 | — | All above |
 
 ---
 
@@ -148,4 +126,4 @@ Before tagging v0.1.0:
 - **Stable enough to try**: External users can deploy and experiment
 - **APIs may still change**: But core concepts (objects, nodes, gates) are settled
 - **Not battle-tested**: Production use at your own risk, but basic failure modes are handled
-- **Foundation for v0.2.0**: Access control, TLS, Helm, and observability improvements come next
+- **Foundation for v0.2.0**: Access control, TLS, and observability improvements come next
