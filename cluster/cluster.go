@@ -745,9 +745,8 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 		go func() {
 			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
-			_, err = client.CreateObject(asyncCtx, req)
-			if err != nil {
-				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, err)
+			if _, asyncErr := client.CreateObject(asyncCtx, req); asyncErr != nil {
+				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, asyncErr)
 			} else {
 				c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
 			}
@@ -830,9 +829,8 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 		go func() {
 			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
-			_, err = client.DeleteObject(asyncCtx, req)
-			if err != nil {
-				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, err)
+			if _, asyncErr := client.DeleteObject(asyncCtx, req); asyncErr != nil {
+				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, asyncErr)
 			} else {
 				c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
 			}
