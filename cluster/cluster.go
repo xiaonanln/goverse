@@ -18,6 +18,7 @@ import (
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 	"github.com/xiaonanln/goverse/util/backoff"
 	"github.com/xiaonanln/goverse/util/callcontext"
+	uerrors "github.com/xiaonanln/goverse/util/errors"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -51,6 +52,22 @@ func effectiveTimeout(configured, fallback time.Duration) time.Duration {
 		return configured
 	}
 	return fallback
+}
+
+// recordOperationResult emits duration + timeout metrics for a cluster operation.
+// Intended to be called from a deferred function with the initial start time and
+// the final (named) error return value.
+func recordOperationResult(addr, operation string, start time.Time, err error) {
+	status := "success"
+	if err != nil {
+		if uerrors.IsTimeout(err) {
+			metrics.RecordOperationTimeout(addr, operation)
+			status = "timeout"
+		} else {
+			status = "error"
+		}
+	}
+	metrics.RecordOperationDuration(addr, operation, status, time.Since(start).Seconds())
 }
 
 type Cluster struct {
@@ -534,7 +551,10 @@ func (c *Cluster) checkAndMarkReady() {
 	c.markClusterReady()
 }
 
-func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (proto.Message, error) {
+func (c *Cluster) CallObject(ctx context.Context, objType string, id string, method string, request proto.Message) (result proto.Message, err error) {
+	start := time.Now()
+	defer func() { recordOperationResult(c.getAdvertiseAddr(), "CallObject", start, err) }()
+
 	// Enforce default call timeout. context.WithTimeout uses the sooner of
 	// the existing deadline and the new timeout, so this is always safe.
 	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
@@ -601,10 +621,13 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 // CallObjectAnyRequest calls a method on a distributed object, accepting an *anypb.Any request.
 // This is an optimized version that avoids unnecessary marshal/unmarshal cycles when the request
 // is already in Any format (e.g., from a gate that received it from a client).
-func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (*anypb.Any, error) {
+func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id string, method string, request *anypb.Any) (result *anypb.Any, err error) {
 	if !c.isGate() {
 		return nil, fmt.Errorf("CallObjectAnyRequest can only be called on gate clusters")
 	}
+
+	start := time.Now()
+	defer func() { recordOperationResult(c.getAdvertiseAddr(), "CallObject", start, err) }()
 
 	// Enforce default call timeout
 	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
@@ -648,7 +671,10 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 // CreateObject creates a distributed object on the appropriate node based on sharding
 // The object ID is determined by the type and optional custom ID
 // This method routes the creation request to the correct node in the cluster
-func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (string, error) {
+func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resultID string, err error) {
+	start := time.Now()
+	defer func() { recordOperationResult(c.getAdvertiseAddr(), "CreateObject", start, err) }()
+
 	// Enforce default create timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
@@ -737,7 +763,10 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (stri
 // It determines which node hosts the object and routes the deletion request accordingly.
 // For gates, the deletion is performed synchronously. For nodes, it is performed
 // asynchronously to prevent deadlocks when called from within object methods.
-func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
+func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
+	start := time.Now()
+	defer func() { recordOperationResult(c.getAdvertiseAddr(), "DeleteObject", start, err) }()
+
 	// Enforce default delete timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
