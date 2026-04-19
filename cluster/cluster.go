@@ -1752,18 +1752,19 @@ func (c *Cluster) removeObjectsNotBelongingToThisNode(ctx context.Context) {
 	objectsToEvict := c.consensusManager.GetObjectsToEvict(localAddr, objectIDs)
 	c.logger.Infof("%s - Found %d objects out of %d to evict from this node", c, len(objectsToEvict), len(objectIDs))
 
-	// Remove each object that should be evicted
+	// Evict each object whose shard no longer belongs to this node. Eviction
+	// preserves persisted state so the new shard owner can reactivate the
+	// object on first access (the virtual-actor reactivation contract).
 	for _, objectID := range objectsToEvict {
 		shardID := sharding.GetShardID(objectID, c.numShards)
-		c.logger.Infof("%s - Removing object %s (shard %d) as it no longer belongs to this node", c,
+		c.logger.Infof("%s - Evicting object %s (shard %d) as it no longer belongs to this node", c,
 			objectID, shardID)
 
-		err := c.node.DeleteObject(ctx, objectID)
+		err := c.node.EvictObject(ctx, objectID)
 		if err != nil {
-			c.logger.Errorf("%s - Failed to delete object %s: %v", c, objectID, err)
+			c.logger.Errorf("%s - Failed to evict object %s: %v", c, objectID, err)
 		} else {
-			c.logger.Infof("%s - Successfully removed object %s", c, objectID)
-			// Metrics are not recorded for evicted objects since we don't track object types here
+			c.logger.Infof("%s - Successfully evicted object %s", c, objectID)
 		}
 	}
 }
