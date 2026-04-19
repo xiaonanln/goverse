@@ -84,8 +84,8 @@ type Cluster struct {
 	minQuorum                 int           // minimal number of nodes required for cluster to be considered stable
 	numShards                 int           // number of shards in this cluster
 	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
-	clusterManagementCtx      context.Context
-	clusterManagementCancel   context.CancelFunc
+	liveCtx                   context.Context
+	liveCancel                context.CancelFunc
 	clusterManagementRunning  bool
 	clusterReadyChan          chan bool
 	clusterReadyOnce          sync.Once
@@ -181,6 +181,11 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 }
 
 func (c *Cluster) init(cfg Config) error {
+	// Initialize the cluster-live ctx up front so background work launched before
+	// Start() (or in tests that never call Start) has a non-nil parent to bind
+	// to. Start() reassigns this ctx to a child of its own ctx.
+	c.liveCtx, c.liveCancel = context.WithCancel(context.Background())
+
 	// Initialization logic for the cluster
 	// Set the cluster's ShardLock on the node immediately for per-cluster isolation
 	// Note: Gates don't need ShardLock as they don't host objects
@@ -235,7 +240,7 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 	// Use testutil.TestNumShards for consistency with test node configuration
 	numShards := testutil.TestNumShards
 	shardLock := shardlock.NewShardLock(numShards)
-	return &Cluster{
+	c := &Cluster{
 		node:                      node,
 		logger:                    logger.NewLogger(name),
 		clusterReadyChan:          make(chan bool),
@@ -247,6 +252,8 @@ func newClusterForTesting(node *node.Node, name string) *Cluster {
 		shardLock:                 shardLock,
 		gateChannels:              make(map[string]chan proto.Message),
 	}
+	c.liveCtx, c.liveCancel = context.WithCancel(context.Background())
+	return c
 }
 
 // newClusterWithEtcdForTesting creates a new cluster instance for testing and initializes it with etcd
@@ -696,7 +703,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(asyncCtx, objType, objID)
@@ -743,7 +750,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			if _, asyncErr := client.CreateObject(asyncCtx, req); asyncErr != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, asyncErr)
@@ -784,7 +791,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -827,7 +834,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(context.Background(), effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			if _, asyncErr := client.DeleteObject(asyncCtx, req); asyncErr != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, asyncErr)
@@ -1461,7 +1468,12 @@ func (c *Cluster) startClusterManagement(ctx context.Context) error {
 		return nil
 	}
 
-	c.clusterManagementCtx, c.clusterManagementCancel = context.WithCancel(ctx)
+	// Replace the constructor-seeded ctx with one tied to the Start() ctx, so
+	// cancellation of the caller's ctx propagates to cluster background work.
+	if c.liveCancel != nil {
+		c.liveCancel()
+	}
+	c.liveCtx, c.liveCancel = context.WithCancel(ctx)
 	c.clusterManagementRunning = true
 
 	go c.clusterManagementLoop()
@@ -1473,9 +1485,9 @@ func (c *Cluster) startClusterManagement(ctx context.Context) error {
 
 // stopShardMappingManagement stops the shard mapping management background task
 func (c *Cluster) stopShardMappingManagement() {
-	if c.clusterManagementCancel != nil {
-		c.clusterManagementCancel()
-		c.clusterManagementCancel = nil
+	if c.liveCancel != nil {
+		c.liveCancel()
+		c.liveCancel = nil
 	}
 	c.clusterManagementRunning = false
 	c.logger.Infof("%s - Stopped shard mapping management", c)
@@ -1488,7 +1500,7 @@ func (c *Cluster) clusterManagementLoop() {
 
 	for {
 		select {
-		case <-c.clusterManagementCtx.Done():
+		case <-c.liveCtx.Done():
 			c.logger.Debugf("%s - Shard mapping management loop stopped", c)
 			return
 		case <-ticker.C:
@@ -1508,7 +1520,7 @@ func (c *Cluster) clusterManagementTick() {
 
 // handleShardMappingCheck checks and updates shard mapping based on leadership and node stability
 func (c *Cluster) handleShardMappingCheck() {
-	ctx := c.clusterManagementCtx
+	ctx := c.liveCtx
 
 	// Try to become leader if no leader exists or current leader is dead
 	if err := c.tryBecomeLeader(); err != nil {
@@ -1545,7 +1557,7 @@ func (c *Cluster) tryBecomeLeader() error {
 	if !c.isNode() {
 		return nil
 	}
-	return c.consensusManager.TryBecomeLeader(c.clusterManagementCtx)
+	return c.consensusManager.TryBecomeLeader(c.liveCtx)
 }
 
 func (c *Cluster) updateMetrics() {
