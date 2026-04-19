@@ -5,9 +5,13 @@ import (
 	"testing"
 	"time"
 
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/testutil"
+	"github.com/xiaonanln/goverse/util/uniqueid"
 )
 
 // TestWatchReconnectsOnChannelClose verifies that the watch can be stopped
@@ -81,6 +85,87 @@ func TestWatchReconnectsOnChannelClose(t *testing.T) {
 	}
 
 	cm.StopWatch()
+}
+
+// TestWatchPrefixOnceRecordsReconnectMetric verifies that watchPrefixOnce
+// records the "reconnected" metric exactly when isReconnect=true and a
+// healthy watch response arrives.
+func TestWatchPrefixOnceRecordsReconnectMetric(t *testing.T) {
+	testPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
+
+	mgr, err := etcdmanager.NewEtcdManager("localhost:2379", testPrefix)
+	if err != nil {
+		t.Fatalf("Failed to create etcd manager: %v", err)
+	}
+	err = mgr.Connect()
+	if err != nil {
+		t.Skipf("etcd not available: %v", err)
+		return
+	}
+	defer mgr.Close()
+
+	// Unique localNodeAddress so the metric label is isolated per test run.
+	localAddr := "test-reconnect-metric-" + uniqueid.UniqueId()
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, localAddr, testNumShards)
+
+	ctx := context.Background()
+	if err := cm.Initialize(ctx); err != nil {
+		t.Fatalf("Failed to initialize: %v", err)
+	}
+
+	// Run watchPrefixOnce in a goroutine with isReconnect=true. We write a key
+	// to force etcd to emit a watch event, which triggers the first-healthy-
+	// response path in watchPrefixOnce that bumps the metric.
+	watchCtx, watchCancel := context.WithCancel(ctx)
+	defer watchCancel()
+	done := make(chan struct{})
+	go func() {
+		_ = cm.watchPrefixOnce(watchCtx, testPrefix, true)
+		close(done)
+	}()
+
+	// Give the watch time to open, then write a key to trigger an event.
+	time.Sleep(200 * time.Millisecond)
+	client := mgr.GetClient()
+	if _, err := client.Put(ctx, testPrefix+"/nodes/test-metric-node", "test-metric-addr:1"); err != nil {
+		t.Fatalf("Failed to put node key: %v", err)
+	}
+
+	// Wait for the event to be processed so the metric is bumped.
+	time.Sleep(200 * time.Millisecond)
+	watchCancel()
+	<-done
+
+	got := promtestutil.ToFloat64(metrics.WatchReconnectionsTotal.WithLabelValues(localAddr, "reconnected"))
+	if got != 1 {
+		t.Fatalf("Expected 1 reconnected metric for %s, got %v", localAddr, got)
+	}
+
+	// Sanity: with isReconnect=false, no metric should be bumped.
+	localAddr2 := "test-reconnect-metric-off-" + uniqueid.UniqueId()
+	cm2 := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, localAddr2, testNumShards)
+	if err := cm2.Initialize(ctx); err != nil {
+		t.Fatalf("Failed to initialize cm2: %v", err)
+	}
+	watchCtx2, watchCancel2 := context.WithCancel(ctx)
+	defer watchCancel2()
+	done2 := make(chan struct{})
+	go func() {
+		_ = cm2.watchPrefixOnce(watchCtx2, testPrefix, false)
+		close(done2)
+	}()
+	time.Sleep(200 * time.Millisecond)
+	if _, err := client.Put(ctx, testPrefix+"/nodes/test-metric-node-2", "test-metric-addr:2"); err != nil {
+		t.Fatalf("Failed to put node key: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	watchCancel2()
+	<-done2
+
+	got2 := promtestutil.ToFloat64(metrics.WatchReconnectionsTotal.WithLabelValues(localAddr2, "reconnected"))
+	if got2 != 0 {
+		t.Fatalf("Expected 0 reconnected metric for %s (isReconnect=false), got %v", localAddr2, got2)
+	}
 }
 
 // TestWatchPrefixOnceReturnsNilOnCancel tests that watchPrefixOnce
