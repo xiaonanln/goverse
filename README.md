@@ -9,7 +9,7 @@ GoVerse is a distributed object runtime for Go, inspired by Orleans.
 It provides virtual actors, automatic placement, lifecycle management, and streaming RPCs.  
 Designed for building fault-tolerant backend services and large-scale real-time systems.
 
-> ⚠️ **EARLY DEVELOPMENT STAGE** - This project is in very early development. APIs are unstable and may change significantly. Not recommended for production use.
+> **v0.1.0 — first tagged release.** Core concepts (objects, nodes, gates) are settled and basic failure modes are handled. APIs may still change before v1.0. Production use is at your own risk; see [CHANGELOG.md](CHANGELOG.md) for known issues.
 
 ---
 
@@ -182,11 +182,11 @@ Full documentation:
 
 ## Status & Roadmap
 
-Current status: **Alpha**
+Current status: **v0.1.0** — first tagged release. See [CHANGELOG.md](CHANGELOG.md) for what's in and [docs/MILESTONE_V0.1.0.md](docs/MILESTONE_V0.1.0.md) for the release criteria.
 
-Near-term goals: stability improvements, enhanced benchmarks, Inspector UI v2
+Near-term goals (v0.2.0): access control and auth, TLS/mTLS, graceful shutdown mode, observability improvements.
 
-See [Getting Started](docs/GET_STARTED.md) for detailed roadmap and contribution guidelines.
+See [Getting Started](docs/GET_STARTED.md) for the end-to-end tutorial and contribution guidelines.
 
 ---
 
