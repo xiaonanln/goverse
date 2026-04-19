@@ -506,6 +506,51 @@ nodes:
 	}
 }
 
+func TestLoaderWithDefaultOperationTimeouts(t *testing.T) {
+	configContent := `
+version: 1
+
+cluster:
+  shards: 4096
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "etcd-cluster:2379"
+    prefix: "/goverse-test"
+  default_call_timeout: 45s
+  default_create_timeout: 12s
+  default_delete_timeout: 7s
+
+nodes:
+  - id: "node-1"
+    grpc_addr: "0.0.0.0:9101"
+    advertise_addr: "node-1.local:9101"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	loader := NewLoader(fs)
+
+	cfg, err := loader.Load([]string{"-config", configPath, "-node-id", "node-1"})
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.DefaultCallTimeout != 45*time.Second {
+		t.Errorf("expected DefaultCallTimeout 45s, got %v", cfg.DefaultCallTimeout)
+	}
+	if cfg.DefaultCreateTimeout != 12*time.Second {
+		t.Errorf("expected DefaultCreateTimeout 12s, got %v", cfg.DefaultCreateTimeout)
+	}
+	if cfg.DefaultDeleteTimeout != 7*time.Second {
+		t.Errorf("expected DefaultDeleteTimeout 7s, got %v", cfg.DefaultDeleteTimeout)
+	}
+}
+
 func TestLoaderWithAutoLoadObjects(t *testing.T) {
 	// Create a temp config file with auto_load_objects
 	configContent := `
