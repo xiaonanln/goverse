@@ -854,6 +854,51 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 	return nil
 }
 
+// EvictObject removes an object from this node's in-memory map without deleting
+// its persisted state. It flushes the latest state to the persistence provider
+// first so the new shard owner can reactivate the object with an up-to-date
+// snapshot (see docs/SHARDING.md: objects are virtual actors, reactivated on
+// the new node on first access after migration). For user-initiated deletion
+// that also removes persistence, use DeleteObject.
+func (node *Node) EvictObject(ctx context.Context, id string) error {
+	node.stopMu.RLock()
+	defer node.stopMu.RUnlock()
+
+	if node.stopped.Load() {
+		return nil
+	}
+
+	unlockKey := node.objectLifecycleLock.Lock(id)
+	defer unlockKey()
+
+	node.objectsMu.RLock()
+	obj, exists := node.objects[id]
+	node.objectsMu.RUnlock()
+
+	if !exists {
+		return nil
+	}
+
+	// Flush latest state to persistence before destroying the in-memory instance
+	// so the new owner can reactivate with up-to-date data. Save errors block
+	// destruction — we'd rather the object stay in memory and retry next tick
+	// than lose state.
+	node.persistenceProviderMu.RLock()
+	provider := node.persistenceProvider
+	node.persistenceProviderMu.RUnlock()
+
+	if provider != nil {
+		if err := obj.Save(provider); err != nil && !errors.Is(err, object.ErrNotPersistent) {
+			node.logger.Errorf("Failed to save object %s before eviction: %v", id, err)
+			return fmt.Errorf("failed to save before eviction: %w", err)
+		}
+	}
+
+	node.destroyObject(id)
+	node.logger.Infof("Evicted object %s from node (persistence preserved)", id)
+	return nil
+}
+
 func (node *Node) NumObjects() int {
 	node.objectsMu.RLock()
 	defer node.objectsMu.RUnlock()
