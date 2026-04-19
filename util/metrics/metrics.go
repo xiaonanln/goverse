@@ -179,6 +179,15 @@ var (
 		},
 		[]string{"error_type"},
 	)
+
+	// WatchReconnectionsTotal tracks etcd watch reconnection events by outcome
+	WatchReconnectionsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_watch_reconnections_total",
+			Help: "Total number of etcd watch reconnection attempts by node and outcome (reconnected, reload_failed)",
+		},
+		[]string{"node_addr", "outcome"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -296,4 +305,10 @@ func RecordOperationTimeout(nodeAddr, operation string) {
 // RecordOperationDuration records the duration of an operation in seconds
 func RecordOperationDuration(nodeAddr, operation, status string, duration float64) {
 	OperationDurationSeconds.WithLabelValues(nodeAddr, operation, status).Observe(duration)
+}
+
+// RecordWatchReconnection increments the etcd watch reconnection counter by outcome
+// ("reconnected" on successful state reload, "reload_failed" when reload fails mid-retry).
+func RecordWatchReconnection(nodeAddr, outcome string) {
+	WatchReconnectionsTotal.WithLabelValues(nodeAddr, outcome).Inc()
 }

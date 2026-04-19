@@ -549,6 +549,7 @@ func (cm *ConsensusManager) watchPrefix(ctx context.Context, prefix string) {
 		state, loadErr := cm.loadClusterStateFromEtcd(ctx)
 		if loadErr != nil {
 			cm.logger.Errorf("Failed to reload cluster state: %v", loadErr)
+			metrics.RecordWatchReconnection(cm.localNodeAddress, "reload_failed")
 			// Increase backoff and retry
 			backoff = backoff * 2
 			if backoff > maxBackoff {
@@ -561,6 +562,7 @@ func (cm *ConsensusManager) watchPrefix(ctx context.Context, prefix string) {
 		cm.state = state
 		cm.mu.Unlock()
 		cm.logger.Infof("Cluster state reloaded at revision %d", state.Revision)
+		metrics.RecordWatchReconnection(cm.localNodeAddress, "reconnected")
 
 		// Notify listeners of the refreshed state
 		cm.notifyStateChanged()

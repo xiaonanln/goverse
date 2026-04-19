@@ -8,8 +8,11 @@ import (
 	"testing"
 	"time"
 
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/xiaonanln/goverse/cluster/etcdmanager"
 	"github.com/xiaonanln/goverse/cluster/shardlock"
+	"github.com/xiaonanln/goverse/util/metrics"
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
@@ -140,5 +143,12 @@ func TestWatchReconnection(t *testing.T) {
 	nodes = cm.GetNodes()
 	if len(nodes) != 2 {
 		t.Fatalf("Expected 2 nodes after reconnection, got %d: %v", len(nodes), nodes)
+	}
+
+	// Verify the watch reconnection metric was bumped at least once with outcome=reconnected.
+	// localNodeAddress was passed as "" to NewConsensusManager above, so the label matches.
+	reconnects := promtestutil.ToFloat64(metrics.WatchReconnectionsTotal.WithLabelValues("", "reconnected"))
+	if reconnects < 1 {
+		t.Fatalf("Expected at least 1 watch reconnection metric (outcome=reconnected), got %v", reconnects)
 	}
 }
