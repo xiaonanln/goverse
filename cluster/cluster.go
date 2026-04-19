@@ -874,6 +874,11 @@ func (c *Cluster) ReliableCallObjectAnyRequest(ctx context.Context, callID strin
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("methodName cannot be empty")
 	}
 
+	// Enforce default call timeout. Without this, a deadline-less ctx lets the
+	// RPC retry loop below run forever on persistent RPC failures.
+	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultCallTimeout, DefaultCallTimeout))
+	defer cancel()
+
 	// Find the target node FIRST (before INSERT)
 	// This ensures INSERT happens on the owner node with proper locking
 	// Pre-execution error - method never executed, so SKIPPED
