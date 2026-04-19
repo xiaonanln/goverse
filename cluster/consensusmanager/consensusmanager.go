@@ -516,9 +516,10 @@ func (cm *ConsensusManager) watchPrefix(ctx context.Context, prefix string) {
 		maxBackoff     = 30 * time.Second
 	)
 	backoff := initialBackoff
+	isReconnect := false
 
 	for {
-		err := cm.watchPrefixOnce(ctx, prefix)
+		err := cm.watchPrefixOnce(ctx, prefix, isReconnect)
 		if err == nil {
 			// Context was cancelled — clean shutdown
 			return
@@ -562,19 +563,22 @@ func (cm *ConsensusManager) watchPrefix(ctx context.Context, prefix string) {
 		cm.state = state
 		cm.mu.Unlock()
 		cm.logger.Infof("Cluster state reloaded at revision %d", state.Revision)
-		metrics.RecordWatchReconnection(cm.localNodeAddress, "reconnected")
 
 		// Notify listeners of the refreshed state
 		cm.notifyStateChanged()
 
-		// Reset backoff on successful reload
+		// Reset backoff on successful reload. The "reconnected" metric is recorded
+		// by watchPrefixOnce once the new watch stream actually opens against etcd.
 		backoff = initialBackoff
+		isReconnect = true
 	}
 }
 
 // watchPrefixOnce runs a single watch session. Returns nil if context was cancelled
 // (clean shutdown), or an error describing why the watch ended.
-func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string) error {
+// If isReconnect is true, records a "reconnected" metric the first time etcd
+// confirms the watch stream is healthy (first non-error response).
+func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string, isReconnect bool) error {
 	client := cm.etcdManager.GetClient()
 	if client == nil {
 		return fmt.Errorf("etcd client not available")
@@ -594,6 +598,7 @@ func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string) 
 	watchChan := client.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision+1))
 
 	cm.logger.Infof("Started watching prefix %s from revision %d", prefix, revision+1)
+	watchOpenConfirmed := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -612,6 +617,15 @@ func (cm *ConsensusManager) watchPrefixOnce(ctx context.Context, prefix string) 
 			}
 			if watchResp.Err() != nil {
 				return fmt.Errorf("watch error: %w", watchResp.Err())
+			}
+
+			// First healthy response confirms the watch stream actually opened
+			// against etcd. Only then is a reconnect counted as successful.
+			if !watchOpenConfirmed {
+				watchOpenConfirmed = true
+				if isReconnect {
+					metrics.RecordWatchReconnection(cm.localNodeAddress, "reconnected")
+				}
 			}
 
 			for _, event := range watchResp.Events {
