@@ -41,7 +41,13 @@ This tutorial walks you from a fresh checkout to calling a distributed object ov
 
 - Go 1.21+
 - Docker (for etcd)
-- Python 3.8+ with `protobuf` (`pip install protobuf`) — used by the sample CLI
+- `protoc` with Go plugins — install `protoc`, then:
+  ```bash
+  go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+  go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+  ```
+  Ensure `$(go env GOPATH)/bin` is on your `PATH`.
+- Python 3.8+ with `grpcio-tools` (`pip install grpcio-tools`) — used by the sample CLI
 
 Clone and enter the repo:
 
@@ -50,7 +56,17 @@ git clone https://github.com/xiaonanln/goverse.git
 cd goverse
 ```
 
-### Step 1 — Start etcd
+### Step 1 — Compile protos
+
+Generated `.pb.go` and `_pb2.py` files are not committed. Build them once from the repo root:
+
+```bash
+./script/compile-proto.sh
+```
+
+This generates both the core Go/Python bindings and the counter sample's bindings.
+
+### Step 2 — Start etcd
 
 GoVerse uses etcd for cluster coordination. The repo ships a `docker-compose.yml` that brings up etcd (and Postgres, which the counter sample doesn't need).
 
@@ -60,7 +76,7 @@ docker compose up -d etcd
 
 etcd is now listening on `localhost:2379`.
 
-### Step 2 — Run the counter node
+### Step 3 — Run the counter node
 
 The counter sample lives in `samples/counter/`. Start it as a node on port `47000`:
 
@@ -70,7 +86,7 @@ go run ./samples/counter/server/ -listen=:47000 -advertise=localhost:47000
 
 This node hosts `Counter` objects. Leave it running.
 
-### Step 3 — Run the gate
+### Step 4 — Run the gate
 
 Open a second terminal and start a gate with HTTP enabled on port `48000`:
 
@@ -80,7 +96,7 @@ go run ./cmd/gate/ -listen=:49000 -advertise=localhost:49000 -http-listen=:48000
 
 The gate accepts gRPC client connections on `:49000` and exposes the REST API on `:48000`. It discovers the node via etcd.
 
-### Step 4 — Call an object over HTTP
+### Step 5 — Call an object over HTTP
 
 In a third terminal, use the bundled Python CLI to create a counter and increment it:
 
@@ -94,7 +110,7 @@ python3 counter.py get visitors
 
 Under the hood, each command is a POST against `http://localhost:48000/api/v1/objects/...`. The gate routes the call to the node hosting the object based on its shard.
 
-### Step 5 — Watch it in the Inspector
+### Step 6 — Watch it in the Inspector
 
 Start the Inspector in a fourth terminal:
 
