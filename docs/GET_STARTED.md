@@ -8,6 +8,7 @@ It lets you build systems around **stateful entities with identity and methods**
 ## Table of Contents
 
 - [Installation](#installation)
+- [5-Minute Tour](#5-minute-tour)
 - [Core Concepts](#core-concepts)
 - [Project Structure](#project-structure)
 - [Gate Architecture](#gate-architecture)
@@ -29,6 +30,86 @@ Install GoVerse using Go modules:
 ```bash
 go get github.com/xiaonanln/goverse
 ```
+
+---
+
+## 5-Minute Tour
+
+This tutorial walks you from a fresh checkout to calling a distributed object over HTTP and watching it appear in the Inspector. Each step runs in its own terminal.
+
+### Prerequisites
+
+- Go 1.21+
+- Docker (for etcd)
+- Python 3.8+ with `protobuf` (`pip install protobuf`) — used by the sample CLI
+
+Clone and enter the repo:
+
+```bash
+git clone https://github.com/xiaonanln/goverse.git
+cd goverse
+```
+
+### Step 1 — Start etcd
+
+GoVerse uses etcd for cluster coordination. The repo ships a `docker-compose.yml` that brings up etcd (and Postgres, which the counter sample doesn't need).
+
+```bash
+docker compose up -d etcd
+```
+
+etcd is now listening on `localhost:2379`.
+
+### Step 2 — Run the counter node
+
+The counter sample lives in `samples/counter/`. Start it as a node on port `47000`:
+
+```bash
+go run ./samples/counter/server/ -listen=:47000 -advertise=localhost:47000
+```
+
+This node hosts `Counter` objects. Leave it running.
+
+### Step 3 — Run the gate
+
+Open a second terminal and start a gate with HTTP enabled on port `48000`:
+
+```bash
+go run ./cmd/gate/ -listen=:49000 -advertise=localhost:49000 -http-listen=:48000
+```
+
+The gate accepts gRPC client connections on `:49000` and exposes the REST API on `:48000`. It discovers the node via etcd.
+
+### Step 4 — Call an object over HTTP
+
+In a third terminal, use the bundled Python CLI to create a counter and increment it:
+
+```bash
+cd samples/counter
+python3 counter.py create visitors
+python3 counter.py increment visitors 5
+python3 counter.py get visitors
+# Counter visitors = 5
+```
+
+Under the hood, each command is a POST against `http://localhost:48000/api/v1/objects/...`. The gate routes the call to the node hosting the object based on its shard.
+
+### Step 5 — Watch it in the Inspector
+
+Start the Inspector in a fourth terminal:
+
+```bash
+go run ./cmd/inspector/
+```
+
+Open http://localhost:8080 — you'll see the node, the gate, and the `Counter-visitors` object, with shard assignments updating live as you run more CLI commands.
+
+### Where to go next
+
+- **Writing your own object**: see [Quick Start Tutorial](#quick-start-tutorial) below for the code-level walkthrough.
+- **A more substantial example**: see [Chat Application Example](#chat-application-example) for a distributed chat app with push messaging and a web client.
+- **Persistent objects**: see [Object Persistence](#object-persistence) to save state to PostgreSQL.
+- **Production deployment**: see [KUBERNETES_DEPLOYMENT.md](KUBERNETES_DEPLOYMENT.md) for a reference Kubernetes manifest set.
 
 ---
 
