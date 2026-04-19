@@ -181,9 +181,9 @@ func NewClusterWithGate(cfg Config, g *gate.Gate) (*Cluster, error) {
 }
 
 func (c *Cluster) init(cfg Config) error {
-	// Initialize the cluster-live ctx up front so background work launched before
-	// Start() (or in tests that never call Start) has a non-nil parent to bind
-	// to. Start() reassigns this ctx to a child of its own ctx.
+	// Initialize the cluster-live ctx up front. It bounds all cluster-live
+	// background work (async Create/DeleteObject goroutines, the shard
+	// management loop, etc.) and is cancelled by Cluster.Stop.
 	c.liveCtx, c.liveCancel = context.WithCancel(context.Background())
 
 	// Initialization logic for the cluster
@@ -331,7 +331,7 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 	}
 
 	// Start shard mapping management
-	if err := c.startClusterManagement(ctx); err != nil {
+	if err := c.startClusterManagement(); err != nil {
 		return fmt.Errorf("failed to start shard mapping management: %w", err)
 	}
 
@@ -353,6 +353,14 @@ func (c *Cluster) Start(ctx context.Context, n *node.Node) error {
 // 5. Closes the etcd connection
 func (c *Cluster) Stop(ctx context.Context) error {
 	c.logger.Infof("%s - Stopping cluster...", c)
+
+	// Cancel the cluster-live ctx up front so any async background work
+	// (Create/DeleteObject goroutines, shard management loop, etc.) unwinds
+	// while the rest of shutdown runs.
+	if c.liveCancel != nil {
+		c.liveCancel()
+		c.liveCancel = nil
+	}
 
 	// Stop node connections
 	c.stopNodeConnections()
@@ -702,8 +710,9 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 
 	// Check if the object should be created on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
+		liveCtx := c.liveCtx
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(asyncCtx, objType, objID)
@@ -749,8 +758,9 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 		return objID, nil
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
+		liveCtx := c.liveCtx
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
 			if _, asyncErr := client.CreateObject(asyncCtx, req); asyncErr != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, asyncErr)
@@ -790,8 +800,9 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	}
 	// Check if the object should be deleted on this node (only for node clusters)
 	if c.isNode() && nodeAddr == c.getAdvertiseAddr() {
+		liveCtx := c.liveCtx
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			// Delete locally
 			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
@@ -833,8 +844,9 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 		return nil
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
+		liveCtx := c.liveCtx
 		go func() {
-			asyncCtx, asyncCancel := context.WithTimeout(c.liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
+			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
 			if _, asyncErr := client.DeleteObject(asyncCtx, req); asyncErr != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, asyncErr)
@@ -1462,18 +1474,12 @@ func (c *Cluster) GetNodeForShard(ctx context.Context, shardID int) (string, err
 // If this node is the leader and the node list has been stable for the configured node stability duration,
 // it will update/initialize the shard mapping.
 // If this node is not the leader, it will periodically refresh the shard mapping from etcd.
-func (c *Cluster) startClusterManagement(ctx context.Context) error {
+func (c *Cluster) startClusterManagement() error {
 	if c.clusterManagementRunning {
 		c.logger.Warnf("%s - Shard mapping management already running", c)
 		return nil
 	}
 
-	// Replace the constructor-seeded ctx with one tied to the Start() ctx, so
-	// cancellation of the caller's ctx propagates to cluster background work.
-	if c.liveCancel != nil {
-		c.liveCancel()
-	}
-	c.liveCtx, c.liveCancel = context.WithCancel(ctx)
 	c.clusterManagementRunning = true
 
 	go c.clusterManagementLoop()
@@ -1483,12 +1489,9 @@ func (c *Cluster) startClusterManagement(ctx context.Context) error {
 	return nil
 }
 
-// stopShardMappingManagement stops the shard mapping management background task
+// stopShardMappingManagement stops the shard mapping management background task.
+// The liveCtx that drives the loop is cancelled by Cluster.Stop directly.
 func (c *Cluster) stopShardMappingManagement() {
-	if c.liveCancel != nil {
-		c.liveCancel()
-		c.liveCancel = nil
-	}
 	c.clusterManagementRunning = false
 	c.logger.Infof("%s - Stopped shard mapping management", c)
 }
