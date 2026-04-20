@@ -106,8 +106,9 @@ POSTGRES_PORT = 5432
 def ensure_postgres_ready(timeout_seconds: float = 30.0) -> bool:
     """Ensure Postgres is accepting connections on POSTGRES_HOST:POSTGRES_PORT.
 
-    If not reachable, attempts `docker-compose up -d postgres` once and retries.
-    Returns True if Postgres becomes reachable within the timeout.
+    If not reachable, tries docker compose (new plugin) and docker-compose
+    (legacy binary) in order. Returns True if Postgres becomes reachable
+    within the timeout.
     """
     def can_connect() -> bool:
         try:
@@ -120,15 +121,24 @@ def ensure_postgres_ready(timeout_seconds: float = 30.0) -> bool:
         print(f"✅ Postgres already running on {POSTGRES_HOST}:{POSTGRES_PORT}")
         return True
 
-    print(f"ℹ️  Postgres not reachable at {POSTGRES_HOST}:{POSTGRES_PORT}; attempting docker-compose up -d postgres")
-    try:
-        subprocess.run(
-            ["docker-compose", "up", "-d", "postgres"],
-            cwd=str(REPO_ROOT),
-            check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"❌ Could not start Postgres via docker-compose: {e}")
+    compose_commands = [
+        ["docker", "compose", "up", "-d", "postgres"],
+        ["docker-compose", "up", "-d", "postgres"],
+    ]
+    started = False
+    for cmd in compose_commands:
+        print(f"ℹ️  Postgres not reachable at {POSTGRES_HOST}:{POSTGRES_PORT}; attempting {' '.join(cmd)}")
+        try:
+            subprocess.run(cmd, cwd=str(REPO_ROOT), check=True)
+            started = True
+            break
+        except FileNotFoundError:
+            continue
+        except subprocess.CalledProcessError as e:
+            print(f"❌ {' '.join(cmd)} failed: {e}")
+            return False
+    if not started:
+        print("❌ Neither `docker compose` nor `docker-compose` is available to start Postgres")
         return False
 
     deadline = time.time() + timeout_seconds
