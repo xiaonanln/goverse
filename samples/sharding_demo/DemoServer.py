@@ -147,7 +147,6 @@ class DemoServer:
         except subprocess.TimeoutExpired:
             # Force kill if graceful shutdown fails
             print(f"⚠️  {self.name} did not stop gracefully, force killing...")
-            time.sleep(300)
             self.process.kill()
             self.process.wait()
         except Exception as e:

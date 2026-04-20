@@ -143,9 +143,17 @@ class StressTestClient:
         self.increment_count = 0
         self.get_count = 0
         self.fatal_error = None  # Set when a fatal error occurs
-        
+
         # Track which counters this client knows about
         self.known_counters = []
+
+        # Highest counter value this client has ever observed per counter_id,
+        # taken from Increment/GetValue response payloads. Used by the
+        # post-run persistence check when --churn-enabled is set: the server's
+        # current value for a counter must be >= the max this client observed,
+        # otherwise a committed increment was lost across a node restart.
+        # Only written from this client's single action thread, so no lock.
+        self.observed_values = {}
     
     def start(self) -> bool:
         """Start the stress test client in a background thread.
@@ -284,9 +292,12 @@ class StressTestClient:
                 request=sharding_demo_pb2.IncrementRequest(),
                 timeout=5.0
             )
-            
+
             self.increment_count += 1
-            print(f"[Client {self.client_id}] Incremented counter: {counter_id}")
+            value = getattr(response, 'value', 0)
+            if value > self.observed_values.get(counter_id, 0):
+                self.observed_values[counter_id] = value
+            print(f"[Client {self.client_id}] Incremented counter: {counter_id} -> {value}")
             
         except Exception as e:
             if self.running:
@@ -314,22 +325,37 @@ class StressTestClient:
                 request=sharding_demo_pb2.GetValueRequest(),
                 timeout=5.0
             )
-            
+
             self.get_count += 1
-            print(f"[Client {self.client_id}] Got value for counter: {counter_id}")
+            value = getattr(response, 'value', 0)
+            if value > self.observed_values.get(counter_id, 0):
+                self.observed_values[counter_id] = value
+            print(f"[Client {self.client_id}] Got value for counter: {counter_id} = {value}")
             
         except Exception as e:
             if self.running:
                 print(f"⚠️  Client {self.client_id} failed to get counter value: {e}")
             raise
     
-    def stop(self):
-        """Stop the stress test client."""
+    def halt_actions(self):
+        """Signal the action loop to exit and join the worker thread.
+
+        The underlying client connection is left open so the caller can still
+        invoke methods (e.g. the post-run persistence check) before tearing
+        the client down with stop().
+        """
         self.running = False
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=2)
-        if self.client:
-            self.client.close()
+
+    def stop(self):
+        """Stop the stress test client and release the gRPC connection."""
+        self.halt_actions()
+        if self.client is not None:
+            try:
+                self.client.close()
+            finally:
+                self.client = None
         print(f"[Client {self.client_id}] Stopped. Actions: {self.action_count}, "
               f"Errors: {self.error_count}, Creates: {self.create_count}, "
               f"Increments: {self.increment_count}, Gets: {self.get_count}")
@@ -353,6 +379,139 @@ class StressTestClient:
     def has_fatal_error(self) -> bool:
         """Check if this client encountered a fatal error."""
         return self.fatal_error is not None
+
+
+class ChurnController:
+    """Periodically kills and restarts a random demo server.
+
+    Exercises shard migration and persistence: while clients keep driving
+    Increment/GetValue traffic, one node is taken down and brought back up
+    every churn_interval seconds. Counters on the killed node's shards must
+    migrate to surviving nodes with their values intact — the persistence
+    check after the test validates this.
+    """
+
+    def __init__(self, demo_servers, config_file, interval, downtime):
+        self.demo_servers = demo_servers   # shared with main(); mutated under self.lock
+        self.config_file = config_file
+        self.interval = interval
+        self.downtime = downtime
+        self.stop_event = threading.Event()
+        self.lock = threading.Lock()
+        self.thread = None
+        self.cycles = 0
+        self.failures = 0
+
+    def start(self):
+        self.thread = threading.Thread(target=self._run, daemon=True, name='churn')
+        self.thread.start()
+
+    def stop(self, timeout: float = 60.0):
+        self.stop_event.set()
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=timeout)
+
+    def _run(self):
+        # Wait one full interval before the first kill so the cluster has
+        # time to warm up with real traffic.
+        while not self.stop_event.wait(self.interval):
+            with self.lock:
+                if not self.demo_servers:
+                    continue
+                idx = random.randint(0, len(self.demo_servers) - 1)
+                target = self.demo_servers[idx]
+
+            print(f"\n🔄 [CHURN] Killing demo server idx={idx} node_id={target.node_id}")
+            try:
+                target.close()
+            except Exception as e:
+                print(f"⚠️  [CHURN] error closing {target.name}: {e}")
+
+            # Brief downtime so clients observe failures and shards migrate.
+            if self.stop_event.wait(self.downtime):
+                return
+
+            try:
+                replacement = DemoServer(
+                    server_index=target.server_index,
+                    config_file=self.config_file,
+                    node_id=target.node_id,
+                )
+                replacement.start()
+                if not replacement.wait_for_ready(timeout=30):
+                    print(f"⚠️  [CHURN] {replacement.name} did not become ready")
+                    self.failures += 1
+                with self.lock:
+                    # The list may have been mutated elsewhere; find the
+                    # stale entry by identity rather than trusting idx.
+                    for i, s in enumerate(self.demo_servers):
+                        if s is target:
+                            self.demo_servers[i] = replacement
+                            break
+                    else:
+                        self.demo_servers.append(replacement)
+                self.cycles += 1
+                print(f"✅ [CHURN] cycle #{self.cycles} complete (node_id={target.node_id})")
+            except Exception as e:
+                print(f"⚠️  [CHURN] restart failed for node_id={target.node_id}: {e}")
+                traceback.print_exc()
+                self.failures += 1
+
+
+def run_persistence_check(clients: List['StressTestClient']) -> bool:
+    """Verify each counter's server value is >= the max any client observed.
+
+    An IncrementResponse with value=V is proof that the server committed V;
+    a later GetValue that returns <V means a committed increment was lost
+    across a node restart. Returns True if the invariant holds for every
+    observed counter.
+    """
+    max_observed = {}
+    for c in clients:
+        for counter_id, v in c.observed_values.items():
+            if v > max_observed.get(counter_id, 0):
+                max_observed[counter_id] = v
+
+    print("\n" + "=" * 80)
+    print("PERSISTENCE CHECK")
+    print("=" * 80)
+    if not max_observed:
+        print("No counter values observed by any client — nothing to verify.")
+        return True
+
+    checker = next((c for c in clients if c.client is not None), None)
+    if checker is None:
+        print("❌ No live client available to query server values")
+        return False
+
+    failures = []
+    checked = 0
+    for counter_id, observed in sorted(max_observed.items()):
+        try:
+            response = checker.client.call_object(
+                object_type="SimpleCounter",
+                object_id=counter_id,
+                method="GetValue",
+                request=sharding_demo_pb2.GetValueRequest(),
+                timeout=10.0,
+            )
+            server_value = getattr(response, 'value', 0)
+        except Exception as e:
+            print(f"❌ {counter_id}: server query failed: {e}")
+            failures.append((counter_id, observed, None, str(e)))
+            continue
+
+        checked += 1
+        if server_value < observed:
+            print(f"❌ {counter_id}: observed max={observed}, server={server_value} (REGRESSION)")
+            failures.append((counter_id, observed, server_value, None))
+        else:
+            print(f"✅ {counter_id}: observed max={observed}, server={server_value}")
+
+    print("-" * 80)
+    print(f"Counters verified: {checked}/{len(max_observed)}, failures: {len(failures)}")
+    print("=" * 80)
+    return not failures
 
 
 def print_stats(clients: List[StressTestClient], file=sys.stdout):
@@ -411,6 +570,12 @@ Examples:
                        help='Number of demo server nodes (default: 10)')
     parser.add_argument('--gates', type=int, default=7,
                        help='Number of gateways (default: 7)')
+    parser.add_argument('--churn-enabled', action='store_true', default=False,
+                       help='Periodically kill + restart a random demo server to exercise shard migration and persistence (default: disabled)')
+    parser.add_argument('--churn-interval', type=float, default=30.0,
+                       help='Seconds between churn cycles when --churn-enabled (default: 30)')
+    parser.add_argument('--churn-downtime', type=float, default=2.0,
+                       help='Seconds a churned node stays down before restart (default: 2)')
     args = parser.parse_args()
     
     num_clients = args.clients
@@ -418,6 +583,9 @@ Examples:
     stats_interval = args.stats_interval
     num_nodes = args.nodes
     num_gates = args.gates
+    churn_enabled = args.churn_enabled
+    churn_interval = args.churn_interval
+    churn_downtime = args.churn_downtime
     
     # Use the already-computed REPO_ROOT
     os.chdir(REPO_ROOT)
@@ -431,14 +599,20 @@ Examples:
     print(f"Clients: {num_clients}")
     print(f"Duration: {duration_seconds} seconds ({duration_seconds / 60:.1f} minutes)")
     print(f"Stats interval: {stats_interval} seconds ({stats_interval / 60:.1f} minutes)")
+    if churn_enabled:
+        print(f"Churn: ENABLED (interval={churn_interval}s, downtime={churn_downtime}s)")
+    else:
+        print("Churn: disabled")
     print("=" * 80)
     print()
-    
+
     # Track all started processes and clients for cleanup
     inspector = None
     demo_servers = []
     gateways = []
     clients = []
+    churn_controller = None
+    persistence_ok = True
     
     final_stats = StringIO()
 
@@ -564,7 +738,22 @@ Examples:
             time.sleep(0.2)
         
         print(f"\n✅ Started {len(clients)} clients successfully")
-        
+
+        # Start churn controller once clients are driving real traffic. It
+        # kills and restarts random demo servers so shard migration and
+        # persistence are exercised end-to-end.
+        if churn_enabled:
+            print("\n" + "=" * 80)
+            print("STARTING CHURN CONTROLLER")
+            print("=" * 80)
+            churn_controller = ChurnController(
+                demo_servers=demo_servers,
+                config_file=str(config_file),
+                interval=churn_interval,
+                downtime=churn_downtime,
+            )
+            churn_controller.start()
+
         # Run for the specified duration
         print("\n" + "=" * 80)
         print(f"RUNNING STRESS TEST FOR {duration_seconds} SECONDS")
@@ -597,12 +786,31 @@ Examples:
         print("\n" + "=" * 80)
         print("STRESS TEST COMPLETED")
         print("=" * 80)
+
+        # Stop churn first so no more nodes bounce while we verify, then let
+        # in-flight shard migrations settle before querying counter values.
+        if churn_controller is not None:
+            print(f"Stopping churn controller "
+                  f"(cycles={churn_controller.cycles}, failures={churn_controller.failures})...")
+            churn_controller.stop()
+            print("Waiting 10s for cluster to settle after churn...")
+            time.sleep(10)
+
+        # Halt action loops but keep client connections open for the check.
+        for client in clients:
+            client.halt_actions()
+
+        if churn_enabled:
+            persistence_ok = run_persistence_check(clients)
+
         print_stats(clients, file=final_stats)
-        
-        return 0
-        
+
+        return 0 if persistence_ok else 1
+
     except KeyboardInterrupt:
         print("\n\n⚠️  Test interrupted by user")
+        if churn_controller is not None:
+            churn_controller.stop()
         print_stats(clients, file=final_stats)
         return 1
         
@@ -614,7 +822,15 @@ Examples:
     finally:
         # Always clean up all processes
         print("\nCleaning up...")
-        
+
+        # Stop churn first — it mutates demo_servers and spawns/kills
+        # subprocesses, so nothing else can be torn down safely while it runs.
+        if churn_controller is not None:
+            try:
+                churn_controller.stop()
+            except Exception as e:
+                print(f"⚠️  Error stopping churn controller: {e}")
+
         # Stop clients
         print("Stopping clients...")
         for client in clients:
