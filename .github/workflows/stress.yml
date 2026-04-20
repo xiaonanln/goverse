@@ -79,6 +79,9 @@ jobs:
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;"
           sudo -u postgres psql -d goverse -c "GRANT ALL ON SCHEMA public TO goverse;"
 
+      - name: Initialize Goverse schema
+        run: go run ./cmd/pgadmin --config samples/sharding_demo/stress_config_demo.yml init
+
       - name: Install PyYAML
         run: python3 -m pip install pyyaml
 
