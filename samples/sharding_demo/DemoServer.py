@@ -142,13 +142,15 @@ class DemoServer:
 
         # Try graceful shutdown first. The grace window must cover:
         #   1. gRPC GracefulStop draining in-flight RPCs (can be seconds under
-        #      load during churn), then
+        #      load during churn — clients aggressively retry through other
+        #      nodes that may also be churning), then
         #   2. Node.Stop() persisting every in-memory object to Postgres.
-        # 5s was too tight under churn — the shutdown got SIGKILLed mid-save
-        # and dirty counter state was lost. 30s is generous but still bounded.
+        # CI runners can be much slower than local dev: a 30s grace window
+        # was repeatedly hitting the SIGKILL path under churn. 60s is
+        # generous but still bounded — a hung node still terminates.
         try:
             self.process.send_signal(signal.SIGTERM)
-            self.process.wait(timeout=30)
+            self.process.wait(timeout=60)
         except subprocess.TimeoutExpired:
             # Force kill if graceful shutdown fails
             print(f"⚠️  {self.name} did not stop gracefully, force killing...")

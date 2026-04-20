@@ -522,25 +522,53 @@ def run_persistence_check(clients: List['StressTestClient']) -> bool:
         print("❌ No healthy client available to query server values")
         return False
 
-    def query_server(counter_id: str):
-        """Try each healthy client in turn until one returns a value."""
+    # Errors that mean "the cluster is still settling routing/migration after
+    # churn" — they're not real failures, just transient state. We retry the
+    # query until either it succeeds or a generous deadline elapses, instead
+    # of letting them count as regressions.
+    transient_markers = (
+        "is in migration",          # shard is mid-migration between nodes
+        "cannot determine node",    # routing table still stale
+        "no shard assigned",        # leader hasn't reassigned the shard yet
+    )
+
+    def is_transient(err: Exception) -> bool:
+        msg = str(err).lower()
+        return any(m.lower() in msg for m in transient_markers)
+
+    def query_server(counter_id: str, retry_deadline_s: float = 30.0):
+        """Try each healthy client in turn until one returns a value.
+
+        Retries transient migration/routing errors until retry_deadline_s
+        elapses; returns whatever final error/value we end up with.
+        """
         last_err = None
-        for cand in healthy_clients:
-            try:
-                response_any = cand.client.call_object(
-                    object_type="SimpleCounter",
-                    object_id=counter_id,
-                    method="GetValue",
-                    request=sharding_demo_pb2.GetValueRequest(),
-                    timeout=10.0,
-                )
-                resp = sharding_demo_pb2.GetValueResponse()
-                if response_any is not None:
-                    response_any.Unpack(resp)
-                return resp.value, None
-            except Exception as e:
-                last_err = e
-        return None, last_err
+        deadline = time.time() + retry_deadline_s
+        attempt = 0
+        while True:
+            attempt += 1
+            for cand in healthy_clients:
+                try:
+                    response_any = cand.client.call_object(
+                        object_type="SimpleCounter",
+                        object_id=counter_id,
+                        method="GetValue",
+                        request=sharding_demo_pb2.GetValueRequest(),
+                        timeout=10.0,
+                    )
+                    resp = sharding_demo_pb2.GetValueResponse()
+                    if response_any is not None:
+                        response_any.Unpack(resp)
+                    return resp.value, None
+                except Exception as e:
+                    last_err = e
+            # All healthy clients failed for this attempt. If the failure was
+            # a transient routing/migration error and we still have time,
+            # back off briefly and retry — the cluster may finish settling.
+            if last_err is not None and is_transient(last_err) and time.time() < deadline:
+                time.sleep(min(2.0, max(0.5, 0.25 * attempt)))
+                continue
+            return None, last_err
 
     failures = []
     checked = 0
@@ -651,6 +679,12 @@ Examples:
     print(f"Stats interval: {stats_interval} seconds ({stats_interval / 60:.1f} minutes)")
     if churn_enabled:
         print(f"Churn: ENABLED (interval={churn_interval}s, downtime={churn_downtime}s)")
+        # Force-killed nodes lose every increment since their last save. The
+        # demo's default is 5 minutes, which means ~all dirty state is lost
+        # on a SIGKILL. Tighten this so even a force-killed node has only a
+        # few seconds of unsaved work. DemoServer subprocess inherits the env.
+        os.environ.setdefault("DEMO_PERSISTENCE_INTERVAL", "5s")
+        print(f"Persistence interval: {os.environ['DEMO_PERSISTENCE_INTERVAL']} (via DEMO_PERSISTENCE_INTERVAL)")
     else:
         print("Churn: disabled")
     print("=" * 80)
