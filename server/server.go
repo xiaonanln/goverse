@@ -214,10 +214,14 @@ func openPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) 
 // preflightGoverseSchema fails fast when the expected Goverse tables are
 // missing, pointing the operator at the pgadmin init command rather than
 // letting the first SaveObject surface a cryptic "relation does not exist".
+//
+// Table names are passed unqualified so they resolve via the connection's
+// search_path, matching how the persistence queries (and pgadmin init) refer
+// to them. This keeps non-public schema deployments working.
 func preflightGoverseSchema(ctx context.Context, db *postgres.DB) error {
 	const query = `
-		SELECT to_regclass('public.goverse_objects') IS NOT NULL
-		   AND to_regclass('public.goverse_reliable_calls') IS NOT NULL
+		SELECT to_regclass('goverse_objects') IS NOT NULL
+		   AND to_regclass('goverse_reliable_calls') IS NOT NULL
 	`
 	var ready bool
 	if err := db.Connection().QueryRowContext(ctx, query).Scan(&ready); err != nil {
