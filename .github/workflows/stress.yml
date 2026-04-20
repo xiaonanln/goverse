@@ -114,3 +114,65 @@ jobs:
           name: stress-demo
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  demo-stress-test-churn:
+    # Same as demo-stress-test but with node churn enabled: a random demo
+    # server is killed + restarted every --churn-interval seconds, and the
+    # script fails if any counter's server value regresses below the highest
+    # value any client observed. Exercises the shard-migration persistence
+    # path end-to-end.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+        with:
+          enable-postgres: 'true'
+
+      - name: Provision Postgres role for demo config
+        run: |
+          sudo -u postgres psql -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='goverse') THEN CREATE ROLE goverse LOGIN PASSWORD 'goverse'; END IF; END \$\$;"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;"
+          sudo -u postgres psql -d goverse -c "GRANT ALL ON SCHEMA public TO goverse;"
+
+      - name: Initialize Goverse schema
+        run: go run ./cmd/pgadmin --config samples/sharding_demo/stress_config_demo.yml init
+
+      - name: Install PyYAML
+        run: python3 -m pip install pyyaml
+
+      - name: Create coverage directory
+        run: mkdir -p /tmp/coverage-demo-churn
+
+      - name: Run demo server stress test with node churn
+        env:
+          GOCOVERDIR: /tmp/coverage-demo-churn
+          ENABLE_COVERAGE: "true"
+        run: |
+          python3 samples/sharding_demo/stress_test_demo.py \
+            --duration 300 \
+            --clients 10 \
+            --churn-enabled \
+            --churn-interval 30 \
+            --churn-downtime 2
+
+      - name: Convert coverage data to text format
+        run: |
+          if [ -d /tmp/coverage-demo-churn ]; then
+            go tool covdata textfmt -i=/tmp/coverage-demo-churn -o=coverage-demo-churn-stress.out
+          else
+            echo "No coverage data found at /tmp/coverage-demo-churn"; exit 0;
+          fi
+
+      - name: Upload coverage to Codecov
+        if: ${{ hashFiles('coverage-demo-churn-stress.out') != '' }}
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./coverage-demo-churn-stress.out
+          flags: stress-demo-churn
+          name: stress-demo-churn
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
