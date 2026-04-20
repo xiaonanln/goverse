@@ -30,6 +30,11 @@ import (
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 )
 
+// gracefulStopBudget caps how long we wait for grpcServer.GracefulStop to
+// drain in-flight RPCs before falling back to a hard Stop. See the comment
+// in the shutdown goroutine for why a pure GracefulStop can stall.
+const gracefulStopBudget = 2 * time.Second
+
 type ServerConfig struct {
 	ListenAddress             string
 	AdvertiseAddress          string
@@ -358,7 +363,30 @@ func (server *Server) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			server.logger.Infof("Run context done, stopping servers...")
 		}
-		grpcServer.GracefulStop()
+		// Try to drain in-flight RPCs briefly, then force-stop. A pure
+		// GracefulStop() can block for up to the full default call timeout
+		// (30s) waiting for forwarded CallObject/ReliableCallObject RPCs to
+		// unreachable peers to time out on their own. Under churn — when
+		// multiple peers die at once — this stalls shutdown long enough that
+		// the process runner's SIGKILL fires before Node.Stop() has a chance
+		// to flush dirty object state to persistence.
+		//
+		// grpcServer.Stop() cancels all in-flight stream contexts; since
+		// forwarded calls use contexts derived from the inbound RPC context,
+		// cancellation cascades and the outbound gRPC calls return promptly,
+		// unblocking their handlers and letting us proceed to the final save.
+		stopDone := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(stopDone)
+		}()
+		select {
+		case <-stopDone:
+		case <-time.After(gracefulStopBudget):
+			server.logger.Warnf("gRPC graceful stop exceeded %s; forcing stop so state flush can proceed", gracefulStopBudget)
+			grpcServer.Stop()
+			<-stopDone
+		}
 		if metricsServer != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
