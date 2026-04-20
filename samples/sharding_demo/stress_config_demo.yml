@@ -9,6 +9,16 @@
 
 version: 1
 
+# Postgres-backed persistence. Values match docker-compose.yml.
+# Start with: docker-compose up -d postgres
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "goverse"
+  password: "goverse"
+  database: "goverse"
+  sslmode: "disable"
+
 inspector:
   # Inspector provides HTTP/gRPC interface for cluster monitoring
   http_addr: "0.0.0.0:8080"

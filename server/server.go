@@ -19,6 +19,7 @@ import (
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/metrics"
+	"github.com/xiaonanln/goverse/util/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -59,6 +60,7 @@ type Server struct {
 	logger          *logger.Logger
 	cluster         *cluster.Cluster
 	accessValidator *config.AccessValidator
+	postgresDB      *postgres.DB // Non-nil when Postgres persistence is auto-wired from config
 }
 
 func NewServer(config *ServerConfig) (*Server, error) {
@@ -138,7 +140,60 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		accessValidator: config.AccessValidator,
 	}
 
+	// Auto-wire Postgres persistence when the YAML config has a postgres section.
+	// Detection: any non-zero connection field (host or database) is treated as
+	// "configured". Zero-value config means persistence is simply off.
+	if cfg := config.ConfigFile; cfg != nil && (cfg.Postgres.Host != "" || cfg.Postgres.Database != "") {
+		if err := server.setupPostgresPersistence(ctx, &cfg.Postgres); err != nil {
+			cancel()
+			return nil, fmt.Errorf("failed to set up Postgres persistence: %w", err)
+		}
+	}
+
 	return server, nil
+}
+
+// setupPostgresPersistence opens the Postgres connection, initializes the schema,
+// and installs the persistence provider on the node. Fails fast if the DB is
+// unreachable so misconfiguration surfaces at startup rather than silently
+// dropping state on the first write.
+func (server *Server) setupPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) error {
+	sslMode := pgCfg.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	dbCfg := &postgres.Config{
+		Host:     pgCfg.Host,
+		Port:     pgCfg.Port,
+		User:     pgCfg.User,
+		Password: pgCfg.Password,
+		Database: pgCfg.Database,
+		SSLMode:  sslMode,
+	}
+
+	db, err := postgres.NewDB(dbCfg)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+
+	pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer pingCancel()
+	if err := db.Ping(pingCtx); err != nil {
+		db.Close()
+		return fmt.Errorf("ping database: %w", err)
+	}
+
+	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer initCancel()
+	if err := db.InitSchema(initCtx); err != nil {
+		db.Close()
+		return fmt.Errorf("init schema: %w", err)
+	}
+
+	server.Node.SetPersistenceProvider(postgres.NewPostgresPersistenceProvider(db))
+	server.postgresDB = db
+	server.logger.Infof("Postgres persistence enabled: %s@%s:%d/%s", pgCfg.User, pgCfg.Host, pgCfg.Port, pgCfg.Database)
+	return nil
 }
 
 func validateServerConfig(config *ServerConfig) error {
@@ -280,6 +335,12 @@ func (server *Server) Run(ctx context.Context) error {
 	err = node.Stop(server.ctx)
 	if err != nil {
 		server.logger.Errorf("Failed to stop node: %v", err)
+	}
+
+	if server.postgresDB != nil {
+		if closeErr := server.postgresDB.Close(); closeErr != nil {
+			server.logger.Errorf("Failed to close Postgres connection: %v", closeErr)
+		}
 	}
 
 	server.logger.Infof("gRPC server stopped")

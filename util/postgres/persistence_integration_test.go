@@ -158,10 +158,18 @@ func TestLoadObject_NotFound_Integration(t *testing.T) {
 	}
 	defer cleanupTestTable(t, db)
 
-	// Try to load non-existent object
-	_, _, err = db.LoadObject(ctx, "non-existent-id")
-	if err == nil {
-		t.Fatal("LoadObject() should return error for non-existent object")
+	// PersistenceProvider contract: missing rows must be signaled by
+	// (nil, 0, nil) — NOT an error — so the node's auto-create path can
+	// distinguish "create fresh" from a real load failure.
+	data, nextRcseq, err := db.LoadObject(ctx, "non-existent-id")
+	if err != nil {
+		t.Fatalf("LoadObject() for missing object returned error: %v (expected nil)", err)
+	}
+	if data != nil {
+		t.Fatalf("LoadObject() for missing object returned data=%q (expected nil)", string(data))
+	}
+	if nextRcseq != 0 {
+		t.Fatalf("LoadObject() for missing object returned nextRcseq=%d (expected 0)", nextRcseq)
 	}
 }
 

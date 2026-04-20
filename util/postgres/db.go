@@ -55,8 +55,25 @@ func (db *DB) Ping(ctx context.Context) error {
 	return db.conn.PingContext(ctx)
 }
 
-// InitSchema initializes the database schema for object persistence and request tracking
+// InitSchema initializes the database schema for object persistence and request tracking.
+//
+// Called concurrently by multiple nodes at startup, so it wraps the DDL in a transaction
+// that takes a pg_advisory_xact_lock first — Postgres's CREATE TABLE/FUNCTION statements
+// are not fully isolated from each other under concurrency and can otherwise error with
+// "duplicate key value violates unique constraint pg_type_typname_nsp_index".
 func (db *DB) InitSchema(ctx context.Context) error {
+	// Arbitrary stable lock key shared across Goverse nodes.
+	const schemaLockKey = int64(6737317374766572) // "goverse" as bigint-ish
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", schemaLockKey); err != nil {
+		return fmt.Errorf("acquire advisory lock: %w", err)
+	}
+
 	schema := `
 	-- Objects table for persistent object state
 	CREATE TABLE IF NOT EXISTS goverse_objects (
@@ -115,10 +132,12 @@ func (db *DB) InitSchema(ctx context.Context) error {
 		EXECUTE FUNCTION update_goverse_reliable_calls_timestamp();
 	`
 
-	_, err := db.conn.ExecContext(ctx, schema)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit schema tx: %w", err)
+	}
 	return nil
 }
