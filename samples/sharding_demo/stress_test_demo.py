@@ -23,6 +23,8 @@ Usage:
 
 from io import StringIO
 import os
+import socket
+import subprocess
 import sys
 import time
 import signal
@@ -94,6 +96,50 @@ FATAL_ERROR_PATTERNS = [
     "connection reset",
     "broken pipe",
 ]
+
+# Postgres connection for the persistence-backed stress run. Must match the
+# postgres: block in stress_config_demo.yml and docker-compose.yml.
+POSTGRES_HOST = "127.0.0.1"
+POSTGRES_PORT = 5432
+
+
+def ensure_postgres_ready(timeout_seconds: float = 30.0) -> bool:
+    """Ensure Postgres is accepting connections on POSTGRES_HOST:POSTGRES_PORT.
+
+    If not reachable, attempts `docker-compose up -d postgres` once and retries.
+    Returns True if Postgres becomes reachable within the timeout.
+    """
+    def can_connect() -> bool:
+        try:
+            with socket.create_connection((POSTGRES_HOST, POSTGRES_PORT), timeout=1.0):
+                return True
+        except OSError:
+            return False
+
+    if can_connect():
+        print(f"✅ Postgres already running on {POSTGRES_HOST}:{POSTGRES_PORT}")
+        return True
+
+    print(f"ℹ️  Postgres not reachable at {POSTGRES_HOST}:{POSTGRES_PORT}; attempting docker-compose up -d postgres")
+    try:
+        subprocess.run(
+            ["docker-compose", "up", "-d", "postgres"],
+            cwd=str(REPO_ROOT),
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ Could not start Postgres via docker-compose: {e}")
+        return False
+
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if can_connect():
+            print(f"✅ Postgres is now reachable on {POSTGRES_HOST}:{POSTGRES_PORT}")
+            return True
+        time.sleep(1)
+
+    print(f"❌ Postgres did not become ready within {timeout_seconds}s")
+    return False
 
 
 class StressTestClient:
@@ -417,10 +463,18 @@ Examples:
     final_stats = StringIO()
 
     try:
+        # Ensure Postgres is up — the demo uses persistent SimpleCounters so
+        # all nodes need the shared store reachable before startup.
+        print("\n" + "=" * 80)
+        print("CHECKING POSTGRES")
+        print("=" * 80)
+        if not ensure_postgres_ready():
+            print("❌ Postgres is required for the stress test (persistent SimpleCounter state). Exiting.")
+            return 1
+
         # Add go bin to PATH using subprocess for safety
-        import subprocess
         try:
-            result = subprocess.run(['go', 'env', 'GOPATH'], 
+            result = subprocess.run(['go', 'env', 'GOPATH'],
                                   capture_output=True, text=True, check=True)
             go_bin_path = result.stdout.strip()
             os.environ['PATH'] = f"{os.environ['PATH']}:{go_bin_path}/bin"

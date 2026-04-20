@@ -20,6 +20,7 @@ import (
 	"github.com/xiaonanln/goverse/cluster/sharding"
 	"github.com/xiaonanln/goverse/goverseapi"
 	pb "github.com/xiaonanln/goverse/samples/sharding_demo/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // SimpleCounter is a basic counter object that demonstrates normal object distribution
@@ -44,6 +45,27 @@ func (c *SimpleCounter) GetValue(ctx context.Context, req *pb.GetValueRequest) (
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return &pb.GetValueResponse{Value: c.value}, nil
+}
+
+func (c *SimpleCounter) ToData() (proto.Message, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return &pb.SimpleCounterData{Value: c.value}, nil
+}
+
+func (c *SimpleCounter) FromData(data proto.Message) error {
+	// The runtime calls FromData(nil) when creating a fresh object — nothing to restore.
+	if data == nil {
+		return nil
+	}
+	state, ok := data.(*pb.SimpleCounterData)
+	if !ok {
+		return fmt.Errorf("SimpleCounter.FromData: expected *SimpleCounterData, got %T", data)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.value = state.GetValue()
+	return nil
 }
 
 // ShardMonitor tracks statistics for a specific shard (per-shard auto-load object)

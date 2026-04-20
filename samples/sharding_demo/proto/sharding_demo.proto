@@ -4,6 +4,12 @@ package sharding_demo;
 
 option go_package = "github.com/xiaonanln/goverse/samples/sharding_demo/proto;sharding_demo_pb";
 
+// Persistent state for SimpleCounter
+
+message SimpleCounterData {
+  int64 value = 1;  // Persisted counter value
+}
+
 // Request/Response messages for SimpleCounter
 
 message IncrementRequest {

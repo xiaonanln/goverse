@@ -65,7 +65,10 @@ func (db *DB) LoadObject(ctx context.Context, objectID string) ([]byte, int64, e
 	err := db.conn.QueryRowContext(ctx, query, objectID).Scan(&jsonData, &nextRcseq)
 
 	if err == sql.ErrNoRows {
-		return nil, 0, fmt.Errorf("object not found: %s", objectID)
+		// Contract: missing rows are signaled by (nil, 0, nil). The node's
+		// auto-create path uses this to know it should build a fresh object
+		// rather than treating absence as a fatal load failure.
+		return nil, 0, nil
 	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to load object: %w", err)
