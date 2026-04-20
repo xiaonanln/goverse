@@ -285,7 +285,7 @@ class StressTestClient:
             counter_id = random.choice(self.known_counters)
             
             # Call the Increment method with proper protobuf request
-            response = self.client.call_object(
+            response_any = self.client.call_object(
                 object_type="SimpleCounter",
                 object_id=counter_id,
                 method="Increment",
@@ -294,7 +294,10 @@ class StressTestClient:
             )
 
             self.increment_count += 1
-            value = getattr(response, 'value', 0)
+            resp = sharding_demo_pb2.IncrementResponse()
+            if response_any is not None:
+                response_any.Unpack(resp)
+            value = resp.value
             if value > self.observed_values.get(counter_id, 0):
                 self.observed_values[counter_id] = value
             print(f"[Client {self.client_id}] Incremented counter: {counter_id} -> {value}")
@@ -318,7 +321,7 @@ class StressTestClient:
             counter_id = random.choice(self.known_counters)
             
             # Call the GetValue method with proper protobuf request
-            response = self.client.call_object(
+            response_any = self.client.call_object(
                 object_type="SimpleCounter",
                 object_id=counter_id,
                 method="GetValue",
@@ -327,7 +330,10 @@ class StressTestClient:
             )
 
             self.get_count += 1
-            value = getattr(response, 'value', 0)
+            resp = sharding_demo_pb2.GetValueResponse()
+            if response_any is not None:
+                response_any.Unpack(resp)
+            value = resp.value
             if value > self.observed_values.get(counter_id, 0):
                 self.observed_values[counter_id] = value
             print(f"[Client {self.client_id}] Got value for counter: {counter_id} = {value}")
@@ -488,14 +494,17 @@ def run_persistence_check(clients: List['StressTestClient']) -> bool:
     checked = 0
     for counter_id, observed in sorted(max_observed.items()):
         try:
-            response = checker.client.call_object(
+            response_any = checker.client.call_object(
                 object_type="SimpleCounter",
                 object_id=counter_id,
                 method="GetValue",
                 request=sharding_demo_pb2.GetValueRequest(),
                 timeout=10.0,
             )
-            server_value = getattr(response, 'value', 0)
+            resp = sharding_demo_pb2.GetValueResponse()
+            if response_any is not None:
+                response_any.Unpack(resp)
+            server_value = resp.value
         except Exception as e:
             print(f"❌ {counter_id}: server query failed: {e}")
             failures.append((counter_id, observed, None, str(e)))
