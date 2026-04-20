@@ -27,8 +27,8 @@ postgres:
   # them, parking source ports in TIME_WAIT for ~60s each. On macOS the
   # ephemeral port range is only ~16k, and you quickly get
   # "dial tcp 127.0.0.1:5432: connect: can't assign requested address".
-  max_open_conns: 8
-  max_idle_conns: 8
+  max_open_conns: 4
+  max_idle_conns: 4
 
 inspector:
   # Inspector provides HTTP/gRPC interface for cluster monitoring
