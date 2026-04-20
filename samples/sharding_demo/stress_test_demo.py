@@ -349,10 +349,17 @@ class StressTestClient:
         The underlying client connection is left open so the caller can still
         invoke methods (e.g. the post-run persistence check) before tearing
         the client down with stop().
+
+        Waits long enough to cover an in-flight RPC (5s timeout) plus margin,
+        so by the time this returns the worker is no longer mutating
+        observed_values. If the thread still refuses to exit, log a warning
+        so callers know the observed_values snapshot may be racy.
         """
         self.running = False
         if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2)
+            self.thread.join(timeout=10)
+            if self.thread.is_alive():
+                print(f"⚠️  Client {self.client_id} worker thread did not exit within 10s; observed_values may still be racing")
 
     def stop(self):
         """Stop the stress test client and release the gRPC connection."""
@@ -472,9 +479,13 @@ def run_persistence_check(clients: List['StressTestClient']) -> bool:
     across a node restart. Returns True if the invariant holds for every
     observed counter.
     """
+    # Snapshot each client's observed_values via dict() so we iterate a local
+    # copy. halt_actions() should have already stopped worker threads, but if
+    # one failed to join in time this prevents a "dictionary changed size
+    # during iteration" RuntimeError from aborting the persistence check.
     max_observed = {}
     for c in clients:
-        for counter_id, v in c.observed_values.items():
+        for counter_id, v in dict(c.observed_values).items():
             if v > max_observed.get(counter_id, 0):
                 max_observed[counter_id] = v
 
@@ -485,29 +496,42 @@ def run_persistence_check(clients: List['StressTestClient']) -> bool:
         print("No counter values observed by any client — nothing to verify.")
         return True
 
-    checker = next((c for c in clients if c.client is not None), None)
-    if checker is None:
-        print("❌ No live client available to query server values")
+    # Only clients without a fatal error are safe to use: a fatal client keeps
+    # its .client handle set but all RPCs on it will fail. Picking one of those
+    # as the checker would make every GetValue query fail and produce a false
+    # regression verdict.
+    healthy_clients = [c for c in clients if c.client is not None and not c.has_fatal_error()]
+    if not healthy_clients:
+        print("❌ No healthy client available to query server values")
         return False
+
+    def query_server(counter_id: str):
+        """Try each healthy client in turn until one returns a value."""
+        last_err = None
+        for cand in healthy_clients:
+            try:
+                response_any = cand.client.call_object(
+                    object_type="SimpleCounter",
+                    object_id=counter_id,
+                    method="GetValue",
+                    request=sharding_demo_pb2.GetValueRequest(),
+                    timeout=10.0,
+                )
+                resp = sharding_demo_pb2.GetValueResponse()
+                if response_any is not None:
+                    response_any.Unpack(resp)
+                return resp.value, None
+            except Exception as e:
+                last_err = e
+        return None, last_err
 
     failures = []
     checked = 0
     for counter_id, observed in sorted(max_observed.items()):
-        try:
-            response_any = checker.client.call_object(
-                object_type="SimpleCounter",
-                object_id=counter_id,
-                method="GetValue",
-                request=sharding_demo_pb2.GetValueRequest(),
-                timeout=10.0,
-            )
-            resp = sharding_demo_pb2.GetValueResponse()
-            if response_any is not None:
-                response_any.Unpack(resp)
-            server_value = resp.value
-        except Exception as e:
-            print(f"❌ {counter_id}: server query failed: {e}")
-            failures.append((counter_id, observed, None, str(e)))
+        server_value, err = query_server(counter_id)
+        if err is not None:
+            print(f"❌ {counter_id}: server query failed: {err}")
+            failures.append((counter_id, observed, None, str(err)))
             continue
 
         checked += 1
