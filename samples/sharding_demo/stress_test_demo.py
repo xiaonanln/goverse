@@ -103,53 +103,23 @@ POSTGRES_HOST = "127.0.0.1"
 POSTGRES_PORT = 5432
 
 
-def ensure_postgres_ready(timeout_seconds: float = 30.0) -> bool:
-    """Ensure Postgres is accepting connections on POSTGRES_HOST:POSTGRES_PORT.
+def ensure_postgres_ready() -> bool:
+    """Return True if Postgres is accepting connections on POSTGRES_HOST:POSTGRES_PORT.
 
-    If not reachable, tries docker compose (new plugin) and docker-compose
-    (legacy binary) in order. Returns True if Postgres becomes reachable
-    within the timeout.
+    The script does not try to start Postgres — that's the caller's job (e.g.
+    `docker compose up -d postgres` locally, or a Postgres service in CI).
     """
-    def can_connect() -> bool:
-        try:
-            with socket.create_connection((POSTGRES_HOST, POSTGRES_PORT), timeout=1.0):
-                return True
-        except OSError:
-            return False
-
-    if can_connect():
-        print(f"✅ Postgres already running on {POSTGRES_HOST}:{POSTGRES_PORT}")
-        return True
-
-    compose_commands = [
-        ["docker", "compose", "up", "-d", "postgres"],
-        ["docker-compose", "up", "-d", "postgres"],
-    ]
-    started = False
-    for cmd in compose_commands:
-        print(f"ℹ️  Postgres not reachable at {POSTGRES_HOST}:{POSTGRES_PORT}; attempting {' '.join(cmd)}")
-        try:
-            subprocess.run(cmd, cwd=str(REPO_ROOT), check=True)
-            started = True
-            break
-        except FileNotFoundError:
-            continue
-        except subprocess.CalledProcessError as e:
-            print(f"❌ {' '.join(cmd)} failed: {e}")
-            return False
-    if not started:
-        print("❌ Neither `docker compose` nor `docker-compose` is available to start Postgres")
+    try:
+        with socket.create_connection((POSTGRES_HOST, POSTGRES_PORT), timeout=1.0):
+            pass
+    except OSError as e:
+        print(f"❌ Postgres not reachable at {POSTGRES_HOST}:{POSTGRES_PORT}: {e}")
+        print("   Local dev: run `docker compose up -d postgres`.")
+        print("   CI: ensure the workflow provisions Postgres before this step.")
         return False
 
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if can_connect():
-            print(f"✅ Postgres is now reachable on {POSTGRES_HOST}:{POSTGRES_PORT}")
-            return True
-        time.sleep(1)
-
-    print(f"❌ Postgres did not become ready within {timeout_seconds}s")
-    return False
+    print(f"✅ Postgres reachable on {POSTGRES_HOST}:{POSTGRES_PORT}")
+    return True
 
 
 class StressTestClient:
