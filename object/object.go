@@ -213,6 +213,15 @@ type Object interface {
 	//   - <-chan *ReliableCall: Channel that receives the matching ReliableCall (if found and processed)
 	ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall
 
+	// EnsureProcessingLoopRunning starts the reliable-call processing goroutine
+	// if it isn't already running, without registering a waiter. Used for
+	// fire-and-forget drains (e.g. on object activation) where the caller
+	// doesn't need a result channel and shouldn't be parked in seqWaiters.
+	//
+	// Single-goroutine invariant is preserved by the same processingCalls
+	// flag that ProcessPendingReliableCalls uses.
+	EnsureProcessingLoopRunning(provider PersistenceProvider)
+
 	// InvokeMethod invokes the specified method on the object using reflection.
 	//
 	// This method uses reflection to dynamically call object methods by name. It validates
@@ -469,6 +478,22 @@ func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider
 	return callsChan
 }
 
+// EnsureProcessingLoopRunning starts runProcessingLoop if it isn't already
+// running, without inserting a waiter into seqWaiters. The loop will fetch
+// pending calls at least once and then exit naturally if there are no
+// waiters and nothing pending — see runProcessingLoop for the exit condition.
+func (base *BaseObject) EnsureProcessingLoopRunning(provider PersistenceProvider) {
+	base.seqWaitersMu.Lock()
+	if base.processingCalls {
+		base.seqWaitersMu.Unlock()
+		return
+	}
+	base.processingCalls = true
+	base.seqWaitersMu.Unlock()
+
+	go base.runProcessingLoop(provider)
+}
+
 // insertWaiterSorted inserts a waiter in sorted order by seq.
 // Must be called with seqWaitersMu held.
 func (base *BaseObject) insertWaiterSorted(seq int64, ch chan<- *ReliableCall) {
@@ -516,9 +541,10 @@ func (base *BaseObject) notifyWaiters(seq int64, call *ReliableCall) {
 }
 
 // runProcessingLoop is the single processing goroutine that processes pending calls.
-// Design: The goroutine stays running as long as waiters exist. It only exits when
-// there are no waiters AND no pending calls (or on shutdown). This eliminates the
-// need for complex restart logic.
+// Design: each iteration fetches at least once before checking the exit condition.
+// This lets EnsureProcessingLoopRunning trigger a one-shot drain (no waiter
+// registered) and still see pending calls processed before the goroutine exits.
+// The loop exits when there are no pending calls AND no waiters (or on shutdown).
 func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 	defer base.cleanupProcessingLoop()
 
@@ -531,37 +557,35 @@ func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 		// Close waiters for already-processed seqs
 		base.notifyWaiters(base.GetNextRcseq()-1, nil)
 
-		// Check if we should exit: no waiters means no one is waiting for results.
-		// This check is atomic with setting processingCalls=false to prevent races.
-		if base.tryExitIfNoWaiters() {
-			return
-		}
-
-		// Fetch pending calls
+		// Fetch pending calls. We always fetch at least once per iteration so
+		// that fire-and-forget drains (no waiter) still process anything
+		// pending before the loop exits.
 		pendingCalls, err := provider.GetPendingReliableCalls(base.ctx, base.id, base.GetNextRcseq())
 		if err != nil {
 			if base.ctx.Err() != nil {
 				return
 			}
 			base.Logger.Errorf("runProcessingLoop: failed to fetch pending calls: %v", err)
-			base.waitWithBackoff()
-			continue
-		}
-
-		// No pending calls - wait and retry (waiters exist, so we keep polling)
-		if len(pendingCalls) == 0 {
-			base.waitWithBackoff()
-			continue
-		}
-
-		// Process each pending call
-		for _, call := range pendingCalls {
-			if base.ctx.Err() != nil {
-				return
+		} else if len(pendingCalls) > 0 {
+			for _, call := range pendingCalls {
+				if base.ctx.Err() != nil {
+					return
+				}
+				base.processReliableCall(provider, call)
+				base.notifyWaiters(call.Seq, call)
 			}
-			base.processReliableCall(provider, call)
-			base.notifyWaiters(call.Seq, call)
+			// Loop again to drain any further calls and notify remaining waiters.
+			continue
 		}
+
+		// No pending calls (or fetch failed). If no waiters either, we're done.
+		// tryExitIfNoWaiters atomically checks the slice and flips processingCalls
+		// to prevent races with concurrent ProcessPendingReliableCalls callers.
+		if base.tryExitIfNoWaiters() {
+			return
+		}
+
+		base.waitWithBackoff()
 	}
 }
 

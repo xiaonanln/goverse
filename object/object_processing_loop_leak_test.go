@@ -2,7 +2,6 @@ package object
 
 import (
 	"context"
-	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,12 +20,21 @@ func (p *countingProvider) GetPendingReliableCalls(ctx context.Context, objectID
 	return nil, nil
 }
 
-// TestProcessingLoopExitsAfterEagerDrain reproduces the goroutine leak that
-// occurs when ProcessPendingReliableCalls is invoked with math.MaxInt64 to
-// kick off an eager drain (see node.createObject). The MaxInt64 waiter is
-// never popped, so runProcessingLoop polls GetPendingReliableCalls forever
-// via tryExitIfNoWaiters. Across thousands of objects this drives massive
-// load against the persistence layer.
+// TestProcessingLoopExitsAfterEagerDrain verifies that triggering an eager
+// drain on object activation (mirroring node.createObject) does not leak the
+// processing goroutine.
+//
+// Pre-fix behavior: createObject called
+//
+//	ProcessPendingReliableCalls(provider, math.MaxInt64)
+//
+// which inserted a waiter at seq=MaxInt64 that notifyWaiters could never pop.
+// tryExitIfNoWaiters then kept the loop alive, polling
+// GetPendingReliableCalls every 10ms forever — for every persistent object
+// on every node.
+//
+// Post-fix: createObject calls EnsureProcessingLoopRunning, which starts the
+// loop without registering a waiter. The loop fetches once and exits.
 func TestProcessingLoopExitsAfterEagerDrain(t *testing.T) {
 	obj := &TestPersistentObject{}
 	obj.OnInit(obj, "leak-test")
@@ -34,7 +42,7 @@ func TestProcessingLoopExitsAfterEagerDrain(t *testing.T) {
 	provider := &countingProvider{MockPersistenceProvider: NewMockPersistenceProvider()}
 
 	// Mirror the eager-drain call site in node.createObject.
-	_ = obj.ProcessPendingReliableCalls(provider, math.MaxInt64)
+	obj.EnsureProcessingLoopRunning(provider)
 
 	// Loop polls every 10ms; give it plenty of time to settle.
 	time.Sleep(150 * time.Millisecond)
