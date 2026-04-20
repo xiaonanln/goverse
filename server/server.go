@@ -69,6 +69,19 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Open and validate Postgres persistence up-front so we don't build a node
+	// or join the cluster when the database is unreachable or the schema can't
+	// be initialized.
+	var postgresDB *postgres.DB
+	if cfg := config.ConfigFile; cfg != nil && (cfg.Postgres.Host != "" || cfg.Postgres.Database != "") {
+		db, err := openPostgresPersistence(ctx, &cfg.Postgres)
+		if err != nil {
+			cancel()
+			return nil, fmt.Errorf("failed to set up Postgres persistence: %w", err)
+		}
+		postgresDB = db
+	}
+
 	// Determine number of shards (default to 8192 if not specified)
 	numShards := config.NumShards
 	if numShards <= 0 {
@@ -76,6 +89,9 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 
 	n := node.NewNode(config.AdvertiseAddress, numShards)
+	if postgresDB != nil {
+		n.SetPersistenceProvider(postgres.NewPostgresPersistenceProvider(postgresDB))
+	}
 
 	// Set inspector address on the node if configured
 	if config.InspectorAddress != "" {
@@ -124,6 +140,9 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	// Initialize cluster with etcd connection
 	c, err := cluster.NewClusterWithNode(clusterCfg, n)
 	if err != nil {
+		if postgresDB != nil {
+			postgresDB.Close()
+		}
 		cancel()
 		return nil, fmt.Errorf("failed to initialize cluster: %w", err)
 	}
@@ -138,26 +157,24 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		logger:          logger.NewLogger(fmt.Sprintf("Server(%s)", config.AdvertiseAddress)),
 		cluster:         c,
 		accessValidator: config.AccessValidator,
+		postgresDB:      postgresDB,
 	}
 
-	// Auto-wire Postgres persistence when the YAML config has a postgres section.
-	// Detection: any non-zero connection field (host or database) is treated as
-	// "configured". Zero-value config means persistence is simply off.
-	if cfg := config.ConfigFile; cfg != nil && (cfg.Postgres.Host != "" || cfg.Postgres.Database != "") {
-		if err := server.setupPostgresPersistence(ctx, &cfg.Postgres); err != nil {
-			cancel()
-			return nil, fmt.Errorf("failed to set up Postgres persistence: %w", err)
-		}
+	if postgresDB != nil {
+		server.logger.Infof("Postgres persistence enabled: %s@%s:%d/%s",
+			config.ConfigFile.Postgres.User,
+			config.ConfigFile.Postgres.Host,
+			config.ConfigFile.Postgres.Port,
+			config.ConfigFile.Postgres.Database)
 	}
 
 	return server, nil
 }
 
-// setupPostgresPersistence opens the Postgres connection, initializes the schema,
-// and installs the persistence provider on the node. Fails fast if the DB is
-// unreachable so misconfiguration surfaces at startup rather than silently
-// dropping state on the first write.
-func (server *Server) setupPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) error {
+// openPostgresPersistence opens the Postgres connection, initializes the schema,
+// and returns a ready DB. Runs before node/cluster construction so the server
+// refuses to start when the database is misconfigured or unreachable.
+func openPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) (*postgres.DB, error) {
 	sslMode := pgCfg.SSLMode
 	if sslMode == "" {
 		sslMode = "disable"
@@ -173,27 +190,24 @@ func (server *Server) setupPostgresPersistence(ctx context.Context, pgCfg *confi
 
 	db, err := postgres.NewDB(dbCfg)
 	if err != nil {
-		return fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 
 	pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer pingCancel()
 	if err := db.Ping(pingCtx); err != nil {
 		db.Close()
-		return fmt.Errorf("ping database: %w", err)
+		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer initCancel()
 	if err := db.InitSchema(initCtx); err != nil {
 		db.Close()
-		return fmt.Errorf("init schema: %w", err)
+		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
-	server.Node.SetPersistenceProvider(postgres.NewPostgresPersistenceProvider(db))
-	server.postgresDB = db
-	server.logger.Infof("Postgres persistence enabled: %s@%s:%d/%s", pgCfg.User, pgCfg.Host, pgCfg.Port, pgCfg.Database)
-	return nil
+	return db, nil
 }
 
 func validateServerConfig(config *ServerConfig) error {
@@ -219,6 +233,15 @@ func validateServerConfig(config *ServerConfig) error {
 func (server *Server) Run(ctx context.Context) error {
 	// Ensure context is canceled when the server stops
 	defer server.cancel()
+	// Close the Postgres handle on every return path, including early failures
+	// before node/cluster startup completes.
+	if server.postgresDB != nil {
+		defer func() {
+			if closeErr := server.postgresDB.Close(); closeErr != nil {
+				server.logger.Errorf("Failed to close Postgres connection: %v", closeErr)
+			}
+		}()
+	}
 
 	goverseServiceListener, err := net.Listen("tcp", server.config.ListenAddress)
 	if err != nil {
@@ -335,12 +358,6 @@ func (server *Server) Run(ctx context.Context) error {
 	err = node.Stop(server.ctx)
 	if err != nil {
 		server.logger.Errorf("Failed to stop node: %v", err)
-	}
-
-	if server.postgresDB != nil {
-		if closeErr := server.postgresDB.Close(); closeErr != nil {
-			server.logger.Errorf("Failed to close Postgres connection: %v", closeErr)
-		}
 	}
 
 	server.logger.Infof("gRPC server stopped")
