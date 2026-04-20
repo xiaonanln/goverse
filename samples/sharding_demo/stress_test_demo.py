@@ -89,13 +89,22 @@ CLUSTER_STABILIZATION_WAIT = 20 # Seconds to wait for cluster and auto-load obje
 # Number of counters to create and manage
 NUM_COUNTERS = 100
 
-# Fatal error patterns that should cause immediate client shutdown
+# Fatal error patterns that should cause immediate client shutdown.
+# Only the client's own gate connection failing counts as fatal. Errors
+# forwarded from the gate (e.g. a backend node died) are transient during
+# churn and must NOT take the client offline — see FORWARDED_ERROR_MARKER.
 FATAL_ERROR_PATTERNS = [
     "Client is not connected",
     "connection refused",
     "connection reset",
     "broken pipe",
 ]
+
+# If this marker appears in the error string, the gate successfully handled
+# the request but the downstream node was unreachable. That's expected
+# during churn and must not be classified as fatal even when the message
+# also contains one of the FATAL_ERROR_PATTERNS tokens.
+FORWARDED_ERROR_MARKER = "remote CallObject failed"
 
 # Postgres connection for the persistence-backed stress run. Must match the
 # postgres: block in stress_config_demo.yml and docker-compose.yml.
@@ -187,8 +196,16 @@ class StressTestClient:
             return False
     
     def _is_fatal_error(self, error: Exception) -> bool:
-        """Check if an error is fatal and should stop the client."""
+        """Check if an error is fatal and should stop the client.
+
+        Errors forwarded from the gate (i.e. the gate reached us fine but a
+        downstream node was unreachable) are transient during churn and are
+        explicitly NOT treated as fatal — otherwise one dead-node routing
+        failure would permanently retire the client.
+        """
         error_str = str(error).lower()
+        if FORWARDED_ERROR_MARKER.lower() in error_str:
+            return False
         for pattern in FATAL_ERROR_PATTERNS:
             if pattern.lower() in error_str:
                 return True
