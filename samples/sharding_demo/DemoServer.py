@@ -137,13 +137,18 @@ class DemoServer:
         """Stop the demo server process."""
         if self.process is None:
             return
-        
+
         print(f"Stopping {self.name}...")
-        
-        # Try graceful shutdown first
+
+        # Try graceful shutdown first. The grace window must cover:
+        #   1. gRPC GracefulStop draining in-flight RPCs (can be seconds under
+        #      load during churn), then
+        #   2. Node.Stop() persisting every in-memory object to Postgres.
+        # 5s was too tight under churn — the shutdown got SIGKILLed mid-save
+        # and dirty counter state was lost. 30s is generous but still bounded.
         try:
             self.process.send_signal(signal.SIGTERM)
-            self.process.wait(timeout=5)
+            self.process.wait(timeout=30)
         except subprocess.TimeoutExpired:
             # Force kill if graceful shutdown fails
             print(f"⚠️  {self.name} did not stop gracefully, force killing...")
@@ -151,6 +156,6 @@ class DemoServer:
             self.process.wait()
         except Exception as e:
             print(f"⚠️  Error stopping {self.name}: {e}")
-        
+
         self.process = None
         print(f"✅ {self.name} stopped")

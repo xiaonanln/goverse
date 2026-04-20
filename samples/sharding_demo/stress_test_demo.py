@@ -843,8 +843,12 @@ Examples:
             print(f"Stopping churn controller "
                   f"(cycles={churn_controller.cycles}, failures={churn_controller.failures})...")
             churn_controller.stop()
-            print("Waiting 10s for cluster to settle after churn...")
-            time.sleep(10)
+            # Node lease TTL is 15s and the leader's shard-mapping tick runs
+            # every ~5s, so dead nodes take up to ~20s to be evicted and have
+            # their shards reassigned. Wait a bit longer than that so the
+            # persistence check doesn't hit stale routing state.
+            print("Waiting 25s for cluster to settle after churn...")
+            time.sleep(25)
 
         # Halt action loops but keep client connections open for the check.
         for client in clients:
