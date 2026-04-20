@@ -4,6 +4,14 @@ import (
 	"fmt"
 )
 
+// Default connection-pool limits applied when a Config leaves MaxOpenConns /
+// MaxIdleConns at zero. Exposed as constants so callers (and tests) can verify
+// what they'll get without replicating the numbers.
+const (
+	DefaultMaxOpenConns = 25
+	DefaultMaxIdleConns = 5
+)
+
 // Config holds PostgreSQL database connection configuration
 type Config struct {
 	Host     string
@@ -12,6 +20,15 @@ type Config struct {
 	Password string
 	Database string
 	SSLMode  string // disable, require, verify-ca, verify-full
+
+	// MaxOpenConns caps the total connections this pool will open. Leave at 0
+	// to use DefaultMaxOpenConns. Deployments with many nodes sharing one
+	// Postgres instance should lower this so N*MaxOpenConns stays under the
+	// server's max_connections.
+	MaxOpenConns int
+	// MaxIdleConns caps idle connections held in the pool. Leave at 0 to use
+	// DefaultMaxIdleConns.
+	MaxIdleConns int
 }
 
 // DefaultConfig returns a default configuration for local development

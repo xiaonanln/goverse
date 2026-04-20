@@ -181,12 +181,14 @@ func openPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) 
 		sslMode = "disable"
 	}
 	dbCfg := &postgres.Config{
-		Host:     pgCfg.Host,
-		Port:     pgCfg.Port,
-		User:     pgCfg.User,
-		Password: pgCfg.Password,
-		Database: pgCfg.Database,
-		SSLMode:  sslMode,
+		Host:         pgCfg.Host,
+		Port:         pgCfg.Port,
+		User:         pgCfg.User,
+		Password:     pgCfg.Password,
+		Database:     pgCfg.Database,
+		SSLMode:      sslMode,
+		MaxOpenConns: pgCfg.MaxOpenConns,
+		MaxIdleConns: pgCfg.MaxIdleConns,
 	}
 
 	db, err := postgres.NewDB(dbCfg)

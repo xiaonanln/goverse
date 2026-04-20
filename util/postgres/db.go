@@ -26,9 +26,21 @@ func NewDB(config *Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
-	conn.SetMaxOpenConns(25)
-	conn.SetMaxIdleConns(5)
+	// Configure connection pool. A value of 0 falls back to the package
+	// default so existing callers that don't set these fields keep their old
+	// limits; multi-node deployments (e.g. the 10-node demo stress test)
+	// should lower them via config so the aggregate stays under Postgres's
+	// max_connections.
+	maxOpen := config.MaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = DefaultMaxOpenConns
+	}
+	maxIdle := config.MaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = DefaultMaxIdleConns
+	}
+	conn.SetMaxOpenConns(maxOpen)
+	conn.SetMaxIdleConns(maxIdle)
 	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	return &DB{

@@ -49,6 +49,12 @@ type PostgresConfig struct {
 	Password string `yaml:"password"`
 	Database string `yaml:"database"`
 	SSLMode  string `yaml:"sslmode"` // Use "require" in production
+
+	// MaxOpenConns / MaxIdleConns size the per-node connection pool. Leave at
+	// 0 to use util/postgres defaults. Reduce these when many nodes share one
+	// Postgres instance so N*MaxOpenConns stays under its max_connections.
+	MaxOpenConns int `yaml:"max_open_conns"`
+	MaxIdleConns int `yaml:"max_idle_conns"`
 }
 
 // NodeConfig holds configuration for a single node

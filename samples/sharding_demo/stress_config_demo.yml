@@ -18,6 +18,11 @@ postgres:
   password: "goverse"
   database: "goverse"
   sslmode: "disable"
+  # 10 nodes share one Postgres (default max_connections=100). Keep the
+  # per-node pool small so the total stays well under that limit — otherwise
+  # nodes start seeing "FATAL: sorry, too many clients already" under load.
+  max_open_conns: 8
+  max_idle_conns: 2
 
 inspector:
   # Inspector provides HTTP/gRPC interface for cluster monitoring
