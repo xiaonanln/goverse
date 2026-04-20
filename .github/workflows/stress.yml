@@ -60,22 +60,31 @@ jobs:
 
   demo-stress-test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-      
+
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
         with:
-          enable-postgres: 'false'
-      
+          enable-postgres: 'true'
+
+      - name: Provision Postgres role for demo config
+        # stress_config_demo.yml authenticates as goverse/goverse to match the
+        # docker-compose defaults developers use locally; the shared setup step
+        # only configures the postgres superuser, so add the role here.
+        run: |
+          sudo -u postgres psql -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='goverse') THEN CREATE ROLE goverse LOGIN PASSWORD 'goverse'; END IF; END \$\$;"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE goverse TO goverse;"
+          sudo -u postgres psql -d goverse -c "GRANT ALL ON SCHEMA public TO goverse;"
+
       - name: Install PyYAML
         run: python3 -m pip install pyyaml
-      
+
       - name: Create coverage directory
         run: mkdir -p /tmp/coverage-demo
-      
+
       - name: Run demo server stress test for 5 minutes with coverage
         env:
           GOCOVERDIR: /tmp/coverage-demo
