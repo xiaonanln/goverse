@@ -171,9 +171,10 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	return server, nil
 }
 
-// openPostgresPersistence opens the Postgres connection, initializes the schema,
-// and returns a ready DB. Runs before node/cluster construction so the server
-// refuses to start when the database is misconfigured or unreachable.
+// openPostgresPersistence opens the Postgres connection and preflights the
+// expected schema. Schema provisioning is out-of-band (`goverse pgadmin init`);
+// the node refuses to start if the tables are missing so the failure is loud
+// and happens before any writes land.
 func openPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) (*postgres.DB, error) {
 	sslMode := pgCfg.SSLMode
 	if sslMode == "" {
@@ -200,14 +201,32 @@ func openPostgresPersistence(ctx context.Context, pgCfg *config.PostgresConfig) 
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
-	defer initCancel()
-	if err := db.InitSchema(initCtx); err != nil {
+	checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer checkCancel()
+	if err := preflightGoverseSchema(checkCtx, db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("init schema: %w", err)
+		return nil, err
 	}
 
 	return db, nil
+}
+
+// preflightGoverseSchema fails fast when the expected Goverse tables are
+// missing, pointing the operator at the pgadmin init command rather than
+// letting the first SaveObject surface a cryptic "relation does not exist".
+func preflightGoverseSchema(ctx context.Context, db *postgres.DB) error {
+	const query = `
+		SELECT to_regclass('public.goverse_objects') IS NOT NULL
+		   AND to_regclass('public.goverse_reliable_calls') IS NOT NULL
+	`
+	var ready bool
+	if err := db.Connection().QueryRowContext(ctx, query).Scan(&ready); err != nil {
+		return fmt.Errorf("check schema: %w", err)
+	}
+	if !ready {
+		return fmt.Errorf("goverse schema not initialized: run `go run ./cmd/pgadmin --config <config.yml> init` before starting nodes")
+	}
+	return nil
 }
 
 func validateServerConfig(config *ServerConfig) error {

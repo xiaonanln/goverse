@@ -41,6 +41,14 @@ The `stress_test_demo.py` script performs comprehensive stress testing of the de
    ./script/compile-proto.sh
    ```
 
+5. **Postgres** - The stress test uses Postgres-backed persistence. Start it and initialize the schema once:
+   ```bash
+   # From the repo root
+   docker compose up -d postgres
+   go run ./cmd/pgadmin --config samples/sharding_demo/stress_config_demo.yml init
+   ```
+   Re-run the `pgadmin init` command only when the schema changes; nodes fail fast on startup if the schema is missing.
+
 ## Usage
 
 ### Basic Usage
