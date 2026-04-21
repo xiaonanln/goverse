@@ -188,6 +188,18 @@ var (
 		},
 		[]string{"node_addr", "outcome"},
 	)
+
+	// NodeStopDurationSeconds tracks how long Node.Stop takes, end to end.
+	// Most cost comes from the final persistence flush; buckets extend past
+	// the typical process supervisor SIGKILL window so stalls are visible.
+	NodeStopDurationSeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "goverse_node_stop_duration_seconds",
+			Help:    "Duration of Node.Stop in seconds by node and status (success, error)",
+			Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120},
+		},
+		[]string{"node_addr", "status"},
+	)
 )
 
 // RecordObjectCreated increments the object count for a given node, type, and shard
@@ -311,4 +323,10 @@ func RecordOperationDuration(nodeAddr, operation, status string, duration float6
 // ("reconnected" on successful state reload, "reload_failed" when reload fails mid-retry).
 func RecordWatchReconnection(nodeAddr, outcome string) {
 	WatchReconnectionsTotal.WithLabelValues(nodeAddr, outcome).Inc()
+}
+
+// RecordNodeStopDuration records how long Node.Stop took, labeled by node and
+// status ("success" or "error").
+func RecordNodeStopDuration(nodeAddr, status string, duration float64) {
+	NodeStopDurationSeconds.WithLabelValues(nodeAddr, status).Observe(duration)
 }
