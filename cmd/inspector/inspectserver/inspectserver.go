@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -24,7 +23,10 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/inspector"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
+	"github.com/xiaonanln/goverse/util/logger"
 )
+
+var log = logger.NewLogger("InspectorServer")
 
 type GoverseNode = models.GoverseNode
 type GoverseObject = models.GoverseObject
@@ -91,12 +93,12 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 	if cfg.EtcdAddr != "" {
 		mgr, err := etcdmanager.NewEtcdManager(cfg.EtcdAddr, cfg.EtcdPrefix)
 		if err != nil {
-			log.Printf("Failed to create etcd manager: %v", err)
+			log.Errorf("Failed to create etcd manager: %v", err)
 		} else if err := mgr.Connect(); err != nil {
-			log.Printf("Failed to connect to etcd: %v", err)
+			log.Errorf("Failed to connect to etcd: %v", err)
 		} else {
 			s.etcdManager = mgr
-			log.Printf("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
+			log.Infof("Connected to etcd at %s with prefix %s", cfg.EtcdAddr, cfg.EtcdPrefix)
 
 			// Initialize ConsensusManager for watching cluster state
 			numShards := cfg.NumShards
@@ -116,15 +118,15 @@ func New(pg *graph.GoverseGraph, cfg Config) *InspectorServer {
 			initCtx, initCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			if err := s.consensusManager.Initialize(initCtx); err != nil {
 				initCancel()
-				log.Panicf("Failed to initialize consensus manager: %v", err)
+				log.Fatalf("Failed to initialize consensus manager: %v", err)
 			}
 			initCancel()
 
 			// Start watching with a long-lived context (will be cancelled on shutdown)
 			if err := s.consensusManager.StartWatch(context.Background()); err != nil {
-				log.Panicf("Failed to start consensus manager watch: %v", err)
+				log.Fatalf("Failed to start consensus manager watch: %v", err)
 			}
-			log.Printf("ConsensusManager initialized and watching cluster state")
+			log.Infof("ConsensusManager initialized and watching cluster state")
 
 			// Register as listener to receive shard state changes
 			s.consensusManager.AddListener(s)
@@ -145,7 +147,7 @@ func (s *InspectorServer) GetConsensusManager() *consensusmanager.ConsensusManag
 // OnClusterStateChanged implements consensusmanager.StateChangeListener
 // This is called when shard mappings change in etcd
 func (s *InspectorServer) OnClusterStateChanged() {
-	log.Printf("Cluster state changed, broadcasting shard_update to SSE clients")
+	log.Debugf("Cluster state changed, broadcasting shard_update to SSE clients")
 	s.broadcastShardUpdate()
 }
 
@@ -164,7 +166,7 @@ func (s *InspectorServer) OnGraphEvent(event graph.GraphEvent) {
 		case <-client.done:
 		default:
 			// Channel full, log and skip this event for this client
-			log.Printf("Event dropped for SSE client %s: channel full", client.id)
+			log.Warnf("Event dropped for SSE client %s: channel full", client.id)
 		}
 	}
 }
@@ -251,7 +253,7 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 	s.sseClients[clientID] = client
 	s.sseClientsMu.Unlock()
 
-	log.Printf("SSE client connected: %s", clientID)
+	log.Infof("SSE client connected: %s", clientID)
 
 	// Cleanup on disconnect
 	defer func() {
@@ -259,7 +261,7 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 		s.sseClientsMu.Lock()
 		delete(s.sseClients, clientID)
 		s.sseClientsMu.Unlock()
-		log.Printf("SSE client disconnected: %s", clientID)
+		log.Infof("SSE client disconnected: %s", clientID)
 	}()
 
 	// Send initial full state
@@ -278,7 +280,7 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 		GoverseObjects: objects,
 	}
 	if err := s.writeSSEEvent(w, flusher, "initial", initialData); err != nil {
-		log.Printf("Failed to send initial state to SSE client %s: %v", clientID, err)
+		log.Errorf("Failed to send initial state to SSE client %s: %v", clientID, err)
 		return
 	}
 
@@ -297,13 +299,13 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 		case <-heartbeatTicker.C:
 			// Send heartbeat to keep connection alive
 			if err := s.writeSSEEvent(w, flusher, "heartbeat", struct{}{}); err != nil {
-				log.Printf("Failed to send heartbeat to SSE client %s: %v", clientID, err)
+				log.Errorf("Failed to send heartbeat to SSE client %s: %v", clientID, err)
 				return
 			}
 		case event := <-client.eventChan:
 			eventType := string(event.Type)
 			if err := s.writeSSEEvent(w, flusher, eventType, event); err != nil {
-				log.Printf("Failed to send event to SSE client %s: %v", clientID, err)
+				log.Errorf("Failed to send event to SSE client %s: %v", clientID, err)
 				return
 			}
 		}
@@ -336,24 +338,24 @@ func (s *InspectorServer) ServeHTTP(done chan<- struct{}) error {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	log.Printf("HTTP on %s (serving %s)", s.httpAddr, filepath.Join(".", s.staticDir))
+	log.Infof("HTTP on %s (serving %s)", s.httpAddr, filepath.Join(".", s.staticDir))
 
 	// Handle graceful shutdown
 	go func() {
 		<-s.shutdownChan
-		log.Println("Shutting down HTTP server...")
+		log.Infof("Shutting down HTTP server...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := s.httpServer.Shutdown(ctx); err != nil {
-			log.Printf("HTTP server shutdown error: %v", err)
+			log.Errorf("HTTP server shutdown error: %v", err)
 		}
 	}()
 
 	go func() {
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("HTTP server error: %v", err)
+			log.Errorf("HTTP server error: %v", err)
 		}
-		log.Println("HTTP server stopped")
+		log.Infof("HTTP server stopped")
 		done <- struct{}{}
 	}()
 
@@ -369,20 +371,20 @@ func (s *InspectorServer) ServeGRPC(done chan<- struct{}) error {
 	s.grpcServer = grpc.NewServer()
 	inspector_pb.RegisterInspectorServiceServer(s.grpcServer, inspector.New(s.pg))
 	reflection.Register(s.grpcServer)
-	log.Printf("gRPC on %s", s.grpcAddr)
+	log.Infof("gRPC on %s", s.grpcAddr)
 
 	// Handle graceful shutdown
 	go func() {
 		<-s.shutdownChan
-		log.Println("Shutting down gRPC server...")
+		log.Infof("Shutting down gRPC server...")
 		s.grpcServer.GracefulStop()
 	}()
 
 	go func() {
 		if err := s.grpcServer.Serve(l); err != nil {
-			log.Printf("gRPC server error: %v", err)
+			log.Errorf("gRPC server error: %v", err)
 		}
-		log.Println("gRPC server stopped")
+		log.Infof("gRPC server stopped")
 		done <- struct{}{}
 	}()
 
@@ -489,7 +491,7 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	log.Printf("Received shard move request: shard_id=%d, target_node=%s", req.ShardID, req.TargetNode)
+	log.Infof("Received shard move request: shard_id=%d, target_node=%s", req.ShardID, req.TargetNode)
 
 	// Validate shard ID (shards are 0-indexed and range from 0 to numShards-1)
 	if req.ShardID < 0 || req.ShardID >= s.consensusManager.GetNumShards() {
@@ -532,7 +534,7 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 	// Store the updated shard mapping
 	successCount, err := s.consensusManager.StoreShardMapping(ctx, updateShards)
 	if err != nil {
-		log.Printf("Failed to move shard %d to node %s: %v", req.ShardID, req.TargetNode, err)
+		log.Errorf("Failed to move shard %d to node %s: %v", req.ShardID, req.TargetNode, err)
 		http.Error(w, fmt.Sprintf("Failed to move shard: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -542,7 +544,7 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	log.Printf("Successfully updated shard %d target to %s (current=%s)", req.ShardID, req.TargetNode, currentShardInfo.CurrentNode)
+	log.Infof("Successfully updated shard %d target to %s (current=%s)", req.ShardID, req.TargetNode, currentShardInfo.CurrentNode)
 
 	// Broadcast shard update event to all SSE clients
 	s.broadcastShardUpdate()
@@ -556,7 +558,7 @@ func (s *InspectorServer) handleShardMove(w http.ResponseWriter, r *http.Request
 		"message":     fmt.Sprintf("Shard %d target updated to %s", req.ShardID, req.TargetNode),
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode response: %v", err)
+		log.Errorf("Failed to encode response: %v", err)
 	}
 }
 
@@ -634,7 +636,7 @@ func (s *InspectorServer) handleShardPin(w http.ResponseWriter, r *http.Request)
 	if req.Pinned {
 		action = "pinned"
 	}
-	log.Printf("Shard %d %s successfully", req.ShardID, action)
+	log.Infof("Shard %d %s successfully", req.ShardID, action)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -696,16 +698,16 @@ func (s *InspectorServer) broadcastShardUpdate() {
 	}
 	s.sseClientsMu.RUnlock()
 
-	log.Printf("Broadcasting shard_update to %d SSE clients", len(clients))
+	log.Debugf("Broadcasting shard_update to %d SSE clients", len(clients))
 
 	for _, client := range clients {
 		select {
 		case client.eventChan <- event:
-			log.Printf("Sent shard_update to SSE client %s", client.id)
+			log.Debugf("Sent shard_update to SSE client %s", client.id)
 		case <-client.done:
-			log.Printf("Client %s already disconnected", client.id)
+			log.Debugf("Client %s already disconnected", client.id)
 		default:
-			log.Printf("Event dropped for SSE client %s: channel full", client.id)
+			log.Warnf("Event dropped for SSE client %s: channel full", client.id)
 		}
 	}
 }
