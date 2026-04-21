@@ -123,8 +123,16 @@ func (node *Node) IsStarted() bool {
 }
 
 // Stop stops the node and unregisters it from the inspector
-func (node *Node) Stop(ctx context.Context) error {
+func (node *Node) Stop(ctx context.Context) (err error) {
 	node.logger.Infof("Node stopping")
+	start := time.Now()
+	defer func() {
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		metrics.RecordNodeStopDuration(node.advertiseAddress, status, time.Since(start).Seconds())
+	}()
 
 	// Set the stopped flag atomically to signal that no new operations should start
 	node.stopped.Store(true)
