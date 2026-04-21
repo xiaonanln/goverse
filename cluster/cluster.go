@@ -86,7 +86,6 @@ type Cluster struct {
 	shardMappingCheckInterval time.Duration // how often to check if shard mapping needs updating
 	liveCtx                   context.Context
 	liveCancel                context.CancelFunc
-	liveCancelOnce            sync.Once
 	clusterManagementRunning  bool
 	clusterReadyChan          chan bool
 	clusterReadyOnce          sync.Once
@@ -357,9 +356,11 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	// Cancel the cluster-live ctx up front so any async background work
 	// (Create/DeleteObject goroutines, shard management loop, etc.) unwinds
-	// while the rest of shutdown runs. Idempotent: BeginShutdown may have
-	// already cancelled it.
-	c.cancelLive()
+	// while the rest of shutdown runs.
+	if c.liveCancel != nil {
+		c.liveCancel()
+		c.liveCancel = nil
+	}
 
 	// Stop node connections
 	c.stopNodeConnections()
@@ -394,33 +395,6 @@ func (c *Cluster) Stop(ctx context.Context) error {
 
 	c.logger.Infof("%s - Cluster stopped", c)
 	return nil
-}
-
-// BeginShutdown signals that the cluster is shutting down by cancelling the
-// cluster-live context, without performing the full teardown done by Stop.
-// In-flight forwarded RPCs whose contexts derive from liveCtx (via the
-// gRPC server interceptor) unwind promptly, letting grpcServer.GracefulStop
-// complete on its own instead of waiting out individual call timeouts.
-// Safe to call multiple times and safe to call before Stop.
-func (c *Cluster) BeginShutdown() {
-	c.cancelLive()
-}
-
-// LiveContext returns the cluster-live context. It is cancelled when the
-// cluster begins shutting down. Intended for wiring into gRPC handler
-// contexts so handlers unwind quickly once shutdown starts.
-func (c *Cluster) LiveContext() context.Context {
-	return c.liveCtx
-}
-
-// cancelLive cancels the cluster-live context exactly once; safe to call
-// from BeginShutdown and Stop concurrently.
-func (c *Cluster) cancelLive() {
-	c.liveCancelOnce.Do(func() {
-		if c.liveCancel != nil {
-			c.liveCancel()
-		}
-	})
 }
 
 // getAdvertiseAddr returns the advertise address of this cluster (node or gate)

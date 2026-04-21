@@ -30,34 +30,6 @@ import (
 	goverse_pb "github.com/xiaonanln/goverse/proto"
 )
 
-// gracefulStopBudget caps how long we wait for grpcServer.GracefulStop to
-// drain in-flight RPCs before falling back to a hard Stop. With the
-// live-context interceptor in place, BeginShutdown cascades cancellation
-// into handler contexts, so GracefulStop usually completes well within this
-// budget; the force-stop path is a safety net for stuck handlers.
-const gracefulStopBudget = 2 * time.Second
-
-// cancelOnSignal returns a child of parent that is also cancelled when
-// signal is cancelled. The returned cancel must be called to release
-// resources.
-func cancelOnSignal(parent, signal context.Context) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(parent)
-	stop := context.AfterFunc(signal, cancel)
-	return ctx, func() {
-		stop()
-		cancel()
-	}
-}
-
-// liveCtxStream wraps a grpc.ServerStream to override its Context with one
-// that also cancels when the cluster's live context cancels.
-type liveCtxStream struct {
-	grpc.ServerStream
-	ctx context.Context
-}
-
-func (s *liveCtxStream) Context() context.Context { return s.ctx }
-
 type ServerConfig struct {
 	ListenAddress             string
 	AdvertiseAddress          string
@@ -302,35 +274,7 @@ func (server *Server) Run(ctx context.Context) error {
 
 	node := server.Node
 
-	// Install interceptors that bind every inbound RPC context to the
-	// cluster's live context. When BeginShutdown cancels liveCtx, every
-	// in-flight handler's ctx (and any outbound forward calls derived from
-	// it) cancel too, so GracefulStop can drain quickly instead of waiting
-	// on per-call timeouts.
-	liveCtxFn := server.cluster.LiveContext
-	unaryInterceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if live := liveCtxFn(); live != nil {
-			var cancel context.CancelFunc
-			ctx, cancel = cancelOnSignal(ctx, live)
-			defer cancel()
-		}
-		return handler(ctx, req)
-	}
-	streamInterceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ctx := ss.Context()
-		if live := liveCtxFn(); live != nil {
-			var cancel context.CancelFunc
-			ctx, cancel = cancelOnSignal(ctx, live)
-			defer cancel()
-			ss = &liveCtxStream{ServerStream: ss, ctx: ctx}
-		}
-		return handler(srv, ss)
-	}
-
-	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(unaryInterceptor),
-		grpc.StreamInterceptor(streamInterceptor),
-	)
+	grpcServer := grpc.NewServer()
 	goverse_pb.RegisterGoverseServer(grpcServer, server)
 	reflection.Register(grpcServer)
 	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
@@ -414,27 +358,12 @@ func (server *Server) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			server.logger.Infof("Run context done, stopping servers...")
 		}
-		// Cancel the cluster-live context first so every in-flight RPC
-		// handler's ctx cancels (via the unary/stream interceptors). Forward
-		// calls in those handlers derive from the inbound ctx, so the
-		// cancellation cascades through the gRPC client and the outbound RPCs
-		// return immediately instead of waiting on the 30s per-call timeout.
-		// With handlers unwinding promptly, GracefulStop drains quickly on its
-		// own; the bounded force-stop below is just a safety net for any
-		// handler that doesn't honour ctx cancellation.
-		server.cluster.BeginShutdown()
-		stopDone := make(chan struct{})
-		go func() {
-			grpcServer.GracefulStop()
-			close(stopDone)
-		}()
-		select {
-		case <-stopDone:
-		case <-time.After(gracefulStopBudget):
-			server.logger.Warnf("gRPC graceful stop exceeded %s; forcing stop so state flush can proceed", gracefulStopBudget)
-			grpcServer.Stop()
-			<-stopDone
-		}
+		// Hard-stop the gRPC server: cancel handler contexts immediately so
+		// in-flight forwarded calls (whose ctx derives from the inbound RPC
+		// ctx) return without waiting on the 30s per-call timeout to an
+		// unreachable peer. GracefulStop is unsuitable here because it waits
+		// for handlers to return on their own without cancelling them.
+		grpcServer.Stop()
 		if metricsServer != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
