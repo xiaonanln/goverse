@@ -395,7 +395,7 @@ func (server *Server) Run(ctx context.Context) error {
 }
 
 func (server *Server) logRPC(method string, req proto.Message) {
-	server.logger.Infof("RPC <<< %s(request=%v)", method, req)
+	server.logger.Debugf("RPC <<< %s(request=%v)", method, req)
 }
 
 // validateObjectShardOwnership validates that an object should be on this node

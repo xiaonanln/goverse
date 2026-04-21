@@ -299,7 +299,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		return nil, callErr
 	}
 
-	node.logger.Infof("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
+	node.logger.Debugf("CallObject received: type=%s, id=%s, method=%s", typ, id, method)
 
 	// Auto-create object
 	err := node.createObject(ctx, typ, id)
@@ -337,7 +337,7 @@ func (node *Node) CallObject(ctx context.Context, typ string, id string, method 
 		return nil, callErr
 	}
 
-	node.logger.Infof("Response type: %T, value: %+v", resp, resp)
+	node.logger.Debugf("Response type: %T, value: %+v", resp, resp)
 	return resp, nil
 }
 
@@ -413,7 +413,7 @@ func (node *Node) ReliableCallObject(
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("node is stopped")
 	}
 
-	node.logger.Infof("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s, method=%s",
+	node.logger.Debugf("ReliableCallObject received: call_id=%s, object_type=%s, object_id=%s, method=%s",
 		callID, objectType, objectID, methodName)
 
 	// Validate input parameters
@@ -606,7 +606,7 @@ func (node *Node) CreateObject(ctx context.Context, typ string, id string) (stri
 		return "", fmt.Errorf("node is stopped")
 	}
 
-	node.logger.Infof("CreateObject received: type=%s, id=%s", typ, id)
+	node.logger.Debugf("CreateObject received: type=%s, id=%s", typ, id)
 
 	err := node.createObject(ctx, typ, id)
 	if err != nil {
@@ -639,7 +639,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	if existingObj != nil {
 		// If object exists and has the same type, return success
 		if existingObj.Type() == typ {
-			node.logger.Infof("Object %s of type %s already exists, returning existing object", id, typ)
+			node.logger.Debugf("Object %s of type %s already exists, returning existing object", id, typ)
 			return nil
 		}
 		// Type mismatch - this is an error
@@ -659,7 +659,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 	if existingObj != nil {
 		// If object exists and has the same type, return success
 		if existingObj.Type() == typ {
-			node.logger.Infof("Object %s of type %s already exists, returning existing object", id, typ)
+			node.logger.Debugf("Object %s of type %s already exists, returning existing object", id, typ)
 			return nil
 		}
 		// Type mismatch - this is an error
@@ -721,7 +721,7 @@ func (node *Node) createObject(ctx context.Context, typ string, id string) error
 			}
 		} else if errors.Is(err, object.ErrNotPersistent) {
 			// Object type doesn't support persistence, call FromData(nil)
-			node.logger.Infof("Object type %s is not persistent, creating new object", typ)
+			node.logger.Debugf("Object type %s is not persistent, creating new object", typ)
 			dataToRestore = nil
 			obj.SetNextRcseq(0) // Default to 0 for non-persistent objects
 		}
@@ -847,7 +847,7 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 			node.logger.Infof("Successfully deleted object %s from persistence", id)
 		} else if errors.Is(err, object.ErrNotPersistent) {
 			// Object is not persistent, skip persistence deletion
-			node.logger.Infof("Object %s is not persistent, skipping persistence deletion", id)
+			node.logger.Debugf("Object %s is not persistent, skipping persistence deletion", id)
 		} else {
 			// Some other error occurred
 			node.logger.Warnf("Could not check persistence for object %s: %v", id, err)
@@ -1096,7 +1096,7 @@ func (node *Node) saveAllObjectsLocked(ctx context.Context) error {
 		err := obj.Save(provider)
 		if err == object.ErrNotPersistent {
 			// Object is not persistent, skip silently
-			node.logger.Infof("Object %s is not persistent", obj)
+			node.logger.Debugf("Object %s is not persistent", obj)
 			nonPersistentCount++
 			unlockKey()
 			continue

@@ -166,7 +166,7 @@ func (n *NodeMonitor) createCounters() {
 			continue
 		}
 		created++
-		n.Logger.Infof("Created counter %s (shard %d)", counterID, shardID)
+		n.Logger.Debugf("Created counter %s (shard %d)", counterID, shardID)
 	}
 
 	if created > 0 {

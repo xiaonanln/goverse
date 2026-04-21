@@ -45,12 +45,12 @@ type Logger struct {
 	logger *log.Logger
 }
 
-// NewLogger creates a new Logger instance with default INFO level
+// NewLogger creates a new Logger instance with default WARN level
 func NewLogger(prefix string) *Logger {
 	l := &Logger{
 		logger: log.New(os.Stdout, "", 0),
 	}
-	l.level.Store(INFO)
+	l.level.Store(WARN)
 	l.prefix.Store(prefix)
 	return l
 }
