@@ -7,12 +7,14 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/xiaonanln/goverse/util/logger"
 )
 
 // DB wraps a PostgreSQL database connection with utility methods
 type DB struct {
 	conn   *sql.DB
 	config *Config
+	logger *logger.Logger
 }
 
 // NewDB creates a new database connection using the provided configuration
@@ -46,6 +48,7 @@ func NewDB(config *Config) (*DB, error) {
 	return &DB{
 		conn:   conn,
 		config: config,
+		logger: logger.NewLogger("postgres"),
 	}, nil
 }
 

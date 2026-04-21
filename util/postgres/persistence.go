@@ -185,8 +185,7 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 		RETURNING seq, call_id, object_id, object_type, method_name, request_data, result_data, error_message, status, created_at, updated_at
 	`
 
-	// Debug: Log the insert parameters
-	fmt.Printf("[DEBUG InsertOrGetReliableCall] call_id=%s, object_id=%s, object_type=%s, method_name=%s\n", requestID, objectID, objectType, methodName)
+	db.logger.Debugf("InsertOrGetReliableCall: call_id=%s, object_id=%s, object_type=%s, method_name=%s", requestID, objectID, objectType, methodName)
 
 	now := time.Now()
 	var rc object.ReliableCall
@@ -208,7 +207,7 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 	)
 
 	if err != nil {
-		fmt.Printf("[DEBUG InsertOrGetReliableCall] ERROR: %v\n", err)
+		db.logger.Debugf("InsertOrGetReliableCall: %v", err)
 		return nil, fmt.Errorf("failed to insert or get reliable call: %w", err)
 	}
 
@@ -219,8 +218,7 @@ func (db *DB) InsertOrGetReliableCall(ctx context.Context, requestID string, obj
 		rc.Error = errorMessage.String
 	}
 
-	// Debug: Log the inserted record
-	fmt.Printf("[DEBUG InsertOrGetReliableCall] Inserted: seq=%d, call_id=%s, object_id=%s, status=%s\n", rc.Seq, rc.CallID, rc.ObjectID, rc.Status)
+	db.logger.Debugf("InsertOrGetReliableCall: inserted seq=%d, call_id=%s, object_id=%s, status=%s", rc.Seq, rc.CallID, rc.ObjectID, rc.Status)
 
 	return &rc, nil
 }
@@ -271,8 +269,7 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 		ORDER BY seq ASC
 	`
 
-	// Debug: Log the query parameters
-	fmt.Printf("[DEBUG GetPendingReliableCalls] object_id=%s, nextRcseq=%d\n", objectID, nextRcseq)
+	db.logger.Debugf("GetPendingReliableCalls: object_id=%s, nextRcseq=%d", objectID, nextRcseq)
 
 	rows, err := db.conn.QueryContext(ctx, query, objectID, nextRcseq)
 	if err != nil {
@@ -319,7 +316,7 @@ func (db *DB) GetPendingReliableCalls(ctx context.Context, objectID string, next
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	fmt.Printf("[DEBUG GetPendingReliableCalls] Found %d rows\n", rowCount)
+	db.logger.Debugf("GetPendingReliableCalls: found %d rows", rowCount)
 
 	return calls, nil
 }
