@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,7 +9,10 @@ import (
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspectorconfig"
 	"github.com/xiaonanln/goverse/cmd/inspector/inspectserver"
+	"github.com/xiaonanln/goverse/util/logger"
 )
+
+var log = logger.NewLogger("Inspector")
 
 func main() {
 	// Load configuration
@@ -40,7 +42,7 @@ func main() {
 
 	// Wait for shutdown signal
 	<-sigChan
-	log.Println("Received shutdown signal")
+	log.Infof("Received shutdown signal")
 	server.Shutdown()
 
 	// Wait for both servers to stop with timeout
@@ -51,10 +53,10 @@ func main() {
 		case <-serversDone:
 			serversShutdown++
 		case <-timeout:
-			log.Println("Timeout waiting for servers to shutdown")
+			log.Warnf("Timeout waiting for servers to shutdown")
 			return
 		}
 	}
 
-	log.Println("Inspector stopped")
+	log.Infof("Inspector stopped")
 }

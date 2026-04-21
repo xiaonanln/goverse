@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/xiaonanln/goverse/cmd/inspector/graph"
 	"github.com/xiaonanln/goverse/cmd/inspector/models"
 	inspector_pb "github.com/xiaonanln/goverse/cmd/inspector/proto"
+	"github.com/xiaonanln/goverse/util/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+var log = logger.NewLogger("Inspector")
 
 type GoverseNode = models.GoverseNode
 type GoverseObject = models.GoverseObject
@@ -229,7 +231,7 @@ func (i *Inspector) RemoveObject(ctx context.Context, req *inspector_pb.RemoveOb
 	}
 
 	i.pg.RemoveObject(objectID)
-	log.Printf("Object removed: object_id=%s, node=%s", objectID, nodeAddress)
+	log.Debugf("Object removed: object_id=%s, node=%s", objectID, nodeAddress)
 	return &inspector_pb.Empty{}, nil
 }
 
@@ -237,7 +239,7 @@ func (i *Inspector) RemoveObject(ctx context.Context, req *inspector_pb.RemoveOb
 func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.RegisterNodeRequest) (*inspector_pb.RegisterNodeResponse, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
-		log.Println("RegisterNode called with empty advertise address")
+		log.Warnf("RegisterNode called with empty advertise address")
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
@@ -282,7 +284,7 @@ func (i *Inspector) RegisterNode(ctx context.Context, req *inspector_pb.Register
 		i.pg.AddOrUpdateObject(obj)
 	}
 
-	log.Printf("Node registered: advertise_addr=%s, connected_nodes=%v, registered_gates=%v", addr, req.GetConnectedNodes(), req.GetRegisteredGates())
+	log.Debugf("Node registered: advertise_addr=%s, connected_nodes=%v, registered_gates=%v", addr, req.GetConnectedNodes(), req.GetRegisteredGates())
 	return &inspector_pb.RegisterNodeResponse{}, nil
 }
 
@@ -291,7 +293,7 @@ func (i *Inspector) UnregisterNode(ctx context.Context, req *inspector_pb.Unregi
 	addr := req.GetAdvertiseAddress()
 
 	i.pg.RemoveNode(addr)
-	log.Printf("Node unregistered: advertise_addr=%s", addr)
+	log.Debugf("Node unregistered: advertise_addr=%s", addr)
 	return &inspector_pb.Empty{}, nil
 }
 
@@ -299,7 +301,7 @@ func (i *Inspector) UnregisterNode(ctx context.Context, req *inspector_pb.Unregi
 func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.RegisterGateRequest) (*inspector_pb.RegisterGateResponse, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
-		log.Println("RegisterGate called with empty advertise address")
+		log.Warnf("RegisterGate called with empty advertise address")
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
@@ -315,7 +317,7 @@ func (i *Inspector) RegisterGate(ctx context.Context, req *inspector_pb.Register
 	}
 	i.pg.AddOrUpdateGate(gate)
 
-	log.Printf("Gate registered: advertise_addr=%s, connected_nodes=%v, clients=%d", addr, req.GetConnectedNodes(), req.GetClients())
+	log.Debugf("Gate registered: advertise_addr=%s, connected_nodes=%v, clients=%d", addr, req.GetConnectedNodes(), req.GetClients())
 	return &inspector_pb.RegisterGateResponse{}, nil
 }
 
@@ -324,7 +326,7 @@ func (i *Inspector) UnregisterGate(ctx context.Context, req *inspector_pb.Unregi
 	addr := req.GetAdvertiseAddress()
 
 	i.pg.RemoveGate(addr)
-	log.Printf("Gate unregistered: advertise_addr=%s", addr)
+	log.Debugf("Gate unregistered: advertise_addr=%s", addr)
 	return &inspector_pb.Empty{}, nil
 }
 
@@ -333,7 +335,7 @@ func (i *Inspector) UnregisterGate(ctx context.Context, req *inspector_pb.Unregi
 func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.UpdateConnectedNodesRequest) (*inspector_pb.Empty, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
-		log.Println("UpdateConnectedNodes called with empty advertise address")
+		log.Warnf("UpdateConnectedNodes called with empty advertise address")
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
@@ -346,13 +348,13 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 	// Try to update as node first, then as gate
 	if i.pg.IsNodeRegistered(addr) {
 		i.pg.UpdateNodeConnectedNodes(addr, connectedNodes)
-		log.Printf("Node connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
+		log.Debugf("Node connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
 	} else if i.pg.IsGateRegistered(addr) {
 		i.pg.UpdateGateConnectedNodes(addr, connectedNodes)
-		log.Printf("Gate connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
+		log.Debugf("Gate connected_nodes updated: advertise_addr=%s, connected_nodes=%v", addr, connectedNodes)
 	} else {
 		// Neither node nor gate is registered, log but don't error
-		log.Printf("UpdateConnectedNodes: no node or gate registered with address %s", addr)
+		log.Warnf("UpdateConnectedNodes: no node or gate registered with address %s", addr)
 	}
 
 	return &inspector_pb.Empty{}, nil
@@ -362,7 +364,7 @@ func (i *Inspector) UpdateConnectedNodes(ctx context.Context, req *inspector_pb.
 func (i *Inspector) UpdateGateClients(ctx context.Context, req *inspector_pb.UpdateGateClientsRequest) (*inspector_pb.Empty, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
-		log.Println("UpdateGateClients called with empty advertise address")
+		log.Warnf("UpdateGateClients called with empty advertise address")
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
@@ -371,9 +373,9 @@ func (i *Inspector) UpdateGateClients(ctx context.Context, req *inspector_pb.Upd
 	// Update gate clients in the graph
 	if i.pg.IsGateRegistered(addr) {
 		i.pg.UpdateGateClients(addr, clients)
-		log.Printf("Gate clients updated: advertise_addr=%s, clients=%d", addr, clients)
+		log.Debugf("Gate clients updated: advertise_addr=%s, clients=%d", addr, clients)
 	} else {
-		log.Printf("UpdateGateClients: no gate registered with address %s", addr)
+		log.Warnf("UpdateGateClients: no gate registered with address %s", addr)
 	}
 
 	return &inspector_pb.Empty{}, nil
@@ -383,7 +385,7 @@ func (i *Inspector) UpdateGateClients(ctx context.Context, req *inspector_pb.Upd
 func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb.UpdateRegisteredGatesRequest) (*inspector_pb.Empty, error) {
 	addr := req.GetAdvertiseAddress()
 	if addr == "" {
-		log.Println("UpdateRegisteredGates called with empty advertise address")
+		log.Warnf("UpdateRegisteredGates called with empty advertise address")
 		return nil, errors.New("advertise address cannot be empty")
 	}
 
@@ -395,10 +397,10 @@ func (i *Inspector) UpdateRegisteredGates(ctx context.Context, req *inspector_pb
 	// Only nodes can have registered gates
 	if i.pg.IsNodeRegistered(addr) {
 		i.pg.UpdateNodeRegisteredGates(addr, registeredGates)
-		log.Printf("Node registered_gates updated: advertise_addr=%s, registered_gates=%v", addr, registeredGates)
+		log.Debugf("Node registered_gates updated: advertise_addr=%s, registered_gates=%v", addr, registeredGates)
 	} else {
 		// Node is not registered, log but don't error
-		log.Printf("UpdateRegisteredGates: no node registered with address %s", addr)
+		log.Warnf("UpdateRegisteredGates: no node registered with address %s", addr)
 	}
 
 	return &inspector_pb.Empty{}, nil
