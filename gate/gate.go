@@ -325,7 +325,7 @@ func (g *Gate) registerWithNode(ctx context.Context, nodeAddr string, client gov
 
 		msg, err := stream.Recv()
 		if err != nil {
-			g.logger.Errorf("Stream from node %s closed: %v", nodeAddr, err)
+			g.logger.Warnf("Stream from node %s closed: %v", nodeAddr, err)
 			return
 		}
 		g.handleGateMessage(nodeAddr, msg)
