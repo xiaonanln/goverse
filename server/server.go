@@ -31,9 +31,32 @@ import (
 )
 
 // gracefulStopBudget caps how long we wait for grpcServer.GracefulStop to
-// drain in-flight RPCs before falling back to a hard Stop. See the comment
-// in the shutdown goroutine for why a pure GracefulStop can stall.
+// drain in-flight RPCs before falling back to a hard Stop. With the
+// live-context interceptor in place, BeginShutdown cascades cancellation
+// into handler contexts, so GracefulStop usually completes well within this
+// budget; the force-stop path is a safety net for stuck handlers.
 const gracefulStopBudget = 2 * time.Second
+
+// cancelOnSignal returns a child of parent that is also cancelled when
+// signal is cancelled. The returned cancel must be called to release
+// resources.
+func cancelOnSignal(parent, signal context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	stop := context.AfterFunc(signal, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
+}
+
+// liveCtxStream wraps a grpc.ServerStream to override its Context with one
+// that also cancels when the cluster's live context cancels.
+type liveCtxStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *liveCtxStream) Context() context.Context { return s.ctx }
 
 type ServerConfig struct {
 	ListenAddress             string
@@ -279,7 +302,35 @@ func (server *Server) Run(ctx context.Context) error {
 
 	node := server.Node
 
-	grpcServer := grpc.NewServer()
+	// Install interceptors that bind every inbound RPC context to the
+	// cluster's live context. When BeginShutdown cancels liveCtx, every
+	// in-flight handler's ctx (and any outbound forward calls derived from
+	// it) cancel too, so GracefulStop can drain quickly instead of waiting
+	// on per-call timeouts.
+	liveCtxFn := server.cluster.LiveContext
+	unaryInterceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if live := liveCtxFn(); live != nil {
+			var cancel context.CancelFunc
+			ctx, cancel = cancelOnSignal(ctx, live)
+			defer cancel()
+		}
+		return handler(ctx, req)
+	}
+	streamInterceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		ctx := ss.Context()
+		if live := liveCtxFn(); live != nil {
+			var cancel context.CancelFunc
+			ctx, cancel = cancelOnSignal(ctx, live)
+			defer cancel()
+			ss = &liveCtxStream{ServerStream: ss, ctx: ctx}
+		}
+		return handler(srv, ss)
+	}
+
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(unaryInterceptor),
+		grpc.StreamInterceptor(streamInterceptor),
+	)
 	goverse_pb.RegisterGoverseServer(grpcServer, server)
 	reflection.Register(grpcServer)
 	server.logger.Infof("gRPC server listening on %s", goverseServiceListener.Addr().String())
@@ -363,18 +414,15 @@ func (server *Server) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			server.logger.Infof("Run context done, stopping servers...")
 		}
-		// Try to drain in-flight RPCs briefly, then force-stop. A pure
-		// GracefulStop() can block for up to the full default call timeout
-		// (30s) waiting for forwarded CallObject/ReliableCallObject RPCs to
-		// unreachable peers to time out on their own. Under churn — when
-		// multiple peers die at once — this stalls shutdown long enough that
-		// the process runner's SIGKILL fires before Node.Stop() has a chance
-		// to flush dirty object state to persistence.
-		//
-		// grpcServer.Stop() cancels all in-flight stream contexts; since
-		// forwarded calls use contexts derived from the inbound RPC context,
-		// cancellation cascades and the outbound gRPC calls return promptly,
-		// unblocking their handlers and letting us proceed to the final save.
+		// Cancel the cluster-live context first so every in-flight RPC
+		// handler's ctx cancels (via the unary/stream interceptors). Forward
+		// calls in those handlers derive from the inbound ctx, so the
+		// cancellation cascades through the gRPC client and the outbound RPCs
+		// return immediately instead of waiting on the 30s per-call timeout.
+		// With handlers unwinding promptly, GracefulStop drains quickly on its
+		// own; the bounded force-stop below is just a safety net for any
+		// handler that doesn't honour ctx cancellation.
+		server.cluster.BeginShutdown()
 		stopDone := make(chan struct{})
 		go func() {
 			grpcServer.GracefulStop()
