@@ -358,7 +358,12 @@ func (server *Server) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			server.logger.Infof("Run context done, stopping servers...")
 		}
-		grpcServer.GracefulStop()
+		// Hard-stop the gRPC server: cancel handler contexts immediately so
+		// in-flight forwarded calls (whose ctx derives from the inbound RPC
+		// ctx) return without waiting on the 30s per-call timeout to an
+		// unreachable peer. GracefulStop is unsuitable here because it waits
+		// for handlers to return on their own without cancelling them.
+		grpcServer.Stop()
 		if metricsServer != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
