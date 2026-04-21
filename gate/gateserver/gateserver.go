@@ -200,25 +200,13 @@ func (s *GateServer) Stop() error {
 	s.logger.Infof("Stopping gate server")
 
 	if s.grpcServer != nil {
-		// Create a timeout context for graceful shutdown (5 seconds)
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-
-		// Graceful stop in goroutine
-		done := make(chan struct{})
-		go func() {
-			s.grpcServer.GracefulStop()
-			close(done)
-		}()
-
-		// Wait for graceful stop or timeout
-		select {
-		case <-done:
-			s.logger.Infof("gRPC server stopped gracefully")
-		case <-shutdownCtx.Done():
-			s.logger.Warnf("gRPC server shutdown timed out, forcing stop")
-			s.grpcServer.Stop()
-		}
+		// Hard-stop the gRPC server: the gate's Register RPC is a long-lived
+		// server-stream that exits only when the client disconnects, so
+		// GracefulStop has nothing meaningful to drain and would just sit
+		// for the full timeout before falling back to Stop anyway. Stop
+		// closes transports immediately, which cancels handler contexts so
+		// the streaming loops return at once.
+		s.grpcServer.Stop()
 	}
 
 	// Shutdown HTTP server if running
