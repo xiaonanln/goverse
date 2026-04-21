@@ -589,7 +589,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Route to the appropriate node (both node and gate clusters can route)
-	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
+	c.logger.Debugf("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -655,7 +655,7 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	}
 
 	// Route to the appropriate node (both node and gate clusters can route)
-	c.logger.Infof("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
+	c.logger.Debugf("%s - Routing CallObject for %s.%s to node %s (type: %s)", c, id, method, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -714,12 +714,12 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 		go func() {
 			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultCreateTimeout, DefaultCreateTimeout))
 			defer asyncCancel()
-			c.logger.Infof("%s - Async creating object %s locally (type: %s)", c, objID, objType)
+			c.logger.Debugf("%s - Async creating object %s locally (type: %s)", c, objID, objType)
 			_, err := c.node.CreateObject(asyncCtx, objType, objID)
 			if err != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed: %v", c, objID, err)
 			} else {
-				c.logger.Infof("%s - Async CreateObject %s completed successfully", c, objID)
+				c.logger.Debugf("%s - Async CreateObject %s completed successfully", c, objID)
 				// Record metrics on success if numShards is configured
 				if c.numShards > 0 {
 					shardID := sharding.GetShardID(objID, c.numShards)
@@ -731,7 +731,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Routing CreateObject for %s to node %s", c, objID, nodeAddr)
+	c.logger.Debugf("%s - Routing CreateObject for %s to node %s", c, objID, nodeAddr)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -754,7 +754,7 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 			c.logger.Errorf("%s - CreateObject %s failed on remote node: %v", c, objID, err)
 			return "", fmt.Errorf("remote CreateObject failed on node %s: %w", nodeAddr, err)
 		}
-		c.logger.Infof("%s - CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+		c.logger.Debugf("%s - CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
 		return objID, nil
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
@@ -765,12 +765,12 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 			if _, asyncErr := client.CreateObject(asyncCtx, req); asyncErr != nil {
 				c.logger.Errorf("%s - Async CreateObject %s failed on remote node: %v", c, objID, asyncErr)
 			} else {
-				c.logger.Infof("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
+				c.logger.Debugf("%s - Async CreateObject %s completed successfully on node %s", c, objID, nodeAddr)
 			}
 		}()
 
 		// Return immediately with the object ID
-		c.logger.Infof("%s - CreateObject %s initiated asynchronously", c, objID)
+		c.logger.Debugf("%s - CreateObject %s initiated asynchronously", c, objID)
 		return objID, nil
 	}
 }
@@ -810,7 +810,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 			if err != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
 			} else {
-				c.logger.Infof("%s - Async DeleteObject %s completed successfully", c, objID)
+				c.logger.Debugf("%s - Async DeleteObject %s completed successfully", c, objID)
 				// Metrics are not recorded here since we don't track object types
 			}
 		}()
@@ -840,7 +840,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 			c.logger.Errorf("%s - DeleteObject %s failed on remote node: %v", c, objID, err)
 			return fmt.Errorf("remote DeleteObject failed on node %s: %w", nodeAddr, err)
 		}
-		c.logger.Infof("%s - DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+		c.logger.Debugf("%s - DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
 		return nil
 	} else {
 		// Asynchronous execution for nodes to prevent deadlocks
@@ -851,12 +851,12 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 			if _, asyncErr := client.DeleteObject(asyncCtx, req); asyncErr != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed on remote node: %v", c, objID, asyncErr)
 			} else {
-				c.logger.Infof("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
+				c.logger.Debugf("%s - Async DeleteObject %s completed successfully on node %s", c, objID, nodeAddr)
 			}
 		}()
 
 		// Return immediately
-		c.logger.Infof("%s - DeleteObject %s initiated asynchronously", c, objID)
+		c.logger.Debugf("%s - DeleteObject %s initiated asynchronously", c, objID)
 		return nil
 	}
 }

@@ -302,7 +302,6 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 			}
 		case event := <-client.eventChan:
 			eventType := string(event.Type)
-			log.Printf("Sending SSE event '%s' to client %s", eventType, clientID)
 			if err := s.writeSSEEvent(w, flusher, eventType, event); err != nil {
 				log.Printf("Failed to send event to SSE client %s: %v", clientID, err)
 				return

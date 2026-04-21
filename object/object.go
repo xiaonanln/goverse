@@ -420,7 +420,7 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 
 	// Unmarshal request to the expected concrete proto.Message type
 	expectedReqType := methodType.In(1)
-	base.Logger.Infof("Request value: %+v", request)
+	base.Logger.Debugf("Request value: %+v", request)
 
 	if reflect.TypeOf(request) != expectedReqType {
 		return nil, fmt.Errorf("request type mismatch: expected %s, got %s", expectedReqType, reflect.TypeOf(request))
@@ -674,9 +674,9 @@ func (base *BaseObject) saveLocked(provider PersistenceProvider, call *ReliableC
 	}
 
 	if call != nil {
-		base.Logger.Infof("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
+		base.Logger.Debugf("Saved persistent object after RC %s (seq=%d)", call.CallID, call.Seq)
 	} else {
-		base.Logger.Infof("Saved persistent object")
+		base.Logger.Debugf("Saved persistent object")
 	}
 	return nil
 }

@@ -443,7 +443,6 @@ func (i *Inspector) ReportObjectCall(ctx context.Context, req *inspector_pb.Repo
 	// Broadcast the call event
 	i.pg.BroadcastObjectCall(objectID, objectClass, method, nodeAddress)
 
-	log.Printf("Object call reported: object_id=%s, class=%s, method=%s, node=%s, duration=%dus", objectID, objectClass, method, nodeAddress, duration)
 	return &inspector_pb.Empty{}, nil
 }
 

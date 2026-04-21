@@ -495,7 +495,7 @@ func (im *InspectorManager) reportObjectCall(ctx context.Context, objectID, obje
 		return
 	}
 
-	im.logger.Infof("Reported object call %s.%s to inspector (duration: %dus)", objectID, method, durationUs)
+	im.logger.Debugf("Reported object call %s.%s to inspector (duration: %dus)", objectID, method, durationUs)
 }
 
 // ReportLinkCall sends a ReportLinkCall RPC to the Inspector without holding a lock.
