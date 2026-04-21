@@ -40,7 +40,7 @@ const clusterStateStabilityDuration = 3 * time.Second
 // SSEClient represents a connected SSE client
 type SSEClient struct {
 	id        string
-	eventChan chan graph.GraphEvent
+	eventChan chan []byte
 	done      chan struct{}
 }
 
@@ -153,6 +153,16 @@ func (s *InspectorServer) OnClusterStateChanged() {
 
 // OnGraphEvent implements the graph.Observer interface
 func (s *InspectorServer) OnGraphEvent(event graph.GraphEvent) {
+	payload, err := formatSSEEvent(string(event.Type), event)
+	if err != nil {
+		log.Errorf("Failed to format SSE event %s: %v", event.Type, err)
+		return
+	}
+	s.broadcastSSEPayload(payload, string(event.Type))
+}
+
+// broadcastSSEPayload fans out a pre-formatted SSE payload to all connected clients.
+func (s *InspectorServer) broadcastSSEPayload(payload []byte, eventType string) {
 	s.sseClientsMu.RLock()
 	clients := make([]*SSEClient, 0, len(s.sseClients))
 	for _, c := range s.sseClients {
@@ -162,11 +172,10 @@ func (s *InspectorServer) OnGraphEvent(event graph.GraphEvent) {
 
 	for _, client := range clients {
 		select {
-		case client.eventChan <- event:
+		case client.eventChan <- payload:
 		case <-client.done:
 		default:
-			// Channel full, log and skip this event for this client
-			log.Warnf("Event dropped for SSE client %s: channel full", client.id)
+			log.Warnf("Event %s dropped for SSE client %s: channel full", eventType, client.id)
 		}
 	}
 }
@@ -247,7 +256,7 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 	clientID := fmt.Sprintf("client-%d", s.clientIDSeq)
 	client := &SSEClient{
 		id:        clientID,
-		eventChan: make(chan graph.GraphEvent, 100),
+		eventChan: make(chan []byte, 100),
 		done:      make(chan struct{}),
 	}
 	s.sseClients[clientID] = client
@@ -302,31 +311,38 @@ func (s *InspectorServer) handleEventsStream(w http.ResponseWriter, r *http.Requ
 				log.Errorf("Failed to send heartbeat to SSE client %s: %v", clientID, err)
 				return
 			}
-		case event := <-client.eventChan:
-			eventType := string(event.Type)
-			if err := s.writeSSEEvent(w, flusher, eventType, event); err != nil {
+		case payload := <-client.eventChan:
+			if _, err := w.Write(payload); err != nil {
 				log.Errorf("Failed to send event to SSE client %s: %v", clientID, err)
 				return
 			}
+			flusher.Flush()
 		}
 	}
 }
 
-// writeSSEEvent writes a Server-Sent Event to the response writer
+// writeSSEEvent writes a Server-Sent Event to the response writer.
+// Used for per-client one-shot writes (initial state, heartbeat).
 func (s *InspectorServer) writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, eventType string, data interface{}) error {
-	// Marshal data to JSON
-	jsonData, err := json.Marshal(data)
+	payload, err := formatSSEEvent(eventType, data)
 	if err != nil {
-		return fmt.Errorf("failed to marshal event data: %w", err)
+		return err
 	}
-
-	// Write SSE format: event: <type>\ndata: <json>\n\n
-	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, jsonData); err != nil {
+	if _, err := w.Write(payload); err != nil {
 		return fmt.Errorf("failed to write SSE event: %w", err)
 	}
-
 	flusher.Flush()
 	return nil
+}
+
+// formatSSEEvent renders an SSE-framed payload (event + data + terminator) once,
+// so broadcasts can reuse the same bytes across all subscribers.
+func formatSSEEvent(eventType string, data interface{}) ([]byte, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal event data: %w", err)
+	}
+	return []byte(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, jsonData)), nil
 }
 
 // ServeHTTP starts the HTTP server in a goroutine and returns immediately
@@ -690,26 +706,12 @@ func (s *InspectorServer) broadcastShardUpdate() {
 	event := graph.GraphEvent{
 		Type: "shard_update",
 	}
-
-	s.sseClientsMu.RLock()
-	clients := make([]*SSEClient, 0, len(s.sseClients))
-	for _, c := range s.sseClients {
-		clients = append(clients, c)
+	payload, err := formatSSEEvent(string(event.Type), event)
+	if err != nil {
+		log.Errorf("Failed to format shard_update SSE event: %v", err)
+		return
 	}
-	s.sseClientsMu.RUnlock()
-
-	log.Debugf("Broadcasting shard_update to %d SSE clients", len(clients))
-
-	for _, client := range clients {
-		select {
-		case client.eventChan <- event:
-			log.Debugf("Sent shard_update to SSE client %s", client.id)
-		case <-client.done:
-			log.Debugf("Client %s already disconnected", client.id)
-		default:
-			log.Warnf("Event dropped for SSE client %s: channel full", client.id)
-		}
-	}
+	s.broadcastSSEPayload(payload, string(event.Type))
 }
 
 // Shutdown initiates graceful shutdown of all servers
