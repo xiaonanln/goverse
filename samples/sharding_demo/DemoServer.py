@@ -18,6 +18,15 @@ from BinaryHelper import BinaryHelper
 from PortHelper import get_free_port
 
 
+class DemoServerStopTimeout(RuntimeError):
+    """Raised when a demo server fails to exit within the SIGTERM grace.
+
+    Hanging on SIGTERM means the node is stuck somewhere in shutdown
+    (e.g. blocked persistence flush, deadlocked goroutine) — a real bug we
+    want to surface loudly instead of papering over with SIGKILL.
+    """
+
+
 class DemoServer:
     """Manages a Goverse demo server process."""
     
@@ -141,20 +150,25 @@ class DemoServer:
         print(f"Stopping {self.name}...")
 
         # SIGTERM grace must cover Node.Stop() persisting every in-memory
-        # object to Postgres. gRPC shutdown itself is near-instant now
-        # (server hard-stops the listener instead of draining), so the
-        # dominant cost is proportional to the number of dirty objects.
-        # 20s is a comfortable ceiling for the stress demo workload.
+        # object to Postgres. gRPC shutdown itself is near-instant (server
+        # hard-stops the listener instead of draining), so the dominant cost
+        # is proportional to the number of dirty objects. 20s is a
+        # comfortable ceiling for the stress demo workload.
+        #
+        # If SIGTERM doesn't return within the grace, we deliberately do NOT
+        # follow up with SIGKILL: a hang in graceful shutdown is a real bug
+        # (stuck persistence, deadlocked goroutine, lost shutdown signal)
+        # and SIGKILL would mask it. Raise instead so the test fails loudly
+        # and the leaked process stays around as evidence.
         try:
             self.process.send_signal(signal.SIGTERM)
             self.process.wait(timeout=20)
         except subprocess.TimeoutExpired:
-            # Force kill if graceful shutdown fails
-            print(f"⚠️  {self.name} did not stop gracefully, force killing...")
-            self.process.kill()
-            self.process.wait()
-        except Exception as e:
-            print(f"⚠️  Error stopping {self.name}: {e}")
+            pid = self.process.pid
+            raise DemoServerStopTimeout(
+                f"{self.name} (pid={pid}) did not exit within 20s of SIGTERM; "
+                "investigate the hang before re-running"
+            )
 
         self.process = None
         print(f"✅ {self.name} stopped")

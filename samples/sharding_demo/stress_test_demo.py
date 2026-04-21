@@ -68,7 +68,7 @@ sys.path.insert(0, str(SAMPLES_DIR))
 CHAT_DIR = REPO_ROOT / 'tests' / 'samples' / 'chat'
 sys.path.insert(0, str(CHAT_DIR))
 
-from DemoServer import DemoServer
+from DemoServer import DemoServer, DemoServerStopTimeout
 from Inspector import Inspector
 from Gateway import Gateway
 
@@ -454,6 +454,15 @@ class ChurnController:
             print(f"\n🔄 [CHURN] Killing demo server idx={idx} node_id={target.node_id}")
             try:
                 target.close()
+            except DemoServerStopTimeout as e:
+                # SIGTERM grace exceeded — a real shutdown bug. Stop churn
+                # so we don't pile on more half-alive nodes (the leaked
+                # process still holds the port; replacement would fail to
+                # bind anyway).
+                print(f"❌ [CHURN] {e}")
+                self.failures += 1
+                self.stop_event.set()
+                return
             except Exception as e:
                 print(f"⚠️  [CHURN] error closing {target.name}: {e}")
 
@@ -697,7 +706,8 @@ Examples:
     clients = []
     churn_controller = None
     persistence_ok = True
-    
+    shutdown_timeouts: List[str] = []
+
     final_stats = StringIO()
 
     try:
@@ -893,20 +903,18 @@ Examples:
 
         print_stats(clients, file=final_stats)
 
-        return 0 if persistence_ok else 1
-
     except KeyboardInterrupt:
         print("\n\n⚠️  Test interrupted by user")
         if churn_controller is not None:
             churn_controller.stop()
         print_stats(clients, file=final_stats)
-        return 1
-        
+        persistence_ok = False
+
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
         traceback.print_exc()
-        return 1
-        
+        persistence_ok = False
+
     finally:
         # Always clean up all processes
         print("\nCleaning up...")
@@ -926,7 +934,7 @@ Examples:
                 client.stop()
             except Exception as e:
                 print(f"⚠️  Error stopping client: {e}")
-        
+
         # Stop gateways
         print("Stopping gateways...")
         for gateway in gateways:
@@ -934,15 +942,21 @@ Examples:
                 gateway.close()
             except Exception as e:
                 print(f"⚠️  Error stopping gateway: {e}")
-        
+
         # Stop demo servers
         print("Stopping demo servers...")
         for server in reversed(demo_servers):
             try:
                 server.close()
+            except DemoServerStopTimeout as e:
+                # SIGTERM grace exceeded — record as a test failure but
+                # keep going so the rest of the servers still get a chance
+                # to flush state. The hung process is left as evidence.
+                print(f"❌ {e}")
+                shutdown_timeouts.append(server.name)
             except Exception as e:
                 print(f"⚠️  Error stopping server: {e}")
-        
+
         # Stop inspector
         if inspector is not None:
             try:
@@ -950,9 +964,15 @@ Examples:
                 inspector.close()
             except Exception as e:
                 print(f"⚠️  Error stopping inspector: {e}")
-        
+
+        if shutdown_timeouts:
+            print(f"\n❌ {len(shutdown_timeouts)} server(s) hung on SIGTERM: "
+                  f"{', '.join(shutdown_timeouts)}")
+
         print("✅ Cleanup complete")
         print(final_stats.getvalue())
+
+    return 0 if (persistence_ok and not shutdown_timeouts) else 1
 
 if __name__ == '__main__':
     sys.exit(main())
