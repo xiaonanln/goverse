@@ -137,21 +137,24 @@ class DemoServer:
         """Stop the demo server process."""
         if self.process is None:
             return
-        
+
         print(f"Stopping {self.name}...")
-        
-        # Try graceful shutdown first
+
+        # SIGTERM grace must cover Node.Stop() persisting every in-memory
+        # object to Postgres. gRPC shutdown itself is near-instant now
+        # (server hard-stops the listener instead of draining), so the
+        # dominant cost is proportional to the number of dirty objects.
+        # 20s is a comfortable ceiling for the stress demo workload.
         try:
             self.process.send_signal(signal.SIGTERM)
-            self.process.wait(timeout=5)
+            self.process.wait(timeout=20)
         except subprocess.TimeoutExpired:
             # Force kill if graceful shutdown fails
             print(f"⚠️  {self.name} did not stop gracefully, force killing...")
-            time.sleep(300)
             self.process.kill()
             self.process.wait()
         except Exception as e:
             print(f"⚠️  Error stopping {self.name}: {e}")
-        
+
         self.process = None
         print(f"✅ {self.name} stopped")

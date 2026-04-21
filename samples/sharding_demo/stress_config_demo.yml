@@ -18,6 +18,17 @@ postgres:
   password: "goverse"
   database: "goverse"
   sslmode: "disable"
+  # 10 nodes share one Postgres (default max_connections=100). Keep the
+  # per-node pool small so the total stays well under that limit — otherwise
+  # nodes start seeing "FATAL: sorry, too many clients already" under load.
+  #
+  # max_idle_conns intentionally equals max_open_conns: if idle < open, the
+  # pool keeps closing "extra" connections under bursty load and reopening
+  # them, parking source ports in TIME_WAIT for ~60s each. On macOS the
+  # ephemeral port range is only ~16k, and you quickly get
+  # "dial tcp 127.0.0.1:5432: connect: can't assign requested address".
+  max_open_conns: 4
+  max_idle_conns: 4
 
 inspector:
   # Inspector provides HTTP/gRPC interface for cluster monitoring

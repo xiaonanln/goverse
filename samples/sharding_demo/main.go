@@ -14,6 +14,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -228,6 +229,18 @@ func (g *GlobalMonitor) GetUptime(ctx context.Context, req *pb.GetUptimeRequest)
 func main() {
 	// Create server (uses command-line flags or config file)
 	server := goverseapi.NewServer()
+
+	// The default 5-minute persistence interval is fine for normal operation
+	// but far too long for the churn stress test: a force-killed node loses
+	// every increment since its last save. The stress test sets
+	// DEMO_PERSISTENCE_INTERVAL=5s (or similar) to keep dirty state small.
+	if iv := os.Getenv("DEMO_PERSISTENCE_INTERVAL"); iv != "" {
+		d, err := time.ParseDuration(iv)
+		if err != nil {
+			panic(fmt.Errorf("invalid DEMO_PERSISTENCE_INTERVAL %q: %w", iv, err))
+		}
+		server.Node.SetPersistenceInterval(d)
+	}
 
 	// Register object types after server is created
 	goverseapi.RegisterObjectType((*SimpleCounter)(nil))

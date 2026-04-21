@@ -80,6 +80,28 @@ Combined example (5 clients, 5 minutes, stats every 30 seconds):
 python3 stress_test_demo.py --clients 5 --duration 300 --stats-interval 30
 ```
 
+### Node Churn Mode
+
+Enable periodic kill + restart of a random demo server to exercise shard
+migration and persistence end-to-end. When enabled, the script tracks the
+highest `Increment`/`GetValue` response each client observes per counter;
+after the run it queries the server and asserts every counter's current
+value is `>=` the max observed. A regression means a committed increment
+was lost across a restart, and the script exits with a non-zero status.
+
+```bash
+python3 stress_test_demo.py \
+    --duration 300 \
+    --churn-enabled \
+    --churn-interval 30 \
+    --churn-downtime 2
+```
+
+Flags:
+- `--churn-enabled` — turn churn on (default: off)
+- `--churn-interval` — seconds between churn cycles (default: 30)
+- `--churn-downtime` — seconds a node stays down before restart (default: 2)
+
 ## Configuration File
 
 The stress test uses `stress_config_demo.yml` which defines:
