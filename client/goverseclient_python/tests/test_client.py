@@ -2,6 +2,7 @@
 # Licensed under the Apache-2.0 License.
 """Unit tests for the Goverse Python client library."""
 
+import base64
 import logging
 import sys
 import threading
@@ -219,18 +220,25 @@ class TestClientNotConnected(unittest.TestCase):
 class TestGenerateCallID(unittest.TestCase):
     """Test generate_call_id produces unique, URL-safe identifiers."""
 
-    def test_returns_nonempty_string(self):
+    def test_matches_go_format(self):
+        # 16 bytes (8-byte timestamp + 8-byte random) padded base64url = 24 chars,
+        # matching the Go client's GenerateCallID / uniqueid.UniqueId output.
         cid = generate_call_id()
         self.assertIsInstance(cid, str)
-        self.assertGreater(len(cid), 0)
+        self.assertEqual(len(cid), 24, f"expected 24 chars, got {cid!r}")
 
     def test_is_url_safe(self):
         cid = generate_call_id()
-        # urlsafe b64 alphabet is A-Z a-z 0-9 - _
+        # Padded urlsafe b64 alphabet: A-Z a-z 0-9 - _ =
         allowed = set(
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_="
         )
         self.assertTrue(set(cid).issubset(allowed), f"unexpected chars in {cid!r}")
+
+    def test_round_trip_decodes_to_16_bytes(self):
+        cid = generate_call_id()
+        raw = base64.urlsafe_b64decode(cid)
+        self.assertEqual(len(raw), 16)
 
     def test_uniqueness(self):
         ids = {generate_call_id() for _ in range(1000)}

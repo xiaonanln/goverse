@@ -102,7 +102,10 @@ def generate_call_id() -> str:
     """
     ts = int(time.time() * 1_000_000)
     buf = struct.pack(">Q", ts) + os.urandom(8)
-    return base64.urlsafe_b64encode(buf).rstrip(b"=").decode("ascii")
+    # Keep the trailing "=" padding: Go's base64.URLEncoding (used by
+    # uniqueid.UniqueId) is padded, and stripping here would produce a
+    # 22-char variant that differs on the wire from the Go client's IDs.
+    return base64.urlsafe_b64encode(buf).decode("ascii")
 
 
 # Type aliases for callbacks
