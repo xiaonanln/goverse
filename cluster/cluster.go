@@ -1591,7 +1591,7 @@ func (c *Cluster) loadAutoLoadObjects(ctx context.Context) {
 	}
 
 	if len(c.config.AutoLoadObjects) == 0 {
-		c.logger.Warnf("%s - No auto-load objects configured, skipping", c)
+		c.logger.Debugf("%s - No auto-load objects configured, skipping", c)
 		return
 	}
 
