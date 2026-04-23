@@ -75,6 +75,21 @@ MAX_DELAY = 0.1
 MIN_AMOUNT = 1
 MAX_AMOUNT = 100
 
+# Fault injection. Before each real call, with probability FAULT_INJECT_PROB,
+# send the same request with a tiny timeout so the client aborts before a
+# normal response arrives. The tiny-timeout call may:
+#   - never reach the server (pure client abort, no server-side state),
+#   - reach the server and race with execution (interesting: server may
+#     execute, client has no idea),
+#   - or even complete normally if the server is fast.
+# In all three cases the real retry that follows — with the same call_id —
+# must still give an outcome consistent with whatever actually happened,
+# which is exactly the reliable-call contract. The random range bracket
+# the typical local RPC latency so we see a mix of all three outcomes.
+FAULT_INJECT_PROB = 0.2
+FAULT_INJECT_MIN_TIMEOUT = 0.002
+FAULT_INJECT_MAX_TIMEOUT = 0.020
+
 
 def ensure_postgres_ready() -> bool:
     try:
@@ -119,6 +134,7 @@ class StressClient:
 
         self.call_count = 0
         self.retry_count = 0
+        self.fault_inject_count = 0
         self.mismatch_count = 0
         self.error_count = 0
 
@@ -159,6 +175,17 @@ class StressClient:
         call_id = generate_call_id()
 
         op = OpRecord(call_id=call_id, wallet_id=wallet_id, kind=kind, amount=amount)
+
+        # Fault injection: abort a first attempt with a tiny timeout so we
+        # don't know whether the server executed it. The real retry with
+        # the same call_id must still yield a consistent outcome. Outcome
+        # of this attempt is ignored; we rely on the retry to tell us
+        # what actually happened.
+        if random.random() < FAULT_INJECT_PROB:
+            self.fault_inject_count += 1
+            short = random.uniform(FAULT_INJECT_MIN_TIMEOUT, FAULT_INJECT_MAX_TIMEOUT)
+            self._invoke(op, timeout=short, count_rpc_error=False)
+
         resp = self._invoke(op)
         if resp is None:
             # Transient failure; don't retry — RPC error means the server
@@ -193,13 +220,13 @@ class StressClient:
 
         self.ops.append(op)
 
-    def _invoke(self, op: OpRecord):
+    def _invoke(self, op: OpRecord, timeout: float = 5.0, count_rpc_error: bool = True):
         if self.client is None:
             return None
         method, req = self._build_request(op)
         try:
             any_resp, _status = self.client.reliable_call_object(
-                op.call_id, "Wallet", op.wallet_id, method, req, timeout=5.0
+                op.call_id, "Wallet", op.wallet_id, method, req, timeout=timeout
             )
         except ReliableCallError as e:
             # Server-side reported method failure. Treat as rejected; do
@@ -208,8 +235,9 @@ class StressClient:
             print(f"[client-{self.client_id}] server error call_id={op.call_id}: {e}")
             return wallet_pb2.WalletResponse(wallet_id=op.wallet_id, balance=0, ok=False, reason=str(e))
         except Exception as e:
-            self.error_count += 1
-            print(f"[client-{self.client_id}] rpc error call_id={op.call_id}: {e}")
+            if count_rpc_error:
+                self.error_count += 1
+                print(f"[client-{self.client_id}] rpc error call_id={op.call_id}: {e}")
             return None
 
         if any_resp is None:
@@ -272,10 +300,12 @@ def assert_conservation(clients: List[StressClient], wallet_ids: List[str], gate
 def print_stats(clients: List[StressClient]) -> None:
     total_calls = sum(c.call_count for c in clients)
     total_retries = sum(c.retry_count for c in clients)
+    total_injects = sum(c.fault_inject_count for c in clients)
     total_mismatch = sum(c.mismatch_count for c in clients)
     total_errors = sum(c.error_count for c in clients)
     print(f"\ncalls={total_calls}  retries={total_retries}  "
-          f"rpc_errors={total_errors}  idempotency_mismatches={total_mismatch}")
+          f"fault_injects={total_injects}  rpc_errors={total_errors}  "
+          f"idempotency_mismatches={total_mismatch}")
 
 
 def main() -> int:
