@@ -1,0 +1,56 @@
+# Wallet stress test cluster — 1 inspector, 3 wallet-server nodes, 2 gates.
+# Reliable calls require Postgres-backed persistence, so this config starts
+# there and does not support running the wallet sample without it.
+
+version: 1
+
+# Postgres-backed persistence. Values match docker-compose.yml.
+# Start locally with: docker-compose up -d postgres
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "goverse"
+  password: "goverse"
+  database: "goverse"
+  sslmode: "disable"
+  # Keep pools small so 3 nodes × pool stays well under Postgres's default
+  # max_connections=100. max_idle_conns == max_open_conns to avoid the
+  # churn-reconnect / TIME_WAIT issue described in samples/sharding_demo.
+  max_open_conns: 4
+  max_idle_conns: 4
+
+inspector:
+  http_addr: "0.0.0.0:8090"
+  grpc_addr: "0.0.0.0:8091"
+  advertise_addr: "localhost:8091"
+
+cluster:
+  shards: 64
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse/wallet-stress-test"
+
+nodes:
+  - id: "wallet-node-1"
+    grpc_addr: "0.0.0.0:9311"
+    advertise_addr: "localhost:9311"
+    http_addr: "0.0.0.0:8311"
+
+  - id: "wallet-node-2"
+    grpc_addr: "0.0.0.0:9312"
+    advertise_addr: "localhost:9312"
+    http_addr: "0.0.0.0:8312"
+
+  - id: "wallet-node-3"
+    grpc_addr: "0.0.0.0:9313"
+    advertise_addr: "localhost:9313"
+    http_addr: "0.0.0.0:8313"
+
+gates:
+  - id: "wallet-gate-1"
+    grpc_addr: "0.0.0.0:10211"
+
+  - id: "wallet-gate-2"
+    grpc_addr: "0.0.0.0:10212"

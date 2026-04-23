@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package wallet;
+
+option go_package = "github.com/xiaonanln/goverse/samples/wallet/proto;wallet_pb";
+
+// DepositRequest credits an amount to a wallet. Paired with reliable calls,
+// a retry with the same call_id must not double-credit.
+message DepositRequest {
+  int64 amount = 1;
+}
+
+// WithdrawRequest debits an amount from a wallet. Fails (ok=false) if the
+// wallet's balance is insufficient; retried with the same call_id, the
+// failure or success must be reproduced exactly, never applied twice.
+message WithdrawRequest {
+  int64 amount = 1;
+}
+
+// GetBalanceRequest is a no-op placeholder so the method has a typed
+// argument for gRPC.
+message GetBalanceRequest {}
+
+// WalletResponse is returned from Deposit/Withdraw/GetBalance.
+// ok=false with a non-empty reason means the operation was rejected
+// (e.g. insufficient funds); callers should not retry in that case.
+message WalletResponse {
+  string wallet_id = 1;
+  int64 balance = 2;
+  bool ok = 3;
+  string reason = 4;
+}
