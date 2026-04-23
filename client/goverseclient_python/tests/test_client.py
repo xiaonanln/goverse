@@ -2,6 +2,7 @@
 # Licensed under the Apache-2.0 License.
 """Unit tests for the Goverse Python client library."""
 
+import base64
 import logging
 import sys
 import threading
@@ -43,6 +44,8 @@ if grpc:
         NotConnectedError,
         ClientClosedError,
         ConnectionFailedError,
+        ReliableCallError,
+        generate_call_id,
         DEFAULT_CONNECTION_TIMEOUT,
         DEFAULT_CALL_TIMEOUT,
         DEFAULT_RECONNECT_INTERVAL,
@@ -177,6 +180,12 @@ class TestClientClose(unittest.TestCase):
         with self.assertRaises(ClientClosedError):
             client.call_object_any("Type", "ID", "Method")
 
+        with self.assertRaises(ClientClosedError):
+            client.reliable_call_object("cid", "Type", "ID", "Method")
+
+        with self.assertRaises(ClientClosedError):
+            client.reliable_call_object_any("cid", "Type", "ID", "Method")
+
 
 @unittest.skipIf(grpc is None, "grpc not installed")
 class TestClientNotConnected(unittest.TestCase):
@@ -198,7 +207,101 @@ class TestClientNotConnected(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             client.call_object_any("Type", "ID", "Method")
 
+        with self.assertRaises(NotConnectedError):
+            client.reliable_call_object("cid", "Type", "ID", "Method")
+
+        with self.assertRaises(NotConnectedError):
+            client.reliable_call_object_any("cid", "Type", "ID", "Method")
+
         client.close()
+
+
+@unittest.skipIf(grpc is None, "grpc not installed")
+class TestGenerateCallID(unittest.TestCase):
+    """Test generate_call_id produces unique, URL-safe identifiers."""
+
+    def test_matches_go_format(self):
+        # 16 bytes (8-byte timestamp + 8-byte random) padded base64url = 24 chars,
+        # matching the Go client's GenerateCallID / uniqueid.UniqueId output.
+        cid = generate_call_id()
+        self.assertIsInstance(cid, str)
+        self.assertEqual(len(cid), 24, f"expected 24 chars, got {cid!r}")
+
+    def test_is_url_safe(self):
+        cid = generate_call_id()
+        # Padded urlsafe b64 alphabet: A-Z a-z 0-9 - _ =
+        allowed = set(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_="
+        )
+        self.assertTrue(set(cid).issubset(allowed), f"unexpected chars in {cid!r}")
+
+    def test_round_trip_decodes_to_16_bytes(self):
+        cid = generate_call_id()
+        raw = base64.urlsafe_b64decode(cid)
+        self.assertEqual(len(raw), 16)
+
+    def test_uniqueness(self):
+        ids = {generate_call_id() for _ in range(1000)}
+        self.assertEqual(len(ids), 1000)
+
+
+@unittest.skipIf(grpc is None, "grpc not installed")
+class TestReliableCallObjectMock(unittest.TestCase):
+    """Test reliable_call_object response handling with a mocked gate stub."""
+
+    def _make_connected_client(self, stub_response):
+        client = Client(["localhost:48000"])
+        client._closed = False
+        client._connected = True
+        client._client_id = "test-client"
+        stub = MagicMock()
+        stub.ReliableCallObject.return_value = stub_response
+        client._stub = stub
+        return client, stub
+
+    def test_success_returns_response_and_status(self):
+        from google.protobuf.any_pb2 import Any as AnyProto
+        from gate.proto import gate_pb2
+
+        payload = AnyProto()
+        payload.type_url = "type.googleapis.com/example.Foo"
+        payload.value = b"\x01\x02"
+        resp = gate_pb2.ReliableCallObjectResponse(
+            response=payload, error="", status="SUCCESS"
+        )
+        client, _ = self._make_connected_client(resp)
+
+        result, status = client.reliable_call_object_any(
+            "cid-1", "Foo", "foo-1", "Bar"
+        )
+        self.assertEqual(status, "SUCCESS")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.type_url, payload.type_url)
+
+    def test_empty_response_returns_none(self):
+        from gate.proto import gate_pb2
+
+        resp = gate_pb2.ReliableCallObjectResponse(status="SUCCESS")
+        client, _ = self._make_connected_client(resp)
+
+        result, status = client.reliable_call_object_any(
+            "cid-2", "Foo", "foo-2", "Bar"
+        )
+        self.assertIsNone(result)
+        self.assertEqual(status, "SUCCESS")
+
+    def test_server_error_raises_reliable_call_error(self):
+        from gate.proto import gate_pb2
+
+        resp = gate_pb2.ReliableCallObjectResponse(
+            error="method failed: bad input", status="FAILED"
+        )
+        client, _ = self._make_connected_client(resp)
+
+        with self.assertRaises(ReliableCallError) as cm:
+            client.reliable_call_object_any("cid-3", "Foo", "foo-3", "Bar")
+        self.assertEqual(cm.exception.status, "FAILED")
+        self.assertIn("bad input", str(cm.exception))
 
 
 @unittest.skipIf(grpc is None, "grpc not installed")
