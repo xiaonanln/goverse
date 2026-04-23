@@ -8,13 +8,16 @@ It handles connection management, automatic failover between multiple gate addre
 and provides a user-friendly API for interacting with Goverse services.
 """
 
+import base64
 import logging
+import os
+import struct
 import sys
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 import grpc
 from google.protobuf.any_pb2 import Any as AnyProto
@@ -74,6 +77,32 @@ class ClientClosedError(GoverseClientError):
 class ConnectionFailedError(GoverseClientError):
     """Raised when connection to all gates fails."""
     pass
+
+
+class ReliableCallError(GoverseClientError):
+    """Raised when a reliable call returns a server-side error.
+
+    The .status attribute carries the execution status reported by the
+    server (e.g. "FAILED", "SKIPPED"); safe to retry with the same call_id
+    only if status is "SKIPPED" (pre-execution error).
+    """
+
+    def __init__(self, message: str, status: str = "UNKNOWN"):
+        super().__init__(message)
+        self.status = status
+
+
+def generate_call_id() -> str:
+    """Generate a unique call ID suitable for reliable_call_object.
+
+    The ID is a 24-char base64url string combining an 8-byte microsecond
+    timestamp and 8 random bytes, matching the Go client's GenerateCallID
+    format. Generate one ID per logical operation and reuse it on retries
+    to get exactly-once semantics.
+    """
+    ts = int(time.time() * 1_000_000)
+    buf = struct.pack(">Q", ts) + os.urandom(8)
+    return base64.urlsafe_b64encode(buf).rstrip(b"=").decode("ascii")
 
 
 # Type aliases for callbacks
@@ -507,6 +536,90 @@ class Client:
             return None
 
         return resp.response
+
+    def reliable_call_object(
+        self,
+        call_id: str,
+        object_type: str,
+        object_id: str,
+        method: str,
+        request: Optional[Message] = None,
+        timeout: Optional[float] = None,
+    ) -> Tuple[Optional[AnyProto], str]:
+        """Call a method on an object with exactly-once semantics.
+
+        The server deduplicates by ``call_id``: a retry with the same
+        ``call_id`` returns the cached result without re-executing the
+        method. Generate one ID per logical operation (see
+        ``generate_call_id``) and reuse it on retries.
+
+        Args:
+            call_id: Unique identifier for this call, used for deduplication.
+            object_type: The type of the object to call.
+            object_id: The ID of the object to call.
+            method: The method name to call.
+            request: The request protobuf message. Can be None.
+            timeout: Call timeout in seconds. If None, uses the default.
+
+        Returns:
+            A tuple ``(response, status)`` where ``response`` is the
+            method's response wrapped in ``google.protobuf.Any`` (or None
+            if the method returned nothing), and ``status`` is the
+            server-reported execution status (``SUCCESS``, ``SKIPPED``, ...).
+
+        Raises:
+            ClientClosedError: If the client has been closed.
+            NotConnectedError: If the client is not connected.
+            ReliableCallError: If the server reports a method-side error.
+            grpc.RpcError: If the underlying RPC call fails.
+        """
+        any_req = None
+        if request is not None:
+            any_req = AnyProto()
+            any_req.Pack(request)
+        return self.reliable_call_object_any(
+            call_id, object_type, object_id, method, any_req, timeout
+        )
+
+    def reliable_call_object_any(
+        self,
+        call_id: str,
+        object_type: str,
+        object_id: str,
+        method: str,
+        request: Optional[AnyProto] = None,
+        timeout: Optional[float] = None,
+    ) -> Tuple[Optional[AnyProto], str]:
+        """Reliable call variant that accepts a pre-packed ``Any`` request.
+
+        See ``reliable_call_object`` for deduplication semantics and
+        return value.
+        """
+        with self._lock:
+            if self._closed:
+                raise ClientClosedError("Client is closed")
+            if not self._connected:
+                raise NotConnectedError("Client is not connected")
+            stub = self._stub
+
+        timeout = timeout or self._options.call_timeout
+
+        req = gate_pb2.ReliableCallObjectRequest(
+            call_id=call_id,
+            type=object_type,
+            id=object_id,
+            method=method,
+            request=request,
+        )
+
+        resp = stub.ReliableCallObject(req, timeout=timeout)
+
+        status = resp.status if resp.status else "UNKNOWN"
+        if resp.error:
+            raise ReliableCallError(resp.error, status=status)
+
+        response = resp.response if resp.response and resp.response.type_url else None
+        return response, status
 
     def create_object(
         self,
