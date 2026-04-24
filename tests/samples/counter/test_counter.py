@@ -22,7 +22,7 @@ from pathlib import Path
 
 # Repo root (tests/samples/counter/test_counter.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
-sys.path.insert(0, str(REPO_ROOT / 'tests' / 'samples'))
+sys.path.insert(0, str(REPO_ROOT / 'samples' / 'common'))
 
 from BinaryHelper import BinaryHelper
 from PortHelper import get_free_port
