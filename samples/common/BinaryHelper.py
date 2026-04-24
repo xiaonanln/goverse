@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import List
 
-# Repo root (tests/samples/BinaryHelper.py -> repo root)
+# Repo root (samples/common/BinaryHelper.py -> repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 
 

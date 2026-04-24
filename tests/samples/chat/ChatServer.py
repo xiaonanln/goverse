@@ -15,9 +15,9 @@ from google.protobuf.any_pb2 import Any as AnyProto
 import sys
 REPO_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
-# Expose the samples directory for shared modules like BinaryHelper
-SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
-sys.path.insert(0, str(SAMPLES_DIR))
+# Expose the samples/common directory for shared helpers like BinaryHelper.
+COMMON_DIR = REPO_ROOT / 'samples' / 'common'
+sys.path.insert(0, str(COMMON_DIR))
 
 from BinaryHelper import BinaryHelper
 from PortHelper import get_free_port

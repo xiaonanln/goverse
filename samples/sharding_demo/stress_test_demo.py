@@ -60,9 +60,9 @@ sys.path.insert(0, str(REPO_ROOT))
 SHARDING_DEMO_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(SHARDING_DEMO_DIR))
 
-# Expose the samples directory for shared modules
-SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
-sys.path.insert(0, str(SAMPLES_DIR))
+# Expose the samples/common directory for shared helpers like BinaryHelper.
+COMMON_DIR = REPO_ROOT / 'samples' / 'common'
+sys.path.insert(0, str(COMMON_DIR))
 
 # Expose the chat directory for Inspector and Gateway helpers
 CHAT_DIR = REPO_ROOT / 'tests' / 'samples' / 'chat'

@@ -42,8 +42,8 @@ from typing import Dict, List, Optional
 # --- path bootstrap ---------------------------------------------------
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
-SAMPLES_DIR = REPO_ROOT / 'tests' / 'samples'
-sys.path.insert(0, str(SAMPLES_DIR))
+COMMON_DIR = REPO_ROOT / 'samples' / 'common'
+sys.path.insert(0, str(COMMON_DIR))
 CHAT_DIR = REPO_ROOT / 'tests' / 'samples' / 'chat'
 sys.path.insert(0, str(CHAT_DIR))
 WALLET_DIR = Path(__file__).parent.resolve()
