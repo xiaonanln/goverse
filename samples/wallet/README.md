@@ -18,15 +18,18 @@ timeouts or network hiccups.
 
 Two invariants are asserted:
 
-1. **In-flight**: for each retried call, the retry's `(ok, balance)`
-   must match the first response. Any mismatch is a violation.
+1. **In-flight**: for each retried call, the retry's `ok` must match
+   the first response's `ok`. A mismatch means the server re-executed
+   the method rather than replaying the cached outcome.
 2. **End-of-run**: for every wallet, server-reported balance must equal
    the client ledger (`sum of applied deposits − sum of applied
    withdrawals`). Any drift means a call was applied more than once.
 
 ## Prerequisites
 
-- Go 1.21+ and Python 3.8+ with `grpcio`, `grpcio-tools`, `pyyaml`.
+- Go 1.25+ (module declares `go 1.25.0`) and Python 3.10+ (the
+  subprocess wrapper uses PEP 604 `X | None` type syntax) with the
+  `grpcio`, `grpcio-tools`, `pyyaml` packages.
 - `protoc` + `protoc-gen-go` + `protoc-gen-go-grpc` on `PATH`.
 - **Postgres** running on `localhost:5432` with the `goverse` user (the
   reliable-call dedup state is persisted there — required, not
