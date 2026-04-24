@@ -2,7 +2,7 @@
 
 All notable changes to GoVerse are documented in this file.
 
-## [0.1.0] — 2026-04-19
+## [0.1.0] — 2026-04-24
 
 First tagged release. GoVerse is a distributed object runtime for Go that
 implements the virtual actor model with etcd-based placement and 8192-shard
@@ -35,7 +35,10 @@ and trust that basic failure modes are handled correctly.
   and Postgres.
 - **Docs**: end-to-end "5-Minute Tour" in `docs/GET_STARTED.md`; full
   getting-started guide, API reference, HTTP gate spec, and design docs.
-- **Samples**: `counter`, `tictactoe`, `chat`, `sharding_demo`.
+- **Samples**: `counter`, `tictactoe`, `chat`, `sharding_demo`, and
+  `wallet` (end-to-end reliable-call demo with a stress test that
+  injects mid-flight timeout aborts and verifies per-wallet balance
+  conservation).
 
 ### Known Issues (deferred to v0.2.0)
 
