@@ -36,20 +36,9 @@ and trust that basic failure modes are handled correctly.
 - **Docs**: end-to-end "5-Minute Tour" in `docs/GET_STARTED.md`; full
   getting-started guide, API reference, HTTP gate spec, and design docs.
 - **Samples**: `counter`, `tictactoe`, `chat`, `sharding_demo`, and
-  `wallet` (demonstrates exactly-once reliable calls end-to-end; its
-  stress test injects mid-flight timeout aborts and validates per-wallet
-  conservation under ~1.7k calls/sec with 100 clients).
-- **Python client**: `reliable_call_object` / `reliable_call_object_any`
-  wrappers, `generate_call_id` helper matching the Go client's 24-char
-  base64url format, and a `ReliableCallError` exception that surfaces the
-  server-reported status for retry decisions.
-- **SSE broadcast efficiency**: Inspector pre-formats graph events once
-  and fans the bytes out to all subscribers instead of re-marshalling
-  per client.
-- **Operator-friendly log levels**: per-RPC chatter demoted to Debug;
-  inspector, gate, and Postgres output routed through the goverse logger;
-  expected shutdown paths (gate stream close, cluster "no auto-load
-  configured") no longer surface as Warn.
+  `wallet` (end-to-end reliable-call demo with a stress test that
+  injects mid-flight timeout aborts and verifies per-wallet balance
+  conservation).
 
 ### Known Issues (deferred to v0.2.0)
 
