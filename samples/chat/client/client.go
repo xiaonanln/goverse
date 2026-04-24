@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +19,8 @@ import (
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
 )
+
+var mainLogger = logger.NewLogger("ChatClient")
 
 const (
 	// DefaultConnectionTimeout is the default timeout for gRPC connection establishment.
@@ -232,7 +233,7 @@ func (c *ChatClient) RunInteractive() {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading input: %v", err)
+		mainLogger.Errorf("Error reading input: %v", err)
 	}
 }
 
@@ -286,7 +287,7 @@ func main() {
 
 	client, err := NewChatClient(*serverAddr, *userID)
 	if err != nil {
-		log.Fatalf("Failed to create chat client: %v", err)
+		mainLogger.Fatalf("Failed to create chat client: %v", err)
 	}
 	client.logger.Infof("Chat client created")
 	defer client.Close()
@@ -294,7 +295,7 @@ func main() {
 
 	stream, err := client.client.Register(ctx, &gate_pb.Empty{}) // Ensure registration
 	if err != nil {
-		log.Fatalf("Failed to register client: %v", err)
+		mainLogger.Fatalf("Failed to register client: %v", err)
 	}
 	defer stream.CloseSend()
 
@@ -313,13 +314,13 @@ func main() {
 func receiveMessages(stream gate_pb.GateService_RegisterClient) proto.Message {
 	msgAny, err := stream.Recv()
 	if err != nil {
-		log.Fatalf("Error receiving message: %v", err)
+		mainLogger.Fatalf("Error receiving message: %v", err)
 	}
 
 	fmt.Printf("Received message: %v\n", msgAny)
 	msg, err := msgAny.UnmarshalNew()
 	if err != nil {
-		log.Fatalf("Failed to unmarshal message: %v", err)
+		mainLogger.Fatalf("Failed to unmarshal message: %v", err)
 	}
 
 	return msg
