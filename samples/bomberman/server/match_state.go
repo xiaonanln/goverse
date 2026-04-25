@@ -44,6 +44,7 @@ const (
 
 type Player struct {
 	ID           string
+	ClientID     string // gate-assigned id of the connected client; empty for server-driven test players
 	X, Y         int
 	Alive        bool
 	BombCapacity int
@@ -182,7 +183,10 @@ func (s *MatchState) SpawnPositions() [][2]int {
 
 // AddPlayer places a new player at (x,y). Fails if a slot already
 // exists, the match has already started, or the cell isn't empty.
-func (s *MatchState) AddPlayer(id string, x, y int) error {
+// clientID is the gate-assigned id of the connected client (used as
+// the push target for snapshots); pass empty for tests that don't
+// have a real client.
+func (s *MatchState) AddPlayer(id, clientID string, x, y int) error {
 	if s.Status != pb.MatchStatus_MATCH_STATUS_LOBBY {
 		return fmt.Errorf("match is not in lobby")
 	}
@@ -197,6 +201,7 @@ func (s *MatchState) AddPlayer(id string, x, y int) error {
 	}
 	s.Players[id] = &Player{
 		ID:           id,
+		ClientID:     clientID,
 		X:            x,
 		Y:            y,
 		Alive:        true,
@@ -205,6 +210,20 @@ func (s *MatchState) AddPlayer(id string, x, y int) error {
 		Speed:        DefaultSpeed,
 	}
 	return nil
+}
+
+// ClientIDs returns the gate-assigned client ids of every player
+// currently in the match (in unspecified order). Empty client ids
+// (from server-driven test players) are skipped so the result is safe
+// to pass directly to PushMessageToClients.
+func (s *MatchState) ClientIDs() []string {
+	ids := make([]string, 0, len(s.Players))
+	for _, p := range s.Players {
+		if p.ClientID != "" {
+			ids = append(ids, p.ClientID)
+		}
+	}
+	return ids
 }
 
 // Start transitions the match from LOBBY to RUNNING. Requires at least
