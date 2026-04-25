@@ -16,6 +16,25 @@ func TestNewMatchState_LayoutHasCornersOpen(t *testing.T) {
 	}
 }
 
+// TestNewMatchState_AllCornersHaveEscapeRoutes is a regression for the
+// asymmetric L-pocket bug: every corner spawn must have at least two
+// reachable empty neighbors so the player isn't trapped at start.
+func TestNewMatchState_AllCornersHaveEscapeRoutes(t *testing.T) {
+	s := NewMatchState(1)
+	corners := [][2]int{{1, 1}, {GridWidth - 2, 1}, {1, GridHeight - 2}, {GridWidth - 2, GridHeight - 2}}
+	for _, c := range corners {
+		empties := 0
+		for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			if s.tileAt(c[0]+d[0], c[1]+d[1]) == TileEmpty {
+				empties++
+			}
+		}
+		if empties < 2 {
+			t.Fatalf("corner (%d,%d) only has %d empty neighbors; player is trapped", c[0], c[1], empties)
+		}
+	}
+}
+
 func TestNewMatchState_BordersAreWalls(t *testing.T) {
 	s := NewMatchState(1)
 	for x := 0; x < GridWidth; x++ {
@@ -293,6 +312,41 @@ func TestPlaceBomb_RespectsCapacity(t *testing.T) {
 	}
 }
 
+// TestSpeedPowerup_IncreasesCellsPerTick verifies that picking up a
+// SPEED powerup actually translates to more movement per tick — the
+// proto and powerup pickup logic both bumped p.Speed but applyInputs
+// previously ignored it, so the field had no gameplay effect.
+func TestSpeedPowerup_IncreasesCellsPerTick(t *testing.T) {
+	s := twoPlayerStarted(t)
+	// Carve a long horizontal corridor for p1 to walk down.
+	for x := 2; x <= 6; x++ {
+		s.setTile(x, 1, TileEmpty)
+	}
+	s.Players["p1"].Speed = 3
+	if err := s.QueueInput("p1", Input{Move: pb.Direction_DIR_RIGHT}); err != nil {
+		t.Fatal(err)
+	}
+	s.AdvanceTick()
+	if p := s.Players["p1"]; p.X != 4 || p.Y != 1 {
+		t.Fatalf("p1 with Speed=3 should be at (4,1), got (%d,%d)", p.X, p.Y)
+	}
+}
+
+// TestSpeedPowerup_StopsAtObstacle ensures higher speed never lets a
+// player teleport past an intervening wall.
+func TestSpeedPowerup_StopsAtObstacle(t *testing.T) {
+	s := twoPlayerStarted(t)
+	// (3,1) is a destructible block, blocks p1 mid-stride.
+	s.Players["p1"].Speed = 5
+	if err := s.QueueInput("p1", Input{Move: pb.Direction_DIR_RIGHT}); err != nil {
+		t.Fatal(err)
+	}
+	s.AdvanceTick()
+	if p := s.Players["p1"]; p.X != 2 || p.Y != 1 {
+		t.Fatalf("p1 with Speed=5 should stop at (2,1) before the (3,1) block, got (%d,%d)", p.X, p.Y)
+	}
+}
+
 func TestQueueInput_DeadPlayerIsSilent(t *testing.T) {
 	s := twoPlayerStarted(t)
 	s.Players["p1"].Alive = false
@@ -308,6 +362,32 @@ func TestQueueInput_UnknownPlayer(t *testing.T) {
 	s := twoPlayerStarted(t)
 	if err := s.QueueInput("ghost", Input{Move: pb.Direction_DIR_RIGHT}); err == nil {
 		t.Fatal("expected error for unknown player")
+	}
+}
+
+// TestChainDetonation_DoesNotBurnExtraFuse pins the fix for the
+// "every chain reaction takes a tick off all unrelated bombs" bug.
+// One bomb is set to detonate this tick; a second, unrelated bomb is
+// far away and should lose exactly one tick of fuse — not two.
+func TestChainDetonation_DoesNotBurnExtraFuse(t *testing.T) {
+	s := twoPlayerStarted(t)
+	s.setTile(5, 5, TileEmpty)
+	s.setTile(9, 5, TileEmpty)
+	s.Bombs = append(s.Bombs,
+		&Bomb{X: 5, Y: 5, OwnerID: "p1", Power: 1, TicksRemaining: 1},  // detonates this tick
+		&Bomb{X: 9, Y: 5, OwnerID: "p2", Power: 1, TicksRemaining: 10}, // far away
+	)
+	s.Players["p1"].ActiveBombs = 1
+	s.Players["p2"].ActiveBombs = 1
+	s.AdvanceTick()
+	var distantFuse int = -1
+	for _, b := range s.Bombs {
+		if b.X == 9 && b.Y == 5 {
+			distantFuse = b.TicksRemaining
+		}
+	}
+	if distantFuse != 9 {
+		t.Fatalf("distant bomb fuse = %d after one tick with a chain elsewhere; want 9", distantFuse)
 	}
 }
 

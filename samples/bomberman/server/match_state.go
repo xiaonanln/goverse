@@ -143,15 +143,23 @@ func (s *MatchState) layoutGrid() {
 		}
 	}
 	// Carve open the four corner spawn pockets so corner players aren't
-	// boxed in by destructible blocks at start.
-	corners := [][2]int{{1, 1}, {s.Width - 2, 1}, {1, s.Height - 2}, {s.Width - 2, s.Height - 2}}
-	for _, c := range corners {
-		for _, off := range [][2]int{{0, 0}, {1, 0}, {0, 1}} {
-			x, y := c[0]+off[0], c[1]+off[1]
-			// keep within bounds
-			if x > 0 && x < s.Width-1 && y > 0 && y < s.Height-1 {
-				s.setTile(x, y, TileEmpty)
-			}
+	// boxed in by destructible blocks at start. Each pocket is an L
+	// (corner cell + horizontal neighbor + vertical neighbor) carved
+	// **toward the map interior**: the top-right pocket extends left
+	// and down, the bottom-left extends right and up, etc. Using the
+	// same positive offsets for every corner — as a previous version
+	// did — would push three of the four pockets onto border cells,
+	// which the bounds check would silently skip, leaving the
+	// (W-2,H-2) spawn fully boxed in by blocks at game start.
+	pockets := [][3][2]int{
+		{{1, 1}, {2, 1}, {1, 2}},
+		{{s.Width - 2, 1}, {s.Width - 3, 1}, {s.Width - 2, 2}},
+		{{1, s.Height - 2}, {2, s.Height - 2}, {1, s.Height - 3}},
+		{{s.Width - 2, s.Height - 2}, {s.Width - 3, s.Height - 2}, {s.Width - 2, s.Height - 3}},
+	}
+	for _, pocket := range pockets {
+		for _, cell := range pocket {
+			s.setTile(cell[0], cell[1], TileEmpty)
 		}
 	}
 }
@@ -250,13 +258,17 @@ func (s *MatchState) applyInputs() {
 		if !ok || !p.Alive {
 			continue
 		}
-		// Movement: discrete one cell in the requested direction. Players
-		// step into a cell only if it's empty, no bomb sits there, and no
-		// other player occupies it.
+		// Movement: step in the requested direction up to p.Speed cells
+		// (default 1, +1 per Speed powerup picked up). Stops at the first
+		// blocked cell — wall, bomb, or another player — so a higher
+		// speed never lets a player teleport through obstacles.
 		if in.Move != pb.Direction_DIR_NONE {
 			dx, dy := dirDelta(in.Move)
-			nx, ny := p.X+dx, p.Y+dy
-			if s.canEnter(nx, ny, pid) {
+			for step := 0; step < p.Speed; step++ {
+				nx, ny := p.X+dx, p.Y+dy
+				if !s.canEnter(nx, ny, pid) {
+					break
+				}
 				p.X, p.Y = nx, ny
 			}
 		}
@@ -315,15 +327,23 @@ func (s *MatchState) bombAt(x, y int) bool {
 }
 
 func (s *MatchState) advanceBombs() {
-	// Iterate snapshot of bombs to handle chain detonation: a bomb
-	// caught by another's blast detonates immediately at the same tick,
-	// extending the explosion. We resolve by repeatedly walking the
-	// list until nothing new exploded this tick.
+	// Decrement every bomb's fuse exactly once per tick. A previous
+	// version did the decrement inside the chain-resolution loop,
+	// which incorrectly burned extra fuse off unrelated bombs whenever
+	// any chain detonation occurred — bombs would explode earlier
+	// than configured and match timing would jitter under load.
+	for _, b := range s.Bombs {
+		b.TicksRemaining--
+	}
+
+	// Resolve all detonations this tick. Each pass: any bomb with
+	// fuse <= 0 explodes; if its blast lands on another live bomb,
+	// that bomb's fuse is set to 0 so it detonates on the next pass.
+	// Loop until no new detonations.
 	for {
 		exploded := false
 		remaining := s.Bombs[:0]
 		for _, b := range s.Bombs {
-			b.TicksRemaining--
 			if b.TicksRemaining <= 0 {
 				s.detonate(b)
 				exploded = true
@@ -335,9 +355,6 @@ func (s *MatchState) advanceBombs() {
 		if !exploded {
 			return
 		}
-		// After a chain detonation, any other bombs sitting on a fresh
-		// explosion tile should detonate too. Set their fuse to 0 so
-		// the next loop iteration consumes them.
 		for _, b := range s.Bombs {
 			for _, e := range s.Explosions {
 				if e.X == b.X && e.Y == b.Y && e.TicksRemaining == ExplosionTicks {
