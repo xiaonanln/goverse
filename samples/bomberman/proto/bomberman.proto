@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package bomberman;
+
+option go_package = "github.com/xiaonanln/goverse/samples/bomberman/proto;bomberman_pb";
+
+// MatchStatus tracks lifecycle of a Match object.
+enum MatchStatus {
+  MATCH_STATUS_UNSPECIFIED = 0;
+  MATCH_STATUS_LOBBY = 1;     // accepting players
+  MATCH_STATUS_RUNNING = 2;   // tick loop active
+  MATCH_STATUS_ENDED = 3;     // match finished, snapshot frozen
+}
+
+// Tile types on the 13x11 grid. Bombs/explosions/powerups are tracked
+// separately as entities so multiple can occupy a cell and animate
+// independently of the static layout.
+enum Tile {
+  TILE_EMPTY = 0;
+  TILE_WALL = 1;          // indestructible
+  TILE_BLOCK = 2;         // destructible
+}
+
+enum PowerupKind {
+  POWERUP_UNSPECIFIED = 0;
+  POWERUP_BOMB = 1;       // +1 simultaneous bombs
+  POWERUP_POWER = 2;      // +1 explosion radius
+  POWERUP_SPEED = 3;      // +1 speed (movement cells per tick budget)
+}
+
+enum Direction {
+  DIR_NONE = 0;
+  DIR_UP = 1;
+  DIR_DOWN = 2;
+  DIR_LEFT = 3;
+  DIR_RIGHT = 4;
+}
+
+// PlayerState is the per-player snapshot in a Match.
+message PlayerState {
+  string player_id = 1;
+  int32 x = 2;             // grid column 0..width-1
+  int32 y = 3;             // grid row 0..height-1
+  bool alive = 4;
+  int32 bomb_capacity = 5; // max simultaneous bombs
+  int32 bomb_power = 6;    // explosion radius in tiles
+  int32 speed = 7;         // cells per tick allowed (1 == 1 cell / 100ms)
+  int32 active_bombs = 8;  // bombs currently placed by this player
+}
+
+message BombState {
+  int32 x = 1;
+  int32 y = 2;
+  string owner_id = 3;
+  int32 power = 4;
+  int32 ticks_remaining = 5;
+}
+
+message ExplosionState {
+  int32 x = 1;
+  int32 y = 2;
+  int32 ticks_remaining = 3;
+}
+
+message PowerupState {
+  int32 x = 1;
+  int32 y = 2;
+  PowerupKind kind = 3;
+}
+
+// MatchSnapshot is the periodic broadcast emitted by Match every tick.
+// Tiles is a row-major flattened width*height array of Tile enum values
+// so clients can rebuild the grid without a nested message.
+message MatchSnapshot {
+  string match_id = 1;
+  MatchStatus status = 2;
+  int32 tick = 3;
+  int32 width = 4;
+  int32 height = 5;
+  repeated Tile tiles = 6;
+  repeated PlayerState players = 7;
+  repeated BombState bombs = 8;
+  repeated ExplosionState explosions = 9;
+  repeated PowerupState powerups = 10;
+  string winner_id = 11; // empty unless status == ENDED
+}
+
+// --- RPCs into Match ---
+
+message AddPlayerRequest {
+  string player_id = 1;
+  int32 spawn_x = 2;
+  int32 spawn_y = 3;
+}
+
+message AddPlayerResponse {
+  bool ok = 1;
+  string reason = 2;
+}
+
+message StartMatchRequest {}
+message StartMatchResponse {
+  bool ok = 1;
+  string reason = 2;
+}
+
+// PlayerInputRequest is a single intent from a client. Move and place_bomb
+// can be combined in one request — typical client behavior is to send the
+// latest desired direction every frame and set place_bomb true on the
+// frame the bomb key was pressed.
+message PlayerInputRequest {
+  string player_id = 1;
+  Direction move = 2;
+  bool place_bomb = 3;
+}
+
+message PlayerInputResponse {
+  bool ok = 1;
+  string reason = 2;
+}
+
+message GetSnapshotRequest {}
+message GetSnapshotResponse {
+  MatchSnapshot snapshot = 1;
+}
