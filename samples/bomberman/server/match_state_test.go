@@ -204,6 +204,157 @@ func TestBlockBlast_DropsAndCollectsPowerup(t *testing.T) {
 	}
 }
 
+func TestSpawnPositions_AreUniqueAndInBounds(t *testing.T) {
+	s := NewMatchState(1)
+	positions := s.SpawnPositions()
+	if len(positions) < MaxPlayers {
+		t.Fatalf("need at least %d spawn positions, got %d", MaxPlayers, len(positions))
+	}
+	seen := make(map[[2]int]bool)
+	for _, p := range positions {
+		if p[0] <= 0 || p[0] >= GridWidth-1 || p[1] <= 0 || p[1] >= GridHeight-1 {
+			t.Fatalf("spawn (%d,%d) is on or outside the border", p[0], p[1])
+		}
+		if seen[p] {
+			t.Fatalf("duplicate spawn position (%d,%d)", p[0], p[1])
+		}
+		seen[p] = true
+	}
+}
+
+func TestTileAt_OutOfBoundsReturnsWall(t *testing.T) {
+	s := NewMatchState(1)
+	for _, c := range [][2]int{{-1, 0}, {0, -1}, {GridWidth, 0}, {0, GridHeight}} {
+		if got := s.tileAt(c[0], c[1]); got != TileWall {
+			t.Fatalf("out-of-bounds tile (%d,%d) = %v; want wall", c[0], c[1], got)
+		}
+	}
+}
+
+func TestSetTile_OutOfBoundsIsNoop(t *testing.T) {
+	s := NewMatchState(1)
+	// Should not panic and should not mutate anything in-bounds.
+	s.setTile(-1, -1, TileBlock)
+	s.setTile(GridWidth, GridHeight, TileBlock)
+	for i, want := range s.Tiles {
+		got := NewMatchState(1).Tiles[i]
+		if got != want {
+			t.Fatalf("setTile out-of-bounds altered cell %d", i)
+		}
+	}
+}
+
+func TestRandomPowerup_CoversAllKinds(t *testing.T) {
+	// randomPowerup picks one of 3 kinds; sample 1000 times and assert
+	// each appears at least once. Probability of missing any is
+	// (2/3)^1000 ≈ 0, well under any flakiness threshold.
+	s := NewMatchState(42)
+	seen := map[PowerupKind]bool{}
+	for i := 0; i < 1000; i++ {
+		seen[randomPowerup(s.rng)] = true
+	}
+	for _, want := range []PowerupKind{PowerupBomb, PowerupPower, PowerupSpeed} {
+		if !seen[want] {
+			t.Fatalf("randomPowerup never produced %v in 1000 draws", want)
+		}
+	}
+}
+
+func TestCanEnter_BlockedByOtherPlayer(t *testing.T) {
+	s := twoPlayerStarted(t)
+	// Move p2 onto (2,1) (cleared corner-pocket cell next to p1).
+	s.Players["p2"].X, s.Players["p2"].Y = 2, 1
+	if err := s.QueueInput("p1", Input{Move: pb.Direction_DIR_RIGHT}); err != nil {
+		t.Fatal(err)
+	}
+	s.AdvanceTick()
+	if p := s.Players["p1"]; p.X != 1 || p.Y != 1 {
+		t.Fatalf("p1 walked through p2: now (%d,%d)", p.X, p.Y)
+	}
+}
+
+func TestPlaceBomb_RespectsCapacity(t *testing.T) {
+	s := twoPlayerStarted(t)
+	// Default bomb capacity is 1: placing twice on the same player
+	// without the first having exploded should leave only one bomb.
+	s.QueueInput("p1", Input{PlaceBomb: true})
+	s.AdvanceTick()
+	if len(s.Bombs) != 1 {
+		t.Fatalf("first place: %d bombs", len(s.Bombs))
+	}
+	// Walk away one cell so the placer isn't standing on a bomb.
+	s.QueueInput("p1", Input{Move: pb.Direction_DIR_RIGHT})
+	s.AdvanceTick()
+	// Try to place a second bomb — should be rejected by capacity check.
+	s.QueueInput("p1", Input{PlaceBomb: true})
+	s.AdvanceTick()
+	if len(s.Bombs) != 1 {
+		t.Fatalf("second place over capacity should be rejected, have %d bombs", len(s.Bombs))
+	}
+}
+
+func TestQueueInput_DeadPlayerIsSilent(t *testing.T) {
+	s := twoPlayerStarted(t)
+	s.Players["p1"].Alive = false
+	if err := s.QueueInput("p1", Input{Move: pb.Direction_DIR_RIGHT}); err != nil {
+		t.Fatalf("queueing for a dead player should be silent, got %v", err)
+	}
+	if _, queued := s.pendingInputs["p1"]; queued {
+		t.Fatal("dead player's input should not be queued")
+	}
+}
+
+func TestQueueInput_UnknownPlayer(t *testing.T) {
+	s := twoPlayerStarted(t)
+	if err := s.QueueInput("ghost", Input{Move: pb.Direction_DIR_RIGHT}); err == nil {
+		t.Fatal("expected error for unknown player")
+	}
+}
+
+func TestChainDetonation_TriggersAdjacentBomb(t *testing.T) {
+	s := twoPlayerStarted(t)
+	// Two bombs side-by-side: one with a 1-tick fuse, the other
+	// with a long fuse. When the first explodes, the second is
+	// caught in its blast and must detonate the same tick.
+	s.setTile(5, 5, TileEmpty)
+	s.setTile(6, 5, TileEmpty)
+	s.Bombs = append(s.Bombs,
+		&Bomb{X: 5, Y: 5, OwnerID: "p1", Power: 2, TicksRemaining: 1},
+		&Bomb{X: 6, Y: 5, OwnerID: "p1", Power: 1, TicksRemaining: BombFuseTicks},
+	)
+	s.Players["p1"].ActiveBombs = 2
+	s.AdvanceTick()
+	if len(s.Bombs) != 0 {
+		t.Fatalf("both bombs should have detonated, %d remain", len(s.Bombs))
+	}
+}
+
+func TestExplosion_DestroysExistingPowerup(t *testing.T) {
+	s := twoPlayerStarted(t)
+	s.setTile(5, 5, TileEmpty)
+	s.Powerups = append(s.Powerups, &Powerup{X: 5, Y: 5, Kind: PowerupBomb})
+	s.Bombs = append(s.Bombs, &Bomb{X: 5, Y: 5, OwnerID: "p1", Power: 1, TicksRemaining: 1})
+	s.Players["p1"].ActiveBombs = 1
+	s.AdvanceTick()
+	for _, p := range s.Powerups {
+		if p.X == 5 && p.Y == 5 {
+			t.Fatal("powerup should have been destroyed by the blast")
+		}
+	}
+}
+
+func TestTimeLimit_EndsMatchAsDraw(t *testing.T) {
+	s := twoPlayerStarted(t)
+	s.Tick = MatchTimeLimit
+	s.AdvanceTick()
+	if s.Status != pb.MatchStatus_MATCH_STATUS_ENDED {
+		t.Fatalf("status = %v; want ENDED", s.Status)
+	}
+	if s.WinnerID != "" {
+		t.Fatalf("draw should leave winner empty, got %q", s.WinnerID)
+	}
+}
+
 func TestSnapshot_ReflectsState(t *testing.T) {
 	s := twoPlayerStarted(t)
 	if err := s.QueueInput("p1", Input{PlaceBomb: true}); err != nil {
