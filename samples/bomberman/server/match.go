@@ -9,8 +9,18 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/xiaonanln/goverse/goverseapi"
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
+
+// reliableCallFunc is the cross-object reliable-call hook used for
+// the one place in this sample that truly needs exactly-once
+// semantics: Match.recordResults → Player.RecordMatchResult, where
+// retries on a permanent stat record would otherwise turn one win
+// into many. Production binds it to goverseapi.ReliableCallObject;
+// tests override Match.reliableCall to capture invocations without
+// a real cluster.
+type reliableCallFunc = func(ctx context.Context, callID, objectType, objectID, method string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error)
 
 // TickPeriod is the wall-clock interval between authoritative match
 // updates. Derived from TickHz so the constant stays in one place.

@@ -8,8 +8,43 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
+
+// recordedReliable captures every (call_id, target object, method)
+// triple plus the request so Match's reliable-call sequence can be
+// asserted without standing up a real cluster.
+type recordedReliable struct {
+	mu    sync.Mutex
+	calls []reliableInvocation
+}
+
+type reliableInvocation struct {
+	callID     string
+	objectType string
+	objectID   string
+	method     string
+	request    proto.Message
+}
+
+func (r *recordedReliable) call(_ context.Context, callID, objectType, objectID, method string, req proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, reliableInvocation{
+		callID: callID, objectType: objectType, objectID: objectID, method: method,
+		request: proto.Clone(req),
+	})
+	return nil, goverse_pb.ReliableCallStatus_SUCCESS, nil
+}
+
+func (r *recordedReliable) snapshot() []reliableInvocation {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]reliableInvocation, len(r.calls))
+	copy(out, r.calls)
+	return out
+}
 
 // recordedPush is a thread-safe pushFunc replacement that captures
 // every broadcast for later assertion.

@@ -8,51 +8,48 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	goverse_pb "github.com/xiaonanln/goverse/proto"
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
 
-// recordedReliable captures every (call_id, target object, method)
-// triple plus the request message so tests can assert the reliable-
-// call sequence MatchmakingQueue issues without standing up a real
-// cluster.
-type recordedReliable struct {
+// recordedCallObject captures every (target object, method) pair plus
+// the request so the queue test can assert the call sequence without
+// standing up a real cluster.
+type recordedCallObject struct {
 	mu    sync.Mutex
-	calls []reliableInvocation
+	calls []callObjectInvocation
 }
 
-type reliableInvocation struct {
-	callID     string
+type callObjectInvocation struct {
 	objectType string
 	objectID   string
 	method     string
 	request    proto.Message
 }
 
-func (r *recordedReliable) call(_ context.Context, callID, objectType, objectID, method string, req proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+func (r *recordedCallObject) call(_ context.Context, objectType, objectID, method string, req proto.Message) (proto.Message, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.calls = append(r.calls, reliableInvocation{
-		callID: callID, objectType: objectType, objectID: objectID, method: method,
+	r.calls = append(r.calls, callObjectInvocation{
+		objectType: objectType, objectID: objectID, method: method,
 		request: proto.Clone(req),
 	})
-	return nil, goverse_pb.ReliableCallStatus_SUCCESS, nil
+	return nil, nil
 }
 
-func (r *recordedReliable) snapshot() []reliableInvocation {
+func (r *recordedCallObject) snapshot() []callObjectInvocation {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]reliableInvocation, len(r.calls))
+	out := make([]callObjectInvocation, len(r.calls))
 	copy(out, r.calls)
 	return out
 }
 
-func newQueueForTest(t *testing.T) (*MatchmakingQueue, *recordedReliable) {
+func newQueueForTest(t *testing.T) (*MatchmakingQueue, *recordedCallObject) {
 	t.Helper()
-	rec := &recordedReliable{}
+	rec := &recordedCallObject{}
 	createStub := func(_ context.Context, _, objID string) (string, error) { return objID, nil }
 	q := &MatchmakingQueue{
-		reliableCall: rec.call,
+		callObject:   rec.call,
 		createObject: createStub,
 		stopCh:       make(chan struct{}),
 	}
@@ -156,11 +153,11 @@ func TestQueue_SpawnIfReady_BelowMinJustWaits(t *testing.T) {
 		t.Fatalf("matchesSpawned = %d; want 0 below MinPlayersToStart", got)
 	}
 	if got := len(rec.snapshot()); got != 0 {
-		t.Fatalf("expected no reliable calls below threshold, got %d", got)
+		t.Fatalf("expected no calls below threshold, got %d", got)
 	}
 }
 
-func TestQueue_SpawnIfReady_BatchesAndReliablyAdds(t *testing.T) {
+func TestQueue_SpawnIfReady_BatchesAndCalls(t *testing.T) {
 	q, rec := newQueueForTest(t)
 	for _, name := range []string{"alice", "bob", "carol"} {
 		_, err := q.JoinQueue(context.Background(), &pb.JoinQueueRequest{PlayerId: name})
@@ -180,7 +177,7 @@ func TestQueue_SpawnIfReady_BatchesAndReliablyAdds(t *testing.T) {
 	calls := rec.snapshot()
 	// Expect 3 AddPlayer calls + 1 StartMatch call.
 	if len(calls) != 4 {
-		t.Fatalf("reliable-call count = %d; want 4", len(calls))
+		t.Fatalf("call count = %d; want 4", len(calls))
 	}
 	addPlayerSeen := map[string]bool{}
 	startSeen := false
@@ -200,11 +197,11 @@ func TestQueue_SpawnIfReady_BatchesAndReliablyAdds(t *testing.T) {
 	}
 	for _, want := range []string{"alice", "bob", "carol"} {
 		if !addPlayerSeen[want] {
-			t.Fatalf("no AddPlayer reliable call for %q", want)
+			t.Fatalf("no AddPlayer call for %q", want)
 		}
 	}
 	if !startSeen {
-		t.Fatal("no StartMatch reliable call")
+		t.Fatal("no StartMatch call")
 	}
 }
 

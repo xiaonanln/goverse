@@ -9,7 +9,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/xiaonanln/goverse/goverseapi"
-	goverse_pb "github.com/xiaonanln/goverse/proto"
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
 
@@ -29,11 +28,11 @@ const MatchSpawnInterval = time.Second
 // MaxPlayers so Match.AddPlayer never rejects on capacity.
 const MatchPlayersPerSpawn = 4
 
-// reliableCallFunc is the cross-object reliable-call hook. Production
-// binds it to goverseapi.ReliableCallObject; tests can override
-// MatchmakingQueue.reliableCall to capture invocations without
-// standing up a real cluster.
-type reliableCallFunc = func(ctx context.Context, callID, objectType, objectID, method string, request proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error)
+// callObjectFunc is the regular cross-object call hook. Used for
+// operations that don't need exactly-once semantics — failures are
+// recoverable by the caller's own retry / backoff logic, and the
+// receiver is idempotent at the data layer.
+type callObjectFunc = func(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error)
 
 // createObjectFunc is the object-creation hook. Production binds it
 // to goverseapi.CreateObject; tests override to skip the real
@@ -54,7 +53,17 @@ type MatchmakingQueue struct {
 	stopCh   chan struct{}
 	stopOnce sync.Once
 
-	reliableCall reliableCallFunc
+	// AddPlayer / StartMatch are routed through plain CallObject, not
+	// ReliableCallObject — neither carries permanent reward state, and
+	// MatchState already rejects duplicate adds and double-starts at
+	// the data layer. If a transient error makes spawnMatch fail mid-
+	// way, the players involved aren't in the queue anymore (already
+	// popped) but the next Match created for any of them will be a
+	// fresh game; the cost of a transient failure is one ruined match
+	// for the affected players, which is acceptable. The framework's
+	// reliable-call machinery is reserved for the truly state-mutating
+	// hop in Match.recordResults → Player.RecordMatchResult.
+	callObject   callObjectFunc
 	createObject createObjectFunc
 }
 
@@ -65,8 +74,8 @@ type queuedPlayer struct {
 
 func (q *MatchmakingQueue) OnCreated() {
 	q.stopCh = make(chan struct{})
-	if q.reliableCall == nil {
-		q.reliableCall = goverseapi.ReliableCallObject
+	if q.callObject == nil {
+		q.callObject = goverseapi.CallObject
 	}
 	if q.createObject == nil {
 		q.createObject = goverseapi.CreateObject
@@ -165,12 +174,15 @@ func (q *MatchmakingQueue) spawnIfReady() {
 	}
 }
 
-// spawnMatch creates the Match object and reliably adds each player +
-// starts the match. Failures are logged but not retried within this
-// method — a follow-up spawn tick will not pick the same players up
-// again because they were already removed from the queue, but reliable-
-// call dedup means the operations themselves are safe to retry by an
-// external operator if needed.
+// spawnMatch creates the Match object and routes each player into it
+// via plain CallObject. These hops do not need reliable-call exactly-
+// once semantics: MatchState rejects duplicate AddPlayer at the data
+// layer, StartMatch only honours the LOBBY → RUNNING transition once,
+// and a transient failure here just means one ruined match for the
+// affected players (no permanent reward state at risk). The reliable-
+// call machinery is reserved for Match.recordResults → Player.Record-
+// MatchResult where retries on a permanent stat record would
+// otherwise turn one win into many.
 func (q *MatchmakingQueue) spawnMatch(matchID string, batch []queuedPlayer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -183,21 +195,18 @@ func (q *MatchmakingQueue) spawnMatch(matchID string, batch []queuedPlayer) erro
 	for i, qp := range batch {
 		spawn := spawns[i%len(spawns)]
 		req := &pb.AddPlayerRequest{PlayerId: qp.playerID, SpawnX: int32(spawn[0]), SpawnY: int32(spawn[1])}
-		callID := fmt.Sprintf("queue-%s-add-%s-%s", q.Id(), matchID, qp.playerID)
-		// AddPlayer is invoked here from the queue — the server-side
-		// recorded client_id will be the queue object's callcontext,
-		// not the original player's. Carrying the player's client_id
-		// across actors is a future enhancement (PR 4 on web UI / PR 5
-		// on stress test); for now the queue logs the mapping so the
-		// stress test driver can wire push routing externally.
-		if _, _, err := q.reliableCall(ctx, callID, "Match", matchID, "AddPlayer", req); err != nil {
-			q.Logger.Errorf("Reliable AddPlayer(%s, %s): %v", matchID, qp.playerID, err)
+		// The server-side recorded client_id will be the queue object's
+		// callcontext, not the original player's. Carrying the player's
+		// client_id across actors is a future enhancement (PR 4 on web
+		// UI / PR 5 on stress test); for now the queue logs the mapping
+		// so the stress test driver can wire push routing externally.
+		if _, err := q.callObject(ctx, "Match", matchID, "AddPlayer", req); err != nil {
+			q.Logger.Errorf("AddPlayer(%s, %s): %v", matchID, qp.playerID, err)
 		}
 	}
 
-	startCallID := fmt.Sprintf("queue-%s-start-%s", q.Id(), matchID)
-	if _, _, err := q.reliableCall(ctx, startCallID, "Match", matchID, "StartMatch", &pb.StartMatchRequest{}); err != nil {
-		return fmt.Errorf("Reliable StartMatch %s: %w", matchID, err)
+	if _, err := q.callObject(ctx, "Match", matchID, "StartMatch", &pb.StartMatchRequest{}); err != nil {
+		return fmt.Errorf("StartMatch %s: %w", matchID, err)
 	}
 	return nil
 }
