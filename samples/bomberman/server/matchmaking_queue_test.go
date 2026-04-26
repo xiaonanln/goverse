@@ -262,6 +262,44 @@ type errFakeSpawn struct{ msg string }
 
 func (e errFakeSpawn) Error() string { return e.msg }
 
+// TestQueue_SpawnForwardsPlayerClientID is the regression that the
+// queue → Match.AddPlayer hop carries the player's original
+// gate-assigned client_id rather than the queue's own. Without it,
+// matches spawned via matchmaking would push snapshots back to the
+// queue object's stream instead of the players who joined.
+func TestQueue_SpawnForwardsPlayerClientID(t *testing.T) {
+	q, rec := newQueueForTest(t)
+	for _, name := range []string{"alice", "bob"} {
+		// JoinQueueRequest.client_id is the explicit override path
+		// browsers will use after learning their SSE id.
+		_, err := q.JoinQueue(context.Background(), &pb.JoinQueueRequest{
+			PlayerId: name, ClientId: "gate1/" + name,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	q.spawnIfReady()
+
+	calls := rec.snapshot()
+	addPlayerByID := map[string]*pb.AddPlayerRequest{}
+	for _, c := range calls {
+		if c.method == "AddPlayer" {
+			req := c.request.(*pb.AddPlayerRequest)
+			addPlayerByID[req.PlayerId] = req
+		}
+	}
+	for _, name := range []string{"alice", "bob"} {
+		req, ok := addPlayerByID[name]
+		if !ok {
+			t.Fatalf("no AddPlayer call for %q", name)
+		}
+		if got, want := req.ClientId, "gate1/"+name; got != want {
+			t.Fatalf("AddPlayer(%s).client_id = %q; want %q", name, got, want)
+		}
+	}
+}
+
 func TestQueue_QueueStatus_ReportsCounts(t *testing.T) {
 	q, _ := newQueueForTest(t)
 	_, _ = q.JoinQueue(context.Background(), &pb.JoinQueueRequest{PlayerId: "alice"})

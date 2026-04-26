@@ -91,13 +91,19 @@ func (q *MatchmakingQueue) Stop() {
 
 // JoinQueue appends a player to the FIFO. Idempotent: a player already
 // queued gets ok=true with their existing position, not a duplicate
-// entry. The connecting client_id is captured from ctx so the spawned
-// match knows where to push snapshots.
+// entry. The connecting client_id (used by the spawned Match for
+// snapshot push routing) is taken from req.ClientId when set —
+// browsers learn their id from the SSE register event and pass it
+// here — and falls back to goverseapi.CallerClientID(ctx) for
+// streaming gRPC callers.
 func (q *MatchmakingQueue) JoinQueue(ctx context.Context, req *pb.JoinQueueRequest) (*pb.JoinQueueResponse, error) {
 	if req.PlayerId == "" {
 		return &pb.JoinQueueResponse{Ok: false, Reason: "player_id is required"}, nil
 	}
-	clientID := goverseapi.CallerClientID(ctx)
+	clientID := req.ClientId
+	if clientID == "" {
+		clientID = goverseapi.CallerClientID(ctx)
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for i, qp := range q.queued {
@@ -214,12 +220,17 @@ func (q *MatchmakingQueue) spawnMatch(matchID string, batch []queuedPlayer) erro
 	spawns := defaultSpawnPositions()
 	for i, qp := range batch {
 		spawn := spawns[i%len(spawns)]
-		req := &pb.AddPlayerRequest{PlayerId: qp.playerID, SpawnX: int32(spawn[0]), SpawnY: int32(spawn[1])}
-		// The server-side recorded client_id will be the queue object's
-		// callcontext, not the original player's. Carrying the player's
-		// client_id across actors is a future enhancement (PR 4 on web
-		// UI / PR 5 on stress test); for now the queue logs the mapping
-		// so the stress test driver can wire push routing externally.
+		req := &pb.AddPlayerRequest{
+			PlayerId: qp.playerID,
+			SpawnX:   int32(spawn[0]),
+			SpawnY:   int32(spawn[1]),
+			// Forward the player's original gate-assigned client id so
+			// Match's per-tick snapshot push lands on their SSE / gRPC
+			// stream rather than on the queue's. Without this, a Match
+			// spawned through matchmaking would broadcast into the void
+			// from the player's perspective.
+			ClientId: qp.clientID,
+		}
 		if _, err := q.callObject(ctx, "Match", matchID, "AddPlayer", req); err != nil {
 			q.Logger.Errorf("AddPlayer(%s, %s): %v", matchID, qp.playerID, err)
 		}

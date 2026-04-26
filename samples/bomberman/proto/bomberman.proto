@@ -91,6 +91,14 @@ message AddPlayerRequest {
   string player_id = 1;
   int32 spawn_x = 2;
   int32 spawn_y = 3;
+  // client_id is the gate-assigned id of the connected browser /
+  // grpc client to push snapshots to. When the queue spawns a Match
+  // and calls AddPlayer it sets this so the player's original SSE
+  // subscription receives state, since the call's own context
+  // carries the queue object's client_id rather than the player's.
+  // For direct AddPlayer calls from a client, leaving this empty
+  // and relying on goverseapi.CallerClientID(ctx) is also fine.
+  string client_id = 4;
 }
 
 message AddPlayerResponse {
@@ -164,6 +172,12 @@ message PlayerData {
 
 message JoinQueueRequest {
   string player_id = 1;
+  // client_id may be set explicitly by HTTP/SSE clients that learned
+  // their gate-assigned id from the SSE "register" event. If empty,
+  // the queue falls back to goverseapi.CallerClientID(ctx) — which
+  // works for streaming gRPC clients but is empty for plain HTTP
+  // POSTs.
+  string client_id = 2;
 }
 
 message JoinQueueResponse {
