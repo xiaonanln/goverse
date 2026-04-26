@@ -8,8 +8,43 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	goverse_pb "github.com/xiaonanln/goverse/proto"
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
+
+// recordedReliable captures every (call_id, target object, method)
+// triple plus the request so Match's reliable-call sequence can be
+// asserted without standing up a real cluster.
+type recordedReliable struct {
+	mu    sync.Mutex
+	calls []reliableInvocation
+}
+
+type reliableInvocation struct {
+	callID     string
+	objectType string
+	objectID   string
+	method     string
+	request    proto.Message
+}
+
+func (r *recordedReliable) call(_ context.Context, callID, objectType, objectID, method string, req proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, reliableInvocation{
+		callID: callID, objectType: objectType, objectID: objectID, method: method,
+		request: proto.Clone(req),
+	})
+	return nil, goverse_pb.ReliableCallStatus_SUCCESS, nil
+}
+
+func (r *recordedReliable) snapshot() []reliableInvocation {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]reliableInvocation, len(r.calls))
+	copy(out, r.calls)
+	return out
+}
 
 // recordedPush is a thread-safe pushFunc replacement that captures
 // every broadcast for later assertion.
@@ -117,6 +152,128 @@ func TestTickAndBroadcastOnce_RunningAdvancesAndBroadcasts(t *testing.T) {
 		}
 	}
 }
+
+// TestTickAndBroadcastOnce_FiresRecordResultsOnEnd checks that the
+// match-end transition kicks off the per-player RecordMatchResult
+// reliable call sequence — the cross-object reliable call PR 3 wires
+// up. The recorder collects the calls fired in a goroutine; we wait
+// briefly for them to land, then assert the contents.
+func TestTickAndBroadcastOnce_FiresRecordResultsOnEnd(t *testing.T) {
+	rec := &recordedPush{}
+	rrec := &recordedReliable{}
+	m := &Match{
+		state:        NewMatchState(1),
+		push:         rec.push,
+		reliableCall: rrec.call,
+		stopCh:       make(chan struct{}),
+	}
+	m.OnInit(m, "Match-test")
+	if err := m.state.AddPlayer("alice", "gate1/c2", 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.AddPlayer("bob", "gate1/c3", GridWidth-2, GridHeight-2); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.Start(); err != nil {
+		t.Fatal(err)
+	}
+	// Force end-of-match: kill bob, alice survives.
+	m.state.Players["bob"].Alive = false
+	if m.tickAndBroadcastOnce() {
+		t.Fatal("end-tick should return false")
+	}
+
+	// recordResults runs in a goroutine — wait a moment for it to land.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(rrec.snapshot()) >= 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	calls := rrec.snapshot()
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 RecordMatchResult reliable calls, got %d", len(calls))
+	}
+	wonByPlayer := map[string]bool{}
+	for _, c := range calls {
+		if c.method != "RecordMatchResult" || c.objectType != "Player" {
+			t.Fatalf("unexpected reliable call %+v", c)
+		}
+		req := c.request.(*pb.RecordMatchResultRequest)
+		// Player object id is "Player-<player_id>" by convention.
+		switch c.objectID {
+		case "Player-alice":
+			wonByPlayer["alice"] = req.Won
+		case "Player-bob":
+			wonByPlayer["bob"] = req.Won
+		default:
+			t.Fatalf("unexpected target object id %q", c.objectID)
+		}
+		// Stable, deterministic call id keyed on (match, player) so
+		// retries dedup correctly.
+		want := "match-Match-test-record-" + req.MatchId
+		_ = want // call_id is descriptive but not asserted exactly here
+	}
+	if !wonByPlayer["alice"] || wonByPlayer["bob"] {
+		t.Fatalf("won-by-player = %+v; want alice=true bob=false", wonByPlayer)
+	}
+
+	// A second call shouldn't re-fire results — the local short-
+	// circuit kicks in even though reliable-call dedup would also
+	// catch it server-side.
+	m.tickAndBroadcastOnce()
+	if got := len(rrec.snapshot()); got != 2 {
+		t.Fatalf("results re-fired on second tick: %d total calls", got)
+	}
+}
+
+// TestRecordResults_RetriesTransientFailure pins the match-end
+// retry behaviour: a flaky reliableCall that fails the first attempt
+// then succeeds must still produce a single eventual landed call per
+// player (because the call_id is stable, the second attempt that
+// hits the framework's dedup would ordinarily return the cached
+// result; in this unit-test stub we just count attempts).
+func TestRecordResults_RetriesTransientFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("uses retry backoff sleep")
+	}
+	var (
+		mu       sync.Mutex
+		attempts int
+	)
+	flaky := func(_ context.Context, _ string, _, _, _ string, _ proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+		mu.Lock()
+		attempts++
+		n := attempts
+		mu.Unlock()
+		if n == 1 {
+			return nil, goverse_pb.ReliableCallStatus_FAILED, errFakeTransient{}
+		}
+		return nil, goverse_pb.ReliableCallStatus_SUCCESS, nil
+	}
+	m := &Match{
+		state:        NewMatchState(1),
+		push:         (&recordedPush{}).push,
+		reliableCall: flaky,
+		stopCh:       make(chan struct{}),
+	}
+	m.OnInit(m, "Match-retry")
+
+	results := []playerResult{{PlayerID: "alice", Won: true}}
+	m.recordResults(results, "alice")
+
+	mu.Lock()
+	defer mu.Unlock()
+	if attempts < 2 {
+		t.Fatalf("expected at least 2 attempts (1 failure + 1 retry succeeds), got %d", attempts)
+	}
+}
+
+type errFakeTransient struct{}
+
+func (errFakeTransient) Error() string { return "transient: timeout" }
 
 func TestTickAndBroadcastOnce_StopsAfterEnd(t *testing.T) {
 	m, rec := matchWithRecorder(t, 1)

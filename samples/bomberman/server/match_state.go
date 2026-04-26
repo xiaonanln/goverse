@@ -42,7 +42,11 @@ const (
 	PowerupSpeed
 )
 
-type Player struct {
+// MatchPlayer is the in-match record for one participant. Distinct
+// from the persistent Player goverse object (per-user stats); a
+// MatchPlayer's identity (ID) typically matches a Player.Id() so the
+// match-end reliable call lands on the correct account.
+type MatchPlayer struct {
 	ID           string
 	ClientID     string // gate-assigned id of the connected client; empty for server-driven test players
 	X, Y         int
@@ -83,7 +87,7 @@ type Input struct {
 type MatchState struct {
 	Width, Height int
 	Tiles         []Tile // row-major, len = Width*Height
-	Players       map[string]*Player
+	Players       map[string]*MatchPlayer
 	Bombs         []*Bomb
 	Explosions    []*Explosion
 	Powerups      []*Powerup
@@ -105,7 +109,7 @@ func NewMatchState(seed int64) *MatchState {
 		Width:         w,
 		Height:        h,
 		Tiles:         make([]Tile, w*h),
-		Players:       make(map[string]*Player),
+		Players:       make(map[string]*MatchPlayer),
 		Status:        pb.MatchStatus_MATCH_STATUS_LOBBY,
 		pendingInputs: make(map[string]*Input),
 		rng:           rand.New(rand.NewSource(seed)),
@@ -199,7 +203,7 @@ func (s *MatchState) AddPlayer(id, clientID string, x, y int) error {
 	if s.tileAt(x, y) != TileEmpty {
 		return fmt.Errorf("spawn cell (%d,%d) is not empty", x, y)
 	}
-	s.Players[id] = &Player{
+	s.Players[id] = &MatchPlayer{
 		ID:           id,
 		ClientID:     clientID,
 		X:            x,

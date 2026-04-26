@@ -13,7 +13,9 @@ func main() {
 	server := goverseapi.NewServer()
 
 	goverseapi.RegisterObjectType((*Match)(nil))
-	serverLogger.Infof("Bomberman object types registered (Match)")
+	goverseapi.RegisterObjectType((*Player)(nil))
+	goverseapi.RegisterObjectType((*MatchmakingQueue)(nil))
+	serverLogger.Infof("Bomberman object types registered (Match, Player, MatchmakingQueue)")
 
 	if err := server.Run(context.Background()); err != nil {
 		panic(err)
