@@ -153,12 +153,54 @@ func TestTickAndBroadcastOnce_StopsAfterEnd(t *testing.T) {
 	}
 }
 
+// TestTickLoop_ExitsOnDestroy is a regression for the destroy-path
+// shutdown: when goverse calls Destroy() (shard migration, node
+// shutdown, manual delete) before the match has reached ENDED, the
+// tick loop must observe the cancelled object context and exit so we
+// don't keep pushing stale snapshots after ownership has moved.
+func TestTickLoop_ExitsOnDestroy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("uses real time.Ticker — slow")
+	}
+	rec := &recordedPush{}
+	m := &Match{state: NewMatchState(1), push: rec.push, stopCh: make(chan struct{})}
+	// OnInit populates BaseObject's lifetime context so Match.Context()
+	// returns a non-nil chan; without this the goroutine would panic
+	// on nil-chan receive.
+	m.OnInit(m, "test-match-destroy")
+	if err := m.state.AddPlayer("alice", "gate1/c2", 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.AddPlayer("bob", "gate1/c3", GridWidth-2, GridHeight-2); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	loopDone := make(chan struct{})
+	go func() {
+		m.tickLoop()
+		close(loopDone)
+	}()
+	// Let the loop tick a couple of times.
+	time.Sleep(3 * TickPeriod)
+	// Simulate goverse destroying the object mid-match.
+	m.Destroy()
+	select {
+	case <-loopDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("tick loop did not exit within 2s of Destroy()")
+	}
+}
+
 func TestTickLoop_RealTickerStopsOnEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("uses real time.Ticker — slow")
 	}
 	rec := &recordedPush{}
 	m := &Match{state: NewMatchState(1), push: rec.push, stopCh: make(chan struct{})}
+	m.OnInit(m, "test-match-end")
 	if err := m.state.AddPlayer("alice", "gate1/c2", 1, 1); err != nil {
 		t.Fatal(err)
 	}

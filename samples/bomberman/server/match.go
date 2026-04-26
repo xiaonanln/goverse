@@ -56,9 +56,18 @@ func (m *Match) Stop() {
 func (m *Match) tickLoop() {
 	ticker := time.NewTicker(TickPeriod)
 	defer ticker.Stop()
+	// Watch the object's lifetime context as well as the local stopCh so
+	// the tick goroutine exits cleanly when goverse destroys the object
+	// (shard migration, node shutdown, manual delete) — not only when
+	// the match reaches MATCH_STATUS_ENDED on its own. Without this,
+	// stale snapshots could keep being pushed after ownership has
+	// already moved away from this node.
+	objDone := m.Context().Done()
 	for {
 		select {
 		case <-m.stopCh:
+			return
+		case <-objDone:
 			return
 		case <-ticker.C:
 			if !m.tickAndBroadcastOnce() {
