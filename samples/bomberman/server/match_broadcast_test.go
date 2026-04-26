@@ -229,6 +229,52 @@ func TestTickAndBroadcastOnce_FiresRecordResultsOnEnd(t *testing.T) {
 	}
 }
 
+// TestRecordResults_RetriesTransientFailure pins the match-end
+// retry behaviour: a flaky reliableCall that fails the first attempt
+// then succeeds must still produce a single eventual landed call per
+// player (because the call_id is stable, the second attempt that
+// hits the framework's dedup would ordinarily return the cached
+// result; in this unit-test stub we just count attempts).
+func TestRecordResults_RetriesTransientFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("uses retry backoff sleep")
+	}
+	var (
+		mu       sync.Mutex
+		attempts int
+	)
+	flaky := func(_ context.Context, _ string, _, _, _ string, _ proto.Message) (proto.Message, goverse_pb.ReliableCallStatus, error) {
+		mu.Lock()
+		attempts++
+		n := attempts
+		mu.Unlock()
+		if n == 1 {
+			return nil, goverse_pb.ReliableCallStatus_FAILED, errFakeTransient{}
+		}
+		return nil, goverse_pb.ReliableCallStatus_SUCCESS, nil
+	}
+	m := &Match{
+		state:        NewMatchState(1),
+		push:         (&recordedPush{}).push,
+		reliableCall: flaky,
+		stopCh:       make(chan struct{}),
+	}
+	m.OnInit(m, "Match-retry")
+
+	results := []playerResult{{PlayerID: "alice", Won: true}}
+	m.recordResults(results, "alice")
+
+	mu.Lock()
+	defer mu.Unlock()
+	if attempts < 2 {
+		t.Fatalf("expected at least 2 attempts (1 failure + 1 retry succeeds), got %d", attempts)
+	}
+}
+
+type errFakeTransient struct{}
+
+func (errFakeTransient) Error() string { return "transient: timeout" }
+
 func TestTickAndBroadcastOnce_StopsAfterEnd(t *testing.T) {
 	m, rec := matchWithRecorder(t, 1)
 	if err := m.state.AddPlayer("alice", "gate1/c2", 1, 1); err != nil {

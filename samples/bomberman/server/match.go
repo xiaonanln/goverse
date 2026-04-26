@@ -160,26 +160,76 @@ func collectMatchResults(s *MatchState) []playerResult {
 }
 
 // recordResults issues a reliable RecordMatchResult call into each
-// Player object. Sequential rather than concurrent — a typical match
-// has at most MaxPlayers participants, so the wall-clock cost is
-// bounded and the simpler control flow makes test invariants easier
-// to assert.
+// Player object, retrying each call until it succeeds or the local
+// retry budget is exhausted. Reliable-call dedup is keyed on the
+// stable per-player call_id, so any retry that hits an already-
+// landed call returns the cached result rather than double-counting.
+//
+// Without retry, a single transient failure (timeout, brief routing
+// hiccup) would silently drop the stat write — and unlike orchestration
+// hops, this one *is* permanent reward state, so eating the loss is
+// the worst-case outcome we have to design against.
+//
+// Sequential rather than concurrent — a typical match has at most
+// MaxPlayers participants, so the wall-clock cost is bounded and the
+// simpler control flow makes test invariants easier to assert.
 func (m *Match) recordResults(results []playerResult, winnerID string) {
 	if m.reliableCall == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recordResultsBudget)
 	defer cancel()
 	matchID := m.Id()
 	for _, r := range results {
 		callID := fmt.Sprintf("match-%s-record-%s", matchID, r.PlayerID)
 		req := &pb.RecordMatchResultRequest{MatchId: matchID, Won: r.Won}
-		_, _, err := m.reliableCall(ctx, callID, "Player", "Player-"+r.PlayerID, "RecordMatchResult", req)
-		if err != nil {
-			m.Logger.Errorf("Reliable RecordMatchResult(%s, %s won=%v): %v", matchID, r.PlayerID, r.Won, err)
+		if err := m.recordOnePlayerResultWithRetry(ctx, callID, r, req); err != nil {
+			m.Logger.Errorf("Reliable RecordMatchResult(%s, %s won=%v) gave up after retries: %v",
+				matchID, r.PlayerID, r.Won, err)
 		}
 	}
 	m.Logger.Infof("Match %s ended (winner=%q), recorded results for %d players", matchID, winnerID, len(results))
+}
+
+// recordResultsBudget caps the total time recordResults will spend
+// retrying. Generous since this runs on the match-end path which
+// isn't latency-sensitive.
+const recordResultsBudget = 60 * time.Second
+
+// recordResultsRetryDelays defines the exponential backoff schedule
+// between RecordMatchResult retries. After the last entry, we give
+// up and log — the call_id is preserved in our log so an operator
+// could replay it, and a future replayer would dedup naturally.
+var recordResultsRetryDelays = []time.Duration{
+	0, // first attempt
+	200 * time.Millisecond,
+	500 * time.Millisecond,
+	1 * time.Second,
+	2 * time.Second,
+	5 * time.Second,
+}
+
+func (m *Match) recordOnePlayerResultWithRetry(
+	ctx context.Context, callID string, r playerResult, req *pb.RecordMatchResultRequest,
+) error {
+	var lastErr error
+	for i, delay := range recordResultsRetryDelays {
+		if delay > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+		_, _, err := m.reliableCall(ctx, callID, "Player", "Player-"+r.PlayerID, "RecordMatchResult", req)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		m.Logger.Warnf("Reliable RecordMatchResult(%s, %s won=%v) attempt %d failed: %v",
+			m.Id(), r.PlayerID, r.Won, i+1, err)
+	}
+	return lastErr
 }
 
 // broadcast pushes the snapshot to every client_id in this match.

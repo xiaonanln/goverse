@@ -218,6 +218,50 @@ func TestQueue_SpawnIfReady_CapsAtMatchPlayersPerSpawn(t *testing.T) {
 	}
 }
 
+// TestQueue_SpawnFailureRequeuesPlayers regression: a transient
+// CreateObject failure used to silently drop the popped batch
+// because spawnIfReady removed them from q.queued before calling
+// spawnMatch. Verify the players land back at the front of the
+// queue so the next tick can retry them with a fresh matchID.
+func TestQueue_SpawnFailureRequeuesPlayers(t *testing.T) {
+	rec := &recordedCallObject{}
+	failingCreate := func(_ context.Context, _, _ string) (string, error) {
+		return "", errSpawnFailure
+	}
+	q := &MatchmakingQueue{
+		callObject:   rec.call,
+		createObject: failingCreate,
+		stopCh:       make(chan struct{}),
+	}
+	q.OnInit(q, MatchmakingQueueID)
+
+	for _, name := range []string{"alice", "bob", "carol"} {
+		_, _ = q.JoinQueue(context.Background(), &pb.JoinQueueRequest{PlayerId: name})
+	}
+	q.spawnIfReady()
+
+	if got := len(q.queued); got != 3 {
+		t.Fatalf("queue size after failed spawn = %d; want 3 (all requeued)", got)
+	}
+	want := []string{"alice", "bob", "carol"}
+	for i, qp := range q.queued {
+		if qp.playerID != want[i] {
+			t.Fatalf("requeued order[%d] = %q; want %q (FIFO must be preserved)", i, qp.playerID, want[i])
+		}
+	}
+	if got := q.matchesSpawned; got != 1 {
+		t.Fatalf("matchesSpawned = %d; want 1 (counter still increments to skip the failed id)", got)
+	}
+}
+
+// errSpawnFailure is a deterministic transient error returned by the
+// requeue test's failing createObject stub.
+var errSpawnFailure = errFakeSpawn{msg: "transient: cluster unhealthy"}
+
+type errFakeSpawn struct{ msg string }
+
+func (e errFakeSpawn) Error() string { return e.msg }
+
 func TestQueue_QueueStatus_ReportsCounts(t *testing.T) {
 	q, _ := newQueueForTest(t)
 	_, _ = q.JoinQueue(context.Background(), &pb.JoinQueueRequest{PlayerId: "alice"})

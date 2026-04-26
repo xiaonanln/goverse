@@ -170,8 +170,28 @@ func (q *MatchmakingQueue) spawnIfReady() {
 	matchID := fmt.Sprintf("Match-%s-%d", q.Id(), matchSeq)
 	q.Logger.Infof("Spawning %s with %d players", matchID, len(batch))
 	if err := q.spawnMatch(matchID, batch); err != nil {
-		q.Logger.Errorf("Failed to spawn %s: %v", matchID, err)
+		q.Logger.Errorf("Failed to spawn %s: %v — requeuing %d players", matchID, err, len(batch))
+		// Push the popped batch back to the front so a transient
+		// failure doesn't silently drop those players from
+		// matchmaking. The next tick will try again with a fresh
+		// matchID; the half-spawned Match-…-N is left orphaned (no
+		// players, no StartMatch). MatchState's dup-id check would
+		// reject any AddPlayer that already landed before the error,
+		// so a same-id retry would be wrong — we use a new matchID
+		// instead.
+		q.requeueFront(batch)
 	}
+}
+
+// requeueFront prepends the given batch back to the queue so the next
+// spawn attempt picks the same players up first. Holds q.mu briefly.
+func (q *MatchmakingQueue) requeueFront(batch []queuedPlayer) {
+	if len(batch) == 0 {
+		return
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.queued = append(append([]queuedPlayer(nil), batch...), q.queued...)
 }
 
 // spawnMatch creates the Match object and routes each player into it
