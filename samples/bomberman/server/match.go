@@ -3,35 +3,131 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/xiaonanln/goverse/goverseapi"
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
 
-// Match is the goverse object wrapper around MatchState. PR 1 only
-// exposes lobby + input + snapshot RPCs and runs the tick logic
-// synchronously when the test or stress driver calls AdvanceTickRPC.
-// PR 2 will replace AdvanceTickRPC with an internal goroutine driven
-// by time.Ticker and broadcast snapshots via push messaging.
+// TickPeriod is the wall-clock interval between authoritative match
+// updates. Derived from TickHz so the constant stays in one place.
+const TickPeriod = time.Second / TickHz
+
+// pushFunc is the broadcast hook. Production binds it to
+// goverseapi.PushMessageToClients; tests can override the package var
+// to capture pushes without spinning up a real cluster.
+type pushFunc = func(ctx context.Context, clientIDs []string, message proto.Message) error
+
+// Match is the goverse object wrapper. It owns the tick goroutine and
+// the per-tick broadcast of MatchSnapshot to every connected player's
+// client_id.
 type Match struct {
 	goverseapi.BaseObject
 
-	mu    sync.Mutex
-	state *MatchState
+	mu       sync.Mutex
+	state    *MatchState
+	stopCh   chan struct{}
+	stopOnce sync.Once
+
+	// push is overridable for tests. When nil (production), OnCreated
+	// wires it to goverseapi.PushMessageToClients.
+	push pushFunc
 }
 
 func (m *Match) OnCreated() {
 	m.state = NewMatchState(seedFromID(m.Id()))
+	m.stopCh = make(chan struct{})
+	if m.push == nil {
+		m.push = goverseapi.PushMessageToClients
+	}
 	m.Logger.Infof("Match %s created", m.Id())
+	go m.tickLoop()
+}
+
+// Stop ends the tick goroutine. Idempotent. Called when the match has
+// reached MATCH_STATUS_ENDED, and exposed for tests / future
+// shard-migration teardown paths.
+func (m *Match) Stop() {
+	m.stopOnce.Do(func() { close(m.stopCh) })
+}
+
+func (m *Match) tickLoop() {
+	ticker := time.NewTicker(TickPeriod)
+	defer ticker.Stop()
+	// Watch the object's lifetime context as well as the local stopCh so
+	// the tick goroutine exits cleanly when goverse destroys the object
+	// (shard migration, node shutdown, manual delete) — not only when
+	// the match reaches MATCH_STATUS_ENDED on its own. Without this,
+	// stale snapshots could keep being pushed after ownership has
+	// already moved away from this node.
+	objDone := m.Context().Done()
+	for {
+		select {
+		case <-m.stopCh:
+			return
+		case <-objDone:
+			return
+		case <-ticker.C:
+			if !m.tickAndBroadcastOnce() {
+				m.Stop()
+				return
+			}
+		}
+	}
+}
+
+// tickAndBroadcastOnce advances the match by one tick (no-op while
+// the match is in lobby), builds a snapshot, and pushes it to every
+// connected client. Returns false once the match has ended, signalling
+// the tick loop to exit. Exposed package-private so unit tests can
+// drive the broadcast deterministically without waiting on time.Ticker.
+func (m *Match) tickAndBroadcastOnce() bool {
+	m.mu.Lock()
+	switch m.state.Status {
+	case pb.MatchStatus_MATCH_STATUS_LOBBY:
+		// In lobby — broadcast the current player list every tick so
+		// joining clients see each other arrive without polling, but
+		// don't run the simulation.
+	case pb.MatchStatus_MATCH_STATUS_RUNNING:
+		m.state.AdvanceTick()
+	case pb.MatchStatus_MATCH_STATUS_ENDED:
+		m.mu.Unlock()
+		return false
+	}
+	clientIDs := append([]string(nil), m.state.ClientIDs()...)
+	snap := m.state.Snapshot(m.Id())
+	ended := m.state.Status == pb.MatchStatus_MATCH_STATUS_ENDED
+	m.mu.Unlock()
+
+	m.broadcast(clientIDs, snap)
+	return !ended
+}
+
+// broadcast pushes the snapshot to every client_id in this match.
+// Failures are logged but not retried — the next tick will try again.
+func (m *Match) broadcast(clientIDs []string, snap *pb.MatchSnapshot) {
+	if len(clientIDs) == 0 || m.push == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := m.push(ctx, clientIDs, snap); err != nil {
+		m.Logger.Warnf("Failed to push snapshot to %d clients: %v", len(clientIDs), err)
+	}
 }
 
 // AddPlayer places a fresh player on the grid. The Match must still
 // be in LOBBY status; spawn coordinates outside the grid or onto a
-// non-empty cell are rejected.
+// non-empty cell are rejected. The caller's client id (taken from the
+// request context) is recorded so subsequent snapshots are pushed to
+// it.
 func (m *Match) AddPlayer(ctx context.Context, req *pb.AddPlayerRequest) (*pb.AddPlayerResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := m.state.AddPlayer(req.PlayerId, int(req.SpawnX), int(req.SpawnY)); err != nil {
+	clientID := goverseapi.CallerClientID(ctx)
+	if err := m.state.AddPlayer(req.PlayerId, clientID, int(req.SpawnX), int(req.SpawnY)); err != nil {
 		return &pb.AddPlayerResponse{Ok: false, Reason: err.Error()}, nil
 	}
 	return &pb.AddPlayerResponse{Ok: true}, nil
@@ -61,7 +157,9 @@ func (m *Match) HandleInput(ctx context.Context, req *pb.PlayerInputRequest) (*p
 }
 
 // GetSnapshot returns the current authoritative state. Cheap to call
-// every tick; clients should rely on push (PR 2) instead of polling.
+// every tick; production clients should rely on the push broadcast
+// instead of polling, but the RPC is useful for one-shot checks (e.g.
+// stress test verification).
 func (m *Match) GetSnapshot(ctx context.Context, req *pb.GetSnapshotRequest) (*pb.GetSnapshotResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -51,13 +51,13 @@ func TestNewMatchState_BordersAreWalls(t *testing.T) {
 
 func TestStart_RequiresMinPlayers(t *testing.T) {
 	s := NewMatchState(1)
-	if err := s.AddPlayer("p1", 1, 1); err != nil {
+	if err := s.AddPlayer("p1", "", 1, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Start(); err == nil {
 		t.Fatal("expected Start to fail with 1 player")
 	}
-	if err := s.AddPlayer("p2", GridWidth-2, GridHeight-2); err != nil {
+	if err := s.AddPlayer("p2", "", GridWidth-2, GridHeight-2); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Start(); err != nil {
@@ -73,10 +73,10 @@ func TestStart_RequiresMinPlayers(t *testing.T) {
 func twoPlayerStarted(t *testing.T) *MatchState {
 	t.Helper()
 	s := NewMatchState(1)
-	if err := s.AddPlayer("p1", 1, 1); err != nil {
+	if err := s.AddPlayer("p1", "", 1, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddPlayer("p2", GridWidth-2, GridHeight-2); err != nil {
+	if err := s.AddPlayer("p2", "", GridWidth-2, GridHeight-2); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Start(); err != nil {
@@ -182,10 +182,10 @@ func TestExplosion_StopsAtIndestructibleWall(t *testing.T) {
 	s := NewMatchState(1)
 	// Wall at (2,2) is indestructible per layout. Bomb at (2,1) with
 	// power 5 should not damage past the wall going down.
-	if err := s.AddPlayer("p1", 1, 1); err != nil {
+	if err := s.AddPlayer("p1", "", 1, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddPlayer("p2", GridWidth-2, GridHeight-2); err != nil {
+	if err := s.AddPlayer("p2", "", GridWidth-2, GridHeight-2); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Start(); err != nil {
