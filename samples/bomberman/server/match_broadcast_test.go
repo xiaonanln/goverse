@@ -118,6 +118,82 @@ func TestTickAndBroadcastOnce_RunningAdvancesAndBroadcasts(t *testing.T) {
 	}
 }
 
+// TestTickAndBroadcastOnce_FiresRecordResultsOnEnd checks that the
+// match-end transition kicks off the per-player RecordMatchResult
+// reliable call sequence — the cross-object reliable call PR 3 wires
+// up. The recorder collects the calls fired in a goroutine; we wait
+// briefly for them to land, then assert the contents.
+func TestTickAndBroadcastOnce_FiresRecordResultsOnEnd(t *testing.T) {
+	rec := &recordedPush{}
+	rrec := &recordedReliable{}
+	m := &Match{
+		state:        NewMatchState(1),
+		push:         rec.push,
+		reliableCall: rrec.call,
+		stopCh:       make(chan struct{}),
+	}
+	m.OnInit(m, "Match-test")
+	if err := m.state.AddPlayer("alice", "gate1/c2", 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.AddPlayer("bob", "gate1/c3", GridWidth-2, GridHeight-2); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.Start(); err != nil {
+		t.Fatal(err)
+	}
+	// Force end-of-match: kill bob, alice survives.
+	m.state.Players["bob"].Alive = false
+	if m.tickAndBroadcastOnce() {
+		t.Fatal("end-tick should return false")
+	}
+
+	// recordResults runs in a goroutine — wait a moment for it to land.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(rrec.snapshot()) >= 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	calls := rrec.snapshot()
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 RecordMatchResult reliable calls, got %d", len(calls))
+	}
+	wonByPlayer := map[string]bool{}
+	for _, c := range calls {
+		if c.method != "RecordMatchResult" || c.objectType != "Player" {
+			t.Fatalf("unexpected reliable call %+v", c)
+		}
+		req := c.request.(*pb.RecordMatchResultRequest)
+		// Player object id is "Player-<player_id>" by convention.
+		switch c.objectID {
+		case "Player-alice":
+			wonByPlayer["alice"] = req.Won
+		case "Player-bob":
+			wonByPlayer["bob"] = req.Won
+		default:
+			t.Fatalf("unexpected target object id %q", c.objectID)
+		}
+		// Stable, deterministic call id keyed on (match, player) so
+		// retries dedup correctly.
+		want := "match-Match-test-record-" + req.MatchId
+		_ = want // call_id is descriptive but not asserted exactly here
+	}
+	if !wonByPlayer["alice"] || wonByPlayer["bob"] {
+		t.Fatalf("won-by-player = %+v; want alice=true bob=false", wonByPlayer)
+	}
+
+	// A second call shouldn't re-fire results — the local short-
+	// circuit kicks in even though reliable-call dedup would also
+	// catch it server-side.
+	m.tickAndBroadcastOnce()
+	if got := len(rrec.snapshot()); got != 2 {
+		t.Fatalf("results re-fired on second tick: %d total calls", got)
+	}
+}
+
 func TestTickAndBroadcastOnce_StopsAfterEnd(t *testing.T) {
 	m, rec := matchWithRecorder(t, 1)
 	if err := m.state.AddPlayer("alice", "gate1/c2", 1, 1); err != nil {

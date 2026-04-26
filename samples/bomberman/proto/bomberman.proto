@@ -123,3 +123,65 @@ message GetSnapshotRequest {}
 message GetSnapshotResponse {
   MatchSnapshot snapshot = 1;
 }
+
+// --- Player object ---
+
+// PlayerStats is the persistent record kept per user. Matches across
+// shard migrations and node restarts via Player's ToData/FromData.
+message PlayerStats {
+  string player_id = 1;
+  int64 total_matches = 2;
+  int64 wins = 3;
+  int64 losses = 4;
+  string last_match_id = 5;
+}
+
+message GetPlayerStatsRequest {}
+message GetPlayerStatsResponse {
+  PlayerStats stats = 1;
+}
+
+// RecordMatchResultRequest is the reliable call fired by Match into
+// each Player when the match ends. Reliable-call dedup keyed on the
+// caller's call_id ensures wins/losses can't be double-counted under
+// retry.
+message RecordMatchResultRequest {
+  string match_id = 1;
+  bool won = 2;
+}
+
+message RecordMatchResultResponse {
+  PlayerStats stats = 1;
+}
+
+// PlayerData is the persistence wire format. The runtime hands this
+// blob back via FromData on object reactivation.
+message PlayerData {
+  PlayerStats stats = 1;
+}
+
+// --- MatchmakingQueue object ---
+
+message JoinQueueRequest {
+  string player_id = 1;
+}
+
+message JoinQueueResponse {
+  bool ok = 1;
+  string reason = 2;
+  int32 queue_position = 3;  // 1-indexed position in queue, 0 if not queued
+}
+
+message LeaveQueueRequest {
+  string player_id = 1;
+}
+
+message LeaveQueueResponse {
+  bool ok = 1;
+}
+
+message QueueStatusRequest {}
+message QueueStatusResponse {
+  int32 queued = 1;        // number of players currently waiting
+  int64 matches_spawned = 2; // monotonic counter since cluster start
+}
