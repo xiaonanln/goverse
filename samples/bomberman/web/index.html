@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bomberman — Goverse Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Bomberman <span class="subtitle">— a Goverse multiplayer demo</span></h1>
+    </header>
+
+    <section id="lobby" class="panel">
+      <h2>Find a Match</h2>
+      <p>
+        Pick a nickname and queue up. Two or more players need to be
+        queued before the cluster spawns a match — open this page in a
+        second browser tab to play against yourself.
+      </p>
+      <label>
+        Nickname
+        <input id="nickname" type="text" maxlength="20" placeholder="alice" autocomplete="off">
+      </label>
+      <button id="join-button" disabled>Connect…</button>
+      <p id="lobby-status" class="status"></p>
+    </section>
+
+    <section id="game" class="panel hidden">
+      <div id="hud">
+        <div id="match-id"></div>
+        <div id="match-status"></div>
+        <div id="my-stats"></div>
+      </div>
+      <canvas id="board" width="520" height="440"></canvas>
+      <div id="players-list"></div>
+      <div id="controls-help">
+        <strong>Controls:</strong> WASD / arrow keys to move, Space to drop a bomb.
+      </div>
+    </section>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

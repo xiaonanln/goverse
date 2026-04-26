@@ -247,13 +247,18 @@ func (m *Match) broadcast(clientIDs []string, snap *pb.MatchSnapshot) {
 
 // AddPlayer places a fresh player on the grid. The Match must still
 // be in LOBBY status; spawn coordinates outside the grid or onto a
-// non-empty cell are rejected. The caller's client id (taken from the
-// request context) is recorded so subsequent snapshots are pushed to
-// it.
+// non-empty cell are rejected. The recorded client_id (used as the
+// snapshot push target) is taken from req.ClientId when set —
+// MatchmakingQueue uses this to forward the original player's gate
+// id — and falls back to goverseapi.CallerClientID(ctx) for direct
+// client invocations.
 func (m *Match) AddPlayer(ctx context.Context, req *pb.AddPlayerRequest) (*pb.AddPlayerResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	clientID := goverseapi.CallerClientID(ctx)
+	clientID := req.ClientId
+	if clientID == "" {
+		clientID = goverseapi.CallerClientID(ctx)
+	}
 	if err := m.state.AddPlayer(req.PlayerId, clientID, int(req.SpawnX), int(req.SpawnY)); err != nil {
 		return &pb.AddPlayerResponse{Ok: false, Reason: err.Error()}, nil
 	}
