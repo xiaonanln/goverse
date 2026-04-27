@@ -36,6 +36,14 @@ let lastSnapshot = null;
 let inputState = { move: 0, placeBomb: false };
 let inputTimer = null;
 let eventSource = null;
+// queueState tracks whether the user is sitting in the matchmaking
+// queue waiting to be slotted into a Match. The pagehide handler
+// uses it to decide whether to fire a best-effort LeaveQueue beacon
+// — if the user has already been matched (state === 'in-match') we
+// leave them alone; closing the tab mid-game shouldn't yank them
+// out of the queue (they're not in it any more) or out of the match
+// (the right thing for that is server-side staleness, future PR).
+let queueState = 'idle';        // 'idle' | 'queued' | 'in-match'
 
 // ---------- entry ----------
 
@@ -47,6 +55,17 @@ document.addEventListener('DOMContentLoaded', () => {
   elNickname.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !elJoinBtn.disabled) onFindMatch();
   });
+  // If the tab is closed while the user is still queued, fire a
+  // best-effort LeaveQueue so they don't sit in the FIFO as a ghost
+  // (the next spawn batch would otherwise pick them up and the match
+  // would start with phantom players). pagehide is the modern signal
+  // for "the page is going away" — fires for tab close, navigation,
+  // and on iOS where beforeunload is unreliable. sendBeacon is the
+  // only API the browser will actually deliver during teardown
+  // (fetch/XHR are cancelled). Crashes / hard kills aren't covered;
+  // server-side staleness eviction is the proper backstop and is
+  // out of scope for this fix.
+  window.addEventListener('pagehide', flushLeaveQueueOnClose);
 });
 
 function inferApiBase() {
@@ -132,12 +151,31 @@ async function onFindMatch() {
       elJoinBtn.textContent = 'Find Match';
       return;
     }
+    queueState = 'queued';
     setStatus(`In queue at position ${resp.queuePosition}. The match will start once enough players are queued.`);
   } catch (err) {
     setStatus(`Queue error: ${err.message}`, 'error');
     elJoinBtn.disabled = false;
     elJoinBtn.textContent = 'Find Match';
   }
+}
+
+// flushLeaveQueueOnClose runs from the pagehide handler. Uses
+// navigator.sendBeacon — fetch() / XHR are aborted when the page
+// goes away, but sendBeacon is delivered by the browser
+// asynchronously after the tab is gone, which is exactly what we
+// need.
+function flushLeaveQueueOnClose() {
+  if (queueState !== 'queued') return;
+  if (!playerID) return;
+  if (typeof navigator.sendBeacon !== 'function') return;
+  const inner = encodeLeaveQueueRequest({ playerId: playerID });
+  const reqAny = wrapAny('type.googleapis.com/bomberman.LeaveQueueRequest', inner);
+  const body = JSON.stringify({ request: base64Encode(reqAny) });
+  const url = `${API_BASE}/objects/call/MatchmakingQueue/MatchmakingQueue/LeaveQueue`;
+  try {
+    navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+  } catch (_) { /* best effort */ }
 }
 
 // ---------- Snapshot handler ----------
@@ -147,6 +185,7 @@ function onSnapshot(snap) {
   // belonging to other matches (e.g. spectator tabs sharing a node).
   if (!matchID) {
     matchID = snap.matchId;
+    queueState = 'in-match';
     elLobby.classList.add('hidden');
     elGame.classList.remove('hidden');
     elBoard.focus();
@@ -166,8 +205,10 @@ function onMatchEnded(snap) {
   elMatchSt.textContent = `Match over — winner: ${winner}`;
   elJoinBtn.disabled = false;
   elJoinBtn.textContent = 'Find another match';
-  // Reset matchID so the next match can take over the canvas.
+  // Reset matchID + queueState so the next match can take over the
+  // canvas and pagehide once again becomes a leave-queue trigger.
   matchID = null;
+  queueState = 'idle';
 }
 
 // ---------- Rendering ----------
@@ -399,6 +440,12 @@ function encodeJoinQueueRequest({ playerId, clientId }) {
   const out = [];
   if (playerId) out.push(...encodeStringField(1, playerId));
   if (clientId) out.push(...encodeStringField(2, clientId));
+  return new Uint8Array(out);
+}
+
+function encodeLeaveQueueRequest({ playerId }) {
+  const out = [];
+  if (playerId) out.push(...encodeStringField(1, playerId));
   return new Uint8Array(out);
 }
 
