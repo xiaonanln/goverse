@@ -140,20 +140,33 @@ async function onFindMatch() {
   elJoinBtn.textContent = 'Queued…';
   setStatus(`Queued as ${playerID}. Waiting for opponents…`);
 
+  // Mark queued state *before* awaiting the RPC. The server processes
+  // JoinQueue (and inserts into the FIFO) before we ever see the
+  // response, so if the user closes the tab in the gap between
+  // "request sent" and "response received", the pagehide handler must
+  // still fire LeaveQueue. We revert on a definitive rejection below.
+  queueState = 'queued';
   const req = encodeJoinQueueRequest({ playerId: playerID, clientId: clientID });
   const reqAny = wrapAny('type.googleapis.com/bomberman.JoinQueueRequest', req);
   try {
     const respBytes = await callObject('MatchmakingQueue', 'MatchmakingQueue', 'JoinQueue', reqAny);
     const resp = decodeJoinQueueResponse(respBytes);
     if (!resp.ok) {
+      // Server rejected the join — we know we're not in the queue.
+      // (The handler is idempotent on the server side: a follow-up
+      // LeaveQueue against a player that isn't queued is a no-op,
+      // so even an extra pagehide beacon here would be harmless.)
+      queueState = 'idle';
       setStatus(`Queue rejected: ${resp.reason || 'unknown'}`, 'error');
       elJoinBtn.disabled = false;
       elJoinBtn.textContent = 'Find Match';
       return;
     }
-    queueState = 'queued';
     setStatus(`In queue at position ${resp.queuePosition}. The match will start once enough players are queued.`);
   } catch (err) {
+    // Network / RPC error. We don't actually know whether the server
+    // got the request — leave queueState='queued' so a tab close
+    // still tries LeaveQueue (idempotent if we're not actually in).
     setStatus(`Queue error: ${err.message}`, 'error');
     elJoinBtn.disabled = false;
     elJoinBtn.textContent = 'Find Match';
