@@ -22,20 +22,36 @@ export BOMBERMAN_MATCH_TIME_LIMIT_TICKS="${BOMBERMAN_MATCH_TIME_LIMIT_TICKS:-300
 
 PIDS=()
 
+# kill_tree signals a process and every descendant, depth-first. We
+# need this because `go run` spawns the compiled binary as a child:
+# capturing $! gives us the wrapper PID, but signalling only the
+# wrapper leaves the compiled inspector/node/gate process running
+# as an orphan, still holding ports — a rerun of run-local.sh would
+# then fail with bind errors. pgrep -P walks one ppid level at a
+# time; we recurse so any future indirection is also caught.
+kill_tree() {
+  local pid=$1 sig=$2
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return
+  fi
+  local child
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    kill_tree "$child" "$sig"
+  done
+  kill -"$sig" "$pid" 2>/dev/null || true
+}
+
 cleanup() {
   echo
   echo "--- shutting down ---"
   for pid in "${PIDS[@]}"; do
-    if kill -0 "$pid" 2>/dev/null; then
-      kill -TERM "$pid" 2>/dev/null || true
-    fi
+    kill_tree "$pid" TERM
   done
-  # Brief grace for graceful exit, then SIGKILL stragglers.
+  # Brief grace for graceful exit, then SIGKILL anything that ignored
+  # SIGTERM (and its descendants).
   sleep 2
   for pid in "${PIDS[@]}"; do
-    if kill -0 "$pid" 2>/dev/null; then
-      kill -KILL "$pid" 2>/dev/null || true
-    fi
+    kill_tree "$pid" KILL
   done
 }
 trap cleanup INT TERM EXIT
