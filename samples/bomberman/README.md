@@ -91,6 +91,32 @@ go run ./cmd/gate     --config samples/bomberman/stress_config.yml --gate-id bom
 python3 -m http.server 8000 --directory samples/bomberman/web
 ```
 
+## Access control
+
+`stress_config.yml`'s `object_access_rules` section restricts which
+methods clients may call via the gate. Without these rules a malicious
+browser could POST directly to `Player.RecordMatchResult` and grant
+itself wins — the demo would otherwise have no defense against that.
+
+| Method | Access |
+| --- | --- |
+| `MatchmakingQueue.{JoinQueue,LeaveQueue,QueueStatus}` | `ALLOW` (clients + nodes) |
+| `Match.{HandleInput,GetSnapshot}` | `ALLOW` |
+| `Match.{AddPlayer,StartMatch}` | `INTERNAL` (queue calls these server-side; clients are denied) |
+| `Player.GetStats` | `ALLOW` |
+| `Player.RecordMatchResult` | `INTERNAL` (only `Match.recordResults` may invoke; closes the cheating attack) |
+
+Anything not listed is `REJECT`ed by default. This is goverse's
+[`config.AccessValidator`](../../config/access_control.go) wired in
+through the gate's `CallObject` / `ReliableCallObject` handlers — no
+sample-specific code, just YAML.
+
+What this **doesn't** give you: client identity. Any tab can
+`JoinQueue` as any nickname, and there's no row-level check that "you
+must be alice to call HandleInput for alice". Real games would put a
+JWT-validating middleware in front of the gate (still a gap in goverse
+v0.1; tracked under v0.2 framework wishlist).
+
 ## Stress-test invariants
 
 The driver asserts three properties at the end of a run; all three

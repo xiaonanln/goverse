@@ -61,3 +61,43 @@ gates:
 
   - id: "bomberman-gate-2"
     grpc_addr: "0.0.0.0:10312"
+
+# Access control. Anything not matched here is REJECTed (default deny).
+#
+# - ALLOW    : both clients (via gate) and nodes (cross-object) may call
+# - EXTERNAL : clients only, deny nodes
+# - INTERNAL : nodes only, deny clients via gate
+#
+# The cheating attack we're closing: without these rules, a malicious
+# client could POST directly to /api/v1/objects/call/Player/...
+# /RecordMatchResult and grant themselves wins. Marking it INTERNAL
+# means only Match.recordResults running server-side can invoke it;
+# any direct client call is denied at the gate.
+object_access_rules:
+  # Matchmaking entry / status. Clients drive these.
+  - type: MatchmakingQueue
+    method: /(JoinQueue|LeaveQueue|QueueStatus)/
+    access: ALLOW
+
+  # In-match player input + read paths. Clients send these every tick.
+  - type: Match
+    method: /(HandleInput|GetSnapshot)/
+    access: ALLOW
+
+  # Match lifecycle is server-side only — only MatchmakingQueue should
+  # AddPlayer / StartMatch on a Match. A direct client call would
+  # bypass matchmaking.
+  - type: Match
+    method: /(AddPlayer|StartMatch)/
+    access: INTERNAL
+
+  # Player stats: clients can read theirs (no row-level auth yet —
+  # any client can read any player's stats; harmless leakage in this
+  # demo). Mutating wins/losses is server-side only.
+  - type: Player
+    method: GetStats
+    access: ALLOW
+
+  - type: Player
+    method: RecordMatchResult
+    access: INTERNAL
