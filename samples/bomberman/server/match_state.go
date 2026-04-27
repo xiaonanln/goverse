@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"strconv"
 
 	pb "github.com/xiaonanln/goverse/samples/bomberman/proto"
 )
@@ -11,19 +13,34 @@ import (
 // Super Bomberman: 13x11 grid, 10Hz tick, 2 s bomb fuse, 0.5 s
 // explosion afterglow, 30 % drop chance per destroyed block.
 const (
-	GridWidth         = 13
-	GridHeight        = 11
-	TickHz            = 10
-	BombFuseTicks     = 20
-	ExplosionTicks    = 5
-	MatchTimeLimit    = 1800 // 3 minutes at 10 Hz
-	BlockDropPowerup  = 0.30
-	DefaultBombCap    = 1
-	DefaultBombPower  = 2
-	DefaultSpeed      = 1
-	MinPlayersToStart = 2
-	MaxPlayers        = 8
+	GridWidth                   = 13
+	GridHeight                  = 11
+	TickHz                      = 10
+	BombFuseTicks               = 20
+	ExplosionTicks              = 5
+	DefaultMatchTimeLimitTicks  = 1800 // 3 minutes at 10 Hz
+	BlockDropPowerup            = 0.30
+	DefaultBombCap              = 1
+	DefaultBombPower            = 2
+	DefaultSpeed                = 1
+	MinPlayersToStart           = 2
+	MaxPlayers                  = 8
 )
+
+// MatchTimeLimit is read once at process start. It defaults to
+// DefaultMatchTimeLimitTicks (3 minutes) but can be overridden via
+// BOMBERMAN_MATCH_TIME_LIMIT_TICKS so the stress test can drive short
+// matches and exercise many end-of-match cycles in a CI window.
+var MatchTimeLimit = readMatchTimeLimit()
+
+func readMatchTimeLimit() int {
+	if v := os.Getenv("BOMBERMAN_MATCH_TIME_LIMIT_TICKS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return DefaultMatchTimeLimitTicks
+}
 
 // Tile values mirror the proto Tile enum so we can convert in O(1).
 type Tile int8

@@ -1,0 +1,58 @@
+# Bomberman stress test cluster — 1 inspector, 3 server nodes, 2 gates.
+# Reliable calls (Match → Player.RecordMatchResult on match end) require
+# Postgres-backed persistence, so this config wires it in.
+
+version: 1
+
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "goverse"
+  password: "goverse"
+  database: "goverse"
+  sslmode: "disable"
+  max_open_conns: 4
+  max_idle_conns: 4
+
+inspector:
+  http_addr: "0.0.0.0:8190"
+  grpc_addr: "0.0.0.0:8191"
+  advertise_addr: "localhost:8191"
+
+cluster:
+  shards: 64
+  provider: "etcd"
+  etcd:
+    endpoints:
+      - "127.0.0.1:2379"
+    prefix: "/goverse/bomberman-stress-test"
+
+  # MatchmakingQueue is a singleton: the leader services it, but every
+  # node loads the type so the object survives shard re-ownership
+  # without an explicit re-creation step.
+  auto_load_objects:
+    - type: "MatchmakingQueue"
+      id: "MatchmakingQueue"
+
+nodes:
+  - id: "bomberman-node-1"
+    grpc_addr: "0.0.0.0:9411"
+    advertise_addr: "localhost:9411"
+    http_addr: "0.0.0.0:8411"
+
+  - id: "bomberman-node-2"
+    grpc_addr: "0.0.0.0:9412"
+    advertise_addr: "localhost:9412"
+    http_addr: "0.0.0.0:8412"
+
+  - id: "bomberman-node-3"
+    grpc_addr: "0.0.0.0:9413"
+    advertise_addr: "localhost:9413"
+    http_addr: "0.0.0.0:8413"
+
+gates:
+  - id: "bomberman-gate-1"
+    grpc_addr: "0.0.0.0:10311"
+
+  - id: "bomberman-gate-2"
+    grpc_addr: "0.0.0.0:10312"
