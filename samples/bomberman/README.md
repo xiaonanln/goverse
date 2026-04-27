@@ -67,23 +67,29 @@ cycles=...  rpc_errors=0  timeouts=0  exactly_once_violations=0
 The web UI in `web/` is a canvas-based client that talks to the
 goverse HTTP gate via SSE for snapshot push and POST for inputs.
 
+The fastest path is the wrapper script — it brings up the inspector,
+three nodes, the gate, and a static web server in one foreground
+process and tears them all down on Ctrl+C:
+
 ```bash
-# 1. Start the cluster (see Running locally above for prerequisites)
+./samples/bomberman/run-local.sh
+```
+
+Then open `http://localhost:8000` in two browser tabs, pick a
+nickname in each, click **Find Match**, and once both are queued the
+cluster spawns a Match and both canvases start receiving 10 Hz
+snapshot pushes. WASD or arrows to move, Space to drop a bomb.
+
+If you'd rather start each piece by hand:
+
+```bash
 go run ./cmd/inspector --config samples/bomberman/stress_config.yml &
 go run ./samples/bomberman/server --config samples/bomberman/stress_config.yml --node-id bomberman-node-1 &
 go run ./samples/bomberman/server --config samples/bomberman/stress_config.yml --node-id bomberman-node-2 &
 go run ./samples/bomberman/server --config samples/bomberman/stress_config.yml --node-id bomberman-node-3 &
 go run ./cmd/gate     --config samples/bomberman/stress_config.yml --gate-id bomberman-gate-1 &
-
-# 2. Serve the web/ folder; the gate exposes /api/v1 on port 8080.
 python3 -m http.server 8000 --directory samples/bomberman/web
 ```
-
-Open `http://localhost:8000`, enter a nickname, click **Find Match**,
-then open the same URL in a second tab and queue up a second player.
-Once two players are queued the cluster spawns a Match and both
-canvases start receiving 10 Hz snapshot pushes. WASD or arrows to
-move, Space to drop a bomb.
 
 ## Stress-test invariants
 

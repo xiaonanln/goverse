@@ -51,8 +51,13 @@ nodes:
     http_addr: "0.0.0.0:8413"
 
 gates:
+  # The first gate exposes the HTTP / SSE client API on :8080 so the
+  # browser sample (samples/bomberman/web/) can reach it. Without
+  # http_addr set, the gate runs gRPC only and any EventSource from
+  # the web UI hangs on "Connecting…".
   - id: "bomberman-gate-1"
     grpc_addr: "0.0.0.0:10311"
+    http_addr: "0.0.0.0:8080"
 
   - id: "bomberman-gate-2"
     grpc_addr: "0.0.0.0:10312"

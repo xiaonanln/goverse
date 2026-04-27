@@ -34,6 +34,8 @@ import socket
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,6 +82,41 @@ MAX_MATCH_WAIT_SECONDS = 90.0
 # Inter-cycle pause so clients don't all hammer JoinQueue in lockstep.
 MIN_REJOIN_DELAY = 0.0
 MAX_REJOIN_DELAY = 0.5
+
+
+def probe_http_gate(http_url: str, timeout: float = 5.0) -> bool:
+    """Open an SSE connection to the gate's /api/v1/events/stream and
+    assert we get the expected `event: register` greeting within timeout
+    seconds. Catches the failure mode where a gate config forgets to
+    set http_addr (gate runs gRPC-only, the web UI hangs on
+    'Connecting…'). The stress test itself uses gRPC, so without this
+    probe the HTTP path can rot silently between releases.
+    """
+    sse_url = http_url.rstrip("/") + "/api/v1/events/stream"
+    print(f"Probing HTTP/SSE at {sse_url} (timeout={timeout}s)...")
+    try:
+        req = urllib.request.Request(sse_url, headers={"Accept": "text/event-stream"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                print(f"❌ HTTP/SSE: gate responded with status {resp.status}")
+                return False
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                line = resp.readline()
+                if not line:
+                    break
+                if line.strip() == b"event: register":
+                    print("✅ HTTP/SSE: gate produced the register event")
+                    return True
+            print("❌ HTTP/SSE: opened stream but no register event within timeout")
+            return False
+    except urllib.error.URLError as e:
+        print(f"❌ HTTP/SSE: gate at {sse_url} not reachable: {e}")
+        print("   Hint: ensure the first gate in stress_config.yml has http_addr set.")
+        return False
+    except Exception as e:
+        print(f"❌ HTTP/SSE probe failed: {e}")
+        return False
 
 
 def ensure_postgres_ready() -> bool:
@@ -316,6 +353,18 @@ def main() -> int:
     node_ids = [n["id"] for n in cfg["nodes"]][:NUM_NODES]
     gate_ids = [g["id"] for g in cfg["gates"]][:NUM_GATES]
     gate_ports = [int(g["grpc_addr"].rsplit(":", 1)[1]) for g in cfg["gates"]][:NUM_GATES]
+    # First gate's http_addr (if any) is what the web UI talks to.
+    # Used by the HTTP/SSE smoke probe below.
+    http_gate_url = None
+    for g in cfg["gates"][:NUM_GATES]:
+        addr = g.get("http_addr") or ""
+        if not addr:
+            continue
+        host, _, port = addr.rpartition(":")
+        if host in ("", "0.0.0.0", "*"):
+            host = "127.0.0.1"
+        http_gate_url = f"http://{host}:{port}"
+        break
 
     inspector: Optional[Inspector] = None
     servers: List[BombermanServer] = []
@@ -390,6 +439,11 @@ def main() -> int:
             gateways.append(gw)
 
         time.sleep(2)
+
+        if http_gate_url is not None:
+            if not probe_http_gate(http_gate_url):
+                print("❌ HTTP gate probe failed — aborting before clients connect")
+                return 1
 
         print("\n" + "=" * 80)
         print(f"LAUNCHING {args.clients} CLIENTS FOR {args.duration}s")
