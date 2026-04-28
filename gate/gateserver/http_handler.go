@@ -245,6 +245,20 @@ func (s *GateServer) handleCreateObject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Mirror the gRPC CreateObject handler's lifecycle check
+	// (gateserver.go:CreateObject). Without this, an INTERNAL or
+	// REJECT lifecycle rule would only be enforced for streaming-gRPC
+	// clients — a browser POSTing here would slip past gate-side
+	// validation and the receiving node would honour the request as
+	// a node-to-node create, defeating the rule.
+	if s.lifecycleValidator != nil {
+		if err := s.lifecycleValidator.CheckClientCreate(objType, objID); err != nil {
+			s.logger.Warnf("Create denied for HTTP client: type=%s, id=%s: %v", objType, objID, err)
+			s.writeError(w, http.StatusForbidden, "ACCESS_DENIED", err.Error())
+			return
+		}
+	}
+
 	// Create context
 	ctx := r.Context()
 
