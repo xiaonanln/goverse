@@ -170,6 +170,24 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check client access if an AccessValidator is configured. The
+	// gRPC CallObject / ReliableCallObject handlers run the same
+	// check (gateserver.go); without mirroring it here, INTERNAL or
+	// REJECT rules would only be enforced for streaming-gRPC clients
+	// — a browser POSTing to /api/v1/objects/call/... would slip
+	// past gate-side validation, and the receiving node's
+	// CheckNodeAccess sees the call as a node-to-node hop and lets
+	// INTERNAL through (server.go:442). Concrete impact in the
+	// bomberman sample: a malicious browser could POST directly to
+	// Player.RecordMatchResult and grant itself wins.
+	if s.accessValidator != nil {
+		if err := s.accessValidator.CheckClientAccess(objType, objID, method); err != nil {
+			s.logger.Warnf("Access denied for HTTP client call: type=%s, id=%s, method=%s: %v", objType, objID, method, err)
+			s.writeError(w, http.StatusForbidden, "ACCESS_DENIED", err.Error())
+			return
+		}
+	}
+
 	// Create context with client ID if provided
 	ctx := r.Context()
 	clientID := r.Header.Get("X-Client-ID")
