@@ -63,6 +63,46 @@ func TestHandleCallObject_AccessDeniedForRejectedMethod(t *testing.T) {
 	}
 }
 
+// TestHandleCreateObject_LifecycleRejected pins the gate's HTTP
+// handleCreateObject lifecycle check. Mirrors what the gRPC
+// CreateObject handler does (gateserver.go:CreateObject). Without the
+// gate-side check, an INTERNAL/REJECT lifecycle rule would only be
+// enforced for streaming-gRPC clients; a browser POST would slip
+// past validation.
+func TestHandleCreateObject_LifecycleRejected(t *testing.T) {
+	rules := []config.LifecycleRule{
+		// Mark Restricted CREATE as INTERNAL — only nodes may create.
+		{Type: "Restricted", Lifecycle: "CREATE", Access: "INTERNAL"},
+	}
+	validator, err := config.NewLifecycleValidator(rules)
+	if err != nil {
+		t.Fatalf("NewLifecycleValidator: %v", err)
+	}
+
+	s := &GateServer{
+		logger:             logger.NewLogger("test-gate"),
+		lifecycleValidator: validator,
+	}
+
+	req := httptest.NewRequest(http.MethodPost,
+		"/api/v1/objects/create/Restricted/some-id", nil)
+	w := httptest.NewRecorder()
+
+	s.handleCreateObject(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d; want 403 Forbidden", w.Code)
+	}
+	respBody, _ := io.ReadAll(w.Body)
+	var errResp HTTPErrorResponse
+	if err := json.Unmarshal(respBody, &errResp); err != nil {
+		t.Fatalf("decode error response: %v\nbody=%s", err, string(respBody))
+	}
+	if errResp.Code != "ACCESS_DENIED" {
+		t.Fatalf("error code = %q; want ACCESS_DENIED. body=%s", errResp.Code, string(respBody))
+	}
+}
+
 // TestHandleCallObject_AllowsExternalClients confirms the access
 // check doesn't block legitimate ALLOW / EXTERNAL methods. Without
 // a real cluster the call still fails downstream, but the failure
