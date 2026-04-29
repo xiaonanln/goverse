@@ -16,15 +16,21 @@ skipping `CheckClientAccess`, HTTP `CreateObject` skipping
 `CheckClientCreate`, `DeleteObject` carrying no type, ghost queue
 entries surviving tab close) traces back to one thing: **the gate is
 not yet a real trust boundary**. It routes traffic but doesn't
-authenticate, terminate TLS, or distinguish "this came from a client"
-from "this came from another node" once the call enters the cluster.
+authenticate or distinguish "this came from a client" from "this came
+from another node" once the call enters the cluster.
 
-v0.2's job: turn the gate into a trust boundary so apps can deploy
-goverse on a public network without an external mesh and still get the
-security and lifecycle properties they reasonably expect.
+v0.2's job: turn the gate into a trust boundary, *assuming a
+TLS-terminating proxy (nginx / cloud LB / service mesh) sits in front
+of it*. Native gate TLS is explicitly out of scope — see §2.
 
 ## 2. Non-goals (parked for v0.3 or beyond)
 
+- **Native TLS termination on the gate.** v0.2 assumes operators put
+  a TLS-terminating proxy (nginx / cloud LB / service mesh) in front
+  of the gate; auth tokens (item 2) are protected at that layer. Most
+  production deployments already run such a proxy, so a built-in
+  `tls:` block would be redundant. Revisit in v0.3 if a "drop one
+  binary on a public IP, no proxy" use case shows up.
 - Distributed tracing (OpenTelemetry context propagation through
   reliable calls).
 - Audit log of state-changing reliable calls (best after auth lands so
@@ -32,7 +38,7 @@ security and lifecycle properties they reasonably expect.
 - Schema migration tool for Postgres-backed objects.
 - Subscribe-permission model for SSE / `Register` stream (refinement
   of auth middleware).
-- mTLS gate↔node intra-cluster (refinement of TLS).
+- mTLS gate↔node intra-cluster (waits on native gate TLS first).
 - Anti-cheat hooks beyond what `caller_user_id` enables.
 
 ## 3. Scope summary
@@ -41,7 +47,6 @@ security and lifecycle properties they reasonably expect.
 
 | # | Item                                  | Approx LOC |
 | - | ------------------------------------- | ---------- |
-| 1 | TLS on the gate (HTTP + gRPC)         | ~500       |
 | 2 | Auth middleware + caller-identity ctx | ~900       |
 | 4 | DeleteObject gate-side access check   | ~300       |
 
@@ -59,96 +64,9 @@ below so the work is queued and reviewable independently.
 
 ---
 
-## 4. Item 1 — TLS on the gate
+## 4. Item 2 — Auth middleware + caller identity
 
 ### 4.1 Motivation
-
-Browsing over a public network exposes every request: the SSE stream
-leaks game state, POSTed reliable calls leak business data, and tokens
-(once auth lands in item 2) would travel in plaintext. Without TLS,
-item 2 is meaningless.
-
-### 4.2 API shape
-
-Add an optional `TLS` block to `GateServerConfig`:
-
-```go
-type GateServerConfig struct {
-    // ... existing fields ...
-
-    // TLS configures the gate's HTTP and gRPC TLS termination. If
-    // nil, both servers run plaintext — preserving v0.1 behaviour.
-    // When set, both listeners serve TLS using the same
-    // certificate.
-    TLS *GateTLSConfig
-}
-
-type GateTLSConfig struct {
-    CertFile string `yaml:"cert_file"` // PEM-encoded server cert
-    KeyFile  string `yaml:"key_file"`  // PEM-encoded private key
-
-    // ClientCAFile + ClientAuth are wired in but the gate only
-    // checks the certificate at the TLS layer. Per-call client
-    // identity (item 2) is independent.
-    ClientCAFile string `yaml:"client_ca_file,omitempty"`
-    ClientAuth   string `yaml:"client_auth,omitempty"` // "none" | "request" | "require"
-}
-```
-
-YAML:
-
-```yaml
-gates:
-  - id: "bomberman-gate-1"
-    grpc_addr: "0.0.0.0:10311"
-    http_addr: "0.0.0.0:8443"   # convention: TLS goes on 8443
-    tls:
-      cert_file: "/etc/goverse/gate.pem"
-      key_file:  "/etc/goverse/gate-key.pem"
-```
-
-### 4.3 Implementation
-
-- `gate/gateserver/gateserver.go`: when `TLS != nil`, load the cert
-  via `tls.LoadX509KeyPair`, build a `*tls.Config`, attach it to both
-  `grpc.NewServer(grpc.Creds(credentials.NewTLS(...)))` and
-  `&http.Server{TLSConfig: ...}`. Listen via
-  `http.Server.ListenAndServeTLS`.
-- Reload story: out of scope for v0.2. Operators restart the gate to
-  pick up new certs. Follow-up issue.
-
-### 4.4 Migration
-
-- v0.1 configs without `tls:` keep working unchanged (plaintext).
-- New configs with `tls:` enable TLS. The bomberman + wallet samples
-  will keep their plain configs (they're demos); a new
-  `samples/wallet/stress_config_tls.yml` documents the production
-  shape.
-
-### 4.5 Test strategy
-
-- New `gate/gateserver/gate_tls_integration_test.go`: spin up gate
-  with self-signed certs (generated in `testutil.GenSelfSignedCert`),
-  POST + SSE through TLS, assert both succeed.
-- Negative: cert/key mismatch → `NewGateServer` returns error.
-- Negative: client connects without TLS → connection refused / TLS
-  handshake error.
-
-### 4.6 Open decisions
-
-- **`[DECIDE]`** Single cert for both HTTP and gRPC, or separate?
-  Default: single. Reduces ops complexity. SAN can cover multiple
-  hostnames if needed.
-- **`[DECIDE]`** Should `mtls` (`ClientAuth: "require"`) gate calls
-  even before identity is extracted in item 2? Default: no — TLS is
-  about transport, identity is item 2's concern. Keep them
-  orthogonal.
-
----
-
-## 5. Item 2 — Auth middleware + caller identity
-
-### 5.1 Motivation
 
 Today every method body that takes a `player_id` is implicitly
 saying "I trust the caller to tell me who they are." That breaks the
@@ -161,11 +79,11 @@ moment the gate is publicly reachable. Apps need:
 Goverse can't (and shouldn't) own the auth provider — but it can own
 the *plumbing* so apps don't reinvent it.
 
-### 5.2 API shape
+### 4.2 API shape
 
 A two-layer design.
 
-#### 5.2.1 Framework-level: pluggable validator
+#### 4.2.1 Framework-level: pluggable validator
 
 ```go
 package goverseapi
@@ -207,7 +125,7 @@ When `AuthValidator == nil` (default), no validation runs and
 that opt in to auth get a non-empty identity on every successful
 request.
 
-#### 5.2.2 Built-in implementations
+#### 4.2.2 Built-in implementations
 
 - **`authjwt.New(opts)`** — verifies HS256 / RS256 / ES256 bearer
   tokens from the `Authorization: Bearer <token>` header (HTTP) or
@@ -221,7 +139,7 @@ request.
 That's it for v0.2. OAuth, sessions, mTLS-derived identity, etc. each
 live as third-party packages or v0.3 work.
 
-#### 5.2.3 App-level: row-level checks
+#### 4.2.3 App-level: row-level checks
 
 ```go
 // In Match.HandleInput:
@@ -237,7 +155,7 @@ func (m *Match) HandleInput(ctx context.Context, req *pb.PlayerInputRequest) (*p
 Apps that don't care (demos, internal services) ignore
 `CallerUserID(ctx)` and behave like v0.1.
 
-### 5.3 Implementation
+### 4.3 Implementation
 
 - `goverseapi/auth.go`: `CallerIdentity`, `AuthValidator` interface,
   `CallerUserID(ctx)` / `CallerRoles(ctx)` helpers.
@@ -255,7 +173,7 @@ Apps that don't care (demos, internal services) ignore
   entry node — apps that need it cluster-wide work around). Default:
   metadata-in-proto, propagate it. Cleaner long-term.
 
-### 5.4 Migration
+### 4.4 Migration
 
 - All v0.1 code keeps working unchanged when no validator is
   configured.
@@ -263,7 +181,7 @@ Apps that don't care (demos, internal services) ignore
   `CallerUserID(ctx)` in handler bodies. Backwards compatible —
   unmodified handlers ignore identity.
 
-### 5.5 Test strategy
+### 4.5 Test strategy
 
 - New `gate/gateserver/gate_auth_integration_test.go`: gate with
   `BearerJWTValidator`, signed tokens accepted, unsigned/expired
@@ -271,7 +189,7 @@ Apps that don't care (demos, internal services) ignore
 - `goverseapi/authjwt/jwt_test.go`: token parsing edge cases (alg
   confusion, kid handling, clock skew).
 
-### 5.6 Open decisions
+### 4.6 Open decisions
 
 - **`[DECIDE]`** Identity propagation across nodes — propagate or
   not? Default: propagate.
@@ -285,9 +203,9 @@ Apps that don't care (demos, internal services) ignore
 
 ---
 
-## 6. Item 4 — DeleteObject gate-side access check
+## 5. Item 4 — DeleteObject gate-side access check
 
-### 6.1 Motivation
+### 5.1 Motivation
 
 `LifecycleValidator.CheckClientDelete(type, id)` exists in v0.1, but
 neither the gate's gRPC nor HTTP delete handlers can call it: the
@@ -296,7 +214,7 @@ calling `DeleteObject` is treated by the receiving node as a node-
 to-node hop and gets the INTERNAL pass — closing this is the last
 gate-enforcement gap.
 
-### 6.2 API shape (path 1: extend the proto)
+### 5.2 API shape (path 1: extend the proto)
 
 We picked path 1 in PR #549's deferred-work note. It's the cleanest
 and the least surprising for callers.
@@ -317,7 +235,7 @@ HTTP route: `POST /api/v1/objects/delete/{type}/{id}` (new). The old
 route `POST /api/v1/objects/delete/{id}` keeps working as the legacy
 v0.1 path with the same warn-and-skip semantics.
 
-### 6.3 Implementation
+### 5.3 Implementation
 
 - Regenerate `gate/proto/gate.pb.go`.
 - `gate/gateserver/gateserver.go:DeleteObject`: read `req.Type`,
@@ -330,7 +248,7 @@ v0.1 path with the same warn-and-skip semantics.
   takes `type` (positional) — breaking-extending. v0.2 minor bump
   is the right place for it.
 
-### 6.4 Migration
+### 5.4 Migration
 
 - Existing gRPC clients that send empty type: warn-once-per-deploy
   log line so operators notice. Calls still succeed in v0.2.
@@ -338,14 +256,14 @@ v0.1 path with the same warn-and-skip semantics.
   same — call succeeds, warn logged.
 - New code uses the typed path. v0.3 deprecates the legacy path.
 
-### 6.5 Test strategy
+### 5.5 Test strategy
 
 - New `TestHandleDeleteObject_LifecycleRejected` mirroring
   `TestHandleCreateObject_LifecycleRejected` from PR #549.
 - gRPC variant in `gateserver_test.go`.
 - Backwards-compat test: empty type passes through with warn.
 
-### 6.6 Open decisions
+### 5.6 Open decisions
 
 - **`[DECIDE]`** Should empty type *fail* in v0.2 or just warn? Default:
   warn. Failing is right semantically, but breaks the upgrade path.
@@ -353,14 +271,14 @@ v0.1 path with the same warn-and-skip semantics.
 
 ---
 
-## 7. Item 3 — `OnClientDisconnect` (Tier 2)
+## 6. Item 3 — `OnClientDisconnect` (Tier 2)
 
-Promoted from "future framework feature" because items 1 + 2 + 4 by
+Promoted from "future framework feature" because items 2 + 4 by
 themselves leave the bomberman ghost-queue class of bug open: even
 with auth, `pagehide` doesn't fire on browser crash / network drop /
 mobile freeze, so the queue still accumulates dead entries.
 
-### 7.1 API shape
+### 6.1 API shape
 
 Opt-in interface; mirrors existing lifecycle hooks (`OnCreated`,
 `Destroy`).
@@ -372,7 +290,7 @@ type ClientDisconnectHandler interface {
 }
 ```
 
-### 7.2 Wire delivery
+### 6.2 Wire delivery
 
 1. **Gate side**: when `Gate.Unregister(clientID)` runs, gate sends
    `NotifyClientDisconnect(clientID)` to every connected node via a
@@ -384,7 +302,7 @@ type ClientDisconnectHandler interface {
    type implements the interface and adds to a per-node index. No
    reflection at dispatch time.
 
-### 7.3 Semantics
+### 6.3 Semantics
 
 - **At-least-once, best-effort.** Gate crash mid-disconnect can lose
   the signal; apps that need a strong guarantee should layer a TTL
@@ -393,13 +311,13 @@ type ClientDisconnectHandler interface {
   node that received the broadcast dispatches independently in
   parallel.
 
-### 7.4 Sample integration
+### 6.4 Sample integration
 
 Bomberman's `MatchmakingQueue.OnClientDisconnect` would prune queue
 entries with the matching `client_id`, replacing the
 `pagehide`-only fix from PR #547 with one that also handles crashes.
 
-### 7.5 Open decisions
+### 6.5 Open decisions
 
 - **`[DECIDE]`** Broadcast to all nodes vs. targeted (gate maintains
   client_id → node map for objects that subscribed). Default:
@@ -408,7 +326,7 @@ entries with the matching `client_id`, replacing the
 
 ---
 
-## 8. Items 5 + 6 — Migration unavailability + graceful shutdown (Tier 2)
+## 7. Items 5 + 6 — Migration unavailability + graceful shutdown (Tier 2)
 
 These are the two known issues already called out in v0.1's
 `CHANGELOG.md`:
@@ -431,7 +349,7 @@ Both warrant their own follow-up design docs (separate PRs in the
   releases shard ownership to a successor before lease expiry.
   Coordinates with `consensusmanager`'s leader election.
 
-## 9. Item 7 — Per-call rate limiting (Tier 2)
+## 8. Item 7 — Per-call rate limiting (Tier 2)
 
 Optional, configurable token bucket per `client_id` (and optionally
 per `caller_user_id` once item 2 lands). Lives in gate handlers
@@ -452,32 +370,32 @@ LRU. Tested with a high-concurrency stress run.
 
 ---
 
-## 10. Rollout plan
+## 9. Rollout plan
 
 1. **Land item 4 (DeleteObject)** first — smallest, mostly mechanical.
    Establishes the v0.2 minor-bump pattern.
-2. **Land item 1 (TLS)** — visible, easy to verify, no dependency on
-   anything else.
-3. **Land item 2 (auth)** — biggest single piece. Block on it until
+2. **Land item 2 (auth)** — biggest single piece. Block on it until
    the API shape is reviewed; once landed, write a `samples/wallet`
    variant that requires JWTs as a worked example.
-4. **Land item 3 (`OnClientDisconnect`)** if time permits before
+3. **Land item 3 (`OnClientDisconnect`)** if time permits before
    v0.2 cut. Otherwise slip to v0.3.
-5. **Tier 2 items 5–7** based on remaining capacity.
+4. **Tier 2 items 5–7** based on remaining capacity.
 
 Each item is its own PR with its own design doc / API stability
 note. This file is the *index*.
 
-## 11. CHANGELOG drafting
+## 10. CHANGELOG drafting
 
-Once items 1, 2, 4 land, draft `## [0.2.0]` with:
+Once items 2, 4 land, draft `## [0.2.0]` with:
 
-- TLS support on the gate (`tls:` config block).
 - Pluggable auth middleware + `goverseapi.CallerUserID(ctx)`.
 - DeleteObject gate-side access checks (with type in the request).
 - Whatever Tier 2 items made it.
+- Documented expectation that the gate is deployed behind a
+  TLS-terminating proxy (no built-in TLS in v0.2).
 
 Updated "Known issues deferred to v0.3.0":
+- Native TLS termination on the gate.
 - Distributed tracing.
 - Audit log.
 - Schema migration tool.
@@ -485,19 +403,20 @@ Updated "Known issues deferred to v0.3.0":
 - mTLS gate↔node intra-cluster.
 - Anti-cheat / replay validation primitives.
 
-## 12. Pre-implementation checklist
+## 11. Pre-implementation checklist
 
 Items I need from a human reviewer before committing code:
 
-- [ ] **Lean v0.2 vs full v0.2**: confirm we ship items 1, 2, 4 only,
+- [ ] **Lean v0.2 vs full v0.2**: confirm we ship items 2, 4 only,
       with 3 / 5 / 6 / 7 stretch.
 - [ ] **Auth model**: confirm pluggable interface + shipped JWT happy
       path, not opinionated default.
 - [ ] **Identity propagation across nodes**: confirm "yes, propagate".
 - [ ] **DeleteObject migration**: confirm warn-and-allow on empty
       type for v0.2; reject in v0.3.
-- [ ] **TLS scope**: confirm single cert covers both HTTP and gRPC.
-- [ ] **Implementation order**: confirm 4 → 1 → 2 → 3 → Tier 2.
+- [ ] **TLS deferred to v0.3**: confirm v0.2 ships without native gate
+      TLS; operators put a proxy in front.
+- [ ] **Implementation order**: confirm 4 → 2 → 3 → Tier 2.
 
 Once these are settled, each item gets its own implementation PR
 with linked design doc updates.
