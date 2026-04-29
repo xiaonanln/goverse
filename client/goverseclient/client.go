@@ -603,10 +603,11 @@ func (c *Client) CreateObject(ctx context.Context, objectType, objectID string) 
 	return resp.Id, nil
 }
 
-// DeleteObject deletes an object by type + ID. The type is required so
-// the gate can run its CheckClientDelete lifecycle check; passing an
-// empty type currently logs a warning gate-side and skips the check
-// (v0.1 compat) but will be rejected outright in v0.3.
+// DeleteObject deletes an object by type + ID. The type is required:
+// the gate runs an advisory CheckClientDelete on it before forwarding.
+// The receiving node performs the authoritative authorization against
+// the object's real type — a mismatched claimed type is rejected
+// there.
 func (c *Client) DeleteObject(ctx context.Context, objectType, objectID string) error {
 	c.mu.RLock()
 	if c.closed {

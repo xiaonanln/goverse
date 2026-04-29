@@ -364,18 +364,18 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultDeleteTimeout)
 	defer cancel()
 
-	// Advisory early-reject using the client-supplied type. The gate
-	// can't trust this value (a malicious client can claim an allowed
-	// type and ask for an id that resolves to a protected object), so
-	// the authoritative authorization happens at the receiving node
-	// via cluster.DeleteClientObject → node.DeleteClientObject, where
-	// the lifecycle check runs against the object's real type.
-	// Empty type is accepted for backwards compatibility with v0.1
-	// clients (warn-and-skip; v0.3 will reject).
+	// Type is required: the gate runs an advisory early-reject via
+	// CheckClientDelete on it. The client-supplied value is untrusted
+	// (a malicious caller can claim an allowed type for an id that
+	// resolves to a protected object), so the authoritative
+	// authorization happens at the receiving node via
+	// cluster.DeleteClientObject → node.DeleteClientObject, where the
+	// lifecycle check runs against the object's real type.
+	if req.Type == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "DeleteObject requires type")
+	}
 	if s.lifecycleValidator != nil {
-		if req.Type == "" {
-			s.logger.Warnf("DeleteObject called without type for id=%s; skipping advisory lifecycle check (v0.1 compat)", req.Id)
-		} else if err := s.lifecycleValidator.CheckClientDelete(req.Type, req.Id); err != nil {
+		if err := s.lifecycleValidator.CheckClientDelete(req.Type, req.Id); err != nil {
 			s.logger.Warnf("Delete denied for client (advisory): type=%s, id=%s: %v", req.Type, req.Id, err)
 			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
 		}

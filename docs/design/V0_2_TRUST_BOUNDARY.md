@@ -223,51 +223,72 @@ and the least surprising for callers.
 // gate/proto/gate.proto
 message DeleteObjectRequest {
     string id = 1;
-    // type is required for v0.2's gate-side access check. Empty
-    // type is accepted for backwards compatibility but logs a
-    // warning and skips the check (v0.1 behaviour). v0.3 will
-    // reject empty type.
+    // type is required so the gate can run an advisory
+    // CheckClientDelete early-reject. Empty type is rejected.
     string type = 2;
 }
 ```
 
-HTTP route: `POST /api/v1/objects/delete/{type}/{id}` (new). The old
-route `POST /api/v1/objects/delete/{id}` keeps working as the legacy
-v0.1 path with the same warn-and-skip semantics.
+HTTP route: `POST /api/v1/objects/delete/{type}/{id}`. There is no
+legacy untyped fallback — the single-segment path is rejected with
+400.
+
+The gate's check is **advisory** because the client-supplied type is
+untrusted: a malicious caller can claim an allowed type for an id
+that resolves to a protected object. The authoritative authorization
+runs at the receiving node (`node.DeleteClientObject`) against the
+object's *real* type, fetched from the node's registry. Plumbing:
+
+```proto
+// proto/goverse.proto (inter-node service)
+message DeleteObjectRequest {
+    string id = 1;
+    bool from_client = 2; // gate-originated → node uses CheckClientDelete
+}
+```
 
 ### 5.3 Implementation
 
-- Regenerate `gate/proto/gate.pb.go`.
-- `gate/gateserver/gateserver.go:DeleteObject`: read `req.Type`,
-  call `CheckClientDelete(req.Type, req.Id)` if validator configured
-  and type is non-empty; warn-and-skip if empty.
-- `gate/gateserver/http_handler.go:handleDeleteObject`: register
-  the new `/api/v1/objects/delete/{type}/{id}` route alongside the
-  legacy one. Same access check.
+- Regenerate `gate/proto/gate.pb.go` and `proto/goverse.pb.go`.
+- `gate/gateserver/gateserver.go:DeleteObject`: reject empty
+  `req.Type` with `InvalidArgument`; otherwise run the advisory
+  `CheckClientDelete(req.Type, req.Id)` and forward via
+  `cluster.DeleteClientObject`.
+- `gate/gateserver/http_handler.go:handleDeleteObject`: require the
+  two-segment path; reject `/api/v1/objects/delete/{id}` with 400.
+  Same advisory check.
+- `cluster.DeleteClientObject(ctx, id)` is the gate-originated
+  counterpart to `cluster.DeleteObject(ctx, id)`. It tags the
+  inter-node RPC with `from_client=true`.
+- `node.DeleteClientObject(ctx, id)` is the gate-originated
+  counterpart to `node.DeleteObject(ctx, id)`. It runs
+  `CheckClientDelete` on `obj.Type()` from the registry.
+- `server.go:DeleteObject` dispatches between the two based on
+  `req.FromClient`.
 - `client/goverseclient/client.go` + Python client: `DeleteObject`
-  takes `type` (positional) — breaking-extending. v0.2 minor bump
-  is the right place for it.
+  takes `type` (positional). v0.2 minor bump.
 
 ### 5.4 Migration
 
-- Existing gRPC clients that send empty type: warn-once-per-deploy
-  log line so operators notice. Calls still succeed in v0.2.
-- Existing HTTP clients on `POST /api/v1/objects/delete/{id}`:
-  same — call succeeds, warn logged.
-- New code uses the typed path. v0.3 deprecates the legacy path.
+The wire format adds the `type` field on the gate-side
+`DeleteObjectRequest` and a `from_client` flag on the inter-node
+`DeleteObjectRequest`. v0.1 callers that omit type get rejected at
+the gate (gRPC `InvalidArgument`, HTTP 400) — they need to pass
+type when they upgrade.
 
 ### 5.5 Test strategy
 
-- New `TestHandleDeleteObject_LifecycleRejected` mirroring
-  `TestHandleCreateObject_LifecycleRejected` from PR #549.
-- gRPC variant in `gateserver_test.go`.
-- Backwards-compat test: empty type passes through with warn.
-
-### 5.6 Open decisions
-
-- **`[DECIDE]`** Should empty type *fail* in v0.2 or just warn? Default:
-  warn. Failing is right semantically, but breaks the upgrade path.
-  v0.3 fails.
+- `TestHandleDeleteObject_LifecycleRejected` — typed HTTP path with
+  INTERNAL DELETE rule returns 403.
+- `TestHandleDeleteObject_RejectsUntypedPath` — single-segment path
+  returns 400.
+- `TestDeleteObject_gRPC_RejectsEmptyType` — empty `req.Type` returns
+  `InvalidArgument`.
+- `TestDeleteObject_gRPC_LifecycleRejected` — gRPC handler returns
+  `PermissionDenied` for a denied lifecycle rule.
+- `TestNode_DeleteClientObject_UsesRealTypeForCheck` — node-level
+  pin that the from-client path authorizes against the object's
+  registry-resolved type, not anything the gate received.
 
 ---
 

@@ -671,10 +671,10 @@ class Client:
     ) -> None:
         """Delete an object by type + ID.
 
-        The type is required so the gate can run its CheckClientDelete
-        lifecycle check. Passing an empty string currently logs a warning
-        on the gate and skips the check (v0.1 compat) but will be
-        rejected outright in v0.3.
+        The type is required: the gate runs an advisory
+        CheckClientDelete on it before forwarding. The receiving node
+        performs the authoritative authorization against the object's
+        real type — a mismatched claimed type is rejected there.
 
         Args:
             object_type: The type of the object to delete.

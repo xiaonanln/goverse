@@ -56,44 +56,58 @@ func TestHandleDeleteObject_LifecycleRejected(t *testing.T) {
 	}
 }
 
-// TestHandleDeleteObject_LegacyUntypedSkipsCheck confirms that the
-// legacy POST /api/v1/objects/delete/{id} path keeps working in v0.2:
-// the lifecycle check is skipped (with a warning) instead of
-// rejecting, so v0.1 clients keep deleting until they upgrade to the
-// typed route. v0.3 will tighten this.
-//
-// Without a real cluster wired in, the call panics inside
-// s.cluster.DeleteObject — which is exactly the proof we need that
-// the untyped path bypassed the access check and got through to the
-// cluster path. recover() catches the panic so the test asserts the
-// validator's behaviour, not the cluster's.
-func TestHandleDeleteObject_LegacyUntypedSkipsCheck(t *testing.T) {
-	rules := []config.LifecycleRule{
-		// Even a default-deny rule must NOT block the legacy untyped
-		// path — empty type warns and skips, by design.
-		{Type: "Restricted", Lifecycle: "DELETE", Access: "REJECT"},
-	}
-	validator, err := config.NewLifecycleValidator(rules)
-	if err != nil {
-		t.Fatalf("NewLifecycleValidator: %v", err)
-	}
-
+// TestHandleDeleteObject_RejectsUntypedPath confirms the HTTP delete
+// route requires the typed form /api/v1/objects/delete/{type}/{id}.
+// The single-segment path is rejected with 400 — type is required so
+// the gate has the input it needs for its advisory check.
+func TestHandleDeleteObject_RejectsUntypedPath(t *testing.T) {
 	s := &GateServer{
-		logger:             logger.NewLogger("test-gate"),
-		lifecycleValidator: validator,
+		logger: logger.NewLogger("test-gate"),
 	}
 
 	req := httptest.NewRequest(http.MethodPost,
 		"/api/v1/objects/delete/some-id", nil)
 	w := httptest.NewRecorder()
 
-	defer func() {
-		_ = recover()
-		if w.Code == http.StatusForbidden {
-			t.Fatalf("legacy untyped delete unexpectedly produced 403; should warn-and-skip the lifecycle check")
-		}
-	}()
 	s.handleDeleteObject(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400 Bad Request", w.Code)
+	}
+	respBody, _ := io.ReadAll(w.Body)
+	var errResp HTTPErrorResponse
+	if err := json.Unmarshal(respBody, &errResp); err != nil {
+		t.Fatalf("decode error response: %v\nbody=%s", err, string(respBody))
+	}
+	if errResp.Code != "INVALID_PATH" {
+		t.Fatalf("error code = %q; want INVALID_PATH. body=%s", errResp.Code, string(respBody))
+	}
+}
+
+// TestDeleteObject_gRPC_RejectsEmptyType pins that the gRPC handler
+// rejects requests without a type field — counterpart to the HTTP
+// route's INVALID_PATH rejection. The receiving node still does the
+// authoritative check on real type; the gate just refuses to forward
+// without the second arg its advisory check needs.
+func TestDeleteObject_gRPC_RejectsEmptyType(t *testing.T) {
+	s := &GateServer{
+		config: &GateServerConfig{DefaultDeleteTimeout: 5 * time.Second},
+		logger: logger.NewLogger("test-gate"),
+	}
+
+	_, err := s.DeleteObject(context.Background(), &gate_pb.DeleteObjectRequest{
+		Id: "some-id",
+	})
+	if err == nil {
+		t.Fatalf("DeleteObject succeeded with empty type; want InvalidArgument")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("error is not a gRPC status: %v", err)
+	}
+	if st.Code() != codes.InvalidArgument {
+		t.Fatalf("status code = %v; want InvalidArgument", st.Code())
+	}
 }
 
 // TestDeleteObject_gRPC_LifecycleRejected pins the gate's gRPC

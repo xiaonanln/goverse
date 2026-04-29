@@ -215,16 +215,23 @@ func TestHandleDeleteObject_PathParsing(t *testing.T) {
 		{
 			name:           "method not allowed - GET",
 			method:         http.MethodGet,
-			path:           "/api/v1/objects/delete/obj-1",
+			path:           "/api/v1/objects/delete/Type/obj-1",
 			expectedStatus: http.StatusMethodNotAllowed,
 			expectedCode:   "METHOD_NOT_ALLOWED",
 		},
 		{
-			name:           "empty ID",
+			name:           "missing type and id",
 			method:         http.MethodPost,
 			path:           "/api/v1/objects/delete/",
 			expectedStatus: http.StatusBadRequest,
-			expectedCode:   "INVALID_PARAMETERS",
+			expectedCode:   "INVALID_PATH",
+		},
+		{
+			name:           "missing id (single segment)",
+			method:         http.MethodPost,
+			path:           "/api/v1/objects/delete/Type",
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   "INVALID_PATH",
 		},
 	}
 

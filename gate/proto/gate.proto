@@ -42,10 +42,9 @@ message CreateObjectResponse {
 
 message DeleteObjectRequest {
   string id = 1;
-  // type is required for the gate's CheckClientDelete access check.
-  // For backwards compatibility with v0.1 clients an empty type is
-  // accepted but logs a warning and skips the check; v0.3 will reject
-  // empty type outright.
+  // type is required so the gate can run its advisory
+  // CheckClientDelete early-reject. Empty type is rejected at the
+  // gate.
   string type = 2;
 }
 
