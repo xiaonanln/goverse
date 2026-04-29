@@ -364,6 +364,18 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultDeleteTimeout)
 	defer cancel()
 
+	// Check lifecycle rules for DELETE if a lifecycle validator is
+	// configured. Empty type is accepted for backwards compatibility
+	// with v0.1 clients but skips the check (v0.3 will reject).
+	if s.lifecycleValidator != nil {
+		if req.Type == "" {
+			s.logger.Warnf("DeleteObject called without type for id=%s; skipping lifecycle check (v0.1 compat)", req.Id)
+		} else if err := s.lifecycleValidator.CheckClientDelete(req.Type, req.Id); err != nil {
+			s.logger.Warnf("Delete denied for client: type=%s, id=%s: %v", req.Type, req.Id, err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
+
 	// Call the cluster to delete the object
 	err := s.cluster.DeleteObject(ctx, req.Id)
 	if err != nil {

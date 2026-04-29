@@ -23,7 +23,7 @@ Example usage:
     response = client.call_object("Counter", "Counter-myid", "Increment", request)
 
     # Delete the object
-    client.delete_object("Counter-myid")
+    client.delete_object("Counter", "Counter-myid")
 
     # Close the client
     client.close()

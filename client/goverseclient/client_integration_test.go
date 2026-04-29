@@ -383,7 +383,7 @@ func TestClientIntegration(t *testing.T) {
 		t.Logf("Created object %s", objID)
 
 		// Delete the object via the client
-		err = client.DeleteObject(ctx, objID)
+		err = client.DeleteObject(ctx, "TestIntegrationObject", objID)
 		if err != nil {
 			t.Fatalf("DeleteObject failed: %v", err)
 		}
@@ -420,7 +420,7 @@ func TestClientIntegration(t *testing.T) {
 		t.Logf("Called Echo: %s", echoResp.Fields["message"].GetStringValue())
 
 		// Delete
-		err = client.DeleteObject(ctx, objID)
+		err = client.DeleteObject(ctx, "TestIntegrationObject", objID)
 		if err != nil {
 			t.Fatalf("DeleteObject failed: %v", err)
 		}
@@ -606,7 +606,7 @@ func TestClientIntegrationMultipleGates(t *testing.T) {
 			objID, echoResp.Fields["message"].GetStringValue())
 
 		// Delete the object via client 2
-		err = client2.DeleteObject(ctx, objID)
+		err = client2.DeleteObject(ctx, "TestIntegrationObject", objID)
 		if err != nil {
 			t.Fatalf("DeleteObject via client 2 failed: %v", err)
 		}

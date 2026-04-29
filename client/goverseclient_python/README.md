@@ -56,7 +56,7 @@ response_any.Unpack(response)
 print(f"Counter value: {response.value}")
 
 # Delete the object
-client.delete_object("Counter-myid")
+client.delete_object("Counter", "Counter-myid")
 
 # Close the client
 client.close()
@@ -85,7 +85,7 @@ Client(addresses: List[str], options: Optional[ClientOptions] = None)
 - `reconnect(timeout: Optional[float] = None)` - Reconnect to a gate server
 - `wait_for_connection(timeout: float = 30.0)` - Wait until connected or timeout
 - `create_object(object_type: str, object_id: str, timeout: Optional[float] = None) -> str` - Create a new object
-- `delete_object(object_id: str, timeout: Optional[float] = None)` - Delete an object
+- `delete_object(object_type: str, object_id: str, timeout: Optional[float] = None)` - Delete an object
 - `call_object(object_type: str, object_id: str, method: str, request: Optional[Message] = None, timeout: Optional[float] = None) -> Optional[Any]` - Call a method on an object
 - `call_object_any(object_type: str, object_id: str, method: str, request: Optional[Any] = None, timeout: Optional[float] = None) -> Optional[Any]` - Call a method using protobuf Any directly
 

@@ -603,8 +603,11 @@ func (c *Client) CreateObject(ctx context.Context, objectType, objectID string) 
 	return resp.Id, nil
 }
 
-// DeleteObject deletes an object by its ID.
-func (c *Client) DeleteObject(ctx context.Context, objectID string) error {
+// DeleteObject deletes an object by type + ID. The type is required so
+// the gate can run its CheckClientDelete lifecycle check; passing an
+// empty type currently logs a warning gate-side and skips the check
+// (v0.1 compat) but will be rejected outright in v0.3.
+func (c *Client) DeleteObject(ctx context.Context, objectType, objectID string) error {
 	c.mu.RLock()
 	if c.closed {
 		c.mu.RUnlock()
@@ -625,7 +628,8 @@ func (c *Client) DeleteObject(ctx context.Context, objectID string) error {
 	}
 
 	req := &gate_pb.DeleteObjectRequest{
-		Id: objectID,
+		Type: objectType,
+		Id:   objectID,
 	}
 
 	_, err := client.DeleteObject(ctx, req)

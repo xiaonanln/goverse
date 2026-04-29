@@ -164,7 +164,7 @@ func TestClientClose(t *testing.T) {
 		t.Errorf("CreateObject() after close error = %v, want %v", err, ErrClientClosed)
 	}
 
-	err = client.DeleteObject(ctx, "ID")
+	err = client.DeleteObject(ctx, "Type", "ID")
 	if err != ErrClientClosed {
 		t.Errorf("DeleteObject() after close error = %v, want %v", err, ErrClientClosed)
 	}
@@ -189,7 +189,7 @@ func TestClientNotConnected(t *testing.T) {
 		t.Errorf("CreateObject() when not connected error = %v, want %v", err, ErrNotConnected)
 	}
 
-	err = client.DeleteObject(ctx, "ID")
+	err = client.DeleteObject(ctx, "Type", "ID")
 	if err != ErrNotConnected {
 		t.Errorf("DeleteObject() when not connected error = %v, want %v", err, ErrNotConnected)
 	}

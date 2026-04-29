@@ -665,12 +665,19 @@ class Client:
 
     def delete_object(
         self,
+        object_type: str,
         object_id: str,
         timeout: Optional[float] = None,
     ) -> None:
-        """Delete an object by its ID.
+        """Delete an object by type + ID.
+
+        The type is required so the gate can run its CheckClientDelete
+        lifecycle check. Passing an empty string currently logs a warning
+        on the gate and skips the check (v0.1 compat) but will be
+        rejected outright in v0.3.
 
         Args:
+            object_type: The type of the object to delete.
             object_id: The ID of the object to delete.
             timeout: Call timeout in seconds. If None, uses the default.
 
@@ -688,7 +695,7 @@ class Client:
 
         timeout = timeout or self._options.call_timeout
 
-        req = gate_pb2.DeleteObjectRequest(id=object_id)
+        req = gate_pb2.DeleteObjectRequest(type=object_type, id=object_id)
 
         stub.DeleteObject(req, timeout=timeout)
 

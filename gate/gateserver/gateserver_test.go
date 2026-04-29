@@ -248,7 +248,8 @@ func TestGateServerRPCMethods(t *testing.T) {
 
 	t.Run("DeleteObject", func(t *testing.T) {
 		req := &gate_pb.DeleteObjectRequest{
-			Id: "test-object-1",
+			Type: "TestObj",
+			Id:   "test-object-1",
 		}
 
 		// This will return "not implemented" error from the gate

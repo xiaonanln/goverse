@@ -274,20 +274,43 @@ func (s *GateServer) handleCreateObject(w http.ResponseWriter, r *http.Request) 
 	s.writeJSON(w, http.StatusOK, httpResp)
 }
 
-// handleDeleteObject handles HTTP POST /api/v1/objects/delete/{id}
+// handleDeleteObject handles HTTP POST /api/v1/objects/delete/{type}/{id}
+// (typed, performs CheckClientDelete) and the legacy POST
+// /api/v1/objects/delete/{id} (untyped, warn-and-skip for v0.1
+// compatibility — v0.3 will reject the untyped form).
 func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST method is allowed")
 		return
 	}
 
-	// Parse URL path: /api/v1/objects/delete/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/objects/delete/")
-	objID := strings.TrimSpace(path)
+	parts := strings.SplitN(path, "/", 2)
 
-	if objID == "" || strings.Contains(objID, "/") {
-		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Object ID must not be empty and must not contain slashes")
+	var objType, objID string
+	switch {
+	case len(parts) == 2 && parts[0] != "" && parts[1] != "":
+		objType, objID = parts[0], parts[1]
+	case len(parts) == 1 && parts[0] != "":
+		objID = parts[0]
+	default:
+		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Path must be /api/v1/objects/delete/{type}/{id} or /api/v1/objects/delete/{id}")
 		return
+	}
+
+	if strings.Contains(objID, "/") {
+		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Object ID must not contain slashes")
+		return
+	}
+
+	if s.lifecycleValidator != nil {
+		if objType == "" {
+			s.logger.Warnf("DeleteObject HTTP called without type for id=%s; skipping lifecycle check (v0.1 compat)", objID)
+		} else if err := s.lifecycleValidator.CheckClientDelete(objType, objID); err != nil {
+			s.logger.Warnf("Delete denied for HTTP client: type=%s, id=%s: %v", objType, objID, err)
+			s.writeError(w, http.StatusForbidden, "ACCESS_DENIED", err.Error())
+			return
+		}
 	}
 
 	// Create context
