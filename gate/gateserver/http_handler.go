@@ -303,11 +303,15 @@ func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Advisory early-reject using the client-supplied type. See
+	// gateserver.go:DeleteObject — the gate can't trust the claimed
+	// type, so the authoritative check runs at the receiving node
+	// against the object's real type.
 	if s.lifecycleValidator != nil {
 		if objType == "" {
-			s.logger.Warnf("DeleteObject HTTP called without type for id=%s; skipping lifecycle check (v0.1 compat)", objID)
+			s.logger.Warnf("DeleteObject HTTP called without type for id=%s; skipping advisory lifecycle check (v0.1 compat)", objID)
 		} else if err := s.lifecycleValidator.CheckClientDelete(objType, objID); err != nil {
-			s.logger.Warnf("Delete denied for HTTP client: type=%s, id=%s: %v", objType, objID, err)
+			s.logger.Warnf("Delete denied for HTTP client (advisory): type=%s, id=%s: %v", objType, objID, err)
 			s.writeError(w, http.StatusForbidden, "ACCESS_DENIED", err.Error())
 			return
 		}
@@ -316,8 +320,9 @@ func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) 
 	// Create context
 	ctx := r.Context()
 
-	// Delete the object via cluster
-	err := s.cluster.DeleteObject(ctx, objID)
+	// Forward as a client-originated delete so the receiving node uses
+	// CheckClientDelete with the real object type.
+	err := s.cluster.DeleteClientObject(ctx, objID)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return

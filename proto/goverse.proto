@@ -47,6 +47,12 @@ message CreateObjectResponse {
 
 message DeleteObjectRequest {
   string id = 1;
+  // from_client signals that the call originated from a Gate-facing
+  // client (rather than a node-to-node hop). The receiving node uses
+  // it to pick CheckClientDelete vs CheckNodeDelete with the object's
+  // real type — the type the gate received from the client is
+  // untrusted, so authorization can't be done at the gate.
+  bool from_client = 2;
 }
 
 message DeleteObjectResponse {
