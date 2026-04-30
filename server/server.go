@@ -532,8 +532,8 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 	}
 
 	var err error
-	if req.GetFromClient() {
-		err = server.Node.DeleteClientObject(ctx, req.GetId())
+	if claimedType := req.GetType(); claimedType != "" {
+		err = server.Node.DeleteClientObject(ctx, claimedType, req.GetId())
 	} else {
 		err = server.Node.DeleteObject(ctx, req.GetId())
 	}

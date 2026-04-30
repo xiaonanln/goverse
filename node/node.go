@@ -793,25 +793,30 @@ func (node *Node) destroyObject(id string) {
 // Returns error only if persistence deletion fails or lifecycle rules deny the deletion.
 //
 // This entry point is for node-internal callers (object-to-object,
-// runtime cleanup); the lifecycle check uses CheckNodeDelete. For
-// gate-originated deletions use DeleteClientObject so the check uses
-// CheckClientDelete with the object's real type — gate-claimed type
-// is untrusted and authorization can't be done at the gate.
+// runtime cleanup); the lifecycle check uses CheckNodeDelete on the
+// object's real type. Gate-originated deletes go through
+// DeleteClientObject which threads the client-claimed type for spoof
+// verification.
 func (node *Node) DeleteObject(ctx context.Context, id string) error {
-	return node.deleteObjectImpl(ctx, id, false /* fromClient */)
+	return node.deleteObjectImpl(ctx, id, "" /* claimedType */)
 }
 
 // DeleteClientObject is the gate-originated counterpart to
-// DeleteObject. It's identical except the lifecycle check uses
-// CheckClientDelete with the real type fetched from this node's
-// object registry — closing the type-spoof gap where a client could
-// claim an allowed type to bypass an INTERNAL/REJECT rule on the
-// real type.
-func (node *Node) DeleteClientObject(ctx context.Context, id string) error {
-	return node.deleteObjectImpl(ctx, id, true /* fromClient */)
+// DeleteObject. claimedType is the type the gate received from the
+// client; the node verifies it matches the object's real type before
+// proceeding. Mismatch is rejected — closing the spoof gap where a
+// client could claim an allowed type for an id that resolves to a
+// protected object. The gate's CheckClientDelete on claimedType is
+// authoritative for authorization; this layer handles identity
+// verification only.
+func (node *Node) DeleteClientObject(ctx context.Context, claimedType, id string) error {
+	if claimedType == "" {
+		return fmt.Errorf("DeleteClientObject requires a non-empty claimed type")
+	}
+	return node.deleteObjectImpl(ctx, id, claimedType)
 }
 
-func (node *Node) deleteObjectImpl(ctx context.Context, id string, fromClient bool) error {
+func (node *Node) deleteObjectImpl(ctx context.Context, id, claimedType string) error {
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -839,20 +844,22 @@ func (node *Node) deleteObjectImpl(ctx context.Context, id string, fromClient bo
 		return nil
 	}
 
-	// Check lifecycle rules for DELETE if lifecycle validator is configured.
-	// We do this here because we now know the object's real type. For
-	// gate-originated calls, that real type is the only trustworthy
-	// input — the gate itself can't authorize on the client-supplied
-	// type without the spoof gap.
-	if node.lifecycleValidator != nil {
-		var checkErr error
-		if fromClient {
-			checkErr = node.lifecycleValidator.CheckClientDelete(obj.Type(), id)
-		} else {
-			checkErr = node.lifecycleValidator.CheckNodeDelete(obj.Type(), id)
+	// Two-layer authorization for DELETE:
+	//   * Gate-originated path (claimedType non-empty): the gate has
+	//     already run CheckClientDelete on the client-supplied type;
+	//     here we just verify that type matches the object's real
+	//     type so a spoofed claim can't bypass the rule. If it
+	//     matches, we trust the gate's decision and proceed.
+	//   * Node-internal path (claimedType empty): no gate involved,
+	//     so we run CheckNodeDelete on the real type ourselves.
+	if claimedType != "" {
+		if obj.Type() != claimedType {
+			node.logger.Warnf("Delete rejected: claimed type=%s does not match real type=%s for id=%s", claimedType, obj.Type(), id)
+			return fmt.Errorf("delete rejected: type mismatch for %s (claimed %s, real %s)", id, claimedType, obj.Type())
 		}
-		if checkErr != nil {
-			node.logger.Warnf("Delete denied by lifecycle rules: type=%s, id=%s, fromClient=%v: %v", obj.Type(), id, fromClient, checkErr)
+	} else if node.lifecycleValidator != nil {
+		if err := node.lifecycleValidator.CheckNodeDelete(obj.Type(), id); err != nil {
+			node.logger.Warnf("Delete denied by lifecycle rules: type=%s, id=%s: %v", obj.Type(), id, err)
 			return fmt.Errorf("delete denied for %s/%s", obj.Type(), id)
 		}
 	}

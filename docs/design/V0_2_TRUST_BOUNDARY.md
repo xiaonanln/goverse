@@ -233,17 +233,23 @@ HTTP route: `POST /api/v1/objects/delete/{type}/{id}`. There is no
 legacy untyped fallback — the single-segment path is rejected with
 400.
 
-The gate's check is **advisory** because the client-supplied type is
-untrusted: a malicious caller can claim an allowed type for an id
-that resolves to a protected object. The authoritative authorization
-runs at the receiving node (`node.DeleteClientObject`) against the
-object's *real* type, fetched from the node's registry. Plumbing:
+Authorization is split across the gate and the receiving node:
+
+- **Gate** runs `CheckClientDelete` on the client-supplied type. This
+  is the authoritative authorization decision — a request the gate
+  rejects never reaches the node.
+- **Node** verifies the client-claimed type matches the object's
+  real type fetched from its registry, and rejects mismatches. This
+  closes the spoof gap where a client could claim an allowed type
+  for an id that resolves to a protected object.
+
+Together: gate authorizes, node verifies identity. Plumbing:
 
 ```proto
 // proto/goverse.proto (inter-node service)
 message DeleteObjectRequest {
     string id = 1;
-    bool from_client = 2; // gate-originated → node uses CheckClientDelete
+    string type = 2; // claimed type for spoof verification at node
 }
 ```
 
@@ -251,28 +257,29 @@ message DeleteObjectRequest {
 
 - Regenerate `gate/proto/gate.pb.go` and `proto/goverse.pb.go`.
 - `gate/gateserver/gateserver.go:DeleteObject`: reject empty
-  `req.Type` with `InvalidArgument`; otherwise run the advisory
+  `req.Type` with `InvalidArgument`; otherwise run
   `CheckClientDelete(req.Type, req.Id)` and forward via
   `cluster.DeleteClientObject`.
 - `gate/gateserver/http_handler.go:handleDeleteObject`: require the
   two-segment path; reject `/api/v1/objects/delete/{id}` with 400.
-  Same advisory check.
-- `cluster.DeleteClientObject(ctx, id)` is the gate-originated
-  counterpart to `cluster.DeleteObject(ctx, id)`. It tags the
-  inter-node RPC with `from_client=true`.
-- `node.DeleteClientObject(ctx, id)` is the gate-originated
-  counterpart to `node.DeleteObject(ctx, id)`. It runs
-  `CheckClientDelete` on `obj.Type()` from the registry.
+  Same authorization check.
+- `cluster.DeleteClientObject(ctx, claimedType, id)` is the
+  gate-originated counterpart to `cluster.DeleteObject(ctx, id)`. It
+  threads the claimed type through the inter-node RPC.
+- `node.DeleteClientObject(ctx, claimedType, id)` is the
+  gate-originated counterpart to `node.DeleteObject(ctx, id)`. It
+  verifies `obj.Type() == claimedType` and rejects mismatches; on
+  match it skips `CheckNodeDelete` because the gate already
+  authorized.
 - `server.go:DeleteObject` dispatches between the two based on
-  `req.FromClient`.
+  whether `req.Type` is empty.
 - `client/goverseclient/client.go` + Python client: `DeleteObject`
   takes `type` (positional). v0.2 minor bump.
 
 ### 5.4 Migration
 
-The wire format adds the `type` field on the gate-side
-`DeleteObjectRequest` and a `from_client` flag on the inter-node
-`DeleteObjectRequest`. v0.1 callers that omit type get rejected at
+Both `DeleteObjectRequest` messages (gate-facing and inter-node)
+gain a `type` field. v0.1 callers that omit type get rejected at
 the gate (gRPC `InvalidArgument`, HTTP 400) — they need to pass
 type when they upgrade.
 
@@ -286,9 +293,11 @@ type when they upgrade.
   `InvalidArgument`.
 - `TestDeleteObject_gRPC_LifecycleRejected` — gRPC handler returns
   `PermissionDenied` for a denied lifecycle rule.
-- `TestNode_DeleteClientObject_UsesRealTypeForCheck` — node-level
-  pin that the from-client path authorizes against the object's
-  registry-resolved type, not anything the gate received.
+- `TestNode_DeleteClientObject_RejectsTypeSpoof` — node-level pin
+  that a claimed type which doesn't match the registry type is
+  rejected, even if the gate would have authorized it.
+- `TestNode_DeleteClientObject_RequiresClaimedType` — pins that
+  the gate-originated path always carries a claimed type.
 
 ---
 

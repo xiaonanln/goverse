@@ -364,26 +364,26 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultDeleteTimeout)
 	defer cancel()
 
-	// Type is required: the gate runs an advisory early-reject via
-	// CheckClientDelete on it. The client-supplied value is untrusted
-	// (a malicious caller can claim an allowed type for an id that
-	// resolves to a protected object), so the authoritative
-	// authorization happens at the receiving node via
-	// cluster.DeleteClientObject → node.DeleteClientObject, where the
-	// lifecycle check runs against the object's real type.
+	// Type is required so the gate can authorize the delete via
+	// CheckClientDelete on the client-supplied type. That value is
+	// not trusted on its own — a malicious caller can claim an
+	// allowed type for an id that resolves to a protected object —
+	// so the claim is forwarded to the node, which verifies it
+	// against the object's real type and rejects mismatches.
+	// Together: gate authorizes, node verifies identity.
 	if req.Type == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "DeleteObject requires type")
 	}
 	if s.lifecycleValidator != nil {
 		if err := s.lifecycleValidator.CheckClientDelete(req.Type, req.Id); err != nil {
-			s.logger.Warnf("Delete denied for client (advisory): type=%s, id=%s: %v", req.Type, req.Id, err)
+			s.logger.Warnf("Delete denied for client: type=%s, id=%s: %v", req.Type, req.Id, err)
 			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
 		}
 	}
 
-	// Forward as a client-originated delete so the receiving node uses
-	// CheckClientDelete with the real object type.
-	err := s.cluster.DeleteClientObject(ctx, req.Id)
+	// Forward the claimed type so the node can verify it matches
+	// the object's real type before deleting.
+	err := s.cluster.DeleteClientObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, err
 	}
