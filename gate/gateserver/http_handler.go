@@ -314,7 +314,7 @@ func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) 
 
 	// Forward the claimed type so the node can verify it matches the
 	// object's real type before deleting.
-	err := s.cluster.DeleteClientObject(ctx, objType, objID)
+	err := s.cluster.DeleteObject(ctx, objType, objID)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return

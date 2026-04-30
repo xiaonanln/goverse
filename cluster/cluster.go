@@ -775,42 +775,22 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 	}
 }
 
-// DeleteObject deletes an object from the cluster on behalf of a
-// node-internal caller (object-to-object, runtime cleanup). It runs
-// CheckNodeDelete on the supplied type, then routes the deletion to
-// whichever node hosts the object. For gates the deletion is
-// performed synchronously; for nodes asynchronously to prevent
-// deadlocks when called from within object methods.
+// DeleteObject deletes an object from the cluster. It determines
+// which node hosts the object and routes the deletion request
+// accordingly. For gates the deletion is performed synchronously;
+// for nodes asynchronously to prevent deadlocks when called from
+// within object methods.
 //
-// Gate-originated client deletions go through DeleteClientObject
-// instead; the gate has its own CheckClientDelete authorization and
-// must not be re-checked with node semantics here (that would
-// incorrectly block EXTERNAL DELETE rules).
-func (c *Cluster) DeleteObject(ctx context.Context, objType, objID string) error {
+// objType is forwarded to the receiving node, which verifies it
+// matches the object's real type (rejecting spoofed claims) and
+// then runs CheckNodeDelete. Authorization for client-originated
+// deletes is the gate's responsibility (CheckClientDelete) before
+// this routing layer is invoked.
+func (c *Cluster) DeleteObject(ctx context.Context, objType, objID string) (err error) {
 	if objType == "" {
 		return fmt.Errorf("DeleteObject requires a non-empty type")
 	}
-	if c.node != nil {
-		if validator := c.node.LifecycleValidator(); validator != nil {
-			if err := validator.CheckNodeDelete(objType, objID); err != nil {
-				c.logger.Warnf("%s - Delete denied by lifecycle rules: type=%s, id=%s: %v", c, objType, objID, err)
-				return fmt.Errorf("delete denied for %s/%s", objType, objID)
-			}
-		}
-	}
 	return c.deleteObjectImpl(ctx, objType, objID)
-}
-
-// DeleteClientObject is the gate-originated counterpart to
-// DeleteObject. The gate has already run CheckClientDelete on the
-// client-supplied type, so this layer skips the lifecycle check and
-// only forwards. The receiving node verifies the claimed type
-// against the object's real type, closing the spoof gap.
-func (c *Cluster) DeleteClientObject(ctx context.Context, claimedType, objID string) error {
-	if claimedType == "" {
-		return fmt.Errorf("DeleteClientObject requires a non-empty claimed type")
-	}
-	return c.deleteObjectImpl(ctx, claimedType, objID)
 }
 
 func (c *Cluster) deleteObjectImpl(ctx context.Context, objType, objID string) (err error) {

@@ -233,23 +233,30 @@ HTTP route: `POST /api/v1/objects/delete/{type}/{id}`. There is no
 legacy untyped fallback — the single-segment path is rejected with
 400.
 
-Authorization is split across the gate and the receiving node:
+Authorization mirrors `CreateObject`: the gate runs the client-side
+check, the node runs the node-side check. Layered:
 
-- **Gate** runs `CheckClientDelete` on the client-supplied type. This
-  is the authoritative authorization decision — a request the gate
-  rejects never reaches the node.
-- **Node** verifies the client-claimed type matches the object's
-  real type fetched from its registry, and rejects mismatches. This
-  closes the spoof gap where a client could claim an allowed type
-  for an id that resolves to a protected object.
+- **Gate** runs `CheckClientDelete` on the client-supplied type
+  before forwarding. A request the gate rejects never reaches the
+  node.
+- **Node** verifies the supplied type matches the object's real
+  type from its registry, rejecting mismatches (closes the spoof
+  gap). On match it then runs `CheckNodeDelete` on the (now
+  trustworthy) type — symmetric with `node.createObject` running
+  `CheckNodeCreate`.
 
-Together: gate authorizes, node verifies identity. Plumbing:
+Note: `EXTERNAL DELETE` rules have the same known limitation as
+`EXTERNAL CREATE` — client-originated calls pass the gate's
+`CheckClient*` but get re-checked against `CheckNode*` at the
+destination, which fails for `EXTERNAL`. Future work can plumb a
+caller-origin signal symmetrically for both create and delete; out
+of scope for v0.2.
 
 ```proto
 // proto/goverse.proto (inter-node service)
 message DeleteObjectRequest {
     string id = 1;
-    string type = 2; // claimed type for spoof verification at node
+    string type = 2; // forwarded to the node for spoof verification
 }
 ```
 
@@ -259,22 +266,17 @@ message DeleteObjectRequest {
 - `gate/gateserver/gateserver.go:DeleteObject`: reject empty
   `req.Type` with `InvalidArgument`; otherwise run
   `CheckClientDelete(req.Type, req.Id)` and forward via
-  `cluster.DeleteClientObject`.
+  `cluster.DeleteObject`.
 - `gate/gateserver/http_handler.go:handleDeleteObject`: require the
   two-segment path; reject `/api/v1/objects/delete/{id}` with 400.
   Same authorization check.
-- `cluster.DeleteObject(ctx, type, id)` is the entry point for
-  node-internal callers. It runs `CheckNodeDelete` against the
-  supplied type via the local node's validator before routing.
-- `cluster.DeleteClientObject(ctx, type, id)` is the gate-originated
-  counterpart. The gate has already authorized via
-  `CheckClientDelete`, so this layer skips the lifecycle check and
-  just routes.
-- `node.DeleteObject(ctx, type, id)` is the single node-side entry
-  point. It verifies `obj.Type() == type` and rejects mismatches.
-  No lifecycle check at this layer — authorization belongs to the
-  caller (gate or `cluster.DeleteObject`).
-- `server.go:DeleteObject` is one line: forward `req.GetType()` and
+- `cluster.DeleteObject(ctx, type, id)` is the only cluster-side
+  delete entry point. It just routes; lifecycle authorization lives
+  at the gate (for client deletes) or at the node (for both).
+- `node.DeleteObject(ctx, type, id)` verifies `obj.Type() == type`,
+  rejects mismatches, then runs `CheckNodeDelete` on the matched
+  type — mirroring `createObject`'s `CheckNodeCreate`.
+- `server.go:DeleteObject` forwards `req.GetType()` and
   `req.GetId()` straight to `node.DeleteObject`.
 - `goverseapi.DeleteObject(ctx, type, id)` takes `type` as a new
   positional argument; calls `cluster.DeleteObject`.

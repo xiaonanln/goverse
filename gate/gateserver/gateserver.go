@@ -383,7 +383,7 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 
 	// Forward the claimed type so the node can verify it matches
 	// the object's real type before deleting.
-	err := s.cluster.DeleteClientObject(ctx, req.Type, req.Id)
+	err := s.cluster.DeleteObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, err
 	}

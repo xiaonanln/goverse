@@ -220,14 +220,6 @@ func (node *Node) SetLifecycleValidator(lv *config.LifecycleValidator) {
 	node.lifecycleValidator = lv
 }
 
-// LifecycleValidator returns the lifecycle validator configured on
-// this node, or nil if none is set. Used by the surrounding cluster
-// to run authorization checks at the originating side before
-// forwarding a delete to the destination node.
-func (node *Node) LifecycleValidator() *config.LifecycleValidator {
-	return node.lifecycleValidator
-}
-
 // SetClusterInfoProvider sets the consolidated cluster info provider for the node.
 // This is the preferred way to provide cluster information to the node's InspectorManager.
 // Must be called during initialization before the node is used concurrently.
@@ -798,14 +790,15 @@ func (node *Node) destroyObject(id string) {
 // This is a public method that properly handles both memory cleanup and persistence deletion.
 // This operation is idempotent - if the object doesn't exist, no error is returned.
 // If the node is stopped, this operation succeeds since all objects are already cleared.
+// Returns error only if persistence deletion fails or lifecycle rules deny the deletion.
 //
 // claimedType is the type the caller asserts the object has. The
 // node verifies it matches the object's real type before deleting
 // and rejects mismatches — closing the spoof gap where a client
 // could claim an allowed type for an id that resolves to a
-// protected object. Lifecycle authorization (CheckClientDelete /
-// CheckNodeDelete) is the responsibility of the caller (gate or
-// cluster.DeleteObject); this layer is identity verification only.
+// protected object. After the type matches, lifecycle rules are
+// enforced via CheckNodeDelete on that type, mirroring how
+// CreateObject runs CheckNodeCreate at this layer.
 func (node *Node) DeleteObject(ctx context.Context, claimedType, id string) error {
 	if claimedType == "" {
 		return fmt.Errorf("DeleteObject requires a non-empty type")
@@ -841,6 +834,13 @@ func (node *Node) DeleteObject(ctx context.Context, claimedType, id string) erro
 	if obj.Type() != claimedType {
 		node.logger.Warnf("Delete rejected: claimed type=%s does not match real type=%s for id=%s", claimedType, obj.Type(), id)
 		return fmt.Errorf("delete rejected: type mismatch for %s (claimed %s, real %s)", id, claimedType, obj.Type())
+	}
+
+	if node.lifecycleValidator != nil {
+		if err := node.lifecycleValidator.CheckNodeDelete(obj.Type(), id); err != nil {
+			node.logger.Warnf("Delete denied by lifecycle rules: type=%s, id=%s: %v", obj.Type(), id, err)
+			return fmt.Errorf("delete denied for %s/%s", obj.Type(), id)
+		}
 	}
 
 	// If persistence provider is configured, delete from persistence while holding the lock
