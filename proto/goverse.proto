@@ -47,13 +47,11 @@ message CreateObjectResponse {
 
 message DeleteObjectRequest {
   string id = 1;
-  // type carries the object type the gate received from the client.
-  // When non-empty (gate-originated path) the receiving node verifies
-  // it matches the object's real type and rejects mismatches —
-  // closing the spoof gap where a client could claim an allowed type
-  // for an id that resolves to a protected object. When empty
-  // (node-internal path) the node falls back to its own
-  // CheckNodeDelete on the real type.
+  // type is the object type the caller asserts. The receiving node
+  // verifies it matches the object's real type and rejects
+  // mismatches — closing the spoof gap where a client could claim an
+  // allowed type for an id that resolves to a protected object.
+  // Required.
   string type = 2;
 }
 

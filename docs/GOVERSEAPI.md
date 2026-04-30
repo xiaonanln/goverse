@@ -217,13 +217,14 @@ id, err := goverseapi.CreateObject(ctx, "Counter", objID)
 ### DeleteObject
 
 ```go
-func DeleteObject(ctx context.Context, objID string) error
+func DeleteObject(ctx context.Context, objType, objID string) error
 ```
 
-Deletes an object from the cluster.
+Deletes an object from the cluster. The receiving node verifies the
+supplied type matches the object's real type and rejects mismatches.
 
 ```go
-err := goverseapi.DeleteObject(ctx, "Counter-my-counter")
+err := goverseapi.DeleteObject(ctx, "Counter", "Counter-my-counter")
 ```
 
 ---

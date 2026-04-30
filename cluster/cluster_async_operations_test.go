@@ -225,7 +225,7 @@ func TestAsyncOperationsReturnImmediately(t *testing.T) {
 
 	// Measure time for DeleteObject to return
 	start = time.Now()
-	err = cluster1.DeleteObject(ctx, objID)
+	err = cluster1.DeleteObject(ctx, "AsyncTestObject", objID)
 	duration = time.Since(start)
 
 	if err != nil {
@@ -259,7 +259,7 @@ func (o *AsyncTestObject) CreateAnotherObject(ctx context.Context, req *goverse_
 // DeleteAnotherObject deletes another object from within a method
 func (o *AsyncTestObject) DeleteAnotherObject(ctx context.Context, req *goverse_pb.Empty) (*goverse_pb.Empty, error) {
 	// This call should not deadlock because DeleteObject is async
-	err := This().DeleteObject(ctx, "async-delete-obj-2")
+	err := This().DeleteObject(ctx, "AsyncTestObject", "async-delete-obj-2")
 	if err != nil {
 		return nil, err
 	}

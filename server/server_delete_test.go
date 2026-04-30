@@ -49,7 +49,8 @@ func TestServerDeleteObject_Success(t *testing.T) {
 
 	// Delete the object
 	deleteReq := &goverse_pb.DeleteObjectRequest{
-		Id: "test-delete-obj",
+		Type: "TestObject",
+		Id:   "test-delete-obj",
 	}
 	_, err = server.DeleteObject(ctx, deleteReq)
 	if err != nil {
@@ -128,7 +129,8 @@ func TestServerDeleteObject_NotFound(t *testing.T) {
 
 	// Try to delete non-existent object
 	deleteReq := &goverse_pb.DeleteObjectRequest{
-		Id: "non-existent-obj",
+		Type: "TestObject",
+		Id:   "non-existent-obj",
 	}
 	_, err := server.DeleteObject(ctx, deleteReq)
 	if err != nil {

@@ -45,7 +45,7 @@ func TestNode_DeleteObject_PersistentObject(t *testing.T) {
 	}
 
 	// Delete the object
-	err = node.DeleteObject(ctx, "delete-obj-1")
+	err = node.DeleteObject(ctx, "TestPersistentObject", "delete-obj-1")
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestNode_DeleteObject_NonPersistentObject(t *testing.T) {
 	}
 
 	// Delete the object
-	err = node.DeleteObject(ctx, "non-persist-obj")
+	err = node.DeleteObject(ctx, "TestNonPersistentObject", "non-persist-obj")
 	if err != nil {
 		t.Fatalf("Failed to delete non-persistent object: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestNode_DeleteObject_NoProvider(t *testing.T) {
 	}
 
 	// Delete the object (should work even without persistence provider)
-	err = node.DeleteObject(ctx, "no-provider-obj")
+	err = node.DeleteObject(ctx, "TestPersistentObject", "no-provider-obj")
 	if err != nil {
 		t.Fatalf("Failed to delete object without provider: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestNode_DeleteObject_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	// Try to delete non-existent object - should succeed (idempotent)
-	err := node.DeleteObject(ctx, "non-existent-obj")
+	err := node.DeleteObject(ctx, "TestPersistentObject", "non-existent-obj")
 	if err != nil {
 		t.Fatalf("Expected no error for idempotent delete of non-existent object, got: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 	}
 
 	// Delete one object
-	err = node.DeleteObject(ctx, "multi-obj-3")
+	err = node.DeleteObject(ctx, "TestPersistentObject", "multi-obj-3")
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestNode_DeleteObject_MultipleObjects(t *testing.T) {
 	}
 
 	// Delete another object
-	err = node.DeleteObject(ctx, "multi-obj-1")
+	err = node.DeleteObject(ctx, "TestPersistentObject", "multi-obj-1")
 	if err != nil {
 		t.Fatalf("Failed to delete second object: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestNode_DeleteObject_ThreadSafety(t *testing.T) {
 	for i := 0; i < objectCount; i++ {
 		go func(idx int) {
 			objID := fmt.Sprintf("thread-obj-%d", idx)
-			_ = node.DeleteObject(ctx, objID)
+			_ = node.DeleteObject(ctx, "TestPersistentObject", objID)
 			done <- true
 		}(i)
 	}

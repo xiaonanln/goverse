@@ -492,7 +492,7 @@ func TestGateNodeIntegration(t *testing.T) {
 		t.Logf("Verified object %s exists on node before deletion", objID)
 
 		// Delete the object via the gate cluster
-		err = gateCluster.DeleteObject(ctx, objID)
+		err = gateCluster.DeleteClientObject(ctx, "TestGateNodeObject", objID)
 		if err != nil {
 			t.Fatalf("DeleteObject via gate failed for %s: %v", objID, err)
 		}
@@ -524,7 +524,7 @@ func TestGateNodeIntegration(t *testing.T) {
 
 		// Delete all objects
 		for _, objID := range objectIDs {
-			err := gateCluster.DeleteObject(ctx, objID)
+			err := gateCluster.DeleteClientObject(ctx, "TestGateNodeObject", objID)
 			if err != nil {
 				t.Fatalf("DeleteObject via gate failed for %s: %v", objID, err)
 			}
@@ -576,7 +576,7 @@ func TestGateNodeIntegration(t *testing.T) {
 		t.Logf("Object %s has state: callCount=%d", objID, incResult)
 
 		// Delete the object
-		err = gateCluster.DeleteObject(ctx, objID)
+		err = gateCluster.DeleteClientObject(ctx, "TestGateNodeObject", objID)
 		if err != nil {
 			t.Fatalf("DeleteObject via gate failed for %s: %v", objID, err)
 		}

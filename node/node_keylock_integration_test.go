@@ -45,7 +45,7 @@ func TestKeyLockIntegration_CreateDeleteRace(t *testing.T) {
 					successCount.Add(1)
 
 					// Delete it
-					err = node.DeleteObject(ctx, objID)
+					err = node.DeleteObject(ctx, "TestPersistentObject", objID)
 					if err != nil {
 						// Object might have been deleted by another goroutine
 						t.Logf("Delete failed: %v", err)
@@ -121,7 +121,7 @@ func TestKeyLockIntegration_CallDuringDelete(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(50 * time.Millisecond) // Let some calls happen first
-		err := node.DeleteObject(ctx, "call-delete-obj")
+		err := node.DeleteObject(ctx, "TestPersistentObjectWithMethod", "call-delete-obj")
 		if err != nil {
 			t.Logf("Delete error: %v", err)
 		}
@@ -182,7 +182,7 @@ func TestKeyLockIntegration_SaveDuringDelete(t *testing.T) {
 		defer wg.Done()
 		time.Sleep(20 * time.Millisecond)
 		for i := 0; i < 5; i++ {
-			err := node.DeleteObject(ctx, "save-delete-obj")
+			err := node.DeleteObject(ctx, "TestPersistentObject", "save-delete-obj")
 			if err != nil {
 				t.Logf("Delete error: %v", err)
 			}
@@ -289,7 +289,7 @@ func TestKeyLockIntegration_CreateCallDeleteSequence(t *testing.T) {
 		}
 
 		// Delete
-		err = node.DeleteObject(ctx, objID)
+		err = node.DeleteObject(ctx, "TestPersistentObjectWithMethod", objID)
 		if err != nil {
 			t.Fatalf("Failed to delete object: %v", err)
 		}
@@ -328,7 +328,7 @@ func TestKeyLockIntegration_NoLockLeaks(t *testing.T) {
 			// Wait for object to be created (CreateObject is async)
 			waitForObjectCreated(t, node, objID, 5*time.Second)
 
-			err = node.DeleteObject(ctx, objID)
+			err = node.DeleteObject(ctx, "TestPersistentObject", objID)
 			if err != nil {
 				t.Logf("Delete error: %v", err)
 			}

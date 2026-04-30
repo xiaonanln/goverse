@@ -775,31 +775,45 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 	}
 }
 
-// DeleteObject deletes an object from the cluster (node-internal
-// callers). It determines which node hosts the object and routes the
-// deletion request accordingly. For gates, the deletion is performed
-// synchronously; for nodes, asynchronously to prevent deadlocks when
-// called from within object methods.
+// DeleteObject deletes an object from the cluster on behalf of a
+// node-internal caller (object-to-object, runtime cleanup). It runs
+// CheckNodeDelete on the supplied type, then routes the deletion to
+// whichever node hosts the object. For gates the deletion is
+// performed synchronously; for nodes asynchronously to prevent
+// deadlocks when called from within object methods.
 //
-// For gate-originated client deletions use DeleteClientObject — the
-// receiving node uses the claimed type to verify against the
-// object's real type, closing the spoof gap.
-func (c *Cluster) DeleteObject(ctx context.Context, objID string) error {
-	return c.deleteObjectImpl(ctx, objID, "" /* claimedType */)
+// Gate-originated client deletions go through DeleteClientObject
+// instead; the gate has its own CheckClientDelete authorization and
+// must not be re-checked with node semantics here (that would
+// incorrectly block EXTERNAL DELETE rules).
+func (c *Cluster) DeleteObject(ctx context.Context, objType, objID string) error {
+	if objType == "" {
+		return fmt.Errorf("DeleteObject requires a non-empty type")
+	}
+	if c.node != nil {
+		if validator := c.node.LifecycleValidator(); validator != nil {
+			if err := validator.CheckNodeDelete(objType, objID); err != nil {
+				c.logger.Warnf("%s - Delete denied by lifecycle rules: type=%s, id=%s: %v", c, objType, objID, err)
+				return fmt.Errorf("delete denied for %s/%s", objType, objID)
+			}
+		}
+	}
+	return c.deleteObjectImpl(ctx, objType, objID)
 }
 
 // DeleteClientObject is the gate-originated counterpart to
-// DeleteObject. claimedType is the type the gate received from the
-// client; the receiving node verifies it matches the object's real
-// type and rejects mismatches.
+// DeleteObject. The gate has already run CheckClientDelete on the
+// client-supplied type, so this layer skips the lifecycle check and
+// only forwards. The receiving node verifies the claimed type
+// against the object's real type, closing the spoof gap.
 func (c *Cluster) DeleteClientObject(ctx context.Context, claimedType, objID string) error {
 	if claimedType == "" {
 		return fmt.Errorf("DeleteClientObject requires a non-empty claimed type")
 	}
-	return c.deleteObjectImpl(ctx, objID, claimedType)
+	return c.deleteObjectImpl(ctx, claimedType, objID)
 }
 
-func (c *Cluster) deleteObjectImpl(ctx context.Context, objID, claimedType string) (err error) {
+func (c *Cluster) deleteObjectImpl(ctx context.Context, objType, objID string) (err error) {
 	start := time.Now()
 	defer func() { recordOperationResult(c.getAdvertiseAddr(), "DeleteObject", start, err) }()
 
@@ -824,15 +838,8 @@ func (c *Cluster) deleteObjectImpl(ctx context.Context, objID, claimedType strin
 		go func() {
 			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
-			// Delete locally
-			c.logger.Infof("%s - Async deleting object %s locally (claimedType=%q)", c, objID, claimedType)
-			var localErr error
-			if claimedType != "" {
-				localErr = c.node.DeleteClientObject(asyncCtx, claimedType, objID)
-			} else {
-				localErr = c.node.DeleteObject(asyncCtx, objID)
-			}
-			if localErr != nil {
+			c.logger.Infof("%s - Async deleting object %s locally (type=%s)", c, objID, objType)
+			if localErr := c.node.DeleteObject(asyncCtx, objType, objID); localErr != nil {
 				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, localErr)
 			} else {
 				c.logger.Debugf("%s - Async DeleteObject %s completed successfully", c, objID)
@@ -843,7 +850,7 @@ func (c *Cluster) deleteObjectImpl(ctx context.Context, objID, claimedType strin
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Routing DeleteObject for %s to node %s (claimedType=%q)", c, objID, nodeAddr, claimedType)
+	c.logger.Infof("%s - Routing DeleteObject for %s to node %s (type=%s)", c, objID, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -857,7 +864,7 @@ func (c *Cluster) deleteObjectImpl(ctx context.Context, objID, claimedType strin
 	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
 	req := &goverse_pb.DeleteObjectRequest{
 		Id:   objID,
-		Type: claimedType,
+		Type: objType,
 	}
 	if c.isGate() {
 		// Synchronous execution for gates

@@ -263,25 +263,34 @@ message DeleteObjectRequest {
 - `gate/gateserver/http_handler.go:handleDeleteObject`: require the
   two-segment path; reject `/api/v1/objects/delete/{id}` with 400.
   Same authorization check.
-- `cluster.DeleteClientObject(ctx, claimedType, id)` is the
-  gate-originated counterpart to `cluster.DeleteObject(ctx, id)`. It
-  threads the claimed type through the inter-node RPC.
-- `node.DeleteClientObject(ctx, claimedType, id)` is the
-  gate-originated counterpart to `node.DeleteObject(ctx, id)`. It
-  verifies `obj.Type() == claimedType` and rejects mismatches; on
-  match it skips `CheckNodeDelete` because the gate already
-  authorized.
-- `server.go:DeleteObject` dispatches between the two based on
-  whether `req.Type` is empty.
+- `cluster.DeleteObject(ctx, type, id)` is the entry point for
+  node-internal callers. It runs `CheckNodeDelete` against the
+  supplied type via the local node's validator before routing.
+- `cluster.DeleteClientObject(ctx, type, id)` is the gate-originated
+  counterpart. The gate has already authorized via
+  `CheckClientDelete`, so this layer skips the lifecycle check and
+  just routes.
+- `node.DeleteObject(ctx, type, id)` is the single node-side entry
+  point. It verifies `obj.Type() == type` and rejects mismatches.
+  No lifecycle check at this layer — authorization belongs to the
+  caller (gate or `cluster.DeleteObject`).
+- `server.go:DeleteObject` is one line: forward `req.GetType()` and
+  `req.GetId()` straight to `node.DeleteObject`.
+- `goverseapi.DeleteObject(ctx, type, id)` takes `type` as a new
+  positional argument; calls `cluster.DeleteObject`.
 - `client/goverseclient/client.go` + Python client: `DeleteObject`
   takes `type` (positional). v0.2 minor bump.
 
 ### 5.4 Migration
 
 Both `DeleteObjectRequest` messages (gate-facing and inter-node)
-gain a `type` field. v0.1 callers that omit type get rejected at
-the gate (gRPC `InvalidArgument`, HTTP 400) — they need to pass
-type when they upgrade.
+gain a `type` field. The gate-facing `goverseapi.DeleteObject`,
+`Client.DeleteObject` (Go), and `Client.delete_object` (Python)
+each gain a `type` argument as well.
+
+v0.1 callers that omit type get rejected at the gate (gRPC
+`InvalidArgument`, HTTP 400) — they need to pass type when they
+upgrade.
 
 ### 5.5 Test strategy
 
@@ -293,11 +302,12 @@ type when they upgrade.
   `InvalidArgument`.
 - `TestDeleteObject_gRPC_LifecycleRejected` — gRPC handler returns
   `PermissionDenied` for a denied lifecycle rule.
-- `TestNode_DeleteClientObject_RejectsTypeSpoof` — node-level pin
-  that a claimed type which doesn't match the registry type is
-  rejected, even if the gate would have authorized it.
-- `TestNode_DeleteClientObject_RequiresClaimedType` — pins that
-  the gate-originated path always carries a claimed type.
+- `TestNode_DeleteObject_RejectsTypeSpoof` — node-level pin that a
+  claimed type which doesn't match the registry type is rejected,
+  even if the gate would have authorized it.
+- `TestNode_DeleteObject_RequiresType` — pins that node-side delete
+  always requires a non-empty type (programming-contract error to
+  omit it).
 
 ---
 

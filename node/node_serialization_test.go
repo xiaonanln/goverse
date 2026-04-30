@@ -76,7 +76,7 @@ func TestObjectLifecycleSerialization(t *testing.T) {
 			objID := "serial-delete-obj"
 			// Create the object first
 			node.createObject(ctx, "TestPersistentObject", objID)
-			err := node.DeleteObject(ctx, objID)
+			err := node.DeleteObject(ctx, "TestPersistentObject", objID)
 			if err == nil {
 				countMu.Lock()
 				deleteCount++
@@ -278,7 +278,7 @@ func TestDeleteObjectSerializesWithCallObject(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(5 * time.Millisecond)
-			err := node.DeleteObject(ctx, objID)
+			err := node.DeleteObject(ctx, "TestPersistentObjectWithMethod", objID)
 			if err == nil {
 				countMu.Lock()
 				deleteSuccessCount++
