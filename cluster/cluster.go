@@ -787,25 +787,21 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 // deletes is the gate's responsibility (CheckClientDelete) before
 // this routing layer is invoked.
 func (c *Cluster) DeleteObject(ctx context.Context, objType, objID string) (err error) {
+	start := time.Now()
+	defer func() { recordOperationResult(c.getAdvertiseAddr(), "DeleteObject", start, err) }()
+
 	if objType == "" {
 		return fmt.Errorf("DeleteObject requires a non-empty type")
 	}
-	return c.deleteObjectImpl(ctx, objType, objID)
-}
-
-func (c *Cluster) deleteObjectImpl(ctx context.Context, objType, objID string) (err error) {
-	start := time.Now()
-	defer func() { recordOperationResult(c.getAdvertiseAddr(), "DeleteObject", start, err) }()
+	if objID == "" {
+		return fmt.Errorf("object ID must be specified")
+	}
 
 	// Enforce default delete timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
 	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 	defer cancel()
-
-	if objID == "" {
-		return fmt.Errorf("object ID must be specified")
-	}
 
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, objID)
