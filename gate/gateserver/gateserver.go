@@ -335,6 +335,19 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 		}
 	}
 
+	// When auth is configured, reject calls whose client_id is absent or does
+	// not correspond to an active authenticated Register session. This prevents
+	// a caller from supplying an arbitrary (or guessed) client_id to impersonate
+	// another user's identity.
+	if s.authValidator != nil {
+		if req.ClientId == "" {
+			return nil, status.Errorf(codes.Unauthenticated, "client_id required when auth is configured")
+		}
+		if _, ok := s.clientIdentities.Load(req.ClientId); !ok {
+			return nil, status.Errorf(codes.Unauthenticated, "client_id does not match an authenticated session")
+		}
+	}
+
 	// Inject client_id into the context so it can be passed to the node
 	if req.ClientId != "" {
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
