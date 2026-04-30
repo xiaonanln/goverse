@@ -274,27 +274,47 @@ func (s *GateServer) handleCreateObject(w http.ResponseWriter, r *http.Request) 
 	s.writeJSON(w, http.StatusOK, httpResp)
 }
 
-// handleDeleteObject handles HTTP POST /api/v1/objects/delete/{id}
+// handleDeleteObject handles HTTP POST /api/v1/objects/delete/{type}/{id}.
+// Type is required so the gate can run its advisory CheckClientDelete
+// early-reject; the authoritative authorization happens at the
+// receiving node against the object's real type.
 func (s *GateServer) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST method is allowed")
 		return
 	}
 
-	// Parse URL path: /api/v1/objects/delete/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/objects/delete/")
-	objID := strings.TrimSpace(path)
-
-	if objID == "" || strings.Contains(objID, "/") {
-		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Object ID must not be empty and must not contain slashes")
+	parts := strings.SplitN(path, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		s.writeError(w, http.StatusBadRequest, "INVALID_PATH", "Path must be /api/v1/objects/delete/{type}/{id}")
 		return
+	}
+	objType, objID := parts[0], parts[1]
+
+	if strings.Contains(objID, "/") {
+		s.writeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", "Object ID must not contain slashes")
+		return
+	}
+
+	// Authorize on the client-supplied type via CheckClientDelete.
+	// See gateserver.go:DeleteObject — the claimed type is forwarded
+	// to the node, which verifies it matches the object's real type
+	// before deleting.
+	if s.lifecycleValidator != nil {
+		if err := s.lifecycleValidator.CheckClientDelete(objType, objID); err != nil {
+			s.logger.Warnf("Delete denied for HTTP client: type=%s, id=%s: %v", objType, objID, err)
+			s.writeError(w, http.StatusForbidden, "ACCESS_DENIED", err.Error())
+			return
+		}
 	}
 
 	// Create context
 	ctx := r.Context()
 
-	// Delete the object via cluster
-	err := s.cluster.DeleteObject(ctx, objID)
+	// Forward the claimed type so the node can verify it matches the
+	// object's real type before deleting.
+	err := s.cluster.DeleteObject(ctx, objType, objID)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return

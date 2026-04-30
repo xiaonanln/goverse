@@ -56,7 +56,7 @@ func TestDeleteObject_CancelsObjectContext(t *testing.T) {
 	}
 
 	// Delete the object
-	err = node.DeleteObject(ctx, objID)
+	err = node.DeleteObject(ctx, "TestObjectWithContext", objID)
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestDeleteObject_CancelsContext_MultipleObjects(t *testing.T) {
 	ctx3 := obj3.Context()
 
 	// Delete object 2
-	err = node.DeleteObject(ctx, obj2ID)
+	err = node.DeleteObject(ctx, "TestObjectWithContext", obj2ID)
 	if err != nil {
 		t.Fatalf("Failed to delete object 2: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestDeleteObject_CancelsContext_MultipleObjects(t *testing.T) {
 	}
 
 	// Delete object 1
-	err = node.DeleteObject(ctx, obj1ID)
+	err = node.DeleteObject(ctx, "TestObjectWithContext", obj1ID)
 	if err != nil {
 		t.Fatalf("Failed to delete object 1: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestDeleteObject_IdempotentCancellation(t *testing.T) {
 	objCtx := obj.Context()
 
 	// Delete the object
-	err = node.DeleteObject(ctx, objID)
+	err = node.DeleteObject(ctx, "TestObjectWithContext", objID)
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestDeleteObject_IdempotentCancellation(t *testing.T) {
 	}
 
 	// Delete again (idempotent) - should not panic or error
-	err = node.DeleteObject(ctx, objID)
+	err = node.DeleteObject(ctx, "TestObjectWithContext", objID)
 	if err != nil {
 		t.Fatalf("Second delete should succeed (idempotent): %v", err)
 	}

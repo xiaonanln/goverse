@@ -225,7 +225,7 @@ def call_reset(counter_name, http_port):
 
 def call_delete(counter_name, http_port):
     """Call the Delete method via HTTP REST API."""
-    url = f'http://localhost:{http_port}/api/v1/objects/delete/Counter-{counter_name}'
+    url = f'http://localhost:{http_port}/api/v1/objects/delete/Counter/Counter-{counter_name}'
     http_post(url)
     return True
 

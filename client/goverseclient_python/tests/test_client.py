@@ -175,7 +175,7 @@ class TestClientClose(unittest.TestCase):
             client.create_object("Type", "ID")
 
         with self.assertRaises(ClientClosedError):
-            client.delete_object("ID")
+            client.delete_object("Type", "ID")
 
         with self.assertRaises(ClientClosedError):
             client.call_object_any("Type", "ID", "Method")
@@ -202,7 +202,7 @@ class TestClientNotConnected(unittest.TestCase):
             client.create_object("Type", "ID")
 
         with self.assertRaises(NotConnectedError):
-            client.delete_object("ID")
+            client.delete_object("Type", "ID")
 
         with self.assertRaises(NotConnectedError):
             client.call_object_any("Type", "ID", "Method")

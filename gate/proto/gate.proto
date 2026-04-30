@@ -42,6 +42,10 @@ message CreateObjectResponse {
 
 message DeleteObjectRequest {
   string id = 1;
+  // type is required so the gate can run its advisory
+  // CheckClientDelete early-reject. Empty type is rejected at the
+  // gate.
+  string type = 2;
 }
 
 message DeleteObjectResponse {

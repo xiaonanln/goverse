@@ -47,6 +47,12 @@ message CreateObjectResponse {
 
 message DeleteObjectRequest {
   string id = 1;
+  // type is the object type the caller asserts. The receiving node
+  // verifies it matches the object's real type and rejects
+  // mismatches — closing the spoof gap where a client could claim an
+  // allowed type for an id that resolves to a protected object.
+  // Required.
+  string type = 2;
 }
 
 message DeleteObjectResponse {

@@ -74,7 +74,7 @@ func (obj *MyObject) CreateChild(ctx context.Context, req *CreateChildRequest) (
 ```go
 func (obj *MyObject) DeleteChild(ctx context.Context, req *DeleteChildRequest) (*Response, error) {
     // This returns immediately - object deletion happens asynchronously
-    err := goverseapi.DeleteObject(ctx, req.ChildId)
+    err := goverseapi.DeleteObject(ctx, "ChildObject", req.ChildId)
     if err != nil {
         // Only errors in node routing are returned
         return nil, err

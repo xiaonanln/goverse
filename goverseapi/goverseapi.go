@@ -71,8 +71,8 @@ func CreateObject(ctx context.Context, objType, objID string) (string, error) {
 	return cluster.This().CreateObject(ctx, objType, objID)
 }
 
-func DeleteObject(ctx context.Context, objID string) error {
-	return cluster.This().DeleteObject(ctx, objID)
+func DeleteObject(ctx context.Context, objType, objID string) error {
+	return cluster.This().DeleteObject(ctx, objType, objID)
 }
 
 func CallObject(ctx context.Context, objType, id string, method string, request proto.Message) (proto.Message, error) {

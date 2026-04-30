@@ -364,8 +364,26 @@ func (s *GateServer) DeleteObject(ctx context.Context, req *gate_pb.DeleteObject
 	ctx, cancel := callcontext.WithDefaultTimeout(ctx, s.config.DefaultDeleteTimeout)
 	defer cancel()
 
-	// Call the cluster to delete the object
-	err := s.cluster.DeleteObject(ctx, req.Id)
+	// Type is required so the gate can authorize the delete via
+	// CheckClientDelete on the client-supplied type. That value is
+	// not trusted on its own — a malicious caller can claim an
+	// allowed type for an id that resolves to a protected object —
+	// so the claim is forwarded to the node, which verifies it
+	// against the object's real type and rejects mismatches.
+	// Together: gate authorizes, node verifies identity.
+	if req.Type == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "DeleteObject requires type")
+	}
+	if s.lifecycleValidator != nil {
+		if err := s.lifecycleValidator.CheckClientDelete(req.Type, req.Id); err != nil {
+			s.logger.Warnf("Delete denied for client: type=%s, id=%s: %v", req.Type, req.Id, err)
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
+	}
+
+	// Forward the claimed type so the node can verify it matches
+	// the object's real type before deleting.
+	err := s.cluster.DeleteObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, err
 	}

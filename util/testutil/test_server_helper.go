@@ -118,7 +118,7 @@ func (tsh *TestServerHelper) GetAddress() string {
 type nodeInterface interface {
 	CreateObject(ctx context.Context, typ string, id string) (string, error)
 	CallObject(ctx context.Context, typ string, id string, method string, request proto.Message) (proto.Message, error)
-	DeleteObject(ctx context.Context, id string) error
+	DeleteObject(ctx context.Context, typ string, id string) error
 	ReliableCallObject(ctx context.Context, callID string, objectType string, objectID string, methodName string, request *anypb.Any) (*anypb.Any, goverse_pb.ReliableCallStatus, error)
 }
 
@@ -256,7 +256,7 @@ func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.De
 	}
 
 	// Call DeleteObject on the actual node
-	err := node.DeleteObject(ctx, req.Id)
+	err := node.DeleteObject(ctx, req.Type, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete object: %v", err)
 	}

@@ -268,7 +268,8 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 
 		// Delete first object via the gate
 		deleteReq1 := &gate_pb.DeleteObjectRequest{
-			Id: objID1,
+			Type: "TestGateNodeObject",
+			Id:   objID1,
 		}
 		_, err = gateClient.DeleteObject(ctx, deleteReq1)
 		if err != nil {
@@ -277,7 +278,8 @@ func TestGateNodeIntegrationSimple(t *testing.T) {
 
 		// Delete second object via the gate
 		deleteReq2 := &gate_pb.DeleteObjectRequest{
-			Id: objID2,
+			Type: "TestGateNodeObject",
+			Id:   objID2,
 		}
 		_, err = gateClient.DeleteObject(ctx, deleteReq2)
 		if err != nil {
@@ -643,7 +645,8 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 
 		// Delete objects via gate1
 		deleteReq1 := &gate_pb.DeleteObjectRequest{
-			Id: objID1,
+			Type: "TestGateNodeObject",
+			Id:   objID1,
 		}
 		_, err = gateClient1.DeleteObject(ctx, deleteReq1)
 		if err != nil {
@@ -651,7 +654,8 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		}
 
 		deleteReq3 := &gate_pb.DeleteObjectRequest{
-			Id: objID3,
+			Type: "TestGateNodeObject",
+			Id:   objID3,
 		}
 		_, err = gateClient1.DeleteObject(ctx, deleteReq3)
 		if err != nil {
@@ -660,7 +664,8 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 
 		// Delete objects via gate2
 		deleteReq2 := &gate_pb.DeleteObjectRequest{
-			Id: objID2,
+			Type: "TestGateNodeObject",
+			Id:   objID2,
 		}
 		_, err = gateClient2.DeleteObject(ctx, deleteReq2)
 		if err != nil {
@@ -668,7 +673,8 @@ func TestGateNodeIntegrationMulti(t *testing.T) {
 		}
 
 		deleteReq4 := &gate_pb.DeleteObjectRequest{
-			Id: objID4,
+			Type: "TestGateNodeObject",
+			Id:   objID4,
 		}
 		_, err = gateClient2.DeleteObject(ctx, deleteReq4)
 		if err != nil {

@@ -217,7 +217,7 @@ func TestStop_RaceWithDeleteObject(t *testing.T) {
 			if index > 5 {
 				time.Sleep(10 * time.Millisecond)
 			}
-			err := node.DeleteObject(ctx, "delete-race-obj")
+			err := node.DeleteObject(ctx, "TestPersistentObject", "delete-race-obj")
 			results <- err
 		}(i)
 	}
@@ -396,7 +396,7 @@ func TestStop_NoNewOperationsAfterStop(t *testing.T) {
 	// Try DeleteObject - should succeed (idempotent: node stopped = objects cleared)
 	// Unlike other operations, DeleteObject succeeds when node is stopped because
 	// the desired state (object not existing) is already achieved
-	err = node.DeleteObject(ctx, "after-stop-obj")
+	err = node.DeleteObject(ctx, "TestPersistentObject", "after-stop-obj")
 	if err != nil {
 		t.Fatalf("Expected DeleteObject to succeed after stop (idempotent), got error: %v", err)
 	}

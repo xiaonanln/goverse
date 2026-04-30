@@ -665,12 +665,19 @@ class Client:
 
     def delete_object(
         self,
+        object_type: str,
         object_id: str,
         timeout: Optional[float] = None,
     ) -> None:
-        """Delete an object by its ID.
+        """Delete an object by type + ID.
+
+        The type is required: the gate runs an advisory
+        CheckClientDelete on it before forwarding. The receiving node
+        performs the authoritative authorization against the object's
+        real type — a mismatched claimed type is rejected there.
 
         Args:
+            object_type: The type of the object to delete.
             object_id: The ID of the object to delete.
             timeout: Call timeout in seconds. If None, uses the default.
 
@@ -688,7 +695,7 @@ class Client:
 
         timeout = timeout or self._options.call_timeout
 
-        req = gate_pb2.DeleteObjectRequest(id=object_id)
+        req = gate_pb2.DeleteObjectRequest(type=object_type, id=object_id)
 
         stub.DeleteObject(req, timeout=timeout)
 

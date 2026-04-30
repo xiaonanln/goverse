@@ -791,7 +791,19 @@ func (node *Node) destroyObject(id string) {
 // This operation is idempotent - if the object doesn't exist, no error is returned.
 // If the node is stopped, this operation succeeds since all objects are already cleared.
 // Returns error only if persistence deletion fails or lifecycle rules deny the deletion.
-func (node *Node) DeleteObject(ctx context.Context, id string) error {
+//
+// claimedType is the type the caller asserts the object has. The
+// node verifies it matches the object's real type before deleting
+// and rejects mismatches — closing the spoof gap where a client
+// could claim an allowed type for an id that resolves to a
+// protected object. After the type matches, lifecycle rules are
+// enforced via CheckNodeDelete on that type, mirroring how
+// CreateObject runs CheckNodeCreate at this layer.
+func (node *Node) DeleteObject(ctx context.Context, claimedType, id string) error {
+	if claimedType == "" {
+		return fmt.Errorf("DeleteObject requires a non-empty type")
+	}
+
 	// Lock ordering: stopMu.RLock → per-key Lock → objectsMu
 	// Acquire read lock to prevent Stop from proceeding while this operation is in flight
 	node.stopMu.RLock()
@@ -819,8 +831,11 @@ func (node *Node) DeleteObject(ctx context.Context, id string) error {
 		return nil
 	}
 
-	// Check lifecycle rules for DELETE if lifecycle validator is configured
-	// Note: We only check here because we now know the object type
+	if obj.Type() != claimedType {
+		node.logger.Warnf("Delete rejected: claimed type=%s does not match real type=%s for id=%s", claimedType, obj.Type(), id)
+		return fmt.Errorf("delete rejected: type mismatch for %s (claimed %s, real %s)", id, claimedType, obj.Type())
+	}
+
 	if node.lifecycleValidator != nil {
 		if err := node.lifecycleValidator.CheckNodeDelete(obj.Type(), id); err != nil {
 			node.logger.Warnf("Delete denied by lifecycle rules: type=%s, id=%s: %v", obj.Type(), id, err)

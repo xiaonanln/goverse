@@ -775,23 +775,33 @@ func (c *Cluster) CreateObject(ctx context.Context, objType, objID string) (resu
 	}
 }
 
-// DeleteObject deletes an object from the cluster.
-// It determines which node hosts the object and routes the deletion request accordingly.
-// For gates, the deletion is performed synchronously. For nodes, it is performed
-// asynchronously to prevent deadlocks when called from within object methods.
-func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
+// DeleteObject deletes an object from the cluster. It determines
+// which node hosts the object and routes the deletion request
+// accordingly. For gates the deletion is performed synchronously;
+// for nodes asynchronously to prevent deadlocks when called from
+// within object methods.
+//
+// objType is forwarded to the receiving node, which verifies it
+// matches the object's real type (rejecting spoofed claims) and
+// then runs CheckNodeDelete. Authorization for client-originated
+// deletes is the gate's responsibility (CheckClientDelete) before
+// this routing layer is invoked.
+func (c *Cluster) DeleteObject(ctx context.Context, objType, objID string) (err error) {
 	start := time.Now()
 	defer func() { recordOperationResult(c.getAdvertiseAddr(), "DeleteObject", start, err) }()
+
+	if objType == "" {
+		return fmt.Errorf("DeleteObject requires a non-empty type")
+	}
+	if objID == "" {
+		return fmt.Errorf("object ID must be specified")
+	}
 
 	// Enforce default delete timeout for synchronous operations in this function.
 	// Async goroutines create their own timeout context because this one is
 	// cancelled by defer when the function returns.
 	ctx, cancel := context.WithTimeout(ctx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 	defer cancel()
-
-	if objID == "" {
-		return fmt.Errorf("object ID must be specified")
-	}
 
 	// Determine which node hosts this object
 	nodeAddr, err := c.GetCurrentNodeForObject(ctx, objID)
@@ -804,11 +814,9 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 		go func() {
 			asyncCtx, asyncCancel := context.WithTimeout(liveCtx, effectiveTimeout(c.config.DefaultDeleteTimeout, DefaultDeleteTimeout))
 			defer asyncCancel()
-			// Delete locally
-			c.logger.Infof("%s - Async deleting object %s locally", c, objID)
-			err := c.node.DeleteObject(asyncCtx, objID)
-			if err != nil {
-				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, err)
+			c.logger.Infof("%s - Async deleting object %s locally (type=%s)", c, objID, objType)
+			if localErr := c.node.DeleteObject(asyncCtx, objType, objID); localErr != nil {
+				c.logger.Errorf("%s - Async DeleteObject %s failed: %v", c, objID, localErr)
 			} else {
 				c.logger.Debugf("%s - Async DeleteObject %s completed successfully", c, objID)
 				// Metrics are not recorded here since we don't track object types
@@ -818,7 +826,7 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	}
 
 	// Route to the appropriate node
-	c.logger.Infof("%s - Routing DeleteObject for %s to node %s", c, objID, nodeAddr)
+	c.logger.Infof("%s - Routing DeleteObject for %s to node %s (type=%s)", c, objID, nodeAddr, objType)
 
 	client, err := c.nodeConnections.GetConnection(nodeAddr)
 	if err != nil {
@@ -831,7 +839,8 @@ func (c *Cluster) DeleteObject(ctx context.Context, objID string) (err error) {
 	// (gates don't host objects so they don't hold object locks)
 	// For nodes, execute asynchronously to prevent deadlocks when called from within object methods
 	req := &goverse_pb.DeleteObjectRequest{
-		Id: objID,
+		Id:   objID,
+		Type: objType,
 	}
 	if c.isGate() {
 		// Synchronous execution for gates

@@ -531,7 +531,7 @@ func (server *Server) DeleteObject(ctx context.Context, req *goverse_pb.DeleteOb
 		}
 	}
 
-	err := server.Node.DeleteObject(ctx, req.GetId())
+	err := server.Node.DeleteObject(ctx, req.GetType(), req.GetId())
 	if err != nil {
 		server.logger.Errorf("DeleteObject failed: %v", err)
 		return nil, err

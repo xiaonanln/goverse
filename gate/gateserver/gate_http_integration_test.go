@@ -286,8 +286,8 @@ func TestGateHTTPIntegration(t *testing.T) {
 	})
 
 	t.Run("DeleteObjectViaHTTP", func(t *testing.T) {
-		// POST /api/v1/objects/delete/{id}
-		url := fmt.Sprintf("%s/api/v1/objects/delete/%s", httpBaseURL, objID)
+		// POST /api/v1/objects/delete/{type}/{id}
+		url := fmt.Sprintf("%s/api/v1/objects/delete/%s/%s", httpBaseURL, objType, objID)
 		req, err := http.NewRequest(http.MethodPost, url, nil)
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request: %v", err)
@@ -541,8 +541,8 @@ func TestGateHTTPIntegrationWithCurl(t *testing.T) {
 	})
 
 	t.Run("DeleteObjectViaCurl", func(t *testing.T) {
-		// POST /api/v1/objects/delete/{id}
-		url := fmt.Sprintf("%s/api/v1/objects/delete/%s", httpBaseURL, objID)
+		// POST /api/v1/objects/delete/{type}/{id}
+		url := fmt.Sprintf("%s/api/v1/objects/delete/%s/%s", httpBaseURL, objType, objID)
 
 		statusCode, bodyBytes := curlPostHelper(t, url, nil)
 
