@@ -41,6 +41,15 @@ func GetCallerIdentity(ctx context.Context) *CallerIdentity {
 	return nil
 }
 
+// CallerUserID returns the authenticated UserID from the context.
+// Returns "" if no identity is present.
+func CallerUserID(ctx context.Context) string {
+	if id := GetCallerIdentity(ctx); id != nil {
+		return id.UserID
+	}
+	return ""
+}
+
 // WithClientID returns a new context with the client ID stored
 // clientID format: "gateAddress/uniqueId" (e.g., "localhost:7001/abc123")
 func WithClientID(ctx context.Context, clientID string) context.Context {

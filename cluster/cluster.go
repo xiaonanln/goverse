@@ -603,13 +603,14 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Call CallObject on the remote node
-	// Extract client_id from context if present and pass it in the request
+	// Extract client_id and caller_user_id from context if present and pass them in the request
 	req := &goverse_pb.CallObjectRequest{
-		Id:       id,
-		Method:   method,
-		Type:     objType,
-		Request:  requestAny,
-		ClientId: callcontext.ClientID(ctx),
+		Id:           id,
+		Method:       method,
+		Type:         objType,
+		Request:      requestAny,
+		ClientId:     callcontext.ClientID(ctx),
+		CallerUserId: callcontext.CallerUserID(ctx),
 	}
 
 	resp, err := client.CallObject(ctx, req)
@@ -663,13 +664,14 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	}
 
 	// Call CallObject on the remote node - pass Any directly (optimization: no marshal needed)
-	// Extract client_id from context if present and pass it in the request
+	// Extract client_id and caller_user_id from context if present and pass them in the request
 	req := &goverse_pb.CallObjectRequest{
-		Id:       id,
-		Method:   method,
-		Type:     objType,
-		Request:  request,
-		ClientId: callcontext.ClientID(ctx),
+		Id:           id,
+		Method:       method,
+		Type:         objType,
+		Request:      request,
+		ClientId:     callcontext.ClientID(ctx),
+		CallerUserId: callcontext.CallerUserID(ctx),
 	}
 
 	resp, err := client.CallObject(ctx, req)

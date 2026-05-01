@@ -450,6 +450,11 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
+	// Inject CallerIdentity if the gate forwarded an authenticated user ID
+	if req.CallerUserId != "" {
+		ctx = callcontext.WithCallerIdentity(ctx, &callcontext.CallerIdentity{UserID: req.CallerUserId})
+	}
+
 	// Unmarshal the Any request to concrete proto.Message
 	var requestMsg proto.Message
 	var err error

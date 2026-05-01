@@ -146,6 +146,19 @@ func TestCallerIdentity_PreservedInDerivedContext(t *testing.T) {
 	}
 }
 
+func TestCallerUserID(t *testing.T) {
+	ctx := WithCallerIdentity(context.Background(), &CallerIdentity{UserID: "alice"})
+	if got := CallerUserID(ctx); got != "alice" {
+		t.Errorf("CallerUserID = %q, want %q", got, "alice")
+	}
+}
+
+func TestCallerUserID_Unauthenticated(t *testing.T) {
+	if got := CallerUserID(context.Background()); got != "" {
+		t.Errorf("CallerUserID on unauthenticated context = %q, want \"\"", got)
+	}
+}
+
 func TestWithDefaultTimeout_NoExistingDeadline(t *testing.T) {
 	ctx := context.Background()
 	defaultTimeout := 5 * time.Second
