@@ -2,8 +2,6 @@ package gateserver
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,15 +23,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 )
-
-// clientSession holds the authenticated identity and the per-connection session
-// token for a registered client. The token is sent to the client inside
-// RegisterResponse and must be echoed back as "x-session-token" gRPC metadata
-// on every CallObject request — proving the caller owns the Register stream.
-type clientSession struct {
-	identity     *callcontext.CallerIdentity
-	sessionToken string
-}
 
 // GateServerConfig holds configuration for the gate server
 type GateServerConfig struct {
@@ -76,10 +65,10 @@ type GateServer struct {
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator
 	lifecycleValidator *config.LifecycleValidator
-	authValidator callcontext.AuthValidator
-	// clientSessions maps clientID → clientSession for authenticated connections.
-	// Written on Register, deleted on disconnect, verified on every CallObject.
-	clientSessions sync.Map
+	authValidator      callcontext.AuthValidator
+	// clientIdentities maps clientID → *callcontext.CallerIdentity for authenticated connections.
+	// Written on Register, deleted on disconnect, read on every CallObject.
+	clientIdentities   sync.Map
 	stopMu             sync.RWMutex
 	stopped            atomic.Bool
 }
@@ -269,20 +258,13 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 
 	// Validate auth if a validator is configured. Extract gRPC metadata so
 	// the validator can read e.g. "authorization" for a bearer token.
-	var session *clientSession
+	var identity *callcontext.CallerIdentity
 	if s.authValidator != nil {
 		md, _ := metadata.FromIncomingContext(ctx)
-		identity, err := s.authValidator.Validate(ctx, md)
+		var err error
+		identity, err = s.authValidator.Validate(ctx, md)
 		if err != nil {
 			return status.Errorf(codes.Unauthenticated, "%v", err)
-		}
-		tokenBytes := make([]byte, 32)
-		if _, err := rand.Read(tokenBytes); err != nil {
-			return status.Errorf(codes.Internal, "failed to generate session token: %v", err)
-		}
-		session = &clientSession{
-			identity:     identity,
-			sessionToken: hex.EncodeToString(tokenBytes),
 		}
 	}
 
@@ -292,17 +274,14 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 	// Make sure to unregister when done
 	defer s.gate.Unregister(clientID)
 
-	// Store session so CallObject can verify ownership and inject identity.
-	if session != nil {
-		s.clientSessions.Store(clientID, session)
-		defer s.clientSessions.Delete(clientID)
+	// Store identity so CallObject can inject it into the call context.
+	if identity != nil {
+		s.clientIdentities.Store(clientID, identity)
+		defer s.clientIdentities.Delete(clientID)
 	}
 
-	// Send RegisterResponse (includes session_token when auth is configured)
+	// Send RegisterResponse
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
-	if session != nil {
-		regResp.SessionToken = session.sessionToken
-	}
 	anyResp, err := protohelper.MsgToAny(regResp)
 	if err != nil {
 		return fmt.Errorf("failed to marshal RegisterResponse: %w", err)
@@ -356,23 +335,16 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 		}
 	}
 
-	// When auth is configured, verify the caller owns the Register session for
-	// req.ClientId by checking the session token sent as "x-session-token"
-	// metadata. This closes the impersonation gap: knowing another client's ID
-	// is not sufficient without also holding the token issued at Register time.
+	// When auth is configured, reject calls whose client_id is absent or does
+	// not correspond to an active authenticated Register session. This prevents
+	// a caller from supplying an arbitrary (or guessed) client_id to impersonate
+	// another user's identity.
 	if s.authValidator != nil {
 		if req.ClientId == "" {
 			return nil, status.Errorf(codes.Unauthenticated, "client_id required when auth is configured")
 		}
-		v, ok := s.clientSessions.Load(req.ClientId)
-		if !ok {
+		if _, ok := s.clientIdentities.Load(req.ClientId); !ok {
 			return nil, status.Errorf(codes.Unauthenticated, "client_id does not match an authenticated session")
-		}
-		sess := v.(*clientSession)
-		md, _ := metadata.FromIncomingContext(ctx)
-		tokens := md["x-session-token"]
-		if len(tokens) == 0 || tokens[0] != sess.sessionToken {
-			return nil, status.Errorf(codes.Unauthenticated, "missing or invalid x-session-token")
 		}
 	}
 
@@ -381,9 +353,9 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
-	// Inject caller identity if the client has an authenticated session.
-	if v, ok := s.clientSessions.Load(req.ClientId); ok {
-		ctx = callcontext.WithCallerIdentity(ctx, v.(*clientSession).identity)
+	// Inject caller identity if the client has an authenticated connection.
+	if v, ok := s.clientIdentities.Load(req.ClientId); ok {
+		ctx = callcontext.WithCallerIdentity(ctx, v.(*callcontext.CallerIdentity))
 	}
 
 	// Use CallObjectAnyRequest to pass Any directly without unmarshaling (optimization)

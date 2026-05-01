@@ -55,24 +55,6 @@ server side.
 The metadata is sent as HTTP/2 headers when the stream is opened and is
 available to Validate immediately, before any messages are exchanged.
 
-After Register succeeds, the gate returns a RegisterResponse containing both
-the client_id and a cryptographically random session_token. The client must
-echo the session token back as the "x-session-token" metadata key on every
-subsequent CallObject request. This binds each unary call to the Register
-session and prevents impersonation: knowing another client's ID is not
-sufficient without also holding its session token.
-
-	anyMsg, _ := stream.Recv()
-	// unmarshal anyMsg to gate_pb.RegisterResponse to get ClientId + SessionToken
-
-	callCtx := metadata.NewOutgoingContext(context.Background(),
-	    metadata.Pairs("x-session-token", sessionToken))
-
-	resp, err := gateClient.CallObject(callCtx, &gate_pb.CallObjectRequest{
-	    ClientId: clientID,
-	    // ...
-	})
-
 ## Reading the caller identity inside object methods
 
 Once auth is configured, every object method receives the validated identity

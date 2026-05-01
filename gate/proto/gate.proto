@@ -14,13 +14,9 @@ service GateService {
     rpc ReliableCallObject (ReliableCallObjectRequest) returns (ReliableCallObjectResponse);
 }
 
-// RegisterResponse is the first message that the client can receive from the Register stream.
-// When AuthValidator is configured, session_token is a cryptographically random token that
-// the client must include as the "x-session-token" gRPC metadata key on every CallObject
-// request. This proves the caller owns the Register session and prevents impersonation.
+// RegisterResponse is the first message that the client can receive from the Register stream
 message RegisterResponse {
   string client_id = 1;
-  string session_token = 2; // Non-empty only when AuthValidator is configured.
 }
 
 message CallObjectRequest {
