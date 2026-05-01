@@ -24,7 +24,6 @@ import (
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -48,19 +47,6 @@ const (
 
 // effectiveTimeout returns configured if it is positive, otherwise returns fallback.
 // This allows zero-value configs to fall back to hardcoded defaults.
-// mdKeyCallerUserID is the gRPC metadata key used to propagate the authenticated
-// caller's user ID across node boundaries without polluting the request proto.
-const mdKeyCallerUserID = "x-caller-user-id"
-
-// outgoingCallContext enriches ctx with gRPC outgoing metadata carrying the
-// caller's user ID so the receiving node can re-inject it into its context.
-func outgoingCallContext(ctx context.Context) context.Context {
-	if userID := callcontext.CallerUserID(ctx); userID != "" {
-		return metadata.AppendToOutgoingContext(ctx, mdKeyCallerUserID, userID)
-	}
-	return ctx
-}
-
 func effectiveTimeout(configured, fallback time.Duration) time.Duration {
 	if configured > 0 {
 		return configured
@@ -617,7 +603,7 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 	}
 
 	// Propagate caller identity via gRPC metadata so the node can re-inject it into context.
-	ctx = outgoingCallContext(ctx)
+	ctx = callcontext.InjectCallerToOutgoing(ctx)
 
 	// Call CallObject on the remote node
 	req := &goverse_pb.CallObjectRequest{
@@ -679,7 +665,7 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 	}
 
 	// Propagate caller identity via gRPC metadata so the node can re-inject it into context.
-	ctx = outgoingCallContext(ctx)
+	ctx = callcontext.InjectCallerToOutgoing(ctx)
 
 	// Call CallObject on the remote node - pass Any directly (optimization: no marshal needed)
 	req := &goverse_pb.CallObjectRequest{

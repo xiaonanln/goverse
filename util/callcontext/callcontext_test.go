@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 )
 
 func TestWithClientID(t *testing.T) {
@@ -215,4 +217,66 @@ func TestWithDefaultTimeout_CancelNoopWhenDeadlineExists(t *testing.T) {
 	// Cancel should be a no-op and not panic
 	cancel()
 	cancel() // Call multiple times to ensure it's safe
+}
+
+func TestInjectCallerToOutgoing_WithIdentity(t *testing.T) {
+	ctx := WithCallerIdentity(context.Background(), &CallerIdentity{UserID: "alice"})
+	out := InjectCallerToOutgoing(ctx)
+
+	md, ok := metadata.FromOutgoingContext(out)
+	if !ok {
+		t.Fatal("Expected outgoing metadata to be set")
+	}
+	vals := md[mdKeyCallerUserID]
+	if len(vals) == 0 || vals[0] != "alice" {
+		t.Errorf("Expected metadata %q = %q, got %v", mdKeyCallerUserID, "alice", vals)
+	}
+}
+
+func TestInjectCallerToOutgoing_NoIdentity(t *testing.T) {
+	ctx := context.Background()
+	out := InjectCallerToOutgoing(ctx)
+
+	_, ok := metadata.FromOutgoingContext(out)
+	if ok {
+		md, _ := metadata.FromOutgoingContext(out)
+		if vals := md[mdKeyCallerUserID]; len(vals) > 0 {
+			t.Errorf("Expected no %q metadata, got %v", mdKeyCallerUserID, vals)
+		}
+	}
+}
+
+func TestExtractCallerFromIncoming_WithMetadata(t *testing.T) {
+	md := metadata.Pairs(mdKeyCallerUserID, "bob")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	out := ExtractCallerFromIncoming(ctx)
+
+	id := GetCallerIdentity(out)
+	if id == nil {
+		t.Fatal("Expected CallerIdentity to be set")
+	}
+	if id.UserID != "bob" {
+		t.Errorf("Expected UserID %q, got %q", "bob", id.UserID)
+	}
+}
+
+func TestExtractCallerFromIncoming_NoMetadata(t *testing.T) {
+	ctx := context.Background()
+	out := ExtractCallerFromIncoming(ctx)
+
+	if id := GetCallerIdentity(out); id != nil {
+		t.Errorf("Expected no CallerIdentity, got %+v", id)
+	}
+}
+
+func TestExtractCallerFromIncoming_EmptyUserID(t *testing.T) {
+	md := metadata.Pairs(mdKeyCallerUserID, "")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	out := ExtractCallerFromIncoming(ctx)
+
+	if id := GetCallerIdentity(out); id != nil {
+		t.Errorf("Expected no CallerIdentity for empty user ID, got %+v", id)
+	}
 }

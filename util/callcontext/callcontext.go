@@ -3,7 +3,13 @@ package callcontext
 import (
 	"context"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 )
+
+// mdKeyCallerUserID is the gRPC metadata key used to propagate the caller's
+// user ID across node boundaries. Owned here so no other package needs it.
+const mdKeyCallerUserID = "x-caller-user-id"
 
 // contextKey is a private type for context keys to avoid collisions
 type contextKey int
@@ -68,6 +74,28 @@ func ClientID(ctx context.Context) string {
 // FromClient checks if the context contains a client ID
 func FromClient(ctx context.Context) bool {
 	return ctx.Value(clientIDKey) != nil
+}
+
+// InjectCallerToOutgoing appends the caller's UserID from ctx as gRPC outgoing
+// metadata so the receiving node can restore it via ExtractCallerFromIncoming.
+// If no CallerIdentity is present, ctx is returned unchanged.
+func InjectCallerToOutgoing(ctx context.Context) context.Context {
+	if userID := CallerUserID(ctx); userID != "" {
+		return metadata.AppendToOutgoingContext(ctx, mdKeyCallerUserID, userID)
+	}
+	return ctx
+}
+
+// ExtractCallerFromIncoming reads the caller's UserID from gRPC incoming
+// metadata and injects it as a CallerIdentity into the returned context.
+// If the metadata key is absent or empty, ctx is returned unchanged.
+func ExtractCallerFromIncoming(ctx context.Context) context.Context {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md[mdKeyCallerUserID]; len(vals) > 0 && vals[0] != "" {
+			ctx = WithCallerIdentity(ctx, &CallerIdentity{UserID: vals[0]})
+		}
+	}
+	return ctx
 }
 
 // WithDefaultTimeout returns a context with the specified timeout applied only if
