@@ -37,3 +37,18 @@ func CallerRoles(ctx context.Context) []string {
 	}
 	return nil
 }
+
+// CallerHasRole reports whether the authenticated caller holds the given role.
+// Returns false if the call is unauthenticated or the role is not present.
+func CallerHasRole(ctx context.Context, role string) bool {
+	id := callcontext.GetCallerIdentity(ctx)
+	if id == nil {
+		return false
+	}
+	for _, r := range id.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
