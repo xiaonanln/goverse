@@ -7,9 +7,12 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// mdKeyCallerUserID is the gRPC metadata key used to propagate the caller's
-// user ID across node boundaries. Owned here so no other package needs it.
-const mdKeyCallerUserID = "x-caller-user-id"
+// Metadata keys used to propagate CallerIdentity across gRPC node boundaries.
+// Owned entirely by this package — no other package should reference these strings.
+const (
+	mdKeyCallerUserID = "x-caller-user-id"
+	mdKeyCallerRoles  = "x-caller-roles" // repeated: one value per role
+)
 
 // contextKey is a private type for context keys to avoid collisions
 type contextKey int
@@ -76,26 +79,39 @@ func FromClient(ctx context.Context) bool {
 	return ctx.Value(clientIDKey) != nil
 }
 
-// InjectCallerToOutgoing appends the caller's UserID from ctx as gRPC outgoing
-// metadata so the receiving node can restore it via ExtractCallerFromIncoming.
-// If no CallerIdentity is present, ctx is returned unchanged.
+// InjectCallerToOutgoing appends the full CallerIdentity (UserID + Roles) from
+// ctx as gRPC outgoing metadata so the receiving node can restore it via
+// ExtractCallerFromIncoming. If no CallerIdentity is present, ctx is returned
+// unchanged.
 func InjectCallerToOutgoing(ctx context.Context) context.Context {
-	if userID := CallerUserID(ctx); userID != "" {
-		return metadata.AppendToOutgoingContext(ctx, mdKeyCallerUserID, userID)
+	id := GetCallerIdentity(ctx)
+	if id == nil || id.UserID == "" {
+		return ctx
 	}
-	return ctx
+	pairs := []string{mdKeyCallerUserID, id.UserID}
+	for _, role := range id.Roles {
+		pairs = append(pairs, mdKeyCallerRoles, role)
+	}
+	return metadata.AppendToOutgoingContext(ctx, pairs...)
 }
 
-// ExtractCallerFromIncoming reads the caller's UserID from gRPC incoming
-// metadata and injects it as a CallerIdentity into the returned context.
-// If the metadata key is absent or empty, ctx is returned unchanged.
+// ExtractCallerFromIncoming reads the full CallerIdentity (UserID + Roles) from
+// gRPC incoming metadata and injects it into the returned context.
+// If the user-ID key is absent or empty, ctx is returned unchanged.
 func ExtractCallerFromIncoming(ctx context.Context) context.Context {
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if vals := md[mdKeyCallerUserID]; len(vals) > 0 && vals[0] != "" {
-			ctx = WithCallerIdentity(ctx, &CallerIdentity{UserID: vals[0]})
-		}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ctx
 	}
-	return ctx
+	userIDVals := md[mdKeyCallerUserID]
+	if len(userIDVals) == 0 || userIDVals[0] == "" {
+		return ctx
+	}
+	id := &CallerIdentity{
+		UserID: userIDVals[0],
+		Roles:  md[mdKeyCallerRoles], // nil if key absent — that's fine
+	}
+	return WithCallerIdentity(ctx, id)
 }
 
 // WithDefaultTimeout returns a context with the specified timeout applied only if
