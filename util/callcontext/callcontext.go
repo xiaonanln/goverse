@@ -9,9 +9,37 @@ import (
 type contextKey int
 
 const (
-	// clientIDKey is the context key for storing the client ID
-	clientIDKey contextKey = iota
+	clientIDKey       contextKey = iota
+	callerIdentityKey contextKey = iota
 )
+
+// CallerIdentity holds the authenticated identity of a client connection.
+// Populated by the gate after a successful AuthValidator.Validate call.
+type CallerIdentity struct {
+	UserID string
+	Roles  []string
+}
+
+// AuthValidator validates client credentials during Register.
+// headers contains gRPC metadata (or HTTP headers) from the incoming request.
+// Return a non-nil CallerIdentity on success, or an error to reject the connection.
+type AuthValidator interface {
+	Validate(ctx context.Context, headers map[string][]string) (*CallerIdentity, error)
+}
+
+// WithCallerIdentity returns a new context with the CallerIdentity stored.
+func WithCallerIdentity(ctx context.Context, id *CallerIdentity) context.Context {
+	return context.WithValue(ctx, callerIdentityKey, id)
+}
+
+// GetCallerIdentity retrieves the CallerIdentity from the context.
+// Returns nil if no identity is present.
+func GetCallerIdentity(ctx context.Context) *CallerIdentity {
+	if id, ok := ctx.Value(callerIdentityKey).(*CallerIdentity); ok {
+		return id
+	}
+	return nil
+}
 
 // WithClientID returns a new context with the client ID stored
 // clientID format: "gateAddress/uniqueId" (e.g., "localhost:7001/abc123")

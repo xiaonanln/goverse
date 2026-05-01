@@ -90,6 +90,62 @@ func TestContextChaining(t *testing.T) {
 	}
 }
 
+func TestWithCallerIdentity(t *testing.T) {
+	ctx := context.Background()
+	id := &CallerIdentity{UserID: "user1", Roles: []string{"admin", "viewer"}}
+
+	ctx = WithCallerIdentity(ctx, id)
+
+	got := GetCallerIdentity(ctx)
+	if got == nil {
+		t.Fatal("Expected CallerIdentity, got nil")
+	}
+	if got.UserID != id.UserID {
+		t.Errorf("Expected UserID %q, got %q", id.UserID, got.UserID)
+	}
+	if len(got.Roles) != len(id.Roles) || got.Roles[0] != id.Roles[0] {
+		t.Errorf("Expected Roles %v, got %v", id.Roles, got.Roles)
+	}
+}
+
+func TestGetCallerIdentity_NotPresent(t *testing.T) {
+	ctx := context.Background()
+	if got := GetCallerIdentity(ctx); got != nil {
+		t.Errorf("Expected nil CallerIdentity, got %+v", got)
+	}
+}
+
+func TestWithCallerIdentity_NilIdentity(t *testing.T) {
+	ctx := WithCallerIdentity(context.Background(), nil)
+	if got := GetCallerIdentity(ctx); got != nil {
+		t.Errorf("Expected nil after storing nil identity, got %+v", got)
+	}
+}
+
+func TestCallerIdentity_IsolatedFromOtherContexts(t *testing.T) {
+	id := &CallerIdentity{UserID: "user1"}
+	ctx1 := WithCallerIdentity(context.Background(), id)
+	ctx2 := context.Background()
+
+	if GetCallerIdentity(ctx2) != nil {
+		t.Error("Expected ctx2 to have no CallerIdentity")
+	}
+	if GetCallerIdentity(ctx1) == nil {
+		t.Error("Expected ctx1 to have CallerIdentity")
+	}
+}
+
+func TestCallerIdentity_PreservedInDerivedContext(t *testing.T) {
+	id := &CallerIdentity{UserID: "user1", Roles: []string{"editor"}}
+	ctx := WithCallerIdentity(context.Background(), id)
+	derived := context.WithValue(ctx, "other-key", "other-value")
+
+	got := GetCallerIdentity(derived)
+	if got == nil || got.UserID != "user1" {
+		t.Errorf("Expected CallerIdentity to be preserved in derived context, got %+v", got)
+	}
+}
+
 func TestWithDefaultTimeout_NoExistingDeadline(t *testing.T) {
 	ctx := context.Background()
 	defaultTimeout := 5 * time.Second

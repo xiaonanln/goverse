@@ -18,6 +18,7 @@ import (
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -43,6 +44,10 @@ type GateServerConfig struct {
 	AccessValidator    *config.AccessValidator    // Optional: access validator for client access control
 	LifecycleValidator *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
 
+	// AuthValidator validates client credentials on Register. When nil, all
+	// connections are accepted without authentication (v0.1 behaviour).
+	AuthValidator callcontext.AuthValidator
+
 	ConfigFile *config.Config // Optional: loaded config file (if config file was used)
 }
 
@@ -60,6 +65,10 @@ type GateServer struct {
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator
 	lifecycleValidator *config.LifecycleValidator
+	authValidator      callcontext.AuthValidator
+	// clientIdentities maps clientID → *callcontext.CallerIdentity for authenticated connections.
+	// Written on Register, deleted on disconnect, read on every CallObject.
+	clientIdentities   sync.Map
 	stopMu             sync.RWMutex
 	stopped            atomic.Bool
 }
@@ -108,6 +117,7 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		cluster:            c,
 		accessValidator:    config.AccessValidator,
 		lifecycleValidator: config.LifecycleValidator,
+		authValidator:      config.AuthValidator,
 	}
 
 	return server, nil
@@ -245,11 +255,30 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 	}
 
 	ctx := stream.Context()
+
+	// Validate auth if a validator is configured. Extract gRPC metadata so
+	// the validator can read e.g. "authorization" for a bearer token.
+	var identity *callcontext.CallerIdentity
+	if s.authValidator != nil {
+		md, _ := metadata.FromIncomingContext(ctx)
+		var err error
+		identity, err = s.authValidator.Validate(ctx, md)
+		if err != nil {
+			return status.Errorf(codes.Unauthenticated, "%v", err)
+		}
+	}
+
 	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
 
 	// Make sure to unregister when done
 	defer s.gate.Unregister(clientID)
+
+	// Store identity so CallObject can inject it into the call context.
+	if identity != nil {
+		s.clientIdentities.Store(clientID, identity)
+		defer s.clientIdentities.Delete(clientID)
+	}
 
 	// Send RegisterResponse
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
@@ -306,9 +335,27 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 		}
 	}
 
+	// When auth is configured, reject calls whose client_id is absent or does
+	// not correspond to an active authenticated Register session. This prevents
+	// a caller from supplying an arbitrary (or guessed) client_id to impersonate
+	// another user's identity.
+	if s.authValidator != nil {
+		if req.ClientId == "" {
+			return nil, status.Errorf(codes.Unauthenticated, "client_id required when auth is configured")
+		}
+		if _, ok := s.clientIdentities.Load(req.ClientId); !ok {
+			return nil, status.Errorf(codes.Unauthenticated, "client_id does not match an authenticated session")
+		}
+	}
+
 	// Inject client_id into the context so it can be passed to the node
 	if req.ClientId != "" {
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
+	}
+
+	// Inject caller identity if the client has an authenticated connection.
+	if v, ok := s.clientIdentities.Load(req.ClientId); ok {
+		ctx = callcontext.WithCallerIdentity(ctx, v.(*callcontext.CallerIdentity))
 	}
 
 	// Use CallObjectAnyRequest to pass Any directly without unmarshaling (optimization)
