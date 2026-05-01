@@ -24,6 +24,7 @@ import (
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"github.com/xiaonanln/goverse/util/testutil"
 	"github.com/xiaonanln/goverse/util/uniqueid"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -47,6 +48,19 @@ const (
 
 // effectiveTimeout returns configured if it is positive, otherwise returns fallback.
 // This allows zero-value configs to fall back to hardcoded defaults.
+// mdKeyCallerUserID is the gRPC metadata key used to propagate the authenticated
+// caller's user ID across node boundaries without polluting the request proto.
+const mdKeyCallerUserID = "x-caller-user-id"
+
+// outgoingCallContext enriches ctx with gRPC outgoing metadata carrying the
+// caller's user ID so the receiving node can re-inject it into its context.
+func outgoingCallContext(ctx context.Context) context.Context {
+	if userID := callcontext.CallerUserID(ctx); userID != "" {
+		return metadata.AppendToOutgoingContext(ctx, mdKeyCallerUserID, userID)
+	}
+	return ctx
+}
+
 func effectiveTimeout(configured, fallback time.Duration) time.Duration {
 	if configured > 0 {
 		return configured
@@ -602,15 +616,16 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Propagate caller identity via gRPC metadata so the node can re-inject it into context.
+	ctx = outgoingCallContext(ctx)
+
 	// Call CallObject on the remote node
-	// Extract client_id and caller_user_id from context if present and pass them in the request
 	req := &goverse_pb.CallObjectRequest{
-		Id:           id,
-		Method:       method,
-		Type:         objType,
-		Request:      requestAny,
-		ClientId:     callcontext.ClientID(ctx),
-		CallerUserId: callcontext.CallerUserID(ctx),
+		Id:       id,
+		Method:   method,
+		Type:     objType,
+		Request:  requestAny,
+		ClientId: callcontext.ClientID(ctx),
 	}
 
 	resp, err := client.CallObject(ctx, req)
@@ -663,15 +678,16 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 		return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
+	// Propagate caller identity via gRPC metadata so the node can re-inject it into context.
+	ctx = outgoingCallContext(ctx)
+
 	// Call CallObject on the remote node - pass Any directly (optimization: no marshal needed)
-	// Extract client_id and caller_user_id from context if present and pass them in the request
 	req := &goverse_pb.CallObjectRequest{
-		Id:           id,
-		Method:       method,
-		Type:         objType,
-		Request:      request,
-		ClientId:     callcontext.ClientID(ctx),
-		CallerUserId: callcontext.CallerUserID(ctx),
+		Id:       id,
+		Method:   method,
+		Type:     objType,
+		Request:  request,
+		ClientId: callcontext.ClientID(ctx),
 	}
 
 	resp, err := client.CallObject(ctx, req)

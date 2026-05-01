@@ -22,6 +22,7 @@ import (
 	"github.com/xiaonanln/goverse/util/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -450,9 +451,11 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
-	// Inject CallerIdentity if the gate forwarded an authenticated user ID
-	if req.CallerUserId != "" {
-		ctx = callcontext.WithCallerIdentity(ctx, &callcontext.CallerIdentity{UserID: req.CallerUserId})
+	// Re-inject CallerIdentity forwarded by the gate as gRPC metadata.
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md["x-caller-user-id"]; len(vals) > 0 && vals[0] != "" {
+			ctx = callcontext.WithCallerIdentity(ctx, &callcontext.CallerIdentity{UserID: vals[0]})
+		}
 	}
 
 	// Unmarshal the Any request to concrete proto.Message
