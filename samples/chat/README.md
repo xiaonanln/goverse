@@ -7,6 +7,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 - **Multiple Chat Rooms**: Predefined rooms (General, Technology, Crypto, Sports, Movies)
 - **Real-time Messaging**: Server pushes new messages to connected clients via streaming gRPC
 - **Distributed Architecture**: ChatRoom objects are distributed across nodes
+- **Authentication**: Chat-specific gate validates `x-username` + `x-password` on every connection; `ChatRoom` objects read the server-verified identity from context rather than trusting client-supplied request fields
 - **Interactive CLI Client**: Command-line interface for joining rooms and chatting
 - **Web Client**: Browser-based chat client using HTTP Gate API
 
@@ -33,7 +34,15 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
      --advertise-client-urls http://localhost:2379
    ```
 
-2. **Start the Gate server**:
+2. **Start the Chat Gate server** (with authentication):
+   ```bash
+   cd samples/chat/gate
+   go run . -http-listen :8080
+   ```
+   The chat gate requires `x-username` + `x-password` headers on every client
+   connection. The demo password is `000000`.
+
+   Alternatively, use the generic gate (no authentication):
    ```bash
    cd cmd/gate
    go run . -http-listen :8080
@@ -48,7 +57,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 4. **Run the client**:
    ```bash
    cd samples/chat/client
-   go run . -user alice
+   go run . -user alice -password 000000
    ```
 
 5. **Run the web client** (alternative):
@@ -116,12 +125,14 @@ samples/chat/
 ├── README.md           # This file
 ├── proto/
 │   └── chat.proto      # Protocol definitions
+├── gate/
+│   └── main.go         # Chat gate with ChatAuthValidator (x-username + x-password)
 ├── server/
 │   ├── chat_server.go  # Server entry point
 │   ├── ChatRoom.go     # ChatRoom object implementation
 │   └── ChatRoomMgr.go  # ChatRoomMgr object implementation
 ├── client/
-│   └── client.go       # Interactive CLI client
+│   └── client.go       # Interactive CLI client (sends auth headers on Register)
 └── web/
     ├── index.html      # Web client HTML
     ├── chat.js         # Web client JavaScript

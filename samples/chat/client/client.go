@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
@@ -26,6 +27,9 @@ const (
 	// DefaultConnectionTimeout is the default timeout for gRPC connection establishment.
 	// Per TIMEOUT_DESIGN.md, gRPC connection operations should have a 30 second timeout.
 	DefaultConnectionTimeout = 30 * time.Second
+
+	// DefaultPassword is the demo password accepted by ChatAuthValidator.
+	DefaultPassword = "000000"
 )
 
 type ChatClient struct {
@@ -125,11 +129,9 @@ func (c *ChatClient) ListChatrooms() error {
 }
 
 func (c *ChatClient) JoinChatroom(roomName string) error {
-	// Call ChatRoom object directly
-	joinRequest := &chat_pb.ChatRoom_JoinRequest{
-		UserName: c.userName,
-		ClientId: c.clientID,
-	}
+	// The server reads UserName and ClientId from the authenticated context;
+	// we send an empty request body here.
+	joinRequest := &chat_pb.ChatRoom_JoinRequest{}
 	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+roomName, "Join", joinRequest)
 	if err != nil {
 		return fmt.Errorf("failed to join chatroom %s: %w", roomName, err)
@@ -149,10 +151,10 @@ func (c *ChatClient) SendMessage(message string) error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	// Call ChatRoom object directly
+	// The server reads UserName from the authenticated context; only the message
+	// content needs to be sent in the request body.
 	req := &chat_pb.ChatRoom_SendChatMessageRequest{
-		UserName: c.userName,
-		Message:  message,
+		Message: message,
 	}
 	_, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "SendMessage", req)
 	if err != nil {
@@ -278,8 +280,9 @@ func (c *ChatClient) handleCommand(command string) {
 
 func main() {
 	var (
-		serverAddr = flag.String("server", "localhost:48000", "Server address")
-		userID     = flag.String("user", "user1", "User ID")
+		serverAddr = flag.String("server", "localhost:49000", "Gate server address")
+		userID     = flag.String("user", "user1", "User name")
+		password   = flag.String("password", DefaultPassword, "Password for authentication")
 	)
 	flag.Parse()
 
@@ -291,9 +294,13 @@ func main() {
 	}
 	client.logger.Infof("Chat client created")
 	defer client.Close()
-	ctx := context.Background()
 
-	stream, err := client.client.Register(ctx, &gate_pb.Empty{}) // Ensure registration
+	// Send auth credentials as gRPC metadata so the gate's AuthValidator
+	// can verify them and attach a CallerIdentity to every subsequent call.
+	md := metadata.Pairs("x-username", *userID, "x-password", *password)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	stream, err := client.client.Register(ctx, &gate_pb.Empty{})
 	if err != nil {
 		mainLogger.Fatalf("Failed to register client: %v", err)
 	}
