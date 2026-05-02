@@ -786,8 +786,7 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Username", "alice")
-		req.Header.Set("X-Password", "000000")
+		req.Header.Set("X-Goverse-Auth", `{"x-username":"alice","x-password":"000000"}`)
 		w := httptest.NewRecorder()
 
 		// The handler will panic at the nil cluster call after passing auth; that
@@ -811,8 +810,7 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Username", "alice")
-		req.Header.Set("X-Password", "wrong")
+		req.Header.Set("X-Goverse-Auth", `{"x-username":"alice","x-password":"wrong"}`)
 		w := httptest.NewRecorder()
 
 		gs.handleCallObject(w, req)
@@ -837,7 +835,7 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
 		req.Header.Set("Content-Type", "application/json")
-		// No X-Username or X-Password headers
+		// No X-Goverse-Auth header
 		w := httptest.NewRecorder()
 
 		gs.handleCallObject(w, req)
@@ -855,9 +853,9 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 	})
 }
 
-// TestCORSAllowsBaseHeaders verifies that the default base headers are always exposed.
-func TestCORSAllowsBaseHeaders(t *testing.T) {
-	gs := &GateServer{} // no additionalCORSHeaders
+// TestCORSHeaders verifies that all required headers are in Access-Control-Allow-Headers.
+func TestCORSHeaders(t *testing.T) {
+	gs := &GateServer{}
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/objects/call/T/id/M", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
@@ -866,26 +864,7 @@ func TestCORSAllowsBaseHeaders(t *testing.T) {
 	gs.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {})(w, req)
 
 	allowed := w.Header().Get("Access-Control-Allow-Headers")
-	for _, h := range []string{"Content-Type", "X-Client-ID", "Authorization"} {
-		if !strings.Contains(allowed, h) {
-			t.Errorf("Expected Access-Control-Allow-Headers to contain %q, got %q", h, allowed)
-		}
-	}
-}
-
-// TestCORSAdditionalHeaders verifies that AdditionalCORSHeaders are appended
-// to the CORS allow-headers when configured.
-func TestCORSAdditionalHeaders(t *testing.T) {
-	gs := &GateServer{additionalCORSHeaders: []string{"X-Username", "X-Password"}}
-
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/objects/call/T/id/M", nil)
-	req.Header.Set("Origin", "http://localhost:3000")
-	w := httptest.NewRecorder()
-
-	gs.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {})(w, req)
-
-	allowed := w.Header().Get("Access-Control-Allow-Headers")
-	for _, h := range []string{"Content-Type", "X-Client-ID", "Authorization", "X-Username", "X-Password"} {
+	for _, h := range []string{"Content-Type", "X-Client-ID", "Authorization", "X-Goverse-Auth"} {
 		if !strings.Contains(allowed, h) {
 			t.Errorf("Expected Access-Control-Allow-Headers to contain %q, got %q", h, allowed)
 		}

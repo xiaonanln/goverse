@@ -106,11 +106,7 @@ func (s *GateServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		allowedHeaders := "Content-Type, X-Client-ID, Authorization"
-		if len(s.additionalCORSHeaders) > 0 {
-			allowedHeaders += ", " + strings.Join(s.additionalCORSHeaders, ", ")
-		}
-		w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization, X-Goverse-Auth")
 		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
 
 		// Handle preflight requests
@@ -200,12 +196,20 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate credentials if an AuthValidator is configured.
-	// HTTP clients send X-Username and X-Password headers on every request
-	// (EventSource does not support custom headers, so SSE auth is not supported).
+	// HTTP clients send credentials as JSON in the X-Goverse-Auth header on every
+	// request. The JSON is expanded into a map[string][]string so validators are
+	// transport-agnostic (same interface as gRPC metadata).
 	if s.authValidator != nil {
-		headers := map[string][]string{
-			"x-username": {r.Header.Get("X-Username")},
-			"x-password": {r.Header.Get("X-Password")},
+		headers := make(map[string][]string)
+		if authHeader := r.Header.Get("X-Goverse-Auth"); authHeader != "" {
+			var authMap map[string]string
+			if err := json.Unmarshal([]byte(authHeader), &authMap); err != nil {
+				s.writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid X-Goverse-Auth header")
+				return
+			}
+			for k, v := range authMap {
+				headers[k] = []string{v}
+			}
 		}
 		identity, err := s.authValidator.Validate(ctx, headers)
 		if err != nil {

@@ -48,12 +48,6 @@ type GateServerConfig struct {
 	// connections are accepted without authentication (v0.1 behaviour).
 	AuthValidator callcontext.AuthValidator
 
-	// AdditionalCORSHeaders lists extra header names to append to the
-	// Access-Control-Allow-Headers response on HTTP preflight requests.
-	// Use this to expose application-specific headers (e.g. "X-Username",
-	// "X-Password") without hardcoding them in framework code.
-	AdditionalCORSHeaders []string
-
 	ConfigFile *config.Config // Optional: loaded config file (if config file was used)
 }
 
@@ -71,8 +65,7 @@ type GateServer struct {
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator
 	lifecycleValidator *config.LifecycleValidator
-	authValidator         callcontext.AuthValidator
-	additionalCORSHeaders []string
+	authValidator callcontext.AuthValidator
 	// clientIdentities maps clientID → *callcontext.CallerIdentity for authenticated connections.
 	// Written on Register, deleted on disconnect, read on every CallObject.
 	clientIdentities sync.Map
@@ -124,8 +117,7 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		cluster:            c,
 		accessValidator:    config.AccessValidator,
 		lifecycleValidator: config.LifecycleValidator,
-		authValidator:         config.AuthValidator,
-		additionalCORSHeaders: config.AdditionalCORSHeaders,
+		authValidator: config.AuthValidator,
 	}
 
 	return server, nil

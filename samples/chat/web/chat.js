@@ -383,8 +383,7 @@ async function callObject(objectType, objectID, method, requestBytes) {
     
     const headers = {
         'Content-Type': 'application/json',
-        'X-Username': userName,
-        'X-Password': password,
+        'X-Goverse-Auth': JSON.stringify({'x-username': userName, 'x-password': password}),
     };
 
     // Include client ID if available (for push message routing)
