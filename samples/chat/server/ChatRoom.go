@@ -42,9 +42,7 @@ func (room *ChatRoom) Join(ctx context.Context, request *chat_pb.ChatRoom_JoinRe
 	room.Logger.Infof("User %s (client %s) joined chatroom %s", userName, clientID, room.Id())
 
 	room.users[userName] = true
-	if clientID != "" {
-		room.clientIDs[userName] = clientID
-	}
+	room.clientIDs[userName] = clientID
 
 	return &chat_pb.ChatRoom_JoinResponse{
 		RoomName: room.Name(),

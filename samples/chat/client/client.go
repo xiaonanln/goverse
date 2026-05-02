@@ -129,9 +129,7 @@ func (c *ChatClient) ListChatrooms() error {
 }
 
 func (c *ChatClient) JoinChatroom(roomName string) error {
-	// ClientId is included so the room can route push messages back even when
-	// the generic (unauthenticated) gate is used and CallerClientID is empty.
-	joinRequest := &chat_pb.ChatRoom_JoinRequest{ClientId: c.clientID}
+	joinRequest := &chat_pb.ChatRoom_JoinRequest{}
 	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+roomName, "Join", joinRequest)
 	if err != nil {
 		return fmt.Errorf("failed to join chatroom %s: %w", roomName, err)
@@ -151,11 +149,8 @@ func (c *ChatClient) SendMessage(message string) error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	// UserName is included as a fallback for the generic (unauthenticated) gate,
-	// where CallerUserID is empty and the room falls back to the request field.
 	req := &chat_pb.ChatRoom_SendChatMessageRequest{
-		UserName: c.userName,
-		Message:  message,
+		Message: message,
 	}
 	_, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "SendMessage", req)
 	if err != nil {
