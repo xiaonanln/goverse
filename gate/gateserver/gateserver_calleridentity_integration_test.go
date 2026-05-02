@@ -133,12 +133,23 @@ func TestCallerIdentity_FullStack(t *testing.T) {
 	}()
 
 	// --- Create object via gate ---
+	// Retry until the gate cluster has a stable shard mapping; without this,
+	// CreateObject can fail with "shard mapping not available" if the gate's
+	// internal cluster hasn't finished loading shard state yet.
 	objID := "calleridentity-fullstack-1"
-	if _, err := gateClient.CreateObject(ctx, &gate_pb.CreateObjectRequest{
-		Type: "callerCapture",
-		Id:   objID,
-	}); err != nil {
-		t.Fatalf("CreateObject via gate: %v", err)
+	createDeadline := time.Now().Add(30 * time.Second)
+	for {
+		_, err = gateClient.CreateObject(ctx, &gate_pb.CreateObjectRequest{
+			Type: "callerCapture",
+			Id:   objID,
+		})
+		if err == nil {
+			break
+		}
+		if time.Now().After(createDeadline) {
+			t.Fatalf("CreateObject via gate still failing after 30s: %v", err)
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 	waitForObjectCreatedOnNode(t, testNode, objID, 10*time.Second)
 
