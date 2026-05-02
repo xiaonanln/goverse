@@ -195,6 +195,9 @@ func (m *MockGoverseServer) CallObject(ctx context.Context, req *goverse_pb.Call
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
+	// Restore CallerIdentity forwarded by the caller via gRPC metadata.
+	ctx = callcontext.ExtractCallerFromIncoming(ctx)
+
 	// Unmarshal request
 	var requestMsg proto.Message
 	var err error
