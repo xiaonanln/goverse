@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -295,9 +296,10 @@ func main() {
 	client.logger.Infof("Chat client created")
 	defer client.Close()
 
-	// Send auth credentials as gRPC metadata so the gate's AuthValidator
-	// can verify them and attach a CallerIdentity to every subsequent call.
-	md := metadata.Pairs("x-username", *userID, "x-password", *password)
+	// Send credentials as JSON in x-goverse-auth metadata, matching the HTTP
+	// client convention so both transports use the same validator interface.
+	authJSON, _ := json.Marshal(map[string]string{"x-username": *userID, "x-password": *password})
+	md := metadata.Pairs("x-goverse-auth", string(authJSON))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	stream, err := client.client.Register(ctx, &gate_pb.Empty{})
