@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -21,24 +20,15 @@ var log = logger.NewLogger("ChatGate")
 type ChatAuthValidator struct{}
 
 func (v *ChatAuthValidator) Validate(_ context.Context, headers map[string][]string) (*goverseapi.CallerIdentity, error) {
-	values := headers["x-goverse-auth"]
-	if len(values) == 0 || values[0] == "" {
-		return nil, fmt.Errorf("x-goverse-auth header is required")
+	usernames := headers["x-username"]
+	if len(usernames) == 0 || usernames[0] == "" {
+		return nil, fmt.Errorf("x-username header is required")
 	}
-	var creds struct {
-		Username string `json:"x-username"`
-		Password string `json:"x-password"`
-	}
-	if err := json.Unmarshal([]byte(values[0]), &creds); err != nil {
-		return nil, fmt.Errorf("invalid x-goverse-auth value")
-	}
-	if creds.Username == "" {
-		return nil, fmt.Errorf("x-username is required")
-	}
-	if creds.Password != "000000" {
+	passwords := headers["x-password"]
+	if len(passwords) == 0 || passwords[0] != "000000" {
 		return nil, fmt.Errorf("invalid password")
 	}
-	return &goverseapi.CallerIdentity{UserID: creds.Username}, nil
+	return &goverseapi.CallerIdentity{UserID: usernames[0]}, nil
 }
 
 func main() {

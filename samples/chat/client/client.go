@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -130,9 +129,9 @@ func (c *ChatClient) ListChatrooms() error {
 }
 
 func (c *ChatClient) JoinChatroom(roomName string) error {
-	// The server reads UserName and ClientId from the authenticated context;
-	// we send an empty request body here.
-	joinRequest := &chat_pb.ChatRoom_JoinRequest{}
+	// ClientId is included so the room can route push messages back even when
+	// the generic (unauthenticated) gate is used and CallerClientID is empty.
+	joinRequest := &chat_pb.ChatRoom_JoinRequest{ClientId: c.clientID}
 	respMsg, err := c.CallObject("ChatRoom", "ChatRoom-"+roomName, "Join", joinRequest)
 	if err != nil {
 		return fmt.Errorf("failed to join chatroom %s: %w", roomName, err)
@@ -152,10 +151,11 @@ func (c *ChatClient) SendMessage(message string) error {
 		return fmt.Errorf("You must join a chatroom first with /join <room>")
 	}
 
-	// The server reads UserName from the authenticated context; only the message
-	// content needs to be sent in the request body.
+	// UserName is included as a fallback for the generic (unauthenticated) gate,
+	// where CallerUserID is empty and the room falls back to the request field.
 	req := &chat_pb.ChatRoom_SendChatMessageRequest{
-		Message: message,
+		UserName: c.userName,
+		Message:  message,
 	}
 	_, err := c.CallObject("ChatRoom", "ChatRoom-"+c.roomName, "SendMessage", req)
 	if err != nil {
@@ -296,10 +296,9 @@ func main() {
 	client.logger.Infof("Chat client created")
 	defer client.Close()
 
-	// Send credentials as JSON in x-goverse-auth metadata, matching the HTTP
-	// client convention so both transports use the same validator interface.
-	authJSON, _ := json.Marshal(map[string]string{"x-username": *userID, "x-password": *password})
-	md := metadata.Pairs("x-goverse-auth", string(authJSON))
+	// Send auth credentials as gRPC metadata so the gate's AuthValidator
+	// can verify them and attach a CallerIdentity to every subsequent call.
+	md := metadata.Pairs("x-username", *userID, "x-password", *password)
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	stream, err := client.client.Register(ctx, &gate_pb.Empty{})

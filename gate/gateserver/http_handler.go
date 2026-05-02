@@ -196,12 +196,21 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate credentials if an AuthValidator is configured.
-	// HTTP clients send credentials as a JSON string in X-Goverse-Auth. The gate
-	// passes it through as-is under the canonical key, exactly as gRPC metadata is
-	// passed; the validator is responsible for parsing the JSON value.
+	// HTTP clients encode credentials as JSON in X-Goverse-Auth. The gate
+	// decodes the JSON and passes an expanded map[string][]string to the
+	// validator, matching the shape of gRPC metadata so validators are
+	// transport-agnostic.
 	if s.authValidator != nil {
-		headers := map[string][]string{
-			"x-goverse-auth": {r.Header.Get("X-Goverse-Auth")},
+		headers := make(map[string][]string)
+		if authHeader := r.Header.Get("X-Goverse-Auth"); authHeader != "" {
+			var authMap map[string]string
+			if err := json.Unmarshal([]byte(authHeader), &authMap); err != nil {
+				s.writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid X-Goverse-Auth header")
+				return
+			}
+			for k, v := range authMap {
+				headers[k] = []string{v}
+			}
 		}
 		identity, err := s.authValidator.Validate(ctx, headers)
 		if err != nil {
