@@ -56,7 +56,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
    go run . -user alice -password 000000
    ```
 
-5. **Run the web client** (read-only / room listing only):
+5. **Run the web client**:
    ```bash
    # Serve the web client (in another terminal)
    cd samples/chat/web
@@ -64,9 +64,9 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
    
    # Open http://localhost:3000 in your browser
    ```
-   > **Note**: The web client uses the HTTP gate API which does not send gRPC
-   > auth metadata, so `Join` and `SendMessage` will be rejected with
-   > `Unauthenticated`. Room listing still works.
+   Enter your name and password (`000000`) before joining a room. The web
+   client sends `X-Username` and `X-Password` headers on every API call so
+   the gate can authenticate it.
 
 ## Architecture
 

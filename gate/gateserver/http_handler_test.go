@@ -3,6 +3,7 @@ package gateserver
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/xiaonanln/goverse/cluster"
+	"github.com/xiaonanln/goverse/util/callcontext"
+	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -737,4 +740,137 @@ func TestSeparatePortMode(t *testing.T) {
 			t.Errorf("Ops mux should not serve client API, got status %d", w.Code)
 		}
 	})
+}
+
+// validCallBody returns the JSON body for a handleCallObject request containing
+// a valid (empty) protobuf Any, sufficient to reach the auth validation stage.
+func validCallBody() string {
+	return `{"request":""}`
+}
+
+// TestHandleCallObject_HTTPAuth verifies that handleCallObject enforces
+// AuthValidator when configured and injects the identity into the context.
+func TestHandleCallObject_HTTPAuth(t *testing.T) {
+	const path = "/api/v1/objects/call/T/id/M"
+
+	t.Run("no_auth_validator_skips_auth", func(t *testing.T) {
+		gs := &GateServer{} // authValidator is nil
+
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// The handler will panic at the nil cluster call after passing auth; that
+		// confirms auth was not the point of failure.
+		panicked := false
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					panicked = true
+				}
+			}()
+			gs.handleCallObject(w, req)
+		}()
+
+		if w.Code == http.StatusUnauthorized {
+			t.Fatalf("Expected no auth check (no AuthValidator), got 401")
+		}
+		if !panicked && w.Code == http.StatusUnauthorized {
+			t.Fatalf("Expected request to pass auth stage, got 401")
+		}
+	})
+
+	t.Run("valid_credentials_pass_auth", func(t *testing.T) {
+		identity := &callcontext.CallerIdentity{UserID: "alice"}
+		gs := &GateServer{authValidator: &stubAuthValidator{identity: identity}}
+
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Username", "alice")
+		req.Header.Set("X-Password", "000000")
+		w := httptest.NewRecorder()
+
+		// The handler will panic at the nil cluster call after passing auth; that
+		// confirms auth passed.
+		func() {
+			defer func() { recover() }()
+			gs.handleCallObject(w, req)
+		}()
+
+		// Auth passed — request reached cluster (nil) rather than returning 401.
+		if w.Code == http.StatusUnauthorized {
+			t.Fatalf("Expected auth to pass, got 401")
+		}
+	})
+
+	t.Run("invalid_credentials_return_401", func(t *testing.T) {
+		gs := &GateServer{
+			authValidator: &stubAuthValidator{err: errors.New("invalid password")},
+			logger:        logger.NewLogger("test"),
+		}
+
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Username", "alice")
+		req.Header.Set("X-Password", "wrong")
+		w := httptest.NewRecorder()
+
+		gs.handleCallObject(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected 401, got %d", w.Code)
+		}
+		var errResp HTTPErrorResponse
+		if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+			t.Fatalf("Failed to decode error response: %v", err)
+		}
+		if errResp.Code != "UNAUTHENTICATED" {
+			t.Fatalf("Expected UNAUTHENTICATED error code, got %q", errResp.Code)
+		}
+	})
+
+	t.Run("missing_credentials_return_401", func(t *testing.T) {
+		gs := &GateServer{
+			authValidator: &stubAuthValidator{err: errors.New("x-username header is required")},
+			logger:        logger.NewLogger("test"),
+		}
+
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
+		req.Header.Set("Content-Type", "application/json")
+		// No X-Username or X-Password headers
+		w := httptest.NewRecorder()
+
+		gs.handleCallObject(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected 401, got %d", w.Code)
+		}
+		var errResp HTTPErrorResponse
+		if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+			t.Fatalf("Failed to decode error response: %v", err)
+		}
+		if errResp.Code != "UNAUTHENTICATED" {
+			t.Fatalf("Expected UNAUTHENTICATED error code, got %q", errResp.Code)
+		}
+	})
+}
+
+// TestCORSAllowsAuthHeaders verifies that the CORS middleware exposes
+// X-Username and X-Password in the Access-Control-Allow-Headers response header.
+func TestCORSAllowsAuthHeaders(t *testing.T) {
+	gs := &GateServer{}
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/objects/call/T/id/M", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Access-Control-Request-Headers", "X-Username, X-Password")
+	w := httptest.NewRecorder()
+
+	gs.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {})(w, req)
+
+	allowed := w.Header().Get("Access-Control-Allow-Headers")
+	for _, h := range []string{"X-Username", "X-Password"} {
+		if !strings.Contains(allowed, h) {
+			t.Errorf("Expected Access-Control-Allow-Headers to contain %q, got %q", h, allowed)
+		}
+	}
 }

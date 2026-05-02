@@ -106,7 +106,7 @@ func (s *GateServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization, X-Username, X-Password")
 		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
 
 		// Handle preflight requests
@@ -193,6 +193,23 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 	clientID := r.Header.Get("X-Client-ID")
 	if clientID != "" {
 		ctx = callcontext.WithClientID(ctx, clientID)
+	}
+
+	// Validate credentials if an AuthValidator is configured.
+	// HTTP clients send X-Username and X-Password headers on every request
+	// (EventSource does not support custom headers, so SSE auth is not supported).
+	if s.authValidator != nil {
+		headers := map[string][]string{
+			"x-username": {r.Header.Get("X-Username")},
+			"x-password": {r.Header.Get("X-Password")},
+		}
+		identity, err := s.authValidator.Validate(ctx, headers)
+		if err != nil {
+			s.logger.Warnf("HTTP auth rejected: type=%s, id=%s, method=%s: %v", objType, objID, method, err)
+			s.writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", err.Error())
+			return
+		}
+		ctx = callcontext.WithCallerIdentity(ctx, identity)
 	}
 
 	// Call the object via cluster

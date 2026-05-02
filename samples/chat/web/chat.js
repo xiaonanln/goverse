@@ -29,6 +29,7 @@ function getApiBase() {
 
 // State
 let userName = '';
+let password = '000000';
 let currentRoom = null;
 let lastMsgTimestamp = 0;
 let isLoading = false;
@@ -54,14 +55,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize chat
 function initChat() {
-    // Load saved username
+    // Load saved username and password
     userName = localStorage.getItem('chat_username') || '';
+    password = localStorage.getItem('chat_password') || '000000';
     document.getElementById('username-input').value = userName;
-    
+    document.getElementById('password-input').value = password;
+
     // Setup event listeners
     document.getElementById('username-input').addEventListener('input', (e) => {
         userName = e.target.value.trim();
         localStorage.setItem('chat_username', userName);
+    });
+    document.getElementById('password-input').addEventListener('input', (e) => {
+        password = e.target.value;
+        localStorage.setItem('chat_password', password);
     });
     
     document.getElementById('message-input').addEventListener('keypress', (e) => {
@@ -221,6 +228,11 @@ async function joinChatroom(roomName) {
         document.getElementById('username-input').focus();
         return;
     }
+    if (!password) {
+        setStatus('Please enter your password', 'error');
+        document.getElementById('password-input').focus();
+        return;
+    }
     
     if (!clientID) {
         setStatus('Connecting to server, please wait...', 'error');
@@ -370,9 +382,11 @@ async function callObject(objectType, objectID, method, requestBytes) {
     const url = `${API_BASE}/objects/call/${objectType}/${objectID}/${method}`;
     
     const headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Username': userName,
+        'X-Password': password,
     };
-    
+
     // Include client ID if available (for push message routing)
     if (clientID) {
         headers['X-Client-ID'] = clientID;
