@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 )
 
 func TestWithClientID(t *testing.T) {
@@ -146,6 +148,19 @@ func TestCallerIdentity_PreservedInDerivedContext(t *testing.T) {
 	}
 }
 
+func TestCallerUserID(t *testing.T) {
+	ctx := WithCallerIdentity(context.Background(), &CallerIdentity{UserID: "alice"})
+	if got := CallerUserID(ctx); got != "alice" {
+		t.Errorf("CallerUserID = %q, want %q", got, "alice")
+	}
+}
+
+func TestCallerUserID_Unauthenticated(t *testing.T) {
+	if got := CallerUserID(context.Background()); got != "" {
+		t.Errorf("CallerUserID on unauthenticated context = %q, want \"\"", got)
+	}
+}
+
 func TestWithDefaultTimeout_NoExistingDeadline(t *testing.T) {
 	ctx := context.Background()
 	defaultTimeout := 5 * time.Second
@@ -202,4 +217,138 @@ func TestWithDefaultTimeout_CancelNoopWhenDeadlineExists(t *testing.T) {
 	// Cancel should be a no-op and not panic
 	cancel()
 	cancel() // Call multiple times to ensure it's safe
+}
+
+func TestInjectCallerToOutgoing_UserIDOnly(t *testing.T) {
+	ctx := WithCallerIdentity(context.Background(), &CallerIdentity{UserID: "alice"})
+	out := InjectCallerToOutgoing(ctx)
+
+	md, ok := metadata.FromOutgoingContext(out)
+	if !ok {
+		t.Fatal("Expected outgoing metadata to be set")
+	}
+	if vals := md[mdKeyCallerUserID]; len(vals) == 0 || vals[0] != "alice" {
+		t.Errorf("Expected %q = %q, got %v", mdKeyCallerUserID, "alice", vals)
+	}
+	if vals := md[mdKeyCallerRoles]; len(vals) != 0 {
+		t.Errorf("Expected no roles metadata, got %v", vals)
+	}
+}
+
+func TestInjectCallerToOutgoing_WithRoles(t *testing.T) {
+	ctx := WithCallerIdentity(context.Background(), &CallerIdentity{
+		UserID: "alice",
+		Roles:  []string{"admin", "viewer"},
+	})
+	out := InjectCallerToOutgoing(ctx)
+
+	md, ok := metadata.FromOutgoingContext(out)
+	if !ok {
+		t.Fatal("Expected outgoing metadata to be set")
+	}
+	if vals := md[mdKeyCallerUserID]; len(vals) == 0 || vals[0] != "alice" {
+		t.Errorf("Expected %q = %q, got %v", mdKeyCallerUserID, "alice", vals)
+	}
+	roles := md[mdKeyCallerRoles]
+	if len(roles) != 2 || roles[0] != "admin" || roles[1] != "viewer" {
+		t.Errorf("Expected roles [admin viewer], got %v", roles)
+	}
+}
+
+func TestInjectCallerToOutgoing_NoIdentity(t *testing.T) {
+	ctx := context.Background()
+	out := InjectCallerToOutgoing(ctx)
+
+	if md, ok := metadata.FromOutgoingContext(out); ok {
+		if vals := md[mdKeyCallerUserID]; len(vals) > 0 {
+			t.Errorf("Expected no %q metadata, got %v", mdKeyCallerUserID, vals)
+		}
+	}
+}
+
+func TestExtractCallerFromIncoming_UserIDOnly(t *testing.T) {
+	md := metadata.Pairs(mdKeyCallerUserID, "bob")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	out := ExtractCallerFromIncoming(ctx)
+
+	id := GetCallerIdentity(out)
+	if id == nil {
+		t.Fatal("Expected CallerIdentity to be set")
+	}
+	if id.UserID != "bob" {
+		t.Errorf("Expected UserID %q, got %q", "bob", id.UserID)
+	}
+	if len(id.Roles) != 0 {
+		t.Errorf("Expected no roles, got %v", id.Roles)
+	}
+}
+
+func TestExtractCallerFromIncoming_WithRoles(t *testing.T) {
+	md := metadata.Pairs(
+		mdKeyCallerUserID, "carol",
+		mdKeyCallerRoles, "editor",
+		mdKeyCallerRoles, "viewer",
+	)
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	out := ExtractCallerFromIncoming(ctx)
+
+	id := GetCallerIdentity(out)
+	if id == nil {
+		t.Fatal("Expected CallerIdentity to be set")
+	}
+	if id.UserID != "carol" {
+		t.Errorf("Expected UserID %q, got %q", "carol", id.UserID)
+	}
+	if len(id.Roles) != 2 || id.Roles[0] != "editor" || id.Roles[1] != "viewer" {
+		t.Errorf("Expected roles [editor viewer], got %v", id.Roles)
+	}
+}
+
+func TestExtractCallerFromIncoming_NoMetadata(t *testing.T) {
+	ctx := context.Background()
+	out := ExtractCallerFromIncoming(ctx)
+
+	if id := GetCallerIdentity(out); id != nil {
+		t.Errorf("Expected no CallerIdentity, got %+v", id)
+	}
+}
+
+func TestExtractCallerFromIncoming_EmptyUserID(t *testing.T) {
+	md := metadata.Pairs(mdKeyCallerUserID, "")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	out := ExtractCallerFromIncoming(ctx)
+
+	if id := GetCallerIdentity(out); id != nil {
+		t.Errorf("Expected no CallerIdentity for empty user ID, got %+v", id)
+	}
+}
+
+func TestInjectExtract_RoundTrip(t *testing.T) {
+	// Simulate the full gate→node propagation: inject on outgoing, extract on incoming.
+	// gRPC doesn't let us directly convert outgoing→incoming MD in a unit test,
+	// so we build the incoming context manually from the same pairs.
+	original := &CallerIdentity{UserID: "dave", Roles: []string{"admin", "editor"}}
+	outCtx := InjectCallerToOutgoing(WithCallerIdentity(context.Background(), original))
+
+	outMD, _ := metadata.FromOutgoingContext(outCtx)
+	inCtx := metadata.NewIncomingContext(context.Background(), outMD)
+	restored := GetCallerIdentity(ExtractCallerFromIncoming(inCtx))
+
+	if restored == nil {
+		t.Fatal("Expected CallerIdentity after round-trip, got nil")
+	}
+	if restored.UserID != original.UserID {
+		t.Errorf("UserID: want %q, got %q", original.UserID, restored.UserID)
+	}
+	if len(restored.Roles) != len(original.Roles) {
+		t.Fatalf("Roles len: want %d, got %d", len(original.Roles), len(restored.Roles))
+	}
+	for i, r := range original.Roles {
+		if restored.Roles[i] != r {
+			t.Errorf("Role[%d]: want %q, got %q", i, r, restored.Roles[i])
+		}
+	}
 }

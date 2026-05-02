@@ -602,8 +602,10 @@ func (c *Cluster) CallObject(ctx context.Context, objType string, id string, met
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Propagate caller identity via gRPC metadata so the node can re-inject it into context.
+	ctx = callcontext.InjectCallerToOutgoing(ctx)
+
 	// Call CallObject on the remote node
-	// Extract client_id from context if present and pass it in the request
 	req := &goverse_pb.CallObjectRequest{
 		Id:       id,
 		Method:   method,
@@ -662,8 +664,10 @@ func (c *Cluster) CallObjectAnyRequest(ctx context.Context, objType string, id s
 		return nil, fmt.Errorf("failed to get connection to node %s: %w", nodeAddr, err)
 	}
 
+	// Propagate caller identity via gRPC metadata so the node can re-inject it into context.
+	ctx = callcontext.InjectCallerToOutgoing(ctx)
+
 	// Call CallObject on the remote node - pass Any directly (optimization: no marshal needed)
-	// Extract client_id from context if present and pass it in the request
 	req := &goverse_pb.CallObjectRequest{
 		Id:       id,
 		Method:   method,

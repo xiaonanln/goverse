@@ -450,6 +450,9 @@ func (server *Server) CallObject(ctx context.Context, req *goverse_pb.CallObject
 		ctx = callcontext.WithClientID(ctx, req.ClientId)
 	}
 
+	// Re-inject CallerIdentity forwarded by the gate as gRPC metadata.
+	ctx = callcontext.ExtractCallerFromIncoming(ctx)
+
 	// Unmarshal the Any request to concrete proto.Message
 	var requestMsg proto.Message
 	var err error
