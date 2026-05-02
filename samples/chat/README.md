@@ -7,7 +7,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
 - **Multiple Chat Rooms**: Predefined rooms (General, Technology, Crypto, Sports, Movies)
 - **Real-time Messaging**: Server pushes new messages to connected clients via streaming gRPC
 - **Distributed Architecture**: ChatRoom objects are distributed across nodes
-- **Authentication**: Chat-specific gate validates `x-username` + `x-password` on every connection; `ChatRoom` objects read the server-verified identity from context rather than trusting client-supplied request fields
+- **Authentication**: Chat-specific gate validates `x-username` + `x-password` on every connection; `ChatRoom` objects enforce authentication and reject calls with no verified identity (`codes.Unauthenticated`)
 - **Interactive CLI Client**: Command-line interface for joining rooms and chatting
 - **Web Client**: Browser-based chat client using HTTP Gate API
 
@@ -34,19 +34,15 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
      --advertise-client-urls http://localhost:2379
    ```
 
-2. **Start the Chat Gate server** (with authentication):
+2. **Start the Chat Gate server**:
    ```bash
    cd samples/chat/gate
    go run . -http-listen :8080
    ```
-   The chat gate requires `x-username` + `x-password` headers on every client
-   connection. The demo password is `000000`.
-
-   Alternatively, use the generic gate (no authentication):
-   ```bash
-   cd cmd/gate
-   go run . -http-listen :8080
-   ```
+   The chat gate enforces authentication: clients must send `x-username` and
+   `x-password` headers on `Register`. The demo password is `000000`. The
+   generic `cmd/gate` will not work because `ChatRoom` rejects calls with no
+   verified identity.
 
 3. **Start the Chat server**:
    ```bash
@@ -60,7 +56,7 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
    go run . -user alice -password 000000
    ```
 
-5. **Run the web client** (alternative):
+5. **Run the web client** (read-only / room listing only):
    ```bash
    # Serve the web client (in another terminal)
    cd samples/chat/web
@@ -68,6 +64,9 @@ A distributed chat application demonstrating the Goverse virtual actor model wit
    
    # Open http://localhost:3000 in your browser
    ```
+   > **Note**: The web client uses the HTTP gate API which does not send gRPC
+   > auth metadata, so `Join` and `SendMessage` will be rejected with
+   > `Unauthenticated`. Room listing still works.
 
 ## Architecture
 

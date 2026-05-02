@@ -7,6 +7,8 @@ import (
 
 	"github.com/xiaonanln/goverse/goverseapi"
 	chat_pb "github.com/xiaonanln/goverse/samples/chat/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ChatRoom struct {
@@ -32,16 +34,11 @@ func (room *ChatRoom) Join(ctx context.Context, request *chat_pb.ChatRoom_JoinRe
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	// Prefer server-verified identity; fall back to request fields for unauthenticated
-	// paths (e.g. the web client via HTTP gate which cannot send gRPC auth metadata).
 	userName := goverseapi.CallerUserID(ctx)
 	if userName == "" {
-		userName = request.GetUserName()
+		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 	clientID := goverseapi.CallerClientID(ctx)
-	if clientID == "" {
-		clientID = request.GetClientId()
-	}
 	room.Logger.Infof("User %s (client %s) joined chatroom %s", userName, clientID, room.Id())
 
 	room.users[userName] = true
@@ -73,10 +70,9 @@ func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom
 	message := request.GetMessage()
 	room.Logger.Infof("Message in chatroom %s: %s", room.Id(), message)
 
-	// Prefer server-verified identity; fall back to request field for web clients.
 	userName := goverseapi.CallerUserID(ctx)
 	if userName == "" {
-		userName = request.GetUserName()
+		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 
 	chatMsg := &chat_pb.ChatMessage{
