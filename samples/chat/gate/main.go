@@ -38,6 +38,7 @@ func main() {
 		log.Fatalf("Failed to load gate config: %v", err)
 	}
 	cfg.AuthValidator = &ChatAuthValidator{}
+	cfg.AdditionalCORSHeaders = []string{"X-Username", "X-Password"}
 
 	gs, err := gateserver.NewGateServer(cfg)
 	if err != nil {

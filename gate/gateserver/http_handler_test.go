@@ -855,20 +855,37 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 	})
 }
 
-// TestCORSAllowsAuthHeaders verifies that the CORS middleware exposes
-// X-Username and X-Password in the Access-Control-Allow-Headers response header.
-func TestCORSAllowsAuthHeaders(t *testing.T) {
-	gs := &GateServer{}
+// TestCORSAllowsBaseHeaders verifies that the default base headers are always exposed.
+func TestCORSAllowsBaseHeaders(t *testing.T) {
+	gs := &GateServer{} // no additionalCORSHeaders
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/objects/call/T/id/M", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
-	req.Header.Set("Access-Control-Request-Headers", "X-Username, X-Password")
 	w := httptest.NewRecorder()
 
 	gs.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {})(w, req)
 
 	allowed := w.Header().Get("Access-Control-Allow-Headers")
-	for _, h := range []string{"X-Username", "X-Password"} {
+	for _, h := range []string{"Content-Type", "X-Client-ID", "Authorization"} {
+		if !strings.Contains(allowed, h) {
+			t.Errorf("Expected Access-Control-Allow-Headers to contain %q, got %q", h, allowed)
+		}
+	}
+}
+
+// TestCORSAdditionalHeaders verifies that AdditionalCORSHeaders are appended
+// to the CORS allow-headers when configured.
+func TestCORSAdditionalHeaders(t *testing.T) {
+	gs := &GateServer{additionalCORSHeaders: []string{"X-Username", "X-Password"}}
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/objects/call/T/id/M", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	w := httptest.NewRecorder()
+
+	gs.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {})(w, req)
+
+	allowed := w.Header().Get("Access-Control-Allow-Headers")
+	for _, h := range []string{"Content-Type", "X-Client-ID", "Authorization", "X-Username", "X-Password"} {
 		if !strings.Contains(allowed, h) {
 			t.Errorf("Expected Access-Control-Allow-Headers to contain %q, got %q", h, allowed)
 		}

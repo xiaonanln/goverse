@@ -106,7 +106,11 @@ func (s *GateServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization, X-Username, X-Password")
+		allowedHeaders := "Content-Type, X-Client-ID, Authorization"
+		if len(s.additionalCORSHeaders) > 0 {
+			allowedHeaders += ", " + strings.Join(s.additionalCORSHeaders, ", ")
+		}
+		w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
 		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
 
 		// Handle preflight requests
