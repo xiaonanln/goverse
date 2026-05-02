@@ -65,12 +65,12 @@ type GateServer struct {
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator
 	lifecycleValidator *config.LifecycleValidator
-	authValidator callcontext.AuthValidator
+	authValidator      callcontext.AuthValidator
 	// clientIdentities maps clientID → *callcontext.CallerIdentity for authenticated connections.
 	// Written on Register, deleted on disconnect, read on every CallObject.
 	clientIdentities sync.Map
-	stopMu             sync.RWMutex
-	stopped            atomic.Bool
+	stopMu           sync.RWMutex
+	stopped          atomic.Bool
 }
 
 // NewGateServer creates a new gate server instance
@@ -117,7 +117,7 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		cluster:            c,
 		accessValidator:    config.AccessValidator,
 		lifecycleValidator: config.LifecycleValidator,
-		authValidator: config.AuthValidator,
+		authValidator:      config.AuthValidator,
 	}
 
 	return server, nil
