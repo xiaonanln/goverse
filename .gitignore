@@ -50,3 +50,6 @@ etcd-*/
 .vscode/**
 /nul
 .claude/**
+# Accidental local artefacts
+log
+typescript

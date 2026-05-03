@@ -6,6 +6,7 @@ import (
 	"time"
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
+	"github.com/xiaonanln/goverse/goverseapi"
 	"github.com/xiaonanln/goverse/object"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -45,7 +46,7 @@ func (o *callerCapture) Capture(ctx context.Context, _ *structpb.Struct) (*struc
 // TestCallerIdentity_FullStack exercises the complete production auth →
 // propagation chain through real GateServer and node (MockGoverseServer):
 //
-//  1. GateServer.Register: AuthValidator fires, clientID → CallerIdentity stored
+//  1. GateServer.Register: EventHandler.OnClientAuthorise fires, clientID → CallerIdentity stored
 //  2. GateServer.CallObject: looks up CallerIdentity by clientID, injects into ctx
 //  3. cluster.CallObject: InjectCallerToOutgoing writes identity to gRPC metadata
 //  4. MockGoverseServer.CallObject: ExtractCallerFromIncoming restores identity
@@ -76,14 +77,14 @@ func TestCallerIdentity_FullStack(t *testing.T) {
 
 	// --- Gate side ---
 	gateAddr := testutil.GetFreeAddress()
-	identity := &callcontext.CallerIdentity{UserID: "alice", Roles: []string{"admin", "viewer"}}
+	identity := &goverseapi.CallerIdentity{UserID: "alice", Roles: []string{"admin", "viewer"}}
 	gateServer, err := NewGateServer(&GateServerConfig{
 		ListenAddress:    gateAddr,
 		AdvertiseAddress: gateAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       etcdPrefix,
 		NumShards:        testutil.TestNumShards,
-		AuthValidator:    &stubAuthValidator{identity: identity},
+		EventHandler:     &stubGateEventHandler{identity: identity},
 	})
 	if err != nil {
 		t.Skipf("etcd not available: %v", err)

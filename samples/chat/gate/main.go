@@ -15,11 +15,14 @@ import (
 
 var log = logger.NewLogger("ChatGate")
 
-// ChatAuthValidator accepts any non-empty username with the password "000000".
-// In production, replace this with real credential verification (JWT, OAuth, etc).
-type ChatAuthValidator struct{}
+// ChatGateHandler implements gate-level auth and client lifecycle events.
+// Accepts any non-empty username with the password "000000".
+// In production, replace credential verification with JWT, OAuth, etc.
+type ChatGateHandler struct {
+	goverseapi.NoopGateEventHandler
+}
 
-func (v *ChatAuthValidator) Validate(_ context.Context, headers map[string][]string) (*goverseapi.CallerIdentity, error) {
+func (h *ChatGateHandler) OnClientAuthorise(_ context.Context, headers map[string][]string) (*goverseapi.CallerIdentity, error) {
 	usernames := headers["x-username"]
 	if len(usernames) == 0 || usernames[0] == "" {
 		return nil, fmt.Errorf("x-username header is required")
@@ -31,13 +34,19 @@ func (v *ChatAuthValidator) Validate(_ context.Context, headers map[string][]str
 	return &goverseapi.CallerIdentity{UserID: usernames[0]}, nil
 }
 
+func (h *ChatGateHandler) OnClientDisconnect(_ context.Context, clientID string, identity *goverseapi.CallerIdentity) {
+	if identity != nil {
+		log.Infof("User %q (client %s) disconnected", identity.UserID, clientID)
+	}
+}
+
 func main() {
 	loader := gateconfig.NewLoader(nil)
 	cfg, err := loader.Load(os.Args[1:])
 	if err != nil {
 		log.Fatalf("Failed to load gate config: %v", err)
 	}
-	cfg.AuthValidator = &ChatAuthValidator{}
+	cfg.EventHandler = &ChatGateHandler{}
 
 	gs, err := gateserver.NewGateServer(cfg)
 	if err != nil {
