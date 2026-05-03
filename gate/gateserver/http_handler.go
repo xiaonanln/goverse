@@ -106,7 +106,7 @@ func (s *GateServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, Authorization, X-Goverse-Auth")
 		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
 
 		// Handle preflight requests
@@ -193,6 +193,32 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 	clientID := r.Header.Get("X-Client-ID")
 	if clientID != "" {
 		ctx = callcontext.WithClientID(ctx, clientID)
+	}
+
+	// Validate credentials if an AuthValidator is configured.
+	// HTTP clients encode credentials as JSON in X-Goverse-Auth. The gate
+	// decodes the JSON and passes an expanded map[string][]string to the
+	// validator, matching the shape of gRPC metadata so validators are
+	// transport-agnostic.
+	if s.authValidator != nil {
+		headers := make(map[string][]string)
+		if authHeader := r.Header.Get("X-Goverse-Auth"); authHeader != "" {
+			var authMap map[string]string
+			if err := json.Unmarshal([]byte(authHeader), &authMap); err != nil {
+				s.writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid X-Goverse-Auth header")
+				return
+			}
+			for k, v := range authMap {
+				headers[k] = []string{v}
+			}
+		}
+		identity, err := s.authValidator.Validate(ctx, headers)
+		if err != nil {
+			s.logger.Warnf("HTTP auth rejected: type=%s, id=%s, method=%s: %v", objType, objID, method, err)
+			s.writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", err.Error())
+			return
+		}
+		ctx = callcontext.WithCallerIdentity(ctx, identity)
 	}
 
 	// Call the object via cluster

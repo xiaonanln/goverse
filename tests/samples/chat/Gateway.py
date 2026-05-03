@@ -24,19 +24,22 @@ class Gateway:
     
     process: subprocess.Popen | None
     
-    def __init__(self, listen_port: int | None = None, binary_path: str | None = None, 
+    def __init__(self, listen_port: int | None = None, binary_path: str | None = None,
+                 source_path: str = './cmd/gate/',
                  config_file: str | None = None, gate_id: str | None = None,
                  build_if_needed: bool = True) -> None:
         """Initialize and optionally build the gateway.
-        
+
         Args:
             listen_port: Gateway listen port (default: dynamically allocated, ignored if config_file is provided)
             binary_path: Path to gateway binary (defaults to /tmp/gateway)
+            source_path: Go source directory to build from (default: ./cmd/gate/)
             config_file: Path to YAML config file (if provided, ports are read from config)
             gate_id: Gate ID when using config file (required if config_file is provided)
             build_if_needed: Whether to build the binary if it doesn't exist
         """
         self.binary_path = binary_path if binary_path is not None else '/tmp/gateway'
+        self.source_path = source_path
         self.config_file = config_file
         self.gate_id = gate_id
         
@@ -65,7 +68,8 @@ class Gateway:
         
         # Build binary if needed
         if build_if_needed and not os.path.exists(self.binary_path):
-            if not BinaryHelper.build_binary('./cmd/gate/', self.binary_path, 'gateway'):
+            name = os.path.basename(self.binary_path)
+            if not BinaryHelper.build_binary(self.source_path, self.binary_path, name):
                 raise RuntimeError(f"Failed to build gateway binary at {self.binary_path}")
     
     def start(self) -> None:

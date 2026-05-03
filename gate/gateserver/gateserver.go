@@ -68,9 +68,9 @@ type GateServer struct {
 	authValidator      callcontext.AuthValidator
 	// clientIdentities maps clientID → *callcontext.CallerIdentity for authenticated connections.
 	// Written on Register, deleted on disconnect, read on every CallObject.
-	clientIdentities   sync.Map
-	stopMu             sync.RWMutex
-	stopped            atomic.Bool
+	clientIdentities sync.Map
+	stopMu           sync.RWMutex
+	stopped          atomic.Bool
 }
 
 // NewGateServer creates a new gate server instance
