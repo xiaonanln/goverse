@@ -802,6 +802,28 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 		}
 	})
 
+	t.Run("anonymous_auth_passes_and_sets_no_identity", func(t *testing.T) {
+		// OnClientAuthorise returns (nil, nil) — anonymous. Request must not get 401,
+		// and no CallerIdentity must be injected (cluster call panics, not auth).
+		gs := &GateServer{
+			eventHandler:   &stubGateEventHandler{identity: nil, err: nil},
+			authConfigured: true,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		func() {
+			defer func() { recover() }()
+			gs.handleCallObject(w, req)
+		}()
+
+		if w.Code == http.StatusUnauthorized {
+			t.Fatalf("anonymous auth should not return 401, got %d", w.Code)
+		}
+	})
+
 	t.Run("invalid_credentials_return_401", func(t *testing.T) {
 		gs := &GateServer{
 			eventHandler:   &stubGateEventHandler{err: errors.New("invalid password")},

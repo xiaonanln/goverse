@@ -119,3 +119,41 @@ func TestGateServerCallObject_AuthRequired_InvalidClientID(t *testing.T) {
 		t.Fatalf("expected codes.Unauthenticated, got %v", code)
 	}
 }
+
+// TestGateServerCallObject_AnonymousSession verifies that when OnClientAuthorise
+// returns (nil, nil) — anonymous access — CallObject still passes the session
+// check for that clientID. Without this, any EventHandler that only overrides
+// OnClientDisconnect would break all CallObject calls.
+func TestGateServerCallObject_AnonymousSession(t *testing.T) {
+	t.Parallel()
+	// handler returns (nil, nil): anonymous access allowed
+	_, client := authGateServer(t, "/test-gate-auth-anonymous",
+		&stubGateEventHandler{identity: nil, err: nil})
+
+	// Register to get a valid clientID
+	stream, err := client.Register(context.Background(), &gate_pb.Empty{})
+	if err != nil {
+		t.Fatalf("Register stream: %v", err)
+	}
+	msgAny, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("Register recv: %v", err)
+	}
+	regResp := &gate_pb.RegisterResponse{}
+	if err := msgAny.UnmarshalTo(regResp); err != nil {
+		t.Fatalf("unmarshal RegisterResponse: %v", err)
+	}
+	clientID := regResp.ClientId
+
+	// CallObject with the registered clientID must not return Unauthenticated.
+	// It may return any other error (e.g. Unavailable — no nodes) but not UNAUTHENTICATED.
+	_, err = client.CallObject(context.Background(), &gate_pb.CallObjectRequest{
+		ClientId: clientID,
+		Method:   "SomeMethod",
+		Type:     "SomeType",
+		Id:       "obj1",
+	})
+	if err != nil && status.Code(err) == codes.Unauthenticated {
+		t.Fatalf("anonymous session got Unauthenticated on CallObject: %v", err)
+	}
+}

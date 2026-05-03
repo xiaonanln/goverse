@@ -281,11 +281,11 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 	defer s.gate.Unregister(clientID)
 	defer s.eventHandler.OnClientDisconnect(context.Background(), clientID, identity)
 
-	// Store identity so CallObject can inject it into the call context.
-	if identity != nil {
-		s.clientIdentities.Store(clientID, identity)
-		defer s.clientIdentities.Delete(clientID)
-	}
+	// Track the client session so CallObject can validate clientID and inject
+	// identity. Stored even when identity is nil (anonymous) so CallObject's
+	// session check passes — Load returns (nil, true) for anonymous clients.
+	s.clientIdentities.Store(clientID, identity)
+	defer s.clientIdentities.Delete(clientID)
 
 	// Send RegisterResponse
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
