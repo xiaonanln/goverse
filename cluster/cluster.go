@@ -943,9 +943,6 @@ func (c *Cluster) ReliableCallObjectAnyRequest(ctx context.Context, callID strin
 		return nil, goverse_pb.ReliableCallStatus_SKIPPED, fmt.Errorf("failed to get connection to node %s: %w", targetNodeAddr, err)
 	}
 
-	// Propagate CallerIdentity to the receiving node as gRPC metadata.
-	ctx = callcontext.InjectCallerToOutgoing(ctx)
-
 	// Issue ReliableCallObject RPC to target node with full call data
 	req := &goverse_pb.ReliableCallObjectRequest{
 		CallId:     callID,
