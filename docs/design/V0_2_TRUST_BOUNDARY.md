@@ -166,12 +166,11 @@ Apps that don't care (demos, internal services) ignore
 - `gate/gateserver/`: HTTP + gRPC handlers call
   `validator.Validate(...)` if configured, attach `CallerIdentity`
   to context. ✅
-- `cluster/cluster.go`: `CallObject` and `ReliableCallObject` both
-  call `InjectCallerToOutgoing` before remote RPCs so the identity
-  reaches objects on any node. ✅
-- `server/server.go`: `CallObject` and `ReliableCallObject` handlers
-  both call `ExtractCallerFromIncoming` to restore the identity from
-  gRPC metadata. ✅
+- `cluster/cluster.go`: `CallObject` calls `InjectCallerToOutgoing`
+  before remote RPCs so the identity reaches objects on any node. ✅
+- `server/server.go`: `CallObject` handler calls
+  `ExtractCallerFromIncoming` to restore the identity from gRPC
+  metadata. ✅
 
 ### 4.4 Migration
 
@@ -199,8 +198,9 @@ Apps that don't care (demos, internal services) ignore
 ### 4.6 Decisions made
 
 - **Identity propagation across nodes**: propagated via gRPC metadata
-  (`x-caller-user-id` / `x-caller-roles`) on both `CallObject` and
-  `ReliableCallObject` paths. ✅
+  (`x-caller-user-id` / `x-caller-roles`) on the `CallObject` path.
+  `ReliableCallObject` is internal cross-node infrastructure (not
+  client-initiated), so CallerIdentity does not apply there. ✅
 - **Reject vs. anonymous**: `AuthValidator` returns error to reject;
   apps that want anonymous access simply don't set an `AuthValidator`
   (v0.1 behaviour). ✅
