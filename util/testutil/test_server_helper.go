@@ -267,11 +267,7 @@ func (m *MockGoverseServer) DeleteObject(ctx context.Context, req *goverse_pb.De
 	return &goverse_pb.DeleteObjectResponse{}, nil
 }
 
-// ReliableCallObject handles remote reliable object calls. It restores the
-// CallerIdentity from incoming gRPC metadata (propagated by the calling
-// cluster via InjectCallerToOutgoing) and dispatches directly to
-// node.CallObject. The mock skips the persistence-backed exactly-once
-// machinery so it works in tests that don't have a Postgres provider.
+// ReliableCallObject handles remote reliable object calls by delegating to the node
 func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse_pb.ReliableCallObjectRequest) (*goverse_pb.ReliableCallObjectResponse, error) {
 	m.mu.Lock()
 	node := m.node
@@ -281,6 +277,7 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 		return nil, fmt.Errorf("no node assigned to mock server")
 	}
 
+	// Validate request parameters - require the new fields
 	if req.GetCallId() == "" {
 		return nil, fmt.Errorf("call_id must be specified in ReliableCallObject request")
 	}
@@ -300,28 +297,25 @@ func (m *MockGoverseServer) ReliableCallObject(ctx context.Context, req *goverse
 	// Restore CallerIdentity forwarded by the originating cluster via gRPC metadata.
 	ctx = callcontext.ExtractCallerFromIncoming(ctx)
 
-	// Unmarshal the Any request, then dispatch via node.CallObject.
-	// The mock skips the persistence-backed exactly-once machinery so it
-	// works in tests that don't have a Postgres provider.
-	requestMsg, err := anypb.UnmarshalNew(req.GetRequest(), proto.UnmarshalOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal request: %v", err)
-	}
-	resp, err := node.CallObject(ctx, req.GetObjectType(), req.GetObjectId(), req.GetMethodName(), requestMsg)
+	// Call ReliableCallObject on the actual node with new parameters
+	resultAny, status, err := node.ReliableCallObject(
+		ctx,
+		req.GetCallId(),
+		req.GetObjectType(),
+		req.GetObjectId(),
+		req.GetMethodName(),
+		req.GetRequest(),
+	)
 	if err != nil {
 		return &goverse_pb.ReliableCallObjectResponse{
 			Error:  err.Error(),
-			Status: goverse_pb.ReliableCallStatus_FAILED,
+			Status: status,
 		}, nil
 	}
 
-	resultAny, err := anypb.New(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %v", err)
-	}
 	return &goverse_pb.ReliableCallObjectResponse{
 		Result: resultAny,
-		Status: goverse_pb.ReliableCallStatus_SUCCESS,
+		Status: status,
 	}, nil
 }
 
