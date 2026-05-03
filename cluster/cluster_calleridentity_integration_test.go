@@ -253,6 +253,7 @@ func TestReliableCallerIdentity_GateToNode(t *testing.T) {
 	nodeCluster := mustNewCluster(ctx, t, nodeAddr, testPrefix)
 	testNode := nodeCluster.GetThisNode()
 	testNode.RegisterObjectType((*CallerCaptureObject)(nil))
+	testNode.SetPersistenceProvider(testutil.NewInMemoryPersistenceProvider())
 
 	mockServer := testutil.NewMockGoverseServer()
 	mockServer.SetNode(testNode)
@@ -302,6 +303,8 @@ func TestReliableCallerIdentity_CrossNode(t *testing.T) {
 	node2 := cluster2.GetThisNode()
 	node1.RegisterObjectType((*CallerCaptureObject)(nil))
 	node2.RegisterObjectType((*CallerCaptureObject)(nil))
+	node1.SetPersistenceProvider(testutil.NewInMemoryPersistenceProvider())
+	node2.SetPersistenceProvider(testutil.NewInMemoryPersistenceProvider())
 
 	for _, pair := range []struct {
 		addr string
