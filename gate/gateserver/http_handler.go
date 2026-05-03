@@ -195,12 +195,12 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 		ctx = callcontext.WithClientID(ctx, clientID)
 	}
 
-	// Validate credentials if an AuthValidator is configured.
+	// Authorise the client via the event handler (when configured).
 	// HTTP clients encode credentials as JSON in X-Goverse-Auth. The gate
 	// decodes the JSON and passes an expanded map[string][]string to the
-	// validator, matching the shape of gRPC metadata so validators are
+	// handler, matching the shape of gRPC metadata so handlers are
 	// transport-agnostic.
-	if s.authValidator != nil {
+	if s.authConfigured {
 		headers := make(map[string][]string)
 		if authHeader := r.Header.Get("X-Goverse-Auth"); authHeader != "" {
 			var authMap map[string]string
@@ -212,13 +212,15 @@ func (s *GateServer) handleCallObject(w http.ResponseWriter, r *http.Request) {
 				headers[k] = []string{v}
 			}
 		}
-		identity, err := s.authValidator.Validate(ctx, headers)
+		identity, err := s.eventHandler.OnClientAuthorise(ctx, headers)
 		if err != nil {
 			s.logger.Warnf("HTTP auth rejected: type=%s, id=%s, method=%s: %v", objType, objID, method, err)
 			s.writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", err.Error())
 			return
 		}
-		ctx = callcontext.WithCallerIdentity(ctx, identity)
+		if identity != nil {
+			ctx = callcontext.WithCallerIdentity(ctx, identity)
+		}
 	}
 
 	// Call the object via cluster

@@ -1,0 +1,779 @@
+Script started on Tue Apr 21 22:49:27 2026
+Restored session: Tue 21 Apr 2026 22:11:07 AEST
+^[[A[1m[7m%[27m[1m[0m                                                                                                                                                            ]7;file://alexs-Mac-mini.local/Users/alex/projects/goverse[0m[27m[24m[Jalex@alexs-Mac-mini goverse % [K[?2004hpython3 samples/sharding_demo/stress_test_demo.py --duration 60 --clients 10[?2004l
+Working directory: /Users/alex/projects/goverse
+================================================================================
+Goverse Demo Server Stress Test
+================================================================================
+Nodes: 10
+Gates: 7
+Clients: 10
+Duration: 60 seconds (1.0 minutes)
+Stats interval: 300 seconds (5.0 minutes)
+Churn: disabled
+================================================================================
+
+
+================================================================================
+CHECKING POSTGRES
+================================================================================
+✅ Postgres reachable on 127.0.0.1:5432
+
+================================================================================
+CLEANING OLD BINARIES
+================================================================================
+✅ Removed old binary: /tmp/inspector
+✅ Removed old binary: /tmp/demo_server
+✅ Removed old binary: /tmp/gateway
+
+================================================================================
+STARTING INSPECTOR
+================================================================================
+Using config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml
+Building inspector...
+✅ inspector built successfully
+Starting Inspector with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml...
+✅ Inspector started with PID: 4598
+Waiting for HTTP server at http://localhost:8080/...
+✅ HTTP server is responding with status 200
+Waiting for port 8081 to be ready...
+✅ Port 8081 is ready
+✅ Inspector is running and ready
+
+================================================================================
+STARTING 10 DEMO SERVERS
+================================================================================
+Building demo server...
+✅ demo server built successfully
+Starting Demo Server 1 (node_id: stress-demo-node-1, port: 9211)...
+Starting Demo Server 2 (node_id: stress-demo-node-2, port: 9212)...
+[2026-04-21 22:49:34.711] [WARN] [ConsensusManager] ConsensusManager not ready: No nodes available
+Starting Demo Server 3 (node_id: stress-demo-node-3, port: 9213)...
+Starting Demo Server 4 (node_id: stress-demo-node-4, port: 9214)...
+Starting Demo Server 5 (node_id: stress-demo-node-5, port: 9215)...
+Starting Demo Server 6 (node_id: stress-demo-node-6, port: 9216)...
+Starting Demo Server 7 (node_id: stress-demo-node-7, port: 9217)...
+Starting Demo Server 8 (node_id: stress-demo-node-8, port: 9218)...
+Starting Demo Server 9 (node_id: stress-demo-node-9, port: 9219)...
+Starting Demo Server 10 (node_id: stress-demo-node-10, port: 9220)...
+Waiting for Demo Server 1 to be ready...
+[2026-04-21 22:49:39.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:39.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:39.714] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:39.714] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:40.179] [WARN] [Cluster] Cluster state not yet stable for this node, waiting before updating shard mapping
+[2026-04-21 22:49:40.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:40.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 1 is ready
+Waiting for Demo Server 2 to be ready...
+[2026-04-21 22:49:40.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:40.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:41.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:41.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 2 is ready
+Waiting for Demo Server 3 to be ready...
+[2026-04-21 22:49:41.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:41.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 3 is ready
+Waiting for Demo Server 4 to be ready...
+[2026-04-21 22:49:42.243] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:42.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:42.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:42.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 4 is ready
+Waiting for Demo Server 5 to be ready...
+[2026-04-21 22:49:43.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:43.273] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:43.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:43.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 5 is ready
+Waiting for Demo Server 6 to be ready...
+[2026-04-21 22:49:44.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:44.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:44.714] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:44.714] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:45.179] [WARN] [Cluster] Cluster state not yet stable for this node, waiting before updating shard mapping
+[2026-04-21 22:49:45.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:45.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 6 is ready
+Waiting for Demo Server 7 to be ready...
+[2026-04-21 22:49:45.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:45.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:46.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:46.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 7 is ready
+Waiting for Demo Server 8 to be ready...
+[2026-04-21 22:49:46.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:46.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:47.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:47.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 8 is ready
+Waiting for Demo Server 9 to be ready...
+[2026-04-21 22:49:47.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:47.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:48.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:48.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 9 is ready
+Waiting for Demo Server 10 to be ready...
+[2026-04-21 22:49:48.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:48.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 10 is ready
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+✓ Demo cluster is ready!
+  - ShardMonitor objects created (one per shard)
+  - NodeMonitor objects managing counter creation
+  - GlobalMonitor providing global statistics
+
+================================================================================
+STARTING 7 GATEWAYS
+================================================================================
+Building gateway...
+✅ gateway built successfully
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-1...
+✅ Gateway started with PID: 4651
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-2...
+✅ Gateway started with PID: 4652
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-3...
+✅ Gateway started with PID: 4653
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-4...
+✅ Gateway started with PID: 4654
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-5...
+✅ Gateway started with PID: 4655
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-6...
+✅ Gateway started with PID: 4656
+Starting Gateway with config file: /Users/alex/projects/goverse/samples/sharding_demo/stress_config_demo.yml, gate ID: stress-demo-gate-7...
+✅ Gateway started with PID: 4657
+Waiting for Gateway port 10111 to be ready...
+[2026-04-21 22:49:56.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:56.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Gateway port 10111 is ready
+✅ Gateway is running and ready
+Waiting for Gateway port 10112 to be ready...
+✅ Gateway port 10112 is ready
+✅ Gateway is running and ready
+Waiting for Gateway port 10113 to be ready...
+✅ Gateway port 10113 is ready
+✅ Gateway is running and ready
+Waiting for Gateway port 10114 to be ready...
+✅ Gateway port 10114 is ready
+✅ Gateway is running and ready
+Waiting for Gateway port 10115 to be ready...
+✅ Gateway port 10115 is ready
+✅ Gateway is running and ready
+Waiting for Gateway port 10116 to be ready...
+✅ Gateway port 10116 is ready
+✅ Gateway is running and ready
+Waiting for Gateway port 10117 to be ready...
+✅ Gateway port 10117 is ready
+✅ Gateway is running and ready
+
+✅ All infrastructure started successfully
+
+Waiting for cluster to stabilize and auto-load objects to be created...
+(This takes ~20 seconds)
+[2026-04-21 22:49:57.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:57.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:57.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:57.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:58.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:58.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:58.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:58.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:59.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:59.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:49:59.714] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:49:59.714] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:00.179] [WARN] [Cluster] Cluster state not yet stable for this node, waiting before updating shard mapping
+[2026-04-21 22:50:00.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:00.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:00.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:00.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:01.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:01.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:01.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:01.722] [WARN] [Cluster] Cluster<localhost:9216,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:02.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:02.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:02.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:02.760] [WARN] [Cluster] Cluster<localhost:9218,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:03.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:03.272] [WARN] [Cluster] Cluster<localhost:9219,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:03.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:03.782] [WARN] [Cluster] Cluster<localhost:9220,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:04.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:04.711] [WARN] [Cluster] Cluster<localhost:9212,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:04.715] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:04.715] [WARN] [Cluster] Cluster<localhost:9211,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:05.179] [WARN] [Cluster] Cluster state not yet stable for this node, waiting before updating shard mapping
+[2026-04-21 22:50:05.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:05.179] [WARN] [Cluster] Cluster<localhost:9213,node,leader,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:05.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:05.693] [WARN] [Cluster] Cluster<localhost:9214,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+[2026-04-21 22:50:06.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:50:06.216] [WARN] [Cluster] Cluster<localhost:9215,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+
+================================================================================
+STARTING 10 CLIENTS
+================================================================================
+✅ Client 1 connected to gateway port 10111
+✅ Client 2 connected to gateway port 10112
+✅ Client 3 connected to gateway port 10113
+✅ Client 4 connected to gateway port 10114
+✅ Client 5 connected to gateway port 10115
+[Client 1] Incremented counter: SimpleCounter-Counter-001 -> 1709
+✅ Client 6 connected to gateway port 10116
+✅ Client 7 connected to gateway port 10117
+[Client 4] Incremented counter: SimpleCounter-Counter-007 -> 1692
+[Client 3] Incremented counter: SimpleCounter-Counter-007 -> 1693
+✅ Client 8 connected to gateway port 10111
+[Client 2] Incremented counter: SimpleCounter-Counter-008 -> 1740
+✅ Client 9 connected to gateway port 10112
+✅ Client 10 connected to gateway port 10113
+[Client 4] Incremented counter: SimpleCounter-Counter-007 -> 1694
+[Client 6] Got value for counter: SimpleCounter-Counter-003 = 1772
+
+✅ Started 10 clients successfully
+
+================================================================================
+RUNNING STRESS TEST FOR 60 SECONDS
+================================================================================
+Press Ctrl+C to stop early
+
+[Client 9] Incremented counter: SimpleCounter-Counter-010 -> 1767
+[Client 5] Incremented counter: SimpleCounter-Counter-010 -> 1768
+[Client 2] Got value for counter: SimpleCounter-Counter-004 = 1739
+[Client 1] Incremented counter: SimpleCounter-Counter-002 -> 1690
+[Client 3] Got value for counter: SimpleCounter-Counter-005 = 1878
+[Client 4] Got value for counter: SimpleCounter-Counter-010 = 1768
+[Client 7] Created counter: SimpleCounter-Counter-003
+[Client 8] Got value for counter: SimpleCounter-Counter-007 = 1694
+[Client 10] Incremented counter: SimpleCounter-Counter-010 -> 1769
+[Client 2] Incremented counter: SimpleCounter-Counter-002 -> 1691
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1773
+[Client 8] Got value for counter: SimpleCounter-Counter-005 = 1878
+[Client 4] Got value for counter: SimpleCounter-Counter-009 = 1750
+[Client 5] Incremented counter: SimpleCounter-Counter-009 -> 1751
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1774
+[Client 1] Incremented counter: SimpleCounter-Counter-007 -> 1695
+[Client 6] Got value for counter: SimpleCounter-Counter-008 = 1740
+[Client 9] Incremented counter: SimpleCounter-Counter-006 -> 1757
+[Client 5] Incremented counter: SimpleCounter-Counter-003 -> 1775
+[Client 3] Incremented counter: SimpleCounter-Counter-005 -> 1879
+[Client 9] Got value for counter: SimpleCounter-Counter-009 = 1751
+[Client 6] Got value for counter: SimpleCounter-Counter-007 = 1695
+[Client 2] Incremented counter: SimpleCounter-Counter-002 -> 1692
+[Client 10] Incremented counter: SimpleCounter-Counter-006 -> 1758
+[Client 4] Incremented counter: SimpleCounter-Counter-006 -> 1759
+[Client 5] Created counter: SimpleCounter-Counter-016
+[Client 1] Incremented counter: SimpleCounter-Counter-002 -> 1693
+[Client 8] Incremented counter: SimpleCounter-Counter-005 -> 1880
+[Client 6] Incremented counter: SimpleCounter-Counter-003 -> 1776
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1777
+[Client 5] Got value for counter: SimpleCounter-Counter-001 = 1709
+[Client 3] Incremented counter: SimpleCounter-Counter-008 -> 1741
+[Client 2] Got value for counter: SimpleCounter-Counter-007 = 1695
+[Client 1] Incremented counter: SimpleCounter-Counter-004 -> 1740
+[Client 9] Incremented counter: SimpleCounter-Counter-009 -> 1752
+[Client 4] Got value for counter: SimpleCounter-Counter-004 = 1740
+[Client 6] Incremented counter: SimpleCounter-Counter-001 -> 1710
+[Client 10] Created counter: SimpleCounter-Counter-024
+[Client 3] Created counter: SimpleCounter-Counter-091
+[Client 9] Incremented counter: SimpleCounter-Counter-002 -> 1694
+[Client 8] Created counter: SimpleCounter-Counter-041
+[Client 5] Incremented counter: SimpleCounter-Counter-016 -> 1111
+[Client 3] Got value for counter: SimpleCounter-Counter-002 = 1694
+[Client 1] Incremented counter: SimpleCounter-Counter-005 -> 1881
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1778
+[Client 2] Incremented counter: SimpleCounter-Counter-006 -> 1760
+[Client 9] Incremented counter: SimpleCounter-Counter-004 -> 1741
+[Client 4] Created counter: SimpleCounter-Counter-089
+[Client 5] Incremented counter: SimpleCounter-Counter-009 -> 1753
+[Client 3] Incremented counter: SimpleCounter-Counter-003 -> 1779
+[Client 6] Created counter: SimpleCounter-Counter-039
+[Client 2] Incremented counter: SimpleCounter-Counter-002 -> 1695
+[Client 1] Incremented counter: SimpleCounter-Counter-007 -> 1696
+[Client 8] Created counter: SimpleCounter-Counter-097
+[Client 10] Incremented counter: SimpleCounter-Counter-003 -> 1780
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1781
+[Client 5] Incremented counter: SimpleCounter-Counter-004 -> 1742
+[Client 1] Got value for counter: SimpleCounter-Counter-002 = 1695
+[Client 4] Incremented counter: SimpleCounter-Counter-009 -> 1754
+[Client 10] Got value for counter: SimpleCounter-Counter-024 = 1101
+[Client 9] Incremented counter: SimpleCounter-Counter-003 -> 1782
+[Client 8] Created counter: SimpleCounter-Counter-024
+[Client 2] Got value for counter: SimpleCounter-Counter-004 = 1742
+[Client 3] Incremented counter: SimpleCounter-Counter-005 -> 1882
+[Client 2] Incremented counter: SimpleCounter-Counter-001 -> 1711
+[Client 1] Created counter: SimpleCounter-Counter-020
+[Client 6] Incremented counter: SimpleCounter-Counter-001 -> 1712
+[Client 8] Got value for counter: SimpleCounter-Counter-041 = 1029
+[Client 2] Incremented counter: SimpleCounter-Counter-006 -> 1761
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1783
+[Client 4] Incremented counter: SimpleCounter-Counter-089 -> 1023
+[Client 5] Incremented counter: SimpleCounter-Counter-004 -> 1743
+[Client 9] Incremented counter: SimpleCounter-Counter-006 -> 1762
+[Client 10] Incremented counter: SimpleCounter-Counter-002 -> 1696
+[Client 5] Got value for counter: SimpleCounter-Counter-007 = 1696
+[Client 9] Got value for counter: SimpleCounter-Counter-002 = 1696
+[Client 4] Incremented counter: SimpleCounter-Counter-002 -> 1697
+[Client 1] Got value for counter: SimpleCounter-Counter-002 = 1697
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1784
+[Client 2] Incremented counter: SimpleCounter-Counter-004 -> 1744
+[Client 3] Incremented counter: SimpleCounter-Counter-003 -> 1785
+[Client 10] Incremented counter: SimpleCounter-Counter-007 -> 1697
+[Client 9] Got value for counter: SimpleCounter-Counter-004 = 1744
+[Client 6] Got value for counter: SimpleCounter-Counter-009 = 1754
+[Client 8] Got value for counter: SimpleCounter-Counter-006 = 1762
+[Client 4] Incremented counter: SimpleCounter-Counter-009 -> 1755
+[Client 10] Incremented counter: SimpleCounter-Counter-009 -> 1756
+[Client 7] Got value for counter: SimpleCounter-Counter-003 = 1785
+[Client 1] Incremented counter: SimpleCounter-Counter-009 -> 1757
+[Client 5] Got value for counter: SimpleCounter-Counter-002 = 1697
+[Client 6] Got value for counter: SimpleCounter-Counter-004 = 1744
+[Client 3] Incremented counter: SimpleCounter-Counter-004 -> 1745
+[Client 4] Created counter: SimpleCounter-Counter-022
+[Client 3] Incremented counter: SimpleCounter-Counter-091 -> 1017
+[Client 1] Incremented counter: SimpleCounter-Counter-003 -> 1786
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1787
+[Client 4] Got value for counter: SimpleCounter-Counter-089 = 1023
+[Client 6] Got value for counter: SimpleCounter-Counter-010 = 1769
+[Client 10] Incremented counter: SimpleCounter-Counter-004 -> 1746
+[Client 5] Got value for counter: SimpleCounter-Counter-006 = 1762
+[Client 9] Incremented counter: SimpleCounter-Counter-009 -> 1758
+[Client 2] Created counter: SimpleCounter-Counter-015
+[Client 5] Incremented counter: SimpleCounter-Counter-002 -> 1698
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1788
+[Client 8] Incremented counter: SimpleCounter-Counter-041 -> 1030
+[Client 1] Got value for counter: SimpleCounter-Counter-007 = 1697
+[Client 10] Got value for counter: SimpleCounter-Counter-009 = 1758
+[Client 2] Created counter: SimpleCounter-Counter-042
+[Client 1] Incremented counter: SimpleCounter-Counter-020 -> 989
+[Client 4] Incremented counter: SimpleCounter-Counter-008 -> 1742
+[Client 5] Incremented counter: SimpleCounter-Counter-008 -> 1743
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1789
+[Client 10] Got value for counter: SimpleCounter-Counter-024 = 1101
+[Client 9] Incremented counter: SimpleCounter-Counter-004 -> 1747
+[Client 2] Incremented counter: SimpleCounter-Counter-002 -> 1699
+[Client 6] Incremented counter: SimpleCounter-Counter-006 -> 1763
+[Client 1] Incremented counter: SimpleCounter-Counter-020 -> 990
+[Client 5] Incremented counter: SimpleCounter-Counter-016 -> 1112
+[Client 3] Incremented counter: SimpleCounter-Counter-008 -> 1744
+[Client 6] Incremented counter: SimpleCounter-Counter-010 -> 1770
+[Client 8] Incremented counter: SimpleCounter-Counter-041 -> 1031
+[Client 6] Got value for counter: SimpleCounter-Counter-003 = 1789
+[Client 3] Got value for counter: SimpleCounter-Counter-010 = 1770
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1790
+[Client 10] Got value for counter: SimpleCounter-Counter-003 = 1790
+[Client 10] Got value for counter: SimpleCounter-Counter-009 = 1758
+[Client 9] Created counter: SimpleCounter-Counter-027
+[Client 4] Incremented counter: SimpleCounter-Counter-007 -> 1698
+[Client 3] Got value for counter: SimpleCounter-Counter-002 = 1699
+[Client 5] Incremented counter: SimpleCounter-Counter-001 -> 1713
+[Client 1] Got value for counter: SimpleCounter-Counter-008 = 1744
+[Client 7] Got value for counter: SimpleCounter-Counter-003 = 1790
+[Client 2] Incremented counter: SimpleCounter-Counter-010 -> 1771
+[Client 10] Incremented counter: SimpleCounter-Counter-008 -> 1745
+[Client 6] Created counter: SimpleCounter-Counter-011
+[Client 3] Incremented counter: SimpleCounter-Counter-001 -> 1714
+[Client 5] Incremented counter: SimpleCounter-Counter-009 -> 1759
+[Client 7] Created counter: SimpleCounter-Counter-059
+[Client 6] Incremented counter: SimpleCounter-Counter-002 -> 1700
+[Client 10] Got value for counter: SimpleCounter-Counter-005 = 1882
+[Client 4] Incremented counter: SimpleCounter-Counter-009 -> 1760
+[Client 9] Incremented counter: SimpleCounter-Counter-001 -> 1715
+[Client 8] Created counter: SimpleCounter-Counter-013
+[Client 5] Incremented counter: SimpleCounter-Counter-001 -> 1716
+[Client 1] Created counter: SimpleCounter-Counter-075
+[Client 2] Created counter: SimpleCounter-Counter-087
+[Client 7] Got value for counter: SimpleCounter-Counter-003 = 1790
+[Client 9] Got value for counter: SimpleCounter-Counter-002 = 1700
+[Client 3] Incremented counter: SimpleCounter-Counter-091 -> 1018
+[Client 8] Created counter: SimpleCounter-Counter-072
+[Client 6] Incremented counter: SimpleCounter-Counter-004 -> 1748
+[Client 9] Created counter: SimpleCounter-Counter-084
+[Client 10] Incremented counter: SimpleCounter-Counter-010 -> 1772
+[Client 4] Got value for counter: SimpleCounter-Counter-007 = 1698
+[Client 7] Got value for counter: SimpleCounter-Counter-003 = 1790
+[Client 4] Incremented counter: SimpleCounter-Counter-006 -> 1764
+[Client 6] Created counter: SimpleCounter-Counter-028
+[Client 1] Got value for counter: SimpleCounter-Counter-006 = 1764
+[Client 5] Created counter: SimpleCounter-Counter-084
+[Client 2] Incremented counter: SimpleCounter-Counter-004 -> 1749
+[Client 8] Incremented counter: SimpleCounter-Counter-009 -> 1761
+[Client 4] Incremented counter: SimpleCounter-Counter-004 -> 1750
+[Client 3] Created counter: SimpleCounter-Counter-067
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1791
+[Client 1] Incremented counter: SimpleCounter-Counter-001 -> 1717
+[Client 9] Got value for counter: SimpleCounter-Counter-027 = 1129
+[Client 2] Got value for counter: SimpleCounter-Counter-001 = 1717
+[Client 10] Created counter: SimpleCounter-Counter-019
+[Client 6] Incremented counter: SimpleCounter-Counter-028 -> 1014
+[Client 9] Got value for counter: SimpleCounter-Counter-001 = 1717
+[Client 4] Incremented counter: SimpleCounter-Counter-089 -> 1024
+[Client 5] Created counter: SimpleCounter-Counter-027
+[Client 6] Got value for counter: SimpleCounter-Counter-004 = 1750
+[Client 7] Created counter: SimpleCounter-Counter-076
+[Client 9] Got value for counter: SimpleCounter-Counter-005 = 1882
+[Client 8] Created counter: SimpleCounter-Counter-043
+[Client 1] Created counter: SimpleCounter-Counter-063
+[Client 3] Incremented counter: SimpleCounter-Counter-003 -> 1792
+[Client 2] Created counter: SimpleCounter-Counter-021
+[Client 9] Incremented counter: SimpleCounter-Counter-002 -> 1701
+[Client 10] Incremented counter: SimpleCounter-Counter-003 -> 1793
+[Client 4] Got value for counter: SimpleCounter-Counter-009 = 1761
+[Client 2] Created counter: SimpleCounter-Counter-068
+[Client 10] Incremented counter: SimpleCounter-Counter-008 -> 1746
+[Client 6] Got value for counter: SimpleCounter-Counter-007 = 1698
+[Client 1] Incremented counter: SimpleCounter-Counter-007 -> 1699
+[Client 4] Got value for counter: SimpleCounter-Counter-022 = 997
+[Client 6] Incremented counter: SimpleCounter-Counter-001 -> 1718
+[Client 8] Got value for counter: SimpleCounter-Counter-010 = 1772
+[Client 4] Got value for counter: SimpleCounter-Counter-003 = 1793
+[Client 7] Incremented counter: SimpleCounter-Counter-059 -> 1007
+[Client 1] Got value for counter: SimpleCounter-Counter-002 = 1701
+[Client 10] Incremented counter: SimpleCounter-Counter-007 -> 1700
+[Client 3] Got value for counter: SimpleCounter-Counter-006 = 1764
+[Client 9] Incremented counter: SimpleCounter-Counter-003 -> 1794
+[Client 7] Incremented counter: SimpleCounter-Counter-076 -> 978
+[Client 4] Got value for counter: SimpleCounter-Counter-004 = 1750
+[Client 10] Created counter: SimpleCounter-Counter-016
+[Client 2] Incremented counter: SimpleCounter-Counter-001 -> 1719
+[Client 1] Got value for counter: SimpleCounter-Counter-020 = 990
+[Client 5] Incremented counter: SimpleCounter-Counter-004 -> 1751
+[Client 8] Incremented counter: SimpleCounter-Counter-002 -> 1702
+[Client 3] Got value for counter: SimpleCounter-Counter-008 = 1746
+[Client 10] Incremented counter: SimpleCounter-Counter-024 -> 1102
+[Client 7] Incremented counter: SimpleCounter-Counter-076 -> 979
+[Client 6] Got value for counter: SimpleCounter-Counter-005 = 1882
+[Client 8] Got value for counter: SimpleCounter-Counter-041 = 1031
+[Client 4] Incremented counter: SimpleCounter-Counter-001 -> 1720
+[Client 9] Got value for counter: SimpleCounter-Counter-084 = 1008
+[Client 8] Created counter: SimpleCounter-Counter-038
+[Client 2] Incremented counter: SimpleCounter-Counter-002 -> 1703
+[Client 4] Incremented counter: SimpleCounter-Counter-002 -> 1704
+[Client 3] Incremented counter: SimpleCounter-Counter-001 -> 1721
+[Client 6] Incremented counter: SimpleCounter-Counter-011 -> 1013
+[Client 5] Incremented counter: SimpleCounter-Counter-009 -> 1762
+[Client 9] Got value for counter: SimpleCounter-Counter-007 = 1700
+[Client 1] Got value for counter: SimpleCounter-Counter-010 = 1772
+[Client 7] Incremented counter: SimpleCounter-Counter-059 -> 1008
+[Client 5] Incremented counter: SimpleCounter-Counter-008 -> 1747
+[Client 10] Incremented counter: SimpleCounter-Counter-016 -> 1113
+[Client 4] Got value for counter: SimpleCounter-Counter-004 = 1751
+[Client 7] Got value for counter: SimpleCounter-Counter-076 = 979
+[Client 6] Incremented counter: SimpleCounter-Counter-005 -> 1883
+[Client 8] Got value for counter: SimpleCounter-Counter-097 = 1019
+[Client 10] Created counter: SimpleCounter-Counter-052
+[Client 3] Got value for counter: SimpleCounter-Counter-010 = 1772
+[Client 5] Got value for counter: SimpleCounter-Counter-004 = 1751
+[Client 9] Incremented counter: SimpleCounter-Counter-005 -> 1884
+[Client 2] Incremented counter: SimpleCounter-Counter-008 -> 1748
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1795
+[Client 8] Incremented counter: SimpleCounter-Counter-001 -> 1722
+[Client 1] Got value for counter: SimpleCounter-Counter-008 = 1748
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1796
+[Client 10] Got value for counter: SimpleCounter-Counter-008 = 1748
+[Client 4] Incremented counter: SimpleCounter-Counter-001 -> 1723
+[Client 9] Got value for counter: SimpleCounter-Counter-009 = 1762
+[Client 2] Got value for counter: SimpleCounter-Counter-009 = 1762
+[Client 5] Incremented counter: SimpleCounter-Counter-010 -> 1773
+[Client 8] Got value for counter: SimpleCounter-Counter-072 = 1031
+[Client 3] Incremented counter: SimpleCounter-Counter-067 -> 1030
+[Client 2] Incremented counter: SimpleCounter-Counter-004 -> 1752
+[Client 5] Got value for counter: SimpleCounter-Counter-010 = 1773
+[Client 4] Got value for counter: SimpleCounter-Counter-022 = 997
+[Client 1] Got value for counter: SimpleCounter-Counter-001 = 1723
+[Client 10] Incremented counter: SimpleCounter-Counter-010 -> 1774
+[Client 9] Got value for counter: SimpleCounter-Counter-002 = 1704
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1797
+[Client 4] Incremented counter: SimpleCounter-Counter-001 -> 1724
+[Client 7] Got value for counter: SimpleCounter-Counter-059 = 1008
+[Client 6] Got value for counter: SimpleCounter-Counter-005 = 1884
+[Client 8] Incremented counter: SimpleCounter-Counter-038 -> 970
+[Client 2] Incremented counter: SimpleCounter-Counter-001 -> 1725
+[Client 10] Incremented counter: SimpleCounter-Counter-019 -> 1056
+[Client 9] Incremented counter: SimpleCounter-Counter-084 -> 1009
+[Client 3] Created counter: SimpleCounter-Counter-020
+[Client 5] Created counter: SimpleCounter-Counter-053
+[Client 7] Created counter: SimpleCounter-Counter-004
+[Client 4] Incremented counter: SimpleCounter-Counter-006 -> 1765
+[Client 1] Got value for counter: SimpleCounter-Counter-005 = 1884
+[Client 5] Incremented counter: SimpleCounter-Counter-001 -> 1726
+[Client 4] Incremented counter: SimpleCounter-Counter-004 -> 1753
+[Client 3] Created counter: SimpleCounter-Counter-017
+[Client 8] Incremented counter: SimpleCounter-Counter-005 -> 1885
+[Client 6] Incremented counter: SimpleCounter-Counter-001 -> 1727
+[Client 9] Incremented counter: SimpleCounter-Counter-009 -> 1763
+[Client 3] Created counter: SimpleCounter-Counter-063
+[Client 2] Incremented counter: SimpleCounter-Counter-007 -> 1701
+[Client 10] Incremented counter: SimpleCounter-Counter-024 -> 1103
+[Client 3] Got value for counter: SimpleCounter-Counter-002 = 1704
+[Client 1] Incremented counter: SimpleCounter-Counter-020 -> 991
+[Client 5] Got value for counter: SimpleCounter-Counter-006 = 1765
+[Client 4] Incremented counter: SimpleCounter-Counter-008 -> 1749
+[Client 7] Got value for counter: SimpleCounter-Counter-003 = 1797
+[Client 6] Incremented counter: SimpleCounter-Counter-008 -> 1750
+[Client 2] Created counter: SimpleCounter-Counter-032
+[Client 7] Incremented counter: SimpleCounter-Counter-059 -> 1009
+[Client 4] Incremented counter: SimpleCounter-Counter-003 -> 1798
+[Client 8] Incremented counter: SimpleCounter-Counter-072 -> 1032
+[Client 10] Created counter: SimpleCounter-Counter-072
+[Client 3] Got value for counter: SimpleCounter-Counter-067 = 1030
+[Client 1] Incremented counter: SimpleCounter-Counter-008 -> 1751
+[Client 5] Incremented counter: SimpleCounter-Counter-008 -> 1752
+[Client 9] Created counter: SimpleCounter-Counter-074
+[Client 2] Created counter: SimpleCounter-Counter-020
+[Client 6] Created counter: SimpleCounter-Counter-092
+[Client 1] Created counter: SimpleCounter-Counter-068
+[Client 7] Created counter: SimpleCounter-Counter-036
+[Client 3] Incremented counter: SimpleCounter-Counter-006 -> 1766
+[Client 5] Incremented counter: SimpleCounter-Counter-007 -> 1702
+[Client 6] Incremented counter: SimpleCounter-Counter-008 -> 1753
+[Client 8] Got value for counter: SimpleCounter-Counter-038 = 970
+[Client 4] Incremented counter: SimpleCounter-Counter-008 -> 1754
+[Client 7] Got value for counter: SimpleCounter-Counter-004 = 1753
+[Client 1] Incremented counter: SimpleCounter-Counter-010 -> 1775
+[Client 4] Incremented counter: SimpleCounter-Counter-022 -> 998
+[Client 7] Incremented counter: SimpleCounter-Counter-076 -> 980
+[Client 6] Created counter: SimpleCounter-Counter-052
+[Client 3] Got value for counter: SimpleCounter-Counter-001 = 1727
+[Client 2] Created counter: SimpleCounter-Counter-040
+[Client 9] Created counter: SimpleCounter-Counter-100
+[Client 10] Got value for counter: SimpleCounter-Counter-007 = 1702
+[Client 6] Incremented counter: SimpleCounter-Counter-028 -> 1015
+[Client 2] Incremented counter: SimpleCounter-Counter-010 -> 1776
+[Client 4] Created counter: SimpleCounter-Counter-034
+[Client 1] Incremented counter: SimpleCounter-Counter-009 -> 1764
+[Client 9] Got value for counter: SimpleCounter-Counter-084 = 1009
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1799
+[Client 5] Incremented counter: SimpleCounter-Counter-006 -> 1767
+[Client 8] Created counter: SimpleCounter-Counter-029
+[Client 10] Got value for counter: SimpleCounter-Counter-009 = 1764
+[Client 3] Got value for counter: SimpleCounter-Counter-002 = 1704
+[Client 1] Incremented counter: SimpleCounter-Counter-006 -> 1768
+[Client 7] Created counter: SimpleCounter-Counter-011
+[Client 2] Incremented counter: SimpleCounter-Counter-008 -> 1755
+[Client 9] Incremented counter: SimpleCounter-Counter-005 -> 1886
+[Client 5] Created counter: SimpleCounter-Counter-098
+[Client 8] Got value for counter: SimpleCounter-Counter-038 = 970
+[Client 10] Got value for counter: SimpleCounter-Counter-001 = 1727
+[Client 1] Created counter: SimpleCounter-Counter-033
+[Client 4] Incremented counter: SimpleCounter-Counter-010 -> 1777
+[Client 5] Incremented counter: SimpleCounter-Counter-016 -> 1114
+[Client 6] Incremented counter: SimpleCounter-Counter-039 -> 1051
+[Client 10] Created counter: SimpleCounter-Counter-085
+[Client 9] Incremented counter: SimpleCounter-Counter-009 -> 1765
+[Client 1] Created counter: SimpleCounter-Counter-088
+[Client 8] Created counter: SimpleCounter-Counter-016
+[Client 4] Got value for counter: SimpleCounter-Counter-007 = 1702
+[Client 2] Incremented counter: SimpleCounter-Counter-032 -> 986
+[Client 10] Incremented counter: SimpleCounter-Counter-004 -> 1754
+[Client 3] Incremented counter: SimpleCounter-Counter-004 -> 1755
+[Client 7] Incremented counter: SimpleCounter-Counter-003 -> 1800
+[Client 5] Got value for counter: SimpleCounter-Counter-003 = 1800
+[Client 8] Got value for counter: SimpleCounter-Counter-029 = 977
+[Client 4] Created counter: SimpleCounter-Counter-088
+[Client 10] Created counter: SimpleCounter-Counter-047
+[Client 9] Got value for counter: SimpleCounter-Counter-084 = 1009
+[Client 6] Got value for counter: SimpleCounter-Counter-008 = 1755
+[Client 3] Created counter: SimpleCounter-Counter-068
+
+================================================================================
+STRESS TEST COMPLETED
+================================================================================
+[Client 4] Incremented counter: SimpleCounter-Counter-088 -> 1028
+[Client 8] Created counter: SimpleCounter-Counter-086
+[Client 5] Created counter: SimpleCounter-Counter-081
+[Client 9] Got value for counter: SimpleCounter-Counter-001 = 1727
+[Client 10] Got value for counter: SimpleCounter-Counter-007 = 1702
+[Client 7] Incremented counter: SimpleCounter-Counter-036 -> 1050
+[Client 9] Incremented counter: SimpleCounter-Counter-008 -> 1756
+[Client 8] Created counter: SimpleCounter-Counter-051
+[Client 5] Got value for counter: SimpleCounter-Counter-004 = 1755
+[Client 10] Incremented counter: SimpleCounter-Counter-072 -> 1033
+[Client 6] Got value for counter: SimpleCounter-Counter-007 = 1702
+[Client 9] Created counter: SimpleCounter-Counter-057
+[Client 7] Incremented counter: SimpleCounter-Counter-011 -> 1014
+[Client 9] Got value for counter: SimpleCounter-Counter-100 = 1089
+[Client 8] Incremented counter: SimpleCounter-Counter-008 -> 1757
+[Client 9] Got value for counter: SimpleCounter-Counter-074 = 999
+[Client 10] Created counter: SimpleCounter-Counter-050
+[Client 10] Got value for counter: SimpleCounter-Counter-019 = 1056
+
+Cleaning up...
+Stopping clients...
+[Client 1] Stopped. Actions: 35, Errors: 0, Creates: 6, Increments: 18, Gets: 11
+[Client 2] Stopped. Actions: 33, Errors: 0, Creates: 8, Increments: 20, Gets: 5
+[Client 3] Stopped. Actions: 35, Errors: 0, Creates: 6, Increments: 16, Gets: 11
+[Client 4] Stopped. Actions: 42, Errors: 0, Creates: 4, Increments: 25, Gets: 12
+[Client 5] Stopped. Actions: 39, Errors: 0, Creates: 6, Increments: 22, Gets: 9
+[Client 6] Stopped. Actions: 37, Errors: 0, Creates: 5, Increments: 16, Gets: 13
+[Client 7] Stopped. Actions: 39, Errors: 0, Creates: 6, Increments: 25, Gets: 8
+[Client 8] Stopped. Actions: 33, Errors: 0, Creates: 11, Increments: 10, Gets: 11
+[Client 9] Stopped. Actions: 39, Errors: 0, Creates: 5, Increments: 18, Gets: 16
+[Client 10] Stopped. Actions: 39, Errors: 0, Creates: 8, Increments: 19, Gets: 12
+Stopping gateways...
+Gracefully stopping Gateway (PID: 4651)...
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.141] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+Gracefully stopping Gateway (PID: 4652)...
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.149] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+Gracefully stopping Gateway (PID: 4653)...
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.158] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+Gracefully stopping Gateway (PID: 4654)...
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.166] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.167] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+Gracefully stopping Gateway (PID: 4655)...
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.175] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+Gracefully stopping Gateway (PID: 4656)...
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.183] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+Gracefully stopping Gateway (PID: 4657)...
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9213 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9218 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9220 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9214 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9216 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9217 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9212 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9211 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9219 closed: rpc error: code = Canceled desc = context canceled
+[2026-04-21 22:51:27.191] [ERROR] [Gate] Stream from node localhost:9215 closed: rpc error: code = Canceled desc = context canceled
+Stopping demo servers...
+Stopping Demo Server 10...
+✅ Demo Server 10 stopped
+Stopping Demo Server 9...
+[2026-04-21 22:51:27.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Failed to claim shard ownership: cluster state not stable, skipping shard claiming
+[2026-04-21 22:51:27.244] [WARN] [Cluster] Cluster<localhost:9217,node,member,quorum=1> - Skipping auto-load: cluster state is not stable yet
+✅ Demo Server 9 stopped
+Stopping Demo Server 8...
+✅ Demo Server 8 stopped
+Stopping Demo Server 7...
+✅ Demo Server 7 stopped
+Stopping Demo Server 6...
+✅ Demo Server 6 stopped
+Stopping Demo Server 5...
+✅ Demo Server 5 stopped
+Stopping Demo Server 4...
+✅ Demo Server 4 stopped
+Stopping Demo Server 3...
+✅ Demo Server 3 stopped
+Stopping Demo Server 2...
+✅ Demo Server 2 stopped
+Stopping Demo Server 1...
+✅ Demo Server 1 stopped
+Stopping inspector...
+Gracefully stopping Inspector (PID: 4598)...
+✅ Cleanup complete
+
+================================================================================
+CLIENT STATISTICS
+================================================================================
+Client  1: Actions:    35 | Errors:    0 | Creates:    6 | Increments:   18 | Gets:   11
+Client  2: Actions:    33 | Errors:    0 | Creates:    8 | Increments:   20 | Gets:    5
+Client  3: Actions:    35 | Errors:    0 | Creates:    6 | Increments:   16 | Gets:   11
+Client  4: Actions:    42 | Errors:    0 | Creates:    4 | Increments:   25 | Gets:   12
+Client  5: Actions:    39 | Errors:    0 | Creates:    6 | Increments:   22 | Gets:    9
+Client  6: Actions:    37 | Errors:    0 | Creates:    5 | Increments:   16 | Gets:   13
+Client  7: Actions:    39 | Errors:    0 | Creates:    6 | Increments:   25 | Gets:    8
+Client  8: Actions:    33 | Errors:    0 | Creates:   11 | Increments:   10 | Gets:   11
+Client  9: Actions:    39 | Errors:    0 | Creates:    5 | Increments:   18 | Gets:   16
+Client 10: Actions:    39 | Errors:    0 | Creates:    8 | Increments:   19 | Gets:   12
+--------------------------------------------------------------------------------
+TOTAL: Actions: 371, Errors: 0, Creates: 65, Increments: 189, Gets: 108
+================================================================================
+
+
+[1m[7m%[27m[1m[0m                                                                                                                                                            ]7;file://alexs-Mac-mini.local/Users/alex/projects/goverse[0m[27m[24m[Jalex@alexs-Mac-mini goverse % [K[?2004h[?2004l
+
+Saving session...
+...saving history...truncating history files...
+...completed.
+
+Script done on Tue Apr 21 22:51:32 2026
