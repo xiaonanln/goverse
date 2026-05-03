@@ -207,7 +207,7 @@ type StateChangeListener interface {
 
 // defaultStuckShardTimeout is the default duration after which the leader reallocates
 // a shard whose TargetNode is alive but has not claimed ownership.
-const defaultStuckShardTimeout = 30 * time.Second
+const defaultStuckShardTimeout = 60 * time.Second
 
 // ConsensusManager handles all etcd interactions and maintains in-memory cluster state
 type ConsensusManager struct {
@@ -385,8 +385,8 @@ func (cm *ConsensusManager) GetImbalanceThreshold() float64 {
 }
 
 // SetStuckShardTimeout sets how long the leader waits before reallocating a shard whose
-// TargetNode is alive but has not claimed ownership. Defaults to 30 seconds.
-// If d <= 0, the default is restored.
+// TargetNode is alive but has not claimed ownership. Should only be called during
+// initialization from cluster config. If d <= 0, the default (1 minute) is used.
 func (cm *ConsensusManager) SetStuckShardTimeout(d time.Duration) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -396,13 +396,6 @@ func (cm *ConsensusManager) SetStuckShardTimeout(d time.Duration) {
 	cm.stuckShardTimeout = d
 }
 
-// GetStuckShardTimeout returns the current stuck-shard reallocation timeout.
-func (cm *ConsensusManager) GetStuckShardTimeout() time.Duration {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.stuckShardTimeout
-}
-
 // calcReallocateStuckShards identifies shards that have been assigned to a live node
 // but not claimed within the stuck-shard timeout, and returns updated ShardInfos with
 // a new TargetNode. It also updates the stuckShardFirstSeen tracking map in place.
@@ -410,38 +403,33 @@ func (cm *ConsensusManager) GetStuckShardTimeout() time.Duration {
 // Must only be called from a single goroutine (the leader management loop).
 func (cm *ConsensusManager) calcReallocateStuckShards(now time.Time) map[int]ShardInfo {
 	cm.mu.RLock()
-	nodes := make([]string, 0, len(cm.state.Nodes))
-	for n := range cm.state.Nodes {
-		nodes = append(nodes, n)
-	}
-	// Sort for deterministic selection
-	slices.Sort(nodes)
-	shards := cm.state.ShardMapping.Shards
-	timeout := cm.stuckShardTimeout
-	cm.mu.RUnlock()
+	defer cm.mu.RUnlock()
 
-	if len(nodes) < 2 {
+	if len(cm.state.Nodes) < 2 {
 		// Cannot reallocate with fewer than 2 nodes — clear stale tracking entries.
 		clear(cm.stuckShardFirstSeen)
 		return nil
 	}
 
+	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
 	nodeSet := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
 		nodeSet[n] = true
 	}
+	timeout := cm.stuckShardTimeout
 
 	updateShards := make(map[int]ShardInfo)
 
 	// Track which shard IDs are currently stuck so we can prune stale entries.
 	activeStuck := make(map[int]bool)
 
-	for shardID, info := range shards {
+	for shardID, info := range cm.state.ShardMapping.Shards {
 		// A shard is stuck when:
 		//   - TargetNode is set (the leader allocated it)
 		//   - CurrentNode is empty (no node has claimed it yet)
 		//   - TargetNode is still alive (so the dead-node path won't handle it)
-		if info.TargetNode == "" || info.CurrentNode != "" || !nodeSet[info.TargetNode] {
+		//   - Shard is not pinned (pinned shards must stay on their assigned node)
+		if info.TargetNode == "" || info.CurrentNode != "" || !nodeSet[info.TargetNode] || info.HasFlag("pinned") {
 			delete(cm.stuckShardFirstSeen, shardID)
 			continue
 		}
@@ -494,6 +482,15 @@ func (cm *ConsensusManager) calcReallocateStuckShards(now time.Time) map[int]Sha
 // call this.
 // Returns the number of shards successfully reallocated and any error encountered.
 func (cm *ConsensusManager) ReallocateStuckShards(ctx context.Context) (int, error) {
+	// Capture original target nodes before calcReallocateStuckShards mutates stuckShardFirstSeen.
+	// We read under the lock inside calcReallocateStuckShards, so grab the fromNode info first.
+	cm.mu.RLock()
+	originalTargets := make(map[int]string, len(cm.state.ShardMapping.Shards))
+	for shardID, info := range cm.state.ShardMapping.Shards {
+		originalTargets[shardID] = info.TargetNode
+	}
+	cm.mu.RUnlock()
+
 	updateShards := cm.calcReallocateStuckShards(time.Now())
 	if updateShards == nil {
 		return 0, nil
@@ -501,14 +498,11 @@ func (cm *ConsensusManager) ReallocateStuckShards(ctx context.Context) (int, err
 
 	// Count reallocations per original target for metrics.
 	fromCounts := make(map[string]int)
-	cm.mu.RLock()
-	for shardID, newInfo := range updateShards {
-		if oldInfo, ok := cm.state.ShardMapping.Shards[shardID]; ok {
-			fromCounts[oldInfo.TargetNode]++
-			_ = newInfo
+	for shardID := range updateShards {
+		if orig := originalTargets[shardID]; orig != "" {
+			fromCounts[orig]++
 		}
 	}
-	cm.mu.RUnlock()
 
 	cm.logger.Warnf("Reallocating %d stuck shards (assigned to live nodes that did not claim within %v)",
 		len(updateShards), cm.stuckShardTimeout)

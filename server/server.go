@@ -48,7 +48,10 @@ type ServerConfig struct {
 	DefaultCallTimeout   time.Duration
 	DefaultCreateTimeout time.Duration
 	DefaultDeleteTimeout time.Duration
-	ConfigFile           *config.Config // Optional: loaded config file (if config file was used)
+	// StuckShardReallocationTimeout is how long the leader waits before reassigning
+	// a shard whose TargetNode is alive but has not claimed. Zero means use built-in default (1 minute).
+	StuckShardReallocationTimeout time.Duration
+	ConfigFile                    *config.Config // Optional: loaded config file (if config file was used)
 }
 
 type Server struct {
@@ -132,6 +135,9 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 	if config.DefaultDeleteTimeout > 0 {
 		clusterCfg.DefaultDeleteTimeout = config.DefaultDeleteTimeout
+	}
+	if config.StuckShardReallocationTimeout > 0 {
+		clusterCfg.StuckShardReallocationTimeout = config.StuckShardReallocationTimeout
 	}
 	if config.ConfigFile != nil {
 		clusterCfg.ConfigFile = config.ConfigFile

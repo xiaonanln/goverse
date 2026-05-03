@@ -51,7 +51,7 @@ func TestCalcReallocateStuckShards_NothingStuck(t *testing.T) {
 func TestCalcReallocateStuckShards_NotYetTimedOut(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1", "node2"})
-	cm.SetStuckShardTimeout(30 * time.Second)
+	cm.stuckShardTimeout = 30 * time.Second
 	setShards(cm, map[int]ShardInfo{
 		0: {TargetNode: "node1", CurrentNode: ""}, // assigned, not claimed
 	})
@@ -75,7 +75,7 @@ func TestCalcReallocateStuckShards_NotYetTimedOut(t *testing.T) {
 func TestCalcReallocateStuckShards_TimedOut(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1", "node2"})
-	cm.SetStuckShardTimeout(30 * time.Second)
+	cm.stuckShardTimeout = 30 * time.Second
 	setShards(cm, map[int]ShardInfo{
 		0: {TargetNode: "node1", CurrentNode: ""},
 	})
@@ -106,7 +106,7 @@ func TestCalcReallocateStuckShards_TimedOut(t *testing.T) {
 func TestCalcReallocateStuckShards_SingleNode(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1"})
-	cm.SetStuckShardTimeout(1 * time.Millisecond)
+	cm.stuckShardTimeout = 1 * time.Millisecond
 	setShards(cm, map[int]ShardInfo{
 		0: {TargetNode: "node1", CurrentNode: ""},
 	})
@@ -124,7 +124,7 @@ func TestCalcReallocateStuckShards_SingleNode(t *testing.T) {
 func TestCalcReallocateStuckShards_DeadTarget(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1", "node2"})
-	cm.SetStuckShardTimeout(1 * time.Millisecond)
+	cm.stuckShardTimeout = 1 * time.Millisecond
 	// TargetNode "dead-node" is not in the active nodes map.
 	setShards(cm, map[int]ShardInfo{
 		0: {TargetNode: "dead-node", CurrentNode: ""},
@@ -143,7 +143,7 @@ func TestCalcReallocateStuckShards_DeadTarget(t *testing.T) {
 func TestCalcReallocateStuckShards_TrackingReset(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1", "node2"})
-	cm.SetStuckShardTimeout(10 * time.Millisecond)
+	cm.stuckShardTimeout = 10 * time.Millisecond
 	setShards(cm, map[int]ShardInfo{
 		0: {TargetNode: "node1", CurrentNode: ""},
 	})
@@ -163,7 +163,7 @@ func TestCalcReallocateStuckShards_TrackingReset(t *testing.T) {
 func TestCalcReallocateStuckShards_AlreadyClaimed(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1", "node2"})
-	cm.SetStuckShardTimeout(30 * time.Second)
+	cm.stuckShardTimeout = 30 * time.Second
 	setShards(cm, map[int]ShardInfo{
 		0: {TargetNode: "node1", CurrentNode: ""},
 	})
@@ -190,24 +190,36 @@ func TestCalcReallocateStuckShards_AlreadyClaimed(t *testing.T) {
 	}
 }
 
-// TestSetAndGetStuckShardTimeout verifies the getter/setter round-trip.
-func TestSetAndGetStuckShardTimeout(t *testing.T) {
+// TestCalcReallocateStuckShards_PinnedShard verifies that pinned shards are never
+// reallocated, even when their target node does not claim them in time.
+func TestCalcReallocateStuckShards_PinnedShard(t *testing.T) {
+	t.Parallel()
+	cm := newTestCM([]string{"node1", "node2"})
+	cm.stuckShardTimeout = 1 * time.Millisecond
+	setShards(cm, map[int]ShardInfo{
+		0: {TargetNode: "node1", CurrentNode: "", Flags: []string{"pinned"}},
+	})
+
+	now := time.Now()
+	cm.calcReallocateStuckShards(now) // seed (should not track pinned shard)
+	result := cm.calcReallocateStuckShards(now.Add(1 * time.Second))
+	if result != nil {
+		t.Fatal("pinned shard must never be reallocated")
+	}
+	if _, found := cm.stuckShardFirstSeen[0]; found {
+		t.Fatal("pinned shard must not be added to stuckShardFirstSeen tracking")
+	}
+}
+
+// TestStuckShardDefaultTimeout verifies the built-in default is 1 minute.
+func TestStuckShardDefaultTimeout(t *testing.T) {
 	t.Parallel()
 	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
 	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "node1", testNumShards)
-
-	if got := cm.GetStuckShardTimeout(); got != defaultStuckShardTimeout {
-		t.Fatalf("expected default %v, got %v", defaultStuckShardTimeout, got)
+	if cm.stuckShardTimeout != defaultStuckShardTimeout {
+		t.Fatalf("expected default %v, got %v", defaultStuckShardTimeout, cm.stuckShardTimeout)
 	}
-
-	cm.SetStuckShardTimeout(60 * time.Second)
-	if got := cm.GetStuckShardTimeout(); got != 60*time.Second {
-		t.Fatalf("expected 60s after set, got %v", got)
-	}
-
-	// Zero resets to default.
-	cm.SetStuckShardTimeout(0)
-	if got := cm.GetStuckShardTimeout(); got != defaultStuckShardTimeout {
-		t.Fatalf("expected default after reset, got %v", got)
+	if defaultStuckShardTimeout != 60*time.Second {
+		t.Fatalf("defaultStuckShardTimeout should be 1 minute, got %v", defaultStuckShardTimeout)
 	}
 }

@@ -15,6 +15,10 @@ type ClusterConfig struct {
 	Etcd                          EtcdConfig    `yaml:"etcd"`
 	ImbalanceThreshold            float64       `yaml:"imbalance_threshold,omitempty"`
 	ClusterStateStabilityDuration time.Duration `yaml:"cluster_state_stability_duration,omitempty"`
+	// StuckShardReallocationTimeout is how long the leader waits before reassigning
+	// a shard whose TargetNode is alive but has not claimed ownership.
+	// Zero means use the built-in default (1 minute).
+	StuckShardReallocationTimeout time.Duration `yaml:"stuck_shard_reallocation_timeout,omitempty"`
 	// DefaultCallTimeout is the default timeout applied to CallObject when the
 	// caller context has no deadline. Zero means use the built-in default.
 	DefaultCallTimeout time.Duration `yaml:"default_call_timeout,omitempty"`
@@ -231,6 +235,12 @@ func (c *Config) GetNumShards() int {
 // Returns 0 if not configured (caller should use default).
 func (c *Config) GetClusterStateStabilityDuration() time.Duration {
 	return c.Cluster.ClusterStateStabilityDuration
+}
+
+// GetStuckShardReallocationTimeout returns the configured stuck-shard reallocation timeout.
+// Returns 0 if not configured (caller should use default).
+func (c *Config) GetStuckShardReallocationTimeout() time.Duration {
+	return c.Cluster.StuckShardReallocationTimeout
 }
 
 // GetDefaultCallTimeout returns the configured default CallObject timeout.

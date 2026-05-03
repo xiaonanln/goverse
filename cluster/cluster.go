@@ -89,6 +89,7 @@ type Cluster struct {
 	clusterManagementRunning  bool
 	clusterReadyChan          chan bool
 	clusterReadyOnce          sync.Once
+	lastStuckShardCheck       time.Time // last time ReallocateStuckShards was run as leader
 	gateChannels              map[string]chan proto.Message
 	gateChannelsMu            sync.RWMutex
 }
@@ -229,6 +230,11 @@ func (c *Cluster) init(cfg Config) error {
 	// Set imbalance threshold on consensus manager if specified
 	if cfg.ImbalanceThreshold > 0 {
 		c.consensusManager.SetImbalanceThreshold(cfg.ImbalanceThreshold)
+	}
+
+	// Set stuck-shard reallocation timeout if specified in config
+	if cfg.StuckShardReallocationTimeout > 0 {
+		c.consensusManager.SetStuckShardTimeout(cfg.StuckShardReallocationTimeout)
 	}
 	return nil
 }
@@ -1810,16 +1816,19 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 	}
 
 	// Second priority: reallocate shards whose TargetNode is alive but has not claimed
-	// ownership within the stuck-shard timeout. This recovers from nodes that are
-	// registered in etcd but not processing their shard assignments.
-	reallocated, err := c.consensusManager.ReallocateStuckShards(ctx)
-	if reallocated > 0 {
-		c.logger.Warnf("%s - Reallocated %d stuck shards to new target nodes", c, reallocated)
-		return true
-	}
-	if err != nil {
-		c.logger.Errorf("%s - Failed to reallocate stuck shards: %v", c, err)
-		return false
+	// ownership within the stuck-shard timeout. Checked once per minute to avoid
+	// unnecessary overhead on every management tick.
+	const stuckShardCheckInterval = time.Minute
+	if time.Since(c.lastStuckShardCheck) >= stuckShardCheckInterval {
+		c.lastStuckShardCheck = time.Now()
+		reallocated, err := c.consensusManager.ReallocateStuckShards(ctx)
+		if reallocated > 0 {
+			c.logger.Warnf("%s - Reallocated %d stuck shards to new target nodes", c, reallocated)
+			return true
+		}
+		if err != nil {
+			c.logger.Errorf("%s - Failed to reallocate stuck shards: %v", c, err)
+		}
 	}
 
 	// Third priority: rebalance shards to improve cluster balance
