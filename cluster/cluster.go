@@ -1809,7 +1809,20 @@ func (c *Cluster) leaderShardManagementLogic(ctx context.Context) bool {
 		return false
 	}
 
-	// Second priority: rebalance shards to improve cluster balance
+	// Second priority: reallocate shards whose TargetNode is alive but has not claimed
+	// ownership within the stuck-shard timeout. This recovers from nodes that are
+	// registered in etcd but not processing their shard assignments.
+	reallocated, err := c.consensusManager.ReallocateStuckShards(ctx)
+	if reallocated > 0 {
+		c.logger.Warnf("%s - Reallocated %d stuck shards to new target nodes", c, reallocated)
+		return true
+	}
+	if err != nil {
+		c.logger.Errorf("%s - Failed to reallocate stuck shards: %v", c, err)
+		return false
+	}
+
+	// Third priority: rebalance shards to improve cluster balance
 	// Only attempt if no reassignment was needed (cluster is stable)
 	rebalanced, err := c.consensusManager.RebalanceShards(ctx)
 	if err != nil {
