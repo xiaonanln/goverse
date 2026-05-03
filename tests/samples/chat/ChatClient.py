@@ -26,6 +26,8 @@ class ChatClient:
     output_lock: threading.Lock
     output_buffer: List[str]
     
+    DEFAULT_PASSWORD = '000000'
+
     def __init__(self) -> None:
         """Initialize the chat client."""
         self.name = "Chat Client"
@@ -41,13 +43,15 @@ class ChatClient:
         self.stream_thread = None
         self.running = False
     
-    def start_interactive(self, server_port: int, username: str = 'testuser') -> bool:
+    def start_interactive(self, server_port: int, username: str = 'testuser',
+                          password: str = DEFAULT_PASSWORD) -> bool:
         """Start the chat client as an interactive background process.
-        
+
         Args:
             server_port: The server port to connect to
             username: Username for the chat client (default: testuser)
-            
+            password: Password for authentication (default: 000000)
+
         Returns:
             True if client started successfully, False otherwise
         """
@@ -57,9 +61,10 @@ class ChatClient:
             self.channel = grpc.insecure_channel(server_address)
             self.stub = gate_pb2_grpc.GateServiceStub(self.channel)
             self.user_name = username
-            
-            # Register the client (this will block until connection is established)
-            self.stream = self.stub.Register(gate_pb2.Empty())
+
+            # Register with auth credentials so the gate sets CallerIdentity.
+            auth_metadata = [('x-username', username), ('x-password', password)]
+            self.stream = self.stub.Register(gate_pb2.Empty(), metadata=auth_metadata)
             
             # Read the first message which should be RegisterResponse
             first_msg = next(self.stream)
@@ -254,30 +259,34 @@ class ChatClient:
         
         return self.get_output()
     
-    def run_test(self, server_port: int, username: str = 'testuser', messages: Optional[List[str]] = None, timeout: float = 30) -> str:
+    def run_test(self, server_port: int, username: str = 'testuser',
+                 password: str = DEFAULT_PASSWORD,
+                 messages: Optional[List[str]] = None, timeout: float = 30) -> str:
         """Run the chat client with a test sequence and return the output.
-        
+
         Args:
             server_port: The server port to connect to
             username: Username for the chat client (default: testuser)
+            password: Password for authentication (default: 000000)
             messages: List of messages to send (default: standard test messages)
             timeout: Command timeout in seconds (default: 30)
-            
+
         Returns:
             The output from the chat client as a string
         """
         if messages is None:
             messages = ['Hello from test!', 'This is message 2', 'Final test message']
-        
+
         try:
             # Connect to the server
             server_address = f'localhost:{server_port}'
             self.channel = grpc.insecure_channel(server_address)
             self.stub = gate_pb2_grpc.GateServiceStub(self.channel)
             self.user_name = username
-            
-            # Register the client (this will block until connection is established)
-            self.stream = self.stub.Register(gate_pb2.Empty())
+
+            # Register with auth credentials so the gate sets CallerIdentity.
+            auth_metadata = [('x-username', username), ('x-password', password)]
+            self.stream = self.stub.Register(gate_pb2.Empty(), metadata=auth_metadata)
             
             # Read the first message which should be RegisterResponse
             first_msg = next(self.stream)
