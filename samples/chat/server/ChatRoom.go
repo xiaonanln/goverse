@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/xiaonanln/goverse/goverseapi"
@@ -11,13 +10,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ChatRoom methods are serialized by the framework's per-object lock; no
+// additional mutex is needed to protect the fields below.
 type ChatRoom struct {
 	goverseapi.BaseObject
 
 	users     map[string]bool   // userName -> bool
 	clientIDs map[string]string // userName -> clientID for push notifications
 	messages  []*chat_pb.ChatMessage
-	mu        sync.Mutex
 }
 
 func (room *ChatRoom) OnCreated() {
@@ -31,9 +31,6 @@ func (room *ChatRoom) Name() string {
 }
 
 func (room *ChatRoom) Join(ctx context.Context, request *chat_pb.ChatRoom_JoinRequest) (*chat_pb.ChatRoom_JoinResponse, error) {
-	room.mu.Lock()
-	defer room.mu.Unlock()
-
 	userName := goverseapi.CallerUserID(ctx)
 	if userName == "" {
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
@@ -62,9 +59,6 @@ func (room *ChatRoom) Join(ctx context.Context, request *chat_pb.ChatRoom_JoinRe
 }
 
 func (room *ChatRoom) SendMessage(ctx context.Context, request *chat_pb.ChatRoom_SendChatMessageRequest) (*chat_pb.Client_SendChatMessageResponse, error) {
-	room.mu.Lock()
-	defer room.mu.Unlock()
-
 	message := request.GetMessage()
 	room.Logger.Infof("Message in chatroom %s: %s", room.Id(), message)
 
