@@ -46,7 +46,7 @@ func TestProcessReliableCall_AdvancesNextRcseqOnDecodeFailure(t *testing.T) {
 	}
 
 	// Process the call with invalid data
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// CRITICAL: nextRcseq MUST advance to 11 even though decode failed
 	if obj.GetNextRcseq() != 11 {
@@ -91,7 +91,7 @@ func TestProcessReliableCall_AdvancesNextRcseqOnDecodeFailure(t *testing.T) {
 	}
 
 	// Process the valid call
-	obj.processReliableCall(provider, successCall)
+	obj.processReliableCall(provider, successCall, context.Background())
 
 	// nextRcseq should advance to 12
 	if obj.GetNextRcseq() != 12 {
@@ -145,7 +145,7 @@ func TestProcessReliableCall_AdvancesNextRcseqOnMethodFailure(t *testing.T) {
 	}
 
 	// Process the call
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// nextRcseq MUST advance even though method failed
 	if obj.GetNextRcseq() != 6 {
@@ -180,7 +180,7 @@ func TestProcessReliableCall_AdvancesNextRcseqOnMethodFailure(t *testing.T) {
 	}
 
 	// Process the valid call
-	obj.processReliableCall(provider, successCall)
+	obj.processReliableCall(provider, successCall, context.Background())
 
 	// nextRcseq should advance to 7
 	if obj.GetNextRcseq() != 7 {
@@ -233,7 +233,7 @@ func TestProcessReliableCall_AdvancesNextRcseqOnSuccess(t *testing.T) {
 	}
 
 	// Process the call
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// nextRcseq MUST advance on success
 	if obj.GetNextRcseq() != 21 {

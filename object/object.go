@@ -206,12 +206,13 @@ type Object interface {
 	// Thread-Safety: This method is thread-safe and can be called concurrently.
 	//
 	// Parameters:
+	//   - ctx: Caller's context; carries CallerIdentity that will be forwarded to the method
 	//   - provider: PersistenceProvider for fetching pending calls from storage
 	//   - seq: The sequence number of the reliable call to wait for
 	//
 	// Returns:
 	//   - <-chan *ReliableCall: Channel that receives the matching ReliableCall (if found and processed)
-	ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall
+	ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall
 
 	// EnsureProcessingLoopRunning starts the reliable-call processing goroutine
 	// if it isn't already running, without registering a waiter. Used for
@@ -275,6 +276,7 @@ var ErrNotPersistent = fmt.Errorf("object is not persistent")
 type seqWaiter struct {
 	seq int64
 	ch  chan<- *ReliableCall
+	ctx context.Context // caller's context; carries CallerIdentity for the method dispatch
 }
 
 // BaseObject is the base type for all distributed objects. Embed it in your
@@ -463,7 +465,7 @@ func (base *BaseObject) InvokeMethod(ctx context.Context, method string, request
 // The channel is closed after processing completes.
 // If the call was already executed (seq < nextRcseq), the channel is closed immediately without adding anything.
 // Always returns a channel; if processing is already running, the caller waits for that goroutine.
-func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider, seq int64) <-chan *ReliableCall {
+func (base *BaseObject) ProcessPendingReliableCalls(ctx context.Context, provider PersistenceProvider, seq int64) <-chan *ReliableCall {
 	callsChan := make(chan *ReliableCall, 1)
 
 	// If the seq is already processed, close immediately
@@ -477,7 +479,7 @@ func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider
 
 	// Register as a waiter and try to start processing goroutine atomically
 	base.seqWaitersMu.Lock()
-	base.insertWaiterSorted(seq, callsChan)
+	base.insertWaiterSorted(seq, callsChan, ctx)
 	shouldStart := !base.processingCalls
 	if shouldStart {
 		base.processingCalls = true
@@ -489,6 +491,22 @@ func (base *BaseObject) ProcessPendingReliableCalls(provider PersistenceProvider
 	}
 
 	return callsChan
+}
+
+// callerContextForSeq returns the caller context registered by the waiter for
+// the given seq, or base.ctx if no waiter context is found (recovery path).
+func (base *BaseObject) callerContextForSeq(seq int64) context.Context {
+	base.seqWaitersMu.Lock()
+	defer base.seqWaitersMu.Unlock()
+	for _, w := range base.seqWaiters {
+		if w.seq == seq {
+			if w.ctx != nil {
+				return w.ctx
+			}
+			break
+		}
+	}
+	return base.ctx
 }
 
 // EnsureProcessingLoopRunning starts runProcessingLoop if it isn't already
@@ -509,8 +527,8 @@ func (base *BaseObject) EnsureProcessingLoopRunning(provider PersistenceProvider
 
 // insertWaiterSorted inserts a waiter in sorted order by seq.
 // Must be called with seqWaitersMu held.
-func (base *BaseObject) insertWaiterSorted(seq int64, ch chan<- *ReliableCall) {
-	w := seqWaiter{seq: seq, ch: ch}
+func (base *BaseObject) insertWaiterSorted(seq int64, ch chan<- *ReliableCall, ctx context.Context) {
+	w := seqWaiter{seq: seq, ch: ch, ctx: ctx}
 	base.seqWaiters = append(base.seqWaiters, w)
 	// Bubble up to maintain sorted order
 	for i := len(base.seqWaiters) - 1; i > 0 && base.seqWaiters[i].seq < base.seqWaiters[i-1].seq; i-- {
@@ -584,7 +602,8 @@ func (base *BaseObject) runProcessingLoop(provider PersistenceProvider) {
 				if base.ctx.Err() != nil {
 					return
 				}
-				base.processReliableCall(provider, call)
+				callCtx := base.callerContextForSeq(call.Seq)
+				base.processReliableCall(provider, call, callCtx)
 				base.notifyWaiters(call.Seq, call)
 			}
 			// Loop again to drain any further calls and notify remaining waiters.
@@ -696,7 +715,7 @@ func (base *BaseObject) saveLocked(provider PersistenceProvider, call *ReliableC
 
 // processReliableCall executes a single reliable call
 // Holds stateMu.Lock() during execution to ensure atomic state mutation + nextRcseq update
-func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *ReliableCall) {
+func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *ReliableCall, callCtx context.Context) {
 	base.stateMu.Lock()
 	defer base.stateMu.Unlock()
 
@@ -729,8 +748,9 @@ func (base *BaseObject) processReliableCall(provider PersistenceProvider, call *
 		return
 	}
 
-	// Invoke the method on the object (state mutation happens here)
-	result, err := base.self.InvokeMethod(base.ctx, call.MethodName, requestMsg)
+	// Invoke the method on the object (state mutation happens here).
+	// callCtx carries the caller's CallerIdentity (falls back to base.ctx on recovery).
+	result, err := base.self.InvokeMethod(callCtx, call.MethodName, requestMsg)
 	if err != nil {
 		// Execution error (method invocation failed) - mark as failed
 		base.Logger.Errorf("Reliable call %s (seq=%d) failed during execution: %v", call.CallID, call.Seq, err)

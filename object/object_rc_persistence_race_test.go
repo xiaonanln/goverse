@@ -124,7 +124,7 @@ func TestProcessReliableCall_UpdatesNextRcseqUnderLock(t *testing.T) {
 	}
 
 	// Process the call
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// Verify nextRcseq was updated
 	if obj.GetNextRcseq() != 6 {

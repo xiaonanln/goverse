@@ -528,7 +528,7 @@ func (node *Node) ReliableCallObject(
 	// Trigger processing of pending reliable calls for this object
 	// This will fetch pending calls from the database and execute them sequentially.
 	// The processing loop retries automatically when new waiters arrive, so single trigger is sufficient.
-	resultChan := obj.ProcessPendingReliableCalls(provider, seq)
+	resultChan := obj.ProcessPendingReliableCalls(ctx, provider, seq)
 
 	// Wait for our call's result.
 	// Channel sends the ReliableCall if processed, or closes without sending if:

@@ -41,7 +41,7 @@ func TestProcessReliableCall_SavesPersistentObject(t *testing.T) {
 	}
 
 	// Process the call
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// Verify nextRcseq was updated
 	if obj.GetNextRcseq() != 6 {
@@ -115,7 +115,7 @@ func TestProcessReliableCall_SkipsNonPersistentObject(t *testing.T) {
 	}
 
 	// Process the call
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// Verify nextRcseq was updated
 	if obj.GetNextRcseq() != 6 {
@@ -168,7 +168,7 @@ func TestProcessReliableCall_SaveFailureDoesNotBlockRCCompletion(t *testing.T) {
 	}
 
 	// Process the call - should not panic or fail
-	obj.processReliableCall(provider, call)
+	obj.processReliableCall(provider, call, context.Background())
 
 	// Verify nextRcseq was updated despite save failure
 	if obj.GetNextRcseq() != 6 {
