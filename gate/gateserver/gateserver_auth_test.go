@@ -77,46 +77,27 @@ func TestGateServerRegister_AuthReject(t *testing.T) {
 	}
 }
 
-// TestGateServerCallObject_AuthRequired_EmptyClientID verifies that CallObject
-// returns Unauthenticated when auth is configured but ClientId is empty.
-func TestGateServerCallObject_AuthRequired_EmptyClientID(t *testing.T) {
+// TestGateServerCallObject_NoSessionCheck verifies that CallObject does NOT
+// reject calls based on client_id — unauthenticated or unregistered clients
+// reach the node, which is responsible for access control.
+func TestGateServerCallObject_NoSessionCheck(t *testing.T) {
 	t.Parallel()
-	_, client := authGateServer(t, "/test-gate-auth-callobj-empty",
+	_, client := authGateServer(t, "/test-gate-auth-callobj-nosession",
 		&stubGateEventHandler{identity: &goverseapi.CallerIdentity{UserID: "alice"}})
 
-	_, err := client.CallObject(context.Background(), &gate_pb.CallObjectRequest{
-		ClientId: "",
-		Method:   "SomeMethod",
-		Type:     "SomeType",
-		Id:       "obj1",
-	})
-	if err == nil {
-		t.Fatal("expected Unauthenticated error, got nil")
-	}
-	if code := status.Code(err); code != codes.Unauthenticated {
-		t.Fatalf("expected codes.Unauthenticated, got %v", code)
-	}
-}
-
-// TestGateServerCallObject_AuthRequired_InvalidClientID verifies that CallObject
-// returns Unauthenticated when the ClientId does not correspond to an active
-// authenticated Register session.
-func TestGateServerCallObject_AuthRequired_InvalidClientID(t *testing.T) {
-	t.Parallel()
-	_, client := authGateServer(t, "/test-gate-auth-callobj-invalid",
-		&stubGateEventHandler{identity: &goverseapi.CallerIdentity{UserID: "alice"}})
-
-	_, err := client.CallObject(context.Background(), &gate_pb.CallObjectRequest{
-		ClientId: "not-a-registered-client",
-		Method:   "SomeMethod",
-		Type:     "SomeType",
-		Id:       "obj1",
-	})
-	if err == nil {
-		t.Fatal("expected Unauthenticated error, got nil")
-	}
-	if code := status.Code(err); code != codes.Unauthenticated {
-		t.Fatalf("expected codes.Unauthenticated, got %v", code)
+	for _, clientID := range []string{"", "not-a-registered-client"} {
+		_, err := client.CallObject(context.Background(), &gate_pb.CallObjectRequest{
+			ClientId: clientID,
+			Method:   "SomeMethod",
+			Type:     "SomeType",
+			Id:       "obj1",
+		})
+		// The gate must not return Unauthenticated — it may return any other
+		// error (e.g. Unavailable — no cluster nodes) but auth enforcement is
+		// the node's responsibility, not the gate's.
+		if err != nil && status.Code(err) == codes.Unauthenticated {
+			t.Errorf("clientID=%q: gate returned Unauthenticated; node should enforce auth, not the gate", clientID)
+		}
 	}
 }
 
