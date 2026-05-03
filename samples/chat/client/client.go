@@ -291,7 +291,7 @@ func main() {
 	client.logger.Infof("Chat client created")
 	defer client.Close()
 
-	// Send auth credentials as gRPC metadata so the gate's EventHandler.OnClientAuthorise
+	// Send auth credentials as gRPC metadata so the gate's AuthValidator
 	// can verify them and attach a CallerIdentity to every subsequent call.
 	md := metadata.Pairs("x-username", *userID, "x-password", *password)
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
