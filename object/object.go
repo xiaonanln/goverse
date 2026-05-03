@@ -277,6 +277,19 @@ type seqWaiter struct {
 	ch  chan<- *ReliableCall
 }
 
+// BaseObject is the base type for all distributed objects. Embed it in your
+// struct to implement the [Object] interface.
+//
+// # Thread Safety
+//
+// The framework guarantees that your object's methods are called serially:
+// at most one method runs on a given object at a time. You do NOT need a
+// mutex to protect your fields from concurrent method calls.
+//
+// The one exception is [BaseObject.ToData] and [BaseObject.FromData]: the
+// persistence layer may call them from a background goroutine concurrently
+// with an in-flight method call. If your object is persistent, protect the
+// fields that ToData/FromData read or write with a mutex.
 type BaseObject struct {
 	self            Object
 	id              string

@@ -286,31 +286,27 @@ package main
 
 import (
     "context"
-    "sync"
     "github.com/xiaonanln/goverse/goverseapi"
 )
 
 type Counter struct {
     goverseapi.BaseObject
-    mu    sync.Mutex
     value int
 }
 
 func (c *Counter) Add(ctx context.Context, n int) (int, error) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    
     c.value += n
     return c.value, nil
 }
 
 func (c *Counter) Get(ctx context.Context) (int, error) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    
     return c.value, nil
 }
 ```
+
+> **No mutex needed.** The framework ensures that at most one method runs on
+> a given object at a time. You can read and write your fields freely inside
+> method handlers without any synchronization.
 
 ### Step 2: Set Up the Server
 
@@ -414,26 +410,21 @@ The chat system demonstrates how distributed objects work together in a real app
 ### ChatRoom Object (Distributed Object)
 
 ```go
+// No mutex needed — the framework serializes all method calls on the same object.
 type ChatRoom struct {
     goverseapi.BaseObject
     users     map[string]bool          // userName -> bool
     clientIDs map[string]string        // userName -> clientID for push notifications
     messages  []*chat_pb.ChatMessage
-    mu        sync.Mutex
 }
 
 func (room *ChatRoom) Join(ctx context.Context, req *chat_pb.ChatRoom_JoinRequest) (*chat_pb.ChatRoom_JoinResponse, error) {
-    room.mu.Lock()
-    defer room.mu.Unlock()
-    
     userName := req.GetUserName()
     clientID := req.GetClientId()
-    
+
     room.users[userName] = true
-    if clientID != "" {
-        room.clientIDs[userName] = clientID  // Store for push messaging
-    }
-    
+    room.clientIDs[userName] = clientID  // Store for push messaging
+
     return &chat_pb.ChatRoom_JoinResponse{
         RoomName: room.Name(),
         RecentMessages: []*chat_pb.ChatMessage{ /* recent messages */ },
@@ -441,16 +432,13 @@ func (room *ChatRoom) Join(ctx context.Context, req *chat_pb.ChatRoom_JoinReques
 }
 
 func (room *ChatRoom) SendMessage(ctx context.Context, req *chat_pb.ChatRoom_SendChatMessageRequest) (*chat_pb.Client_SendChatMessageResponse, error) {
-    room.mu.Lock()
-    defer room.mu.Unlock()
-    
     chatMsg := &chat_pb.ChatMessage{
         UserName:  req.GetUserName(),
         Message:   req.GetMessage(),
         Timestamp: time.Now().UnixMicro(),
     }
     room.messages = append(room.messages, chatMsg)
-    
+
     // Push message to all connected clients in the room
     notification := &chat_pb.Client_NewMessageNotification{
         Message: chatMsg,
@@ -461,7 +449,7 @@ func (room *ChatRoom) SendMessage(ctx context.Context, req *chat_pb.ChatRoom_Sen
         }
         goverseapi.PushMessageToClient(ctx, clientID, notification)
     }
-    
+
     return &chat_pb.Client_SendChatMessageResponse{}, nil
 }
 ```
@@ -683,15 +671,19 @@ import (
     "google.golang.org/protobuf/types/known/structpb"
 )
 
+// Persistent objects need a mutex ONLY for ToData/FromData, because those
+// are called by the persistence layer concurrently with running methods.
+// Regular method handlers do not need any mutex.
 type UserProfile struct {
     object.BaseObject
-    mu       sync.Mutex  // REQUIRED: Protects concurrent access
+    mu       sync.Mutex  // guards fields accessed by ToData/FromData
     Username string
     Email    string
     Score    int
 }
 
-// ToData must be thread-safe - called during periodic persistence
+// ToData is called by the persistence layer from a background goroutine.
+// The mutex is needed here (but NOT in method handlers).
 func (u *UserProfile) ToData() (proto.Message, error) {
     u.mu.Lock()
     defer u.mu.Unlock()
@@ -703,7 +695,7 @@ func (u *UserProfile) ToData() (proto.Message, error) {
     })
 }
 
-// FromData must be thread-safe - called during initialization
+// FromData is also called by the persistence layer — same mutex applies.
 func (u *UserProfile) FromData(data proto.Message) error {
     structData, ok := data.(*structpb.Struct)
     if !ok {
@@ -721,10 +713,10 @@ func (u *UserProfile) FromData(data proto.Message) error {
 }
 ```
 
-**Important**: `ToData()` and `FromData()` MUST use mutex protection because:
-- Periodic persistence runs in background goroutines
-- Objects may process requests while being persisted
-- Race conditions can cause data corruption without proper locking
+**Important**: `ToData()` and `FromData()` need mutex protection because the
+persistence layer calls them from background goroutines, potentially
+concurrently with a running method call. Regular method handlers do **not**
+need a mutex — the framework guarantees they run serially.
 
 **3. Save and Load**:
 

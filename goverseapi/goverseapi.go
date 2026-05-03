@@ -21,6 +21,13 @@ type ServerConfig = server.ServerConfig
 type Server = server.Server
 type Node = node.Node
 type Object = object.Object
+
+// BaseObject is the base type for all distributed objects. Embed it in your
+// struct to give it a distributed identity and lifecycle.
+//
+// The framework serializes all method calls on the same object instance, so
+// you do NOT need a mutex to protect your fields inside method handlers.
+// See [object.BaseObject] for the full thread-safety contract.
 type BaseObject = object.BaseObject
 type BaseClient = client.BaseClient
 type Cluster = cluster.Cluster
