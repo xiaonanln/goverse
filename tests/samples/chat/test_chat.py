@@ -223,8 +223,11 @@ def main():
             if not server.wait_for_ready(timeout=20):
                 return 1
 
-        # Start gateway using Gateway class (uses dynamically allocated port)
-        gateway = Gateway()
+        # Start the chat-specific gate (has ChatAuthValidator for x-username/x-password).
+        gateway = Gateway(
+            binary_path='/tmp/chat_gateway',
+            source_path='./samples/chat/gate/',
+        )
         gateway.start()
         
         # Wait for gateway to be ready
