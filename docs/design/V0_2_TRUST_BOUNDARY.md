@@ -127,17 +127,15 @@ request.
 
 #### 4.2.2 Built-in implementations
 
-- **`authjwt.New(opts)`** — verifies HS256 / RS256 / ES256 bearer
-  tokens from the `Authorization: Bearer <token>` header (HTTP) or
-  `authorization` metadata (gRPC). Extracts `sub` as `UserID`,
-  optional `roles` claim as `Roles`. Configurable issuer / audience /
-  clock skew.
-- **`authnone.New()`** — explicit "no auth, on purpose". Useful for
-  local dev so the gate plumbing path is exercised without a real
-  token provider.
+v0.2 ships **no** built-in implementations. JWT, OAuth, session
+cookies, API-key validation — all live as application code or
+third-party packages. Bundling a specific JWT library into the
+framework would force that dependency on every user of goverse.
 
-That's it for v0.2. OAuth, sessions, mTLS-derived identity, etc. each
-live as third-party packages or v0.3 work.
+The chat sample (`samples/chat/gate/main.go`) demonstrates how to
+write a concrete `AuthValidator` (username + password header check).
+Apps that need JWT bring their own library and implement the
+interface themselves.
 
 #### 4.2.3 App-level: row-level checks
 
@@ -157,21 +155,23 @@ Apps that don't care (demos, internal services) ignore
 
 ### 4.3 Implementation
 
+**Shipped (PRs #559–#561 + #562-propagation-fix):**
+
 - `goverseapi/auth.go`: `CallerIdentity`, `AuthValidator` interface,
-  `CallerUserID(ctx)` / `CallerRoles(ctx)` helpers.
-- `goverseapi/authjwt/`: shipped JWT implementation.
+  `CallerUserID(ctx)` / `CallerRoles(ctx)` / `CallerHasRole(ctx)`
+  helpers. ✅
+- `util/callcontext/`: extended with `CallerIdentity`, context
+  injection/extraction helpers, and gRPC metadata
+  `InjectCallerToOutgoing` / `ExtractCallerFromIncoming`. ✅
 - `gate/gateserver/`: HTTP + gRPC handlers call
   `validator.Validate(...)` if configured, attach `CallerIdentity`
-  to context via `callcontext.WithCallerIdentity(ctx, ident)`.
-- `util/callcontext/`: extend the existing call-context plumbing
-  (already carries `client_id`) to also carry `CallerIdentity`.
-- `cluster/`: ensure `CallerIdentity` propagates through cross-node
-  RPCs (CallObject, ReliableCallObject) so an object on node B can
-  see the original caller's identity even if the request entered via
-  node A's gate. **`[DECIDE]`** Can be metadata in the inter-node
-  proto, or skipped in v0.2 (caller identity only available at the
-  entry node — apps that need it cluster-wide work around). Default:
-  metadata-in-proto, propagate it. Cleaner long-term.
+  to context. ✅
+- `cluster/cluster.go`: `CallObject` and `ReliableCallObject` both
+  call `InjectCallerToOutgoing` before remote RPCs so the identity
+  reaches objects on any node. ✅
+- `server/server.go`: `CallObject` and `ReliableCallObject` handlers
+  both call `ExtractCallerFromIncoming` to restore the identity from
+  gRPC metadata. ✅
 
 ### 4.4 Migration
 
@@ -183,23 +183,32 @@ Apps that don't care (demos, internal services) ignore
 
 ### 4.5 Test strategy
 
-- New `gate/gateserver/gate_auth_integration_test.go`: gate with
-  `BearerJWTValidator`, signed tokens accepted, unsigned/expired
-  rejected, `CallerUserID(ctx)` reaches an in-node test object.
-- `goverseapi/authjwt/jwt_test.go`: token parsing edge cases (alg
-  confusion, kid handling, clock skew).
+**Shipped:**
 
-### 4.6 Open decisions
+- `gate/gateserver/gateserver_auth_test.go`: unit tests — AuthValidator
+  rejection returns `Unauthenticated`, successful validation stores
+  identity on Register. ✅
+- `gate/gateserver/gateserver_calleridentity_integration_test.go`:
+  full-stack test — identity flows gate → node → object method via
+  real gRPC. ✅
+- `cluster/cluster_calleridentity_integration_test.go`: cross-node
+  propagation via gRPC metadata. ✅
+- `util/callcontext/callcontext_grpc_test.go`: bufconn round-trip for
+  Inject/Extract helpers. ✅
 
-- **`[DECIDE]`** Identity propagation across nodes — propagate or
-  not? Default: propagate.
-- **`[DECIDE]`** Should `AuthValidator` reject the call (return error)
-  or stamp an "unauthenticated" identity? Default: reject. Apps that
-  want to allow anonymous use `authnone.New()` (which always succeeds
-  with `UserID == ""`).
-- **`[DECIDE]`** Header name conventions — `Authorization: Bearer
-  <token>` (HTTP) is universal. gRPC: use `authorization` metadata
-  (also conventional)?
+### 4.6 Decisions made
+
+- **Identity propagation across nodes**: propagated via gRPC metadata
+  (`x-caller-user-id` / `x-caller-roles`) on both `CallObject` and
+  `ReliableCallObject` paths. ✅
+- **Reject vs. anonymous**: `AuthValidator` returns error to reject;
+  apps that want anonymous access simply don't set an `AuthValidator`
+  (v0.1 behaviour). ✅
+- **Header conventions**: `authorization` (lowercase) for gRPC
+  metadata; the chat sample uses custom `x-username`/`x-password`
+  keys to show that the interface is fully pluggable. ✅
+- **No built-in JWT**: apps bring their own token library and
+  implement `AuthValidator` themselves. ✅
 
 ---
 
@@ -414,13 +423,11 @@ LRU. Tested with a high-concurrency stress run.
 
 ## 9. Rollout plan
 
-1. **Land item 4 (DeleteObject)** first — smallest, mostly mechanical.
-   Establishes the v0.2 minor-bump pattern.
-2. **Land item 2 (auth)** — biggest single piece. Block on it until
-   the API shape is reviewed; once landed, write a `samples/wallet`
-   variant that requires JWTs as a worked example.
-3. **Land item 3 (`OnClientDisconnect`)** if time permits before
-   v0.2 cut. Otherwise slip to v0.3.
+1. **Land item 4 (DeleteObject)** ✅ Done (all layers including node
+   type-spoof check and gate lifecycle enforcement).
+2. **Land item 2 (auth)** ✅ Done (PRs #559–#561 + propagation fix).
+   No built-in JWT — apps bring their own `AuthValidator`.
+3. **Land item 3 (`OnClientDisconnect`)** — next up.
 4. **Tier 2 items 5–7** based on remaining capacity.
 
 Each item is its own PR with its own design doc / API stability
@@ -447,18 +454,12 @@ Updated "Known issues deferred to v0.3.0":
 
 ## 11. Pre-implementation checklist
 
-Items I need from a human reviewer before committing code:
-
-- [ ] **Lean v0.2 vs full v0.2**: confirm we ship items 2, 4 only,
-      with 3 / 5 / 6 / 7 stretch.
-- [ ] **Auth model**: confirm pluggable interface + shipped JWT happy
-      path, not opinionated default.
-- [ ] **Identity propagation across nodes**: confirm "yes, propagate".
-- [ ] **DeleteObject migration**: confirm warn-and-allow on empty
-      type for v0.2; reject in v0.3.
-- [ ] **TLS deferred to v0.3**: confirm v0.2 ships without native gate
-      TLS; operators put a proxy in front.
-- [ ] **Implementation order**: confirm 4 → 2 → 3 → Tier 2.
+- [x] **Lean v0.2 vs full v0.2**: items 2, 4 only; 3/5/6/7 stretch.
+- [x] **Auth model**: pluggable interface only — no bundled JWT.
+- [x] **Identity propagation across nodes**: yes, via gRPC metadata.
+- [x] **DeleteObject migration**: empty type rejected (no warn-and-allow).
+- [x] **TLS deferred to v0.3**: confirmed.
+- [x] **Implementation order**: 4 → 2 → 3 → Tier 2.
 
 Once these are settled, each item gets its own implementation PR
 with linked design doc updates.
