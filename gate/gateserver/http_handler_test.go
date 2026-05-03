@@ -749,12 +749,12 @@ func validCallBody() string {
 }
 
 // TestHandleCallObject_HTTPAuth verifies that handleCallObject enforces
-// EventHandler.OnClientAuthorise when configured and injects the identity into the context.
+// AuthValidator when configured and injects the identity into the context.
 func TestHandleCallObject_HTTPAuth(t *testing.T) {
 	const path = "/api/v1/objects/call/T/id/M"
 
 	t.Run("no_auth_validator_skips_auth", func(t *testing.T) {
-		gs := &GateServer{} // eventHandler is nil (authConfigured = false)
+		gs := &GateServer{} // authValidator is nil
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
 		req.Header.Set("Content-Type", "application/json")
@@ -773,7 +773,7 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 		}()
 
 		if w.Code == http.StatusUnauthorized {
-			t.Fatalf("Expected no auth check (no EventHandler), got 401")
+			t.Fatalf("Expected no auth check (no AuthValidator), got 401")
 		}
 		if !panicked && w.Code == http.StatusUnauthorized {
 			t.Fatalf("Expected request to pass auth stage, got 401")
@@ -782,7 +782,7 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 
 	t.Run("valid_credentials_pass_auth", func(t *testing.T) {
 		identity := &callcontext.CallerIdentity{UserID: "alice"}
-		gs := &GateServer{eventHandler: &stubGateEventHandler{identity: identity}, authConfigured: true}
+		gs := &GateServer{authValidator: &stubAuthValidator{identity: identity}}
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
 		req.Header.Set("Content-Type", "application/json")
@@ -804,9 +804,8 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 
 	t.Run("invalid_credentials_return_401", func(t *testing.T) {
 		gs := &GateServer{
-			eventHandler:   &stubGateEventHandler{err: errors.New("invalid password")},
-			authConfigured: true,
-			logger:         logger.NewLogger("test"),
+			authValidator: &stubAuthValidator{err: errors.New("invalid password")},
+			logger:        logger.NewLogger("test"),
 		}
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))
@@ -830,9 +829,8 @@ func TestHandleCallObject_HTTPAuth(t *testing.T) {
 
 	t.Run("missing_credentials_return_401", func(t *testing.T) {
 		gs := &GateServer{
-			eventHandler:   &stubGateEventHandler{err: errors.New("x-username header is required")},
-			authConfigured: true,
-			logger:         logger.NewLogger("test"),
+			authValidator: &stubAuthValidator{err: errors.New("x-username header is required")},
+			logger:        logger.NewLogger("test"),
 		}
 
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(validCallBody()))

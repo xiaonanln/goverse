@@ -23,10 +23,17 @@ const (
 )
 
 // CallerIdentity holds the authenticated identity of a client connection.
-// Populated by the gate after a successful GateEventHandler.OnClientAuthorise call.
+// Populated by the gate after a successful AuthValidator.Validate call.
 type CallerIdentity struct {
 	UserID string
 	Roles  []string
+}
+
+// AuthValidator validates client credentials during Register.
+// headers contains gRPC metadata (or HTTP headers) from the incoming request.
+// Return a non-nil CallerIdentity on success, or an error to reject the connection.
+type AuthValidator interface {
+	Validate(ctx context.Context, headers map[string][]string) (*CallerIdentity, error)
 }
 
 // WithCallerIdentity returns a new context with the CallerIdentity stored.

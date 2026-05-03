@@ -6,28 +6,24 @@ import (
 	"testing"
 
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
-	"github.com/xiaonanln/goverse/goverseapi"
+	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/testutil"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
-// stubGateEventHandler is a test implementation of GateEventHandler.
-// Embed NoopGateEventHandler so only OnClientAuthorise needs to be set.
-type stubGateEventHandler struct {
-	goverseapi.NoopGateEventHandler
-	identity *goverseapi.CallerIdentity
+type stubAuthValidator struct {
+	identity *callcontext.CallerIdentity
 	err      error
 }
 
-func (s *stubGateEventHandler) OnClientAuthorise(_ context.Context, _ map[string][]string) (*goverseapi.CallerIdentity, error) {
+func (s *stubAuthValidator) Validate(_ context.Context, _ map[string][]string) (*callcontext.CallerIdentity, error) {
 	return s.identity, s.err
 }
 
-func authGateServer(t *testing.T, prefix string, handler goverseapi.GateEventHandler) (*GateServer, gate_pb.GateServiceClient) {
+func authGateServer(t *testing.T, prefix string, validator callcontext.AuthValidator) (*GateServer, gate_pb.GateServiceClient) {
 	t.Helper()
 	listenAddr := testutil.GetFreeAddress()
 	cfg := &GateServerConfig{
@@ -35,7 +31,7 @@ func authGateServer(t *testing.T, prefix string, handler goverseapi.GateEventHan
 		AdvertiseAddress: listenAddr,
 		EtcdAddress:      "localhost:2379",
 		EtcdPrefix:       prefix,
-		EventHandler:     handler,
+		AuthValidator:    validator,
 	}
 	server, err := NewGateServer(cfg)
 	if err != nil {
@@ -61,7 +57,7 @@ func authGateServer(t *testing.T, prefix string, handler goverseapi.GateEventHan
 func TestGateServerRegister_AuthReject(t *testing.T) {
 	t.Parallel()
 	_, client := authGateServer(t, "/test-gate-auth-reject",
-		&stubGateEventHandler{err: errors.New("invalid token")})
+		&stubAuthValidator{err: errors.New("invalid token")})
 
 	stream, err := client.Register(context.Background(), &gate_pb.Empty{})
 	if err != nil {
@@ -82,7 +78,7 @@ func TestGateServerRegister_AuthReject(t *testing.T) {
 func TestGateServerCallObject_AuthRequired_EmptyClientID(t *testing.T) {
 	t.Parallel()
 	_, client := authGateServer(t, "/test-gate-auth-callobj-empty",
-		&stubGateEventHandler{identity: &goverseapi.CallerIdentity{UserID: "alice"}})
+		&stubAuthValidator{identity: &callcontext.CallerIdentity{UserID: "alice"}})
 
 	_, err := client.CallObject(context.Background(), &gate_pb.CallObjectRequest{
 		ClientId: "",
@@ -104,7 +100,7 @@ func TestGateServerCallObject_AuthRequired_EmptyClientID(t *testing.T) {
 func TestGateServerCallObject_AuthRequired_InvalidClientID(t *testing.T) {
 	t.Parallel()
 	_, client := authGateServer(t, "/test-gate-auth-callobj-invalid",
-		&stubGateEventHandler{identity: &goverseapi.CallerIdentity{UserID: "alice"}})
+		&stubAuthValidator{identity: &callcontext.CallerIdentity{UserID: "alice"}})
 
 	_, err := client.CallObject(context.Background(), &gate_pb.CallObjectRequest{
 		ClientId: "not-a-registered-client",
