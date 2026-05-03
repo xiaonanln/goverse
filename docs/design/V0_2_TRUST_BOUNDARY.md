@@ -1,6 +1,7 @@
 # Goverse v0.2 — Trust-Boundary Design
 
-> **Status**: Draft. Open decisions marked **`[DECIDE]`**.
+> **Status**: Items 2 and 4 (Lean v0.2 Tier 1) shipped. Item 3
+> (`OnClientDisconnect`) is next. Tier 2 items (5–7) are queued.
 >
 > See [CHANGELOG.md](../../CHANGELOG.md) v0.1.0 "Known Issues" for what
 > this release is meant to close.
@@ -108,16 +109,27 @@ type AuthValidator interface {
 }
 ```
 
-Wired into the gate via `GateServerConfig.AuthValidator`:
+Wired into the gate via `GateConfig.AuthValidator` (see chat sample for
+a concrete example):
 
 ```go
-gwServerConfig := &gateserver.GateServerConfig{
-    // ...
-    AuthValidator: authjwt.New(authjwt.Options{
-        SigningKey: jwtSecret,
-        Issuer:     "https://my-auth.example.com",
-    }),
+// Implement the interface with whatever credential check you need.
+type MyAuthValidator struct{}
+
+func (v *MyAuthValidator) Validate(_ context.Context, headers map[string][]string) (*goverseapi.CallerIdentity, error) {
+    token := headers["authorization"]
+    if len(token) == 0 {
+        return nil, fmt.Errorf("missing authorization header")
+    }
+    userID, err := verifyToken(token[0]) // your JWT/OAuth/API-key logic
+    if err != nil {
+        return nil, err
+    }
+    return &goverseapi.CallerIdentity{UserID: userID}, nil
 }
+
+// Wire it in:
+cfg.AuthValidator = &MyAuthValidator{}
 ```
 
 When `AuthValidator == nil` (default), no validation runs and
@@ -155,7 +167,7 @@ Apps that don't care (demos, internal services) ignore
 
 ### 4.3 Implementation
 
-**Shipped (PRs #559–#561 + #562-propagation-fix):**
+**Shipped (PRs #554–#561, #565):**
 
 - `goverseapi/auth.go`: `CallerIdentity`, `AuthValidator` interface,
   `CallerUserID(ctx)` / `CallerRoles(ctx)` / `CallerHasRole(ctx)`
@@ -425,7 +437,7 @@ LRU. Tested with a high-concurrency stress run.
 
 1. **Land item 4 (DeleteObject)** ✅ Done (all layers including node
    type-spoof check and gate lifecycle enforcement).
-2. **Land item 2 (auth)** ✅ Done (PRs #559–#561 + propagation fix).
+2. **Land item 2 (auth)** ✅ Done (PRs #554–#561, #565).
    No built-in JWT — apps bring their own `AuthValidator`.
 3. **Land item 3 (`OnClientDisconnect`)** — next up.
 4. **Tier 2 items 5–7** based on remaining capacity.
