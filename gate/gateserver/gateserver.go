@@ -13,6 +13,7 @@ import (
 	"github.com/xiaonanln/goverse/config"
 	"github.com/xiaonanln/goverse/gate"
 	gate_pb "github.com/xiaonanln/goverse/gate/proto"
+	"github.com/xiaonanln/goverse/goverseapi"
 	"github.com/xiaonanln/goverse/util/callcontext"
 	"github.com/xiaonanln/goverse/util/logger"
 	"github.com/xiaonanln/goverse/util/protohelper"
@@ -44,9 +45,10 @@ type GateServerConfig struct {
 	AccessValidator    *config.AccessValidator    // Optional: access validator for client access control
 	LifecycleValidator *config.LifecycleValidator // Optional: lifecycle validator for CREATE/DELETE control
 
-	// AuthValidator validates client credentials on Register. When nil, all
-	// connections are accepted without authentication (v0.1 behaviour).
-	AuthValidator callcontext.AuthValidator
+	// EventHandler handles gate-level events: client auth on Register and
+	// disconnect notifications. When nil, all connections are accepted
+	// anonymously (v0.1 behaviour).
+	EventHandler goverseapi.GateEventHandler
 
 	ConfigFile *config.Config // Optional: loaded config file (if config file was used)
 }
@@ -65,7 +67,8 @@ type GateServer struct {
 	cluster            *cluster.Cluster
 	accessValidator    *config.AccessValidator
 	lifecycleValidator *config.LifecycleValidator
-	authValidator      callcontext.AuthValidator
+	eventHandler       goverseapi.GateEventHandler
+	authConfigured     bool // true when caller set a non-nil EventHandler
 	// clientIdentities maps clientID → *callcontext.CallerIdentity for authenticated connections.
 	// Written on Register, deleted on disconnect, read on every CallObject.
 	clientIdentities sync.Map
@@ -108,6 +111,12 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		return nil, fmt.Errorf("failed to create cluster: %w", err)
 	}
 
+	eventHandler := config.EventHandler
+	authConfigured := eventHandler != nil
+	if eventHandler == nil {
+		eventHandler = &goverseapi.NoopGateEventHandler{}
+	}
+
 	server := &GateServer{
 		config:             config,
 		ctx:                ctx,
@@ -117,7 +126,8 @@ func NewGateServer(config *GateServerConfig) (*GateServer, error) {
 		cluster:            c,
 		accessValidator:    config.AccessValidator,
 		lifecycleValidator: config.LifecycleValidator,
-		authValidator:      config.AuthValidator,
+		eventHandler:       eventHandler,
+		authConfigured:     authConfigured,
 	}
 
 	return server, nil
@@ -256,29 +266,26 @@ func (s *GateServer) Register(req *gate_pb.Empty, stream grpc.ServerStreamingSer
 
 	ctx := stream.Context()
 
-	// Validate auth if a validator is configured. Extract gRPC metadata so
-	// the validator can read e.g. "authorization" for a bearer token.
-	var identity *callcontext.CallerIdentity
-	if s.authValidator != nil {
-		md, _ := metadata.FromIncomingContext(ctx)
-		var err error
-		identity, err = s.authValidator.Validate(ctx, md)
-		if err != nil {
-			return status.Errorf(codes.Unauthenticated, "%v", err)
-		}
+	// Authorise the client. Extract gRPC metadata so the handler can read
+	// e.g. "authorization" for a bearer token.
+	md, _ := metadata.FromIncomingContext(ctx)
+	identity, err := s.eventHandler.OnClientAuthorise(ctx, md)
+	if err != nil {
+		return status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
 	clientProxy := s.gate.Register(ctx)
 	clientID := clientProxy.GetID()
 
-	// Make sure to unregister when done
+	// Unregister and notify on disconnect (for any reason: clean close, drop, shutdown).
 	defer s.gate.Unregister(clientID)
+	defer s.eventHandler.OnClientDisconnect(context.Background(), clientID, identity)
 
-	// Store identity so CallObject can inject it into the call context.
-	if identity != nil {
-		s.clientIdentities.Store(clientID, identity)
-		defer s.clientIdentities.Delete(clientID)
-	}
+	// Track the client session so CallObject can validate clientID and inject
+	// identity. Stored even when identity is nil (anonymous) so CallObject's
+	// session check passes — Load returns (nil, true) for anonymous clients.
+	s.clientIdentities.Store(clientID, identity)
+	defer s.clientIdentities.Delete(clientID)
 
 	// Send RegisterResponse
 	regResp := &gate_pb.RegisterResponse{ClientId: clientID}
@@ -332,19 +339,6 @@ func (s *GateServer) CallObject(ctx context.Context, req *gate_pb.CallObjectRequ
 		if err := s.accessValidator.CheckClientAccess(req.Type, req.Id, req.Method); err != nil {
 			s.logger.Warnf("Access denied for client call: type=%s, id=%s, method=%s: %v", req.Type, req.Id, req.Method, err)
 			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
-		}
-	}
-
-	// When auth is configured, reject calls whose client_id is absent or does
-	// not correspond to an active authenticated Register session. This prevents
-	// a caller from supplying an arbitrary (or guessed) client_id to impersonate
-	// another user's identity.
-	if s.authValidator != nil {
-		if req.ClientId == "" {
-			return nil, status.Errorf(codes.Unauthenticated, "client_id required when auth is configured")
-		}
-		if _, ok := s.clientIdentities.Load(req.ClientId); !ok {
-			return nil, status.Errorf(codes.Unauthenticated, "client_id does not match an authenticated session")
 		}
 	}
 
