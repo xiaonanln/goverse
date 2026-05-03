@@ -650,6 +650,9 @@ func (server *Server) RegisterGate(req *goverse_pb.RegisterGateRequest, stream g
 func (server *Server) ReliableCallObject(ctx context.Context, req *goverse_pb.ReliableCallObjectRequest) (*goverse_pb.ReliableCallObjectResponse, error) {
 	server.logRPC("ReliableCallObject", req)
 
+	// Re-inject CallerIdentity forwarded by the originating node as gRPC metadata.
+	ctx = callcontext.ExtractCallerFromIncoming(ctx)
+
 	// Validate request parameters - require the new fields
 	// Return SKIPPED status for validation errors since method was never executed
 	if req.GetCallId() == "" {
