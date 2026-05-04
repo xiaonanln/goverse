@@ -62,8 +62,10 @@ type Server struct {
 	cancel          context.CancelFunc
 	logger          *logger.Logger
 	cluster         *cluster.Cluster
-	accessValidator *config.AccessValidator
-	postgresDB      *postgres.DB // Non-nil when Postgres persistence is auto-wired from config
+	accessValidator      *config.AccessValidator
+	postgresDB           *postgres.DB // Non-nil when Postgres persistence is auto-wired from config
+	testHookAfterNodeStop    func()   // nil in production; set by tests to observe shutdown ordering
+	testHookAfterClusterStop func()   // nil in production; set by tests to observe shutdown ordering
 }
 
 func NewServer(config *ServerConfig) (*Server, error) {
@@ -392,12 +394,18 @@ func (server *Server) Run(ctx context.Context) error {
 	if err != nil {
 		server.logger.Errorf("Failed to stop node: %v", err)
 	}
+	if server.testHookAfterNodeStop != nil {
+		server.testHookAfterNodeStop()
+	}
 
 	// Revoke the etcd lease after objects are persisted so the cluster
 	// immediately redistributes our shards without a lease-TTL wait.
 	err = server.cluster.Stop(server.ctx)
 	if err != nil {
 		server.logger.Errorf("Failed to stop cluster: %v", err)
+	}
+	if server.testHookAfterClusterStop != nil {
+		server.testHookAfterClusterStop()
 	}
 
 	server.logger.Infof("gRPC server stopped")
