@@ -97,12 +97,13 @@ and trust that basic failure modes are handled correctly.
   injects mid-flight timeout aborts and verifies per-wallet balance
   conservation).
 
-### Known Issues (deferred to v0.2.0)
+### Known Issues
 
 - **Migration-period unavailability**: during shard handoff,
   `GetCurrentNodeForObject` errors even though the current node is still
   alive — causes brief unavailability during rebalance.
 - **Graceful shutdown**: scale-down relies on etcd lease expiry rather
   than a proactive shard release.
-- **No built-in access control / TLS**: deploy in a private network or
-  behind a service mesh until v0.2.0.
+- **No built-in TLS**: deploy behind a TLS-terminating proxy (nginx /
+  cloud LB / service mesh). Auth middleware ships in v0.1.1; native gate
+  TLS is deferred.
