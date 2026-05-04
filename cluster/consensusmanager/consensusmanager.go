@@ -397,23 +397,22 @@ func (cm *ConsensusManager) SetStuckShardTimeout(d time.Duration) {
 }
 
 // calcReallocateStuckShards identifies shards that have been assigned to a live node
-// but not claimed within the stuck-shard timeout, and returns updated ShardInfos with
-// a new TargetNode. It also updates the stuckShardFirstSeen tracking map in place.
+// but not claimed within the stuck-shard timeout, and clears their TargetNode so that
+// calcReassignShardTargetNodes can reassign them in the next leader cycle.
+// It also updates the stuckShardFirstSeen tracking map in place.
 //
 // Must only be called from a single goroutine (the leader management loop).
 func (cm *ConsensusManager) calcReallocateStuckShards(now time.Time) map[int]ShardInfo {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	if len(cm.state.Nodes) < 2 {
-		// Cannot reallocate with fewer than 2 nodes — clear stale tracking entries.
+	if len(cm.state.Nodes) == 0 {
 		clear(cm.stuckShardFirstSeen)
 		return nil
 	}
 
-	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
-	nodeSet := make(map[string]bool, len(nodes))
-	for _, n := range nodes {
+	nodeSet := make(map[string]bool, len(cm.state.Nodes))
+	for n := range cm.state.Nodes {
 		nodeSet[n] = true
 	}
 	timeout := cm.stuckShardTimeout
@@ -446,21 +445,9 @@ func (cm *ConsensusManager) calcReallocateStuckShards(now time.Time) map[int]Sha
 			continue
 		}
 
-		// Pick an alternative node (round-robin, skip the stuck target).
-		newTarget := ""
-		for i := range nodes {
-			candidate := nodes[(shardID+i)%len(nodes)]
-			if candidate != info.TargetNode {
-				newTarget = candidate
-				break
-			}
-		}
-		if newTarget == "" {
-			continue
-		}
-
-		updateShards[shardID] = info.WithTargetNode(newTarget)
-		// Reset tracking so the new target also gets a fresh timeout window.
+		// Clear TargetNode so calcReassignShardTargetNodes re-assigns it next cycle.
+		updateShards[shardID] = info.WithTargetNode("")
+		// Reset tracking so the re-assigned shard gets a fresh timeout window.
 		delete(cm.stuckShardFirstSeen, shardID)
 	}
 

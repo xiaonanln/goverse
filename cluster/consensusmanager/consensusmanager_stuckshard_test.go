@@ -71,7 +71,7 @@ func TestCalcReallocateStuckShards_NotYetTimedOut(t *testing.T) {
 }
 
 // TestCalcReallocateStuckShards_TimedOut verifies that a shard stuck past the
-// timeout is reassigned to a different live node.
+// timeout has its TargetNode cleared so calcReassignShardTargetNodes can reassign it.
 func TestCalcReallocateStuckShards_TimedOut(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1", "node2"})
@@ -93,16 +93,15 @@ func TestCalcReallocateStuckShards_TimedOut(t *testing.T) {
 	if !ok {
 		t.Fatal("expected shard 0 in result")
 	}
-	if info.TargetNode == "node1" {
-		t.Fatalf("expected TargetNode to change from node1, got %s", info.TargetNode)
-	}
-	if info.TargetNode != "node2" {
-		t.Fatalf("expected TargetNode=node2, got %s", info.TargetNode)
+	// TargetNode must be cleared so calcReassignShardTargetNodes re-assigns it.
+	if info.TargetNode != "" {
+		t.Fatalf("expected TargetNode cleared to \"\", got %q", info.TargetNode)
 	}
 }
 
-// TestCalcReallocateStuckShards_SingleNode verifies that with only one node,
-// no reallocation is possible and no error is produced.
+// TestCalcReallocateStuckShards_SingleNode verifies that a single-node cluster
+// can still clear a stuck shard's TargetNode so calcReassignShardTargetNodes
+// re-assigns it (back to the same node, acting as a retry signal).
 func TestCalcReallocateStuckShards_SingleNode(t *testing.T) {
 	t.Parallel()
 	cm := newTestCM([]string{"node1"})
@@ -114,8 +113,15 @@ func TestCalcReallocateStuckShards_SingleNode(t *testing.T) {
 	now := time.Now()
 	cm.calcReallocateStuckShards(now)
 	result := cm.calcReallocateStuckShards(now.Add(1 * time.Second))
-	if result != nil {
-		t.Fatalf("single-node cluster must not reallocate, got %v", result)
+	if result == nil {
+		t.Fatal("expected stuck shard to be cleared even in single-node cluster")
+	}
+	info, ok := result[0]
+	if !ok {
+		t.Fatal("expected shard 0 in result")
+	}
+	if info.TargetNode != "" {
+		t.Fatalf("expected TargetNode cleared to \"\", got %q", info.TargetNode)
 	}
 }
 
