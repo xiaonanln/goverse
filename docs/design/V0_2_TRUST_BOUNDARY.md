@@ -1,7 +1,6 @@
 # Goverse v0.2 — Trust-Boundary Design
 
-> **Status**: Items 2 and 4 (Lean v0.2 Tier 1) shipped. Item 3
-> (`OnClientDisconnect`) is next. Tier 2 items (5–7) are queued.
+> **Status**: Items 2 and 4 (Lean v0.2 Tier 1) shipped. Tier 2 items (5–7) are queued.
 >
 > See [CHANGELOG.md](../../CHANGELOG.md) v0.1.0 "Known Issues" for what
 > this release is meant to close.
@@ -55,7 +54,6 @@ of it*. Native gate TLS is explicitly out of scope — see §2.
 
 | #  | Item                                                | Approx LOC      |
 | -- | --------------------------------------------------- | --------------- |
-| 3  | `OnClientDisconnect` framework hook                 | ~700            |
 | 5  | Migration-period unavailability fix                 | depends — design first |
 | 6  | Proactive shard release on graceful shutdown        | ~500            |
 | 7  | Per-call rate limiting at gate                      | ~300            |
@@ -334,62 +332,7 @@ upgrade.
 
 ---
 
-## 6. Item 3 — `OnClientDisconnect` (Tier 2)
-
-Promoted from "future framework feature" because items 2 + 4 by
-themselves leave the bomberman ghost-queue class of bug open: even
-with auth, `pagehide` doesn't fire on browser crash / network drop /
-mobile freeze, so the queue still accumulates dead entries.
-
-### 6.1 API shape
-
-Opt-in interface; mirrors existing lifecycle hooks (`OnCreated`,
-`Destroy`).
-
-```go
-// In object/object.go:
-type ClientDisconnectHandler interface {
-    OnClientDisconnect(ctx context.Context, clientID string)
-}
-```
-
-### 6.2 Wire delivery
-
-1. **Gate side**: when `Gate.Unregister(clientID)` runs, gate sends
-   `NotifyClientDisconnect(clientID)` to every connected node via a
-   new node-side RPC.
-2. **Node side**: receives the RPC, looks up types registered as
-   implementing `ClientDisconnectHandler`, iterates live objects of
-   those types, calls `OnClientDisconnect(ctx, clientID)` on each.
-3. **Type discovery**: at `RegisterObjectType`, runtime checks if the
-   type implements the interface and adds to a per-node index. No
-   reflection at dispatch time.
-
-### 6.3 Semantics
-
-- **At-least-once, best-effort.** Gate crash mid-disconnect can lose
-  the signal; apps that need a strong guarantee should layer a TTL
-  backstop on top.
-- Order of dispatch within a node is unspecified. Cross-node: every
-  node that received the broadcast dispatches independently in
-  parallel.
-
-### 6.4 Sample integration
-
-Bomberman's `MatchmakingQueue.OnClientDisconnect` would prune queue
-entries with the matching `client_id`, replacing the
-`pagehide`-only fix from PR #547 with one that also handles crashes.
-
-### 6.5 Open decisions
-
-- **`[DECIDE]`** Broadcast to all nodes vs. targeted (gate maintains
-  client_id → node map for objects that subscribed). Default:
-  broadcast. Simpler, fewer moving parts; targeted is a v0.3
-  refinement once we have data.
-
----
-
-## 7. Items 5 + 6 — Migration unavailability + graceful shutdown (Tier 2)
+## 6. Items 5 + 6 — Migration unavailability + graceful shutdown (Tier 2)
 
 These are the two known issues already called out in v0.1's
 `CHANGELOG.md`:
@@ -412,7 +355,7 @@ Both warrant their own follow-up design docs (separate PRs in the
   releases shard ownership to a successor before lease expiry.
   Coordinates with `consensusmanager`'s leader election.
 
-## 8. Item 7 — Per-call rate limiting (Tier 2)
+## 7. Item 7 — Per-call rate limiting (Tier 2)
 
 Optional, configurable token bucket per `client_id` (and optionally
 per `caller_user_id` once item 2 lands). Lives in gate handlers
@@ -433,19 +376,18 @@ LRU. Tested with a high-concurrency stress run.
 
 ---
 
-## 9. Rollout plan
+## 8. Rollout plan
 
 1. **Land item 4 (DeleteObject)** ✅ Done (all layers including node
    type-spoof check and gate lifecycle enforcement).
 2. **Land item 2 (auth)** ✅ Done (PRs #554–#561, #565).
    No built-in JWT — apps bring their own `AuthValidator`.
-3. **Land item 3 (`OnClientDisconnect`)** — next up.
-4. **Tier 2 items 5–7** based on remaining capacity.
+3. **Tier 2 items 5–7** based on remaining capacity.
 
 Each item is its own PR with its own design doc / API stability
 note. This file is the *index*.
 
-## 10. CHANGELOG drafting
+## 9. CHANGELOG drafting
 
 Once items 2, 4 land, draft `## [0.2.0]` with:
 
@@ -464,14 +406,14 @@ Updated "Known issues deferred to v0.3.0":
 - mTLS gate↔node intra-cluster.
 - Anti-cheat / replay validation primitives.
 
-## 11. Pre-implementation checklist
+## 10. Pre-implementation checklist
 
 - [x] **Lean v0.2 vs full v0.2**: items 2, 4 only; 3/5/6/7 stretch.
 - [x] **Auth model**: pluggable interface only — no bundled JWT.
 - [x] **Identity propagation across nodes**: yes, via gRPC metadata.
 - [x] **DeleteObject migration**: empty type rejected (no warn-and-allow).
 - [x] **TLS deferred to v0.3**: confirmed.
-- [x] **Implementation order**: 4 → 2 → 3 → Tier 2.
+- [x] **Implementation order**: 4 → 2 → Tier 2.
 
 Once these are settled, each item gets its own implementation PR
 with linked design doc updates.
