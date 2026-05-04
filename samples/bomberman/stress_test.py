@@ -125,39 +125,45 @@ def wait_for_cluster_ready(gate_port: int, timeout: float = 60.0) -> bool:
     return False
 
 
-def probe_http_gate(http_url: str, timeout: float = 5.0) -> bool:
-    """Open an SSE connection to the gate's /api/v1/events/stream and
-    assert we get the expected `event: register` greeting within timeout
-    seconds. Catches the failure mode where a gate config forgets to
-    set http_addr (gate runs gRPC-only, the web UI hangs on
-    'Connecting…'). The stress test itself uses gRPC, so without this
-    probe the HTTP path can rot silently between releases.
+def probe_http_gate(http_url: str, timeout: float = 30.0) -> bool:
+    """Poll the gate's /api/v1/events/stream until we get the expected
+    `event: register` greeting or the timeout expires. Retries on connection
+    refused so the probe tolerates the gate process starting slowly.
+
+    Catches the failure mode where a gate config forgets to set http_addr
+    (gate runs gRPC-only, the web UI hangs on 'Connecting…'). The stress
+    test itself uses gRPC, so without this probe the HTTP path can rot
+    silently between releases.
     """
     sse_url = http_url.rstrip("/") + "/api/v1/events/stream"
     print(f"Probing HTTP/SSE at {sse_url} (timeout={timeout}s)...")
-    try:
-        req = urllib.request.Request(sse_url, headers={"Accept": "text/event-stream"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status != 200:
-                print(f"❌ HTTP/SSE: gate responded with status {resp.status}")
-                return False
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                line = resp.readline()
-                if not line:
-                    break
-                if line.strip() == b"event: register":
-                    print("✅ HTTP/SSE: gate produced the register event")
-                    return True
-            print("❌ HTTP/SSE: opened stream but no register event within timeout")
-            return False
-    except urllib.error.URLError as e:
-        print(f"❌ HTTP/SSE: gate at {sse_url} not reachable: {e}")
-        print("   Hint: ensure the first gate in stress_config.yml has http_addr set.")
-        return False
-    except Exception as e:
-        print(f"❌ HTTP/SSE probe failed: {e}")
-        return False
+    deadline = time.time() + timeout
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        try:
+            req = urllib.request.Request(sse_url, headers={"Accept": "text/event-stream"})
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                if resp.status != 200:
+                    print(f"❌ HTTP/SSE: gate responded with status {resp.status}")
+                    return False
+                read_deadline = min(time.time() + 3.0, deadline)
+                while time.time() < read_deadline:
+                    line = resp.readline()
+                    if not line:
+                        break
+                    if line.strip() == b"event: register":
+                        elapsed = timeout - (deadline - time.time())
+                        print(f"✅ HTTP/SSE: gate ready after {elapsed:.1f}s ({attempt} probe(s))")
+                        return True
+        except urllib.error.URLError:
+            pass
+        except Exception:
+            pass
+        time.sleep(0.5)
+    print(f"❌ HTTP/SSE: gate at {sse_url} not reachable after {timeout}s ({attempt} probes)")
+    print("   Hint: ensure the first gate in stress_config.yml has http_addr set.")
+    return False
 
 
 def ensure_postgres_ready() -> bool:
