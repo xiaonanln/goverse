@@ -2,50 +2,39 @@
 
 All notable changes to GoVerse are documented in this file.
 
-## [0.1.0] — 2026-04-24
-
-First tagged release. GoVerse is a distributed object runtime for Go that
-implements the virtual actor model with etcd-based placement and 8192-shard
-sharding. External users can deploy GoVerse, run a distributed application,
-and trust that basic failure modes are handled correctly.
+## [0.1.1] — 2026-05-04
 
 ### Added
 
-- **Core runtime**: virtual objects with automatic lifecycle & activation;
-  Node + Gate architecture; streaming gRPC and HTTP REST APIs.
-- **Exactly-once call semantics**: `ReliableCallObject` for inter-object
-  calls that tolerate retries and node failures.
-- **Sharded placement**: 8192-shard model with dynamic object & shard
-  rebalancing across nodes.
-- **Default timeouts**: `DefaultCallTimeout`, `DefaultCreateTimeout`,
-  `EtcdOperationTimeout`, and `ConnectionTimeout` on `ServerConfig` /
-  `GateServerConfig` / `ClusterConfig`, configurable via YAML.
-- **Timeout observability**: `TimeoutError` type with `IsTimeout(err)`
-  helper (gRPC-aware); `goverse_operation_timeouts_total` and
-  `goverse_operation_duration_seconds` metrics.
-- **Watch reconnection**: etcd watch auto-reconnects with exponential
-  backoff after disconnects or compaction, preventing stale cluster state.
+- **Bomberman sample**: new reference app showing how to build a real-time multiplayer game with GoVerse (#540–#545).
+- **Auth middleware**: implement `GateEventHandler` on your gate to authenticate clients and receive disconnect events; read `CallerUserID(ctx)` / `CallerRoles(ctx)` inside any object method, on any node (#554, #569).
+- **HTTP access checks now match gRPC**: `CreateObject` and `DeleteObject` via HTTP enforce the same `CheckClientCreate` / `CheckClientDelete` lifecycle rules as gRPC. `DeleteObject` now requires the object type in the request (#549, #552).
+- **Self-healing stuck shards**: if a node is assigned shards but goes silent, the cluster automatically reassigns them after `stuck_shard_reallocation_timeout` (default 1 min, configurable in YAML) (#570).
+- **Balanced shard distribution**: shards are spread evenly across nodes (±1) with randomisation, avoiding hot spots at startup and after rebalance (#572).
+
+### Changed
+
+- `GateServerConfig.AuthValidator` renamed to `GateServerConfig.EventHandler` (`GateEventHandler` interface). **Migration**: implement `GateEventHandler` and set `EventHandler` instead of `AuthValidator` (#569).
+
+## [0.1.0] — 2026-04-24
+
+First tagged release.
+
+### Added
+
+- **Core runtime**: virtual objects, Node + Gate architecture, gRPC and HTTP REST APIs.
+- **Exactly-once call semantics**: `ReliableCallObject` tolerates retries and node failures.
+- **Sharded placement**: 8192-shard model with dynamic rebalancing.
+- **Timeouts**: configurable `DefaultCallTimeout`, `DefaultCreateTimeout`, `EtcdOperationTimeout`; `IsTimeout(err)` helper; timeout metrics.
+- **Watch reconnection**: etcd watch auto-reconnects with exponential backoff.
 - **Persistence**: PostgreSQL with JSONB storage.
-- **Observability**: Prometheus metrics, pprof profiling, Inspector UI.
-- **Push messaging**: real-time server-to-client delivery, including
-  `BroadcastToAllClients`.
-- **Operations**: `/healthz` and `/ready` endpoints on node and inspector;
-  production Dockerfiles for node, gate, and inspector; reference
-  Kubernetes manifests under `k8s/`; `docker-compose.yml` for local etcd
-  and Postgres.
-- **Docs**: end-to-end "5-Minute Tour" in `docs/GET_STARTED.md`; full
-  getting-started guide, API reference, HTTP gate spec, and design docs.
-- **Samples**: `counter`, `tictactoe`, `chat`, `sharding_demo`, and
-  `wallet` (end-to-end reliable-call demo with a stress test that
-  injects mid-flight timeout aborts and verifies per-wallet balance
-  conservation).
+- **Observability**: Prometheus metrics, pprof, Inspector UI, `/healthz` + `/ready` endpoints.
+- **Push messaging**: real-time server-to-client delivery, `BroadcastToAllClients`.
+- **Operations**: production Dockerfiles, Kubernetes manifests, `docker-compose.yml`.
+- **Samples**: `counter`, `tictactoe`, `chat`, `sharding_demo`, `wallet`.
 
-### Known Issues (deferred to v0.2.0)
+### Known Issues
 
-- **Migration-period unavailability**: during shard handoff,
-  `GetCurrentNodeForObject` errors even though the current node is still
-  alive — causes brief unavailability during rebalance.
-- **Graceful shutdown**: scale-down relies on etcd lease expiry rather
-  than a proactive shard release.
-- **No built-in access control / TLS**: deploy in a private network or
-  behind a service mesh until v0.2.0.
+- **Migration-period unavailability**: brief errors during shard handoff even though the current node is still alive.
+- **Graceful shutdown**: scale-down relies on etcd lease expiry rather than proactive shard release.
+- **No built-in TLS**: deploy behind a TLS-terminating proxy. Auth middleware ships in v0.1.1; native gate TLS is deferred.
