@@ -392,7 +392,6 @@ func (server *Server) Run(ctx context.Context) error {
 	if err != nil {
 		server.logger.Errorf("Failed to stop node: %v", err)
 	}
-
 	// Revoke the etcd lease after objects are persisted so the cluster
 	// immediately redistributes our shards without a lease-TTL wait.
 	err = server.cluster.Stop(server.ctx)
