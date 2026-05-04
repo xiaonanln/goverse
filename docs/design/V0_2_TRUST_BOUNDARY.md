@@ -56,7 +56,6 @@ of it*. Native gate TLS is explicitly out of scope — see §2.
 | -- | --------------------------------------------------- | --------------- |
 | 5  | Migration-period unavailability fix                 | depends — design first |
 | 6  | Proactive shard release on graceful shutdown        | ~500            |
-| 7  | Per-call rate limiting at gate                      | ~300            |
 
 Lean v0.2 is the recommended cut. Items 3–7 each have full sections
 below so the work is queued and reviewable independently.
@@ -355,39 +354,18 @@ Both warrant their own follow-up design docs (separate PRs in the
   releases shard ownership to a successor before lease expiry.
   Coordinates with `consensusmanager`'s leader election.
 
-## 7. Item 7 — Per-call rate limiting (Tier 2)
-
-Optional, configurable token bucket per `client_id` (and optionally
-per `caller_user_id` once item 2 lands). Lives in gate handlers
-alongside the access check.
-
-```yaml
-gate_rate_limits:
-  per_client:
-    requests_per_second: 100
-    burst: 200
-  per_user:                          # only effective with auth
-    requests_per_second: 50
-    burst: 100
-```
-
-Implementation: `golang.org/x/time/rate.Limiter` per key, expired by
-LRU. Tested with a high-concurrency stress run.
-
----
-
-## 8. Rollout plan
+## 7. Rollout plan
 
 1. **Land item 4 (DeleteObject)** ✅ Done (all layers including node
    type-spoof check and gate lifecycle enforcement).
 2. **Land item 2 (auth)** ✅ Done (PRs #554–#561, #565).
    No built-in JWT — apps bring their own `AuthValidator`.
-3. **Tier 2 items 5–7** based on remaining capacity.
+3. **Tier 2 items 5–6** based on remaining capacity.
 
 Each item is its own PR with its own design doc / API stability
 note. This file is the *index*.
 
-## 9. CHANGELOG drafting
+## 8. CHANGELOG drafting
 
 Once items 2, 4 land, draft `## [0.2.0]` with:
 
@@ -406,7 +384,7 @@ Updated "Known issues deferred to v0.3.0":
 - mTLS gate↔node intra-cluster.
 - Anti-cheat / replay validation primitives.
 
-## 10. Pre-implementation checklist
+## 9. Pre-implementation checklist
 
 - [x] **Lean v0.2 vs full v0.2**: items 2, 4 only; 3/5/6/7 stretch.
 - [x] **Auth model**: pluggable interface only — no bundled JWT.
