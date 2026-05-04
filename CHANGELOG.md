@@ -2,6 +2,63 @@
 
 All notable changes to GoVerse are documented in this file.
 
+## [0.1.1] — 2026-05-04
+
+### Added
+
+- **Bomberman sample**: full 2–4 player multiplayer game demonstrating
+  push-based tick broadcasts, cross-object `ReliableCallObject`, a
+  `MatchmakingQueue` singleton, and a web UI with real-time state sync.
+  Includes a stress test that drives concurrent JoinQueue→match→rejoin
+  cycles and verifies exactly-once `RecordMatchResult` dedup (#540–#545).
+- **Pluggable auth middleware** (`GateEventHandler`): a single callback
+  on `GateServerConfig` that handles both authentication and
+  client-disconnect events. `CallerUserID(ctx)` / `CallerRoles(ctx)` /
+  `CallerHasRole(ctx)` helpers available inside object methods (#554,
+  #569).
+- **`CallerIdentity` propagation**: authenticated identity flows from
+  gate → node → cross-node via gRPC metadata (`x-caller-user-id` /
+  `x-caller-roles`) so object methods on any node can read the caller
+  (#555, #563).
+- **`CheckClientCreate` on HTTP**: the HTTP `CreateObject` handler now
+  runs `LifecycleValidator.CheckClientCreate` before forwarding,
+  matching the behaviour of the gRPC path (#549).
+- **`CheckClientDelete` with typed request**: `DeleteObjectRequest`
+  (gate-facing and inter-node) gains a required `type` field. The gate
+  runs `CheckClientDelete(type, id)` before forwarding; the node
+  verifies the supplied type matches the registered type to close a
+  type-spoof gap. HTTP path is `POST /api/v1/objects/delete/{type}/{id}`
+  (#552).
+- **Stuck-shard reallocation**: the consensus leader now monitors shards
+  whose `TargetNode` is alive but has not claimed ownership within a
+  configurable timeout (default 1 min, `stuck_shard_reallocation_timeout`
+  in YAML) and reassigns them, preventing permanently stuck shards after
+  partial node failures (#570).
+- **Randomised shard assignment**: shard-to-node assignment is now
+  balanced (±1 per node) and non-deterministic, avoiding hot-spot
+  patterns on startup or rebalance (#572).
+- **Chat sample authentication**: demonstrates a concrete
+  `GateEventHandler` implementation with username/password header
+  validation (#560).
+
+### Fixed
+
+- **Bomberman stress test startup errors**: the stress test now polls
+  `Player.GetStats` through the gate until the cluster accepts calls
+  before launching clients, replacing the fixed 2 s sleep and eliminating
+  spurious `rpc_errors` caused by unclaimed shards at startup (#573).
+
+### Changed
+
+- `GateServerConfig.AuthValidator` replaced by
+  `GateServerConfig.EventHandler` (`GateEventHandler` interface). The new
+  interface covers both auth validation (returning `*CallerIdentity`) and
+  `OnClientDisconnect` events in one place. **Migration**: implement
+  `GateEventHandler` and set `EventHandler` instead of `AuthValidator`
+  (#569).
+- Shared sample server subprocess helpers moved from `tests/samples/` to
+  `samples/common/` for reuse across all sample stress tests (#539).
+
 ## [0.1.0] — 2026-04-24
 
 First tagged release. GoVerse is a distributed object runtime for Go that
