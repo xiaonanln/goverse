@@ -106,20 +106,89 @@ exactly when the error fires and whether a fallback read is safe.
 
 **Priority: medium.**
 
-When the gate pod receives `SIGTERM`, it currently shuts down abruptly,
-breaking all active client connections. For HTTP long-lived connections
-(SSE streams) and gRPC streams, this is visible to end users.
+#### Current behaviour
 
-**Change:** On `SIGTERM`, the gate should:
-1. Stop accepting new TCP connections (close the listener).
-2. Send a `GoAway` frame on active gRPC connections so clients reconnect
-   to another gate.
-3. Close SSE streams with a final `event: shutdown` so web clients can
-   reconnect gracefully.
-4. Wait up to `GateDrainTimeout` (default: 10 s) for open streams to
-   close, then force-close.
+`GateServer.Stop()` (`gate/gateserver/gateserver.go`):
 
-**Approx LOC:** ~200 (`gate/gateserver/`).
+1. Sets `stopped = true` — new RPCs rejected immediately.
+2. Calls `grpcServer.Stop()` — **hard stop**, no GoAway, all transports
+   closed immediately. gRPC clients see a broken connection.
+3. Calls `httpServer.Shutdown(ctx)` with a 5 s timeout — graceful for
+   HTTP, but SSE streams are just dropped when the transport closes.
+4. Stops gate and cluster.
+
+Result: every connected gRPC and SSE client sees an abrupt disconnect
+with no signal to reconnect.
+
+#### Target behaviour
+
+```
+Stop() called (SIGTERM)
+  1. stopped = true           → new RPCs rejected (already done)
+  2. Notify SSE streams       → each handler sends "event: shutdown\n\n"
+                                 then exits; clients know to reconnect
+  3. grpcServer.GracefulStop() in goroutine
+                              → sends HTTP/2 GoAway; gRPC clients
+                                 reconnect to another gate
+  4. Wait up to GateDrainTimeout (default 10 s) for streams to close
+  5. grpcServer.Stop()        → force-close any remaining streams
+  6. httpServer.Shutdown(5 s) → already done; SSE is gone by now
+  7. gate.Stop() + cluster.Stop()
+```
+
+#### Implementation notes
+
+**GoAway (gRPC):** Replace `grpcServer.Stop()` with a bounded
+`GracefulStop()`:
+
+```go
+done := make(chan struct{})
+go func() { s.grpcServer.GracefulStop(); close(done) }()
+select {
+case <-done:
+case <-time.After(s.config.GateDrainTimeout):
+    s.grpcServer.Stop()
+}
+```
+
+`GracefulStop()` sends GoAway and waits for all RPCs to finish. Without
+the timeout it would hang indefinitely on long-lived `Register` streams,
+so the force-stop fallback is essential.
+
+**SSE shutdown event:** The SSE handler
+(`http_handler.go:handleEventsStream`) loops on
+`clientProxy.MessageChan()` and `r.Context().Done()`. Add a
+gate-level broadcast channel closed on `Stop()`:
+
+```go
+// GateServer
+sseShutdown chan struct{} // closed in Stop()
+
+// handleEventsStream
+select {
+case msg := <-clientProxy.MessageChan(): ...
+case <-s.sseShutdown:
+    fmt.Fprintf(w, "event: shutdown\ndata: {}\n\n")
+    flusher.Flush()
+    return
+case <-r.Context().Done(): return
+}
+```
+
+No per-stream registry needed — closing the broadcast channel wakes all
+handlers simultaneously.
+
+**Config:**
+
+```go
+type GateServerConfig struct {
+    ...
+    GateDrainTimeout time.Duration // default 10 s
+}
+```
+
+**Approx LOC:** ~150 (`gate/gateserver/gateserver.go` ~80,
+`gate/gateserver/http_handler.go` ~50, config ~20).
 
 ---
 
