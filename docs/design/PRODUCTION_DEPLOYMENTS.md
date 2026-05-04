@@ -102,97 +102,7 @@ exactly when the error fires and whether a fallback read is safe.
 
 ---
 
-### Item C — Gate connection draining on shutdown
-
-**Priority: medium.**
-
-#### Current behaviour
-
-`GateServer.Stop()` (`gate/gateserver/gateserver.go`):
-
-1. Sets `stopped = true` — new RPCs rejected immediately.
-2. Calls `grpcServer.Stop()` — **hard stop**, no GoAway, all transports
-   closed immediately. gRPC clients see a broken connection.
-3. Calls `httpServer.Shutdown(ctx)` with a 5 s timeout — graceful for
-   HTTP, but SSE streams are just dropped when the transport closes.
-4. Stops gate and cluster.
-
-Result: every connected gRPC and SSE client sees an abrupt disconnect
-with no signal to reconnect.
-
-#### Target behaviour
-
-```
-Stop() called (SIGTERM)
-  1. stopped = true           → new RPCs rejected (already done)
-  2. Notify SSE streams       → each handler sends "event: shutdown\n\n"
-                                 then exits; clients know to reconnect
-  3. grpcServer.GracefulStop() in goroutine
-                              → sends HTTP/2 GoAway; gRPC clients
-                                 reconnect to another gate
-  4. Wait up to GateDrainTimeout (default 10 s) for streams to close
-  5. grpcServer.Stop()        → force-close any remaining streams
-  6. httpServer.Shutdown(5 s) → already done; SSE is gone by now
-  7. gate.Stop() + cluster.Stop()
-```
-
-#### Implementation notes
-
-**GoAway (gRPC):** Replace `grpcServer.Stop()` with a bounded
-`GracefulStop()`:
-
-```go
-done := make(chan struct{})
-go func() { s.grpcServer.GracefulStop(); close(done) }()
-select {
-case <-done:
-case <-time.After(s.config.GateDrainTimeout):
-    s.grpcServer.Stop()
-}
-```
-
-`GracefulStop()` sends GoAway and waits for all RPCs to finish. Without
-the timeout it would hang indefinitely on long-lived `Register` streams,
-so the force-stop fallback is essential.
-
-**SSE shutdown event:** The SSE handler
-(`http_handler.go:handleEventsStream`) loops on
-`clientProxy.MessageChan()` and `r.Context().Done()`. Add a
-gate-level broadcast channel closed on `Stop()`:
-
-```go
-// GateServer
-sseShutdown chan struct{} // closed in Stop()
-
-// handleEventsStream
-select {
-case msg := <-clientProxy.MessageChan(): ...
-case <-s.sseShutdown:
-    fmt.Fprintf(w, "event: shutdown\ndata: {}\n\n")
-    flusher.Flush()
-    return
-case <-r.Context().Done(): return
-}
-```
-
-No per-stream registry needed — closing the broadcast channel wakes all
-handlers simultaneously.
-
-**Config:**
-
-```go
-type GateServerConfig struct {
-    ...
-    GateDrainTimeout time.Duration // default 10 s
-}
-```
-
-**Approx LOC:** ~150 (`gate/gateserver/gateserver.go` ~80,
-`gate/gateserver/http_handler.go` ~50, config ~20).
-
----
-
-### Item D — Node version metadata in etcd
+### Item C — Node version metadata in etcd
 
 **Priority: low.**
 
@@ -216,8 +126,7 @@ per-node versions.
 | - | ----------------------------------------- | -------- | --------------- |
 | A | Graceful shutdown / proactive shard release | Highest | ~500            |
 | B | Migration-period availability             | Medium   | design first    |
-| C | Gate connection draining                  | Medium   | ~200            |
-| D | Node version metadata in etcd             | Low      | ~100            |
+| C | Node version metadata in etcd             | Low      | ~100            |
 
 ## 5. Non-goals
 
@@ -226,6 +135,9 @@ per-node versions.
   k8s to orchestrate, not self-orchestrating.
 - **Pod auto-scaling based on shard load**: out of scope; use k8s HPA
   on CPU/memory metrics exposed via Prometheus.
+- **Gate connection draining**: client libraries handle reconnection on
+  broken connections; explicit GoAway/SSE shutdown events add complexity
+  without meaningful user benefit.
 - **mTLS intra-cluster**: tracked separately.
 - **Zero-downtime schema migrations for Postgres-backed objects**: tracked
   separately.
@@ -233,6 +145,5 @@ per-node versions.
 ## 6. Recommended implementation order
 
 1. **A** — closes the shutdown gap; most impactful for rolling updates.
-2. **C** — gate draining; completes the user-visible shutdown story.
-3. **B** — investigate and design; implement once A is stable.
-4. **D** — operational polish; last.
+2. **B** — investigate and design; implement once A is stable.
+3. **C** — operational polish; last.
