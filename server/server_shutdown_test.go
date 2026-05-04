@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"os"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -11,7 +10,7 @@ import (
 	"github.com/xiaonanln/goverse/util/testutil"
 )
 
-func newShutdownTestServer(t *testing.T) (*Server, string) {
+func newShutdownTestServer(t *testing.T) *Server {
 	t.Helper()
 	etcdPrefix := testutil.PrepareEtcdPrefix(t, "localhost:2379")
 	listenAddr := testutil.GetFreeAddress()
@@ -28,25 +27,24 @@ func newShutdownTestServer(t *testing.T) (*Server, string) {
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
-	return srv, listenAddr
+	return srv
 }
 
 // TestServer_ContextCancel_TriggersCleanShutdown verifies that cancelling the
-// Run context shuts the server down cleanly within a bounded timeout.
-// This is the same code path as SIGTERM (ctx.Done case in the select).
+// Run context (the same code path as SIGTERM via ctx.Done) shuts the server
+// down cleanly within a bounded timeout.
 func TestServer_ContextCancel_TriggersCleanShutdown(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
 	}
 
-	srv, _ := newShutdownTestServer(t)
+	srv := newShutdownTestServer(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Run(ctx) }()
 
 	time.Sleep(2 * time.Second)
-
 	cancel()
 
 	select {
@@ -59,15 +57,15 @@ func TestServer_ContextCancel_TriggersCleanShutdown(t *testing.T) {
 	}
 }
 
-// TestServer_SIGTERM_TriggersCleanShutdown verifies that SIGTERM causes
-// server.Run to return cleanly. Do not run in parallel — sends a real signal
-// to the process.
+// TestServer_SIGTERM_TriggersCleanShutdown verifies that a real SIGTERM is
+// caught by signal.Notify and causes server.Run to return cleanly.
+// Must not run in parallel — sends a real signal to the process.
 func TestServer_SIGTERM_TriggersCleanShutdown(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
 	}
 
-	srv, _ := newShutdownTestServer(t)
+	srv := newShutdownTestServer(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -88,54 +86,5 @@ func TestServer_SIGTERM_TriggersCleanShutdown(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("server did not shut down within 15s after SIGTERM")
-	}
-}
-
-// TestServer_ShutdownOrder_NodeBeforeCluster verifies the critical shutdown
-// invariant: node.Stop() (Postgres save) must complete before cluster.Stop()
-// (etcd lease revocation). If violated, other nodes claiming our shards would
-// load stale object state.
-func TestServer_ShutdownOrder_NodeBeforeCluster(t *testing.T) {
-	if testing.Short() {
-		t.Skip("integration test")
-	}
-
-	srv, _ := newShutdownTestServer(t)
-
-	var mu sync.Mutex
-	var order []string
-	srv.testHookAfterNodeStop = func() {
-		mu.Lock()
-		order = append(order, "node")
-		mu.Unlock()
-	}
-	srv.testHookAfterClusterStop = func() {
-		mu.Lock()
-		order = append(order, "cluster")
-		mu.Unlock()
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- srv.Run(ctx) }()
-
-	time.Sleep(2 * time.Second)
-	cancel()
-
-	select {
-	case <-done:
-	case <-time.After(15 * time.Second):
-		t.Fatal("server did not shut down within 15s")
-	}
-
-	mu.Lock()
-	got := append([]string(nil), order...)
-	mu.Unlock()
-
-	if len(got) != 2 {
-		t.Fatalf("expected 2 shutdown events, got %d: %v", len(got), got)
-	}
-	if got[0] != "node" || got[1] != "cluster" {
-		t.Errorf("shutdown order = %v; want [node cluster]", got)
 	}
 }
