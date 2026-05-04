@@ -1389,13 +1389,12 @@ func TestReassignShardTargetNodes_RespectsCurrentNode(t *testing.T) {
 		}
 	}
 
-	// Verify shard 2: TargetNode should be assigned via round-robin (shard 2 % 2 = 0 -> node1)
+	// Verify shard 2: TargetNode should be assigned to one of the active nodes (random).
 	if shard2, ok := updateShards[2]; !ok {
 		t.Fatal("Shard 2 should be in update list")
 	} else {
-		expectedTarget := node1 // shard 2 % 2 nodes = 0, so first node in sorted list
-		if shard2.TargetNode != expectedTarget {
-			t.Fatalf("Shard 2: Expected TargetNode to be %s (round-robin), got %s", expectedTarget, shard2.TargetNode)
+		if shard2.TargetNode != node1 && shard2.TargetNode != node2 {
+			t.Fatalf("Shard 2: Expected TargetNode to be an active node, got %s", shard2.TargetNode)
 		}
 		if shard2.CurrentNode != "" {
 			t.Fatalf("Shard 2: Expected CurrentNode to remain empty, got %s", shard2.CurrentNode)
@@ -1532,19 +1531,64 @@ func TestCalcReassignShardTargetNodes_WithPinnedShards(t *testing.T) {
 		}
 	}
 
-	// Shard 3: pinned, empty target - SHOULD be assigned
+	// Shard 3: pinned, empty target - SHOULD be assigned to one of the active nodes (random).
 	if shard3, exists := updateShards[3]; !exists {
 		t.Error("Shard 3: pinned shard with empty TargetNode should be assigned")
 	} else {
-		// Should be assigned using round-robin (shard 3 % 2 = 1 -> node2)
-		expectedTarget := node2
-		if shard3.TargetNode != expectedTarget {
-			t.Errorf("Shard 3: expected TargetNode to be %s (round-robin), got %s", expectedTarget, shard3.TargetNode)
+		if shard3.TargetNode != node1 && shard3.TargetNode != node2 {
+			t.Errorf("Shard 3: expected TargetNode to be an active node, got %s", shard3.TargetNode)
 		}
 		// Check that flags are preserved
 		if !equalStringSlices(shard3.Flags, []string{"pinned"}) {
 			t.Errorf("Shard 3: expected flags to be preserved as ['pinned'], got %v", shard3.Flags)
 		}
+	}
+}
+
+// TestCalcReassignShardTargetNodes_RandomBalance verifies that:
+// 1. Each node receives roughly the same number of shards (balanced).
+// 2. Multiple calls produce different assignments (random, not deterministic).
+func TestCalcReassignShardTargetNodes_RandomBalance(t *testing.T) {
+	t.Parallel()
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
+
+	nodes := []string{"node-a", "node-b", "node-c"}
+	cm.mu.Lock()
+	for _, n := range nodes {
+		cm.state.Nodes[n] = true
+	}
+	cm.mu.Unlock()
+
+	// Balance check: each node should receive testNumShards/len(nodes) ± 1 shards.
+	result := cm.calcReassignShardTargetNodes()
+	if len(result) != testNumShards {
+		t.Fatalf("expected %d shards assigned, got %d", testNumShards, len(result))
+	}
+	counts := make(map[string]int)
+	for _, info := range result {
+		counts[info.TargetNode]++
+	}
+	idealPerNode := testNumShards / len(nodes)
+	for _, n := range nodes {
+		if counts[n] < idealPerNode-1 || counts[n] > idealPerNode+1 {
+			t.Errorf("node %s: shard count %d is outside balanced range [%d, %d]", n, counts[n], idealPerNode-1, idealPerNode+1)
+		}
+	}
+
+	// Randomness check: run multiple times and confirm results differ.
+	seen := make(map[string]bool)
+	for range 10 {
+		r := cm.calcReassignShardTargetNodes()
+		// Build a fingerprint: sorted list of "shardID:node" for the first 20 shards.
+		fp := ""
+		for i := 0; i < 20; i++ {
+			fp += r[i].TargetNode + ","
+		}
+		seen[fp] = true
+	}
+	if len(seen) < 2 {
+		t.Error("expected random variation across multiple calls, got identical results every time")
 	}
 }
 
