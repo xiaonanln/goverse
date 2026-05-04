@@ -1613,11 +1613,13 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 		}
 	}
 
-	// Randomly shuffle the unassigned shards so each node receives a random,
-	// evenly distributed subset rather than a fixed shardID % N slice.
+	// Shuffle the unassigned shards and start placement at a random node offset
+	// so that even a single-shard reassignment is not always biased toward the
+	// lexicographically first node.
 	rand.Shuffle(len(toAssign), func(i, j int) { toAssign[i], toAssign[j] = toAssign[j], toAssign[i] })
+	offset := rand.IntN(len(nodes))
 	for i, shardID := range toAssign {
-		targetNode := nodes[i%len(nodes)]
+		targetNode := nodes[(offset+i)%len(nodes)]
 		updateShards[shardID] = currentShards[shardID].WithTargetNode(targetNode)
 	}
 

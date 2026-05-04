@@ -1580,7 +1580,7 @@ func TestCalcReassignShardTargetNodes_RandomBalance(t *testing.T) {
 	seen := make(map[string]bool)
 	for range 10 {
 		r := cm.calcReassignShardTargetNodes()
-		// Build a fingerprint: sorted list of "shardID:node" for the first 20 shards.
+		// Build a fingerprint from the first 20 shards.
 		fp := ""
 		for i := 0; i < 20; i++ {
 			fp += r[i].TargetNode + ","
@@ -1589,6 +1589,41 @@ func TestCalcReassignShardTargetNodes_RandomBalance(t *testing.T) {
 	}
 	if len(seen) < 2 {
 		t.Error("expected random variation across multiple calls, got identical results every time")
+	}
+}
+
+// TestCalcReassignShardTargetNodes_SingleShardRandomOffset verifies that when only
+// one shard needs reassignment, it is not always assigned to the lexicographically
+// first node (i.e. the random node offset is applied even for batch size 1).
+func TestCalcReassignShardTargetNodes_SingleShardRandomOffset(t *testing.T) {
+	t.Parallel()
+	mgr, _ := etcdmanager.NewEtcdManager("localhost:2379", "/test")
+	cm := NewConsensusManager(mgr, shardlock.NewShardLock(testNumShards), 0, "", testNumShards)
+
+	nodes := []string{"node-a", "node-b", "node-c"}
+	cm.mu.Lock()
+	for _, n := range nodes {
+		cm.state.Nodes[n] = true
+	}
+	// Pre-fill all shards with valid targets except shard 0, which needs reassignment.
+	cm.state.ShardMapping = &ShardMapping{Shards: make(map[int]ShardInfo)}
+	for i := 1; i < testNumShards; i++ {
+		cm.state.ShardMapping.Shards[i] = ShardInfo{TargetNode: "node-a"}
+	}
+	// Shard 0: TargetNode empty, needs assignment.
+	cm.state.ShardMapping.Shards[0] = ShardInfo{}
+	cm.mu.Unlock()
+
+	seen := make(map[string]bool)
+	for range 30 {
+		r := cm.calcReassignShardTargetNodes()
+		if r == nil {
+			t.Fatal("expected shard 0 to need reassignment")
+		}
+		seen[r[0].TargetNode] = true
+	}
+	if len(seen) < 2 {
+		t.Errorf("single-shard reassignment always picked the same node %v; random offset not applied", seen)
 	}
 }
 
