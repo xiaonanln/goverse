@@ -12,10 +12,6 @@ All notable changes to GoVerse are documented in this file.
 - **Self-healing stuck shards**: if a node is assigned shards but goes silent, the cluster automatically reassigns them after `stuck_shard_reallocation_timeout` (default 1 min, configurable in YAML) (#570).
 - **Balanced shard distribution**: shards are spread evenly across nodes (±1) with randomisation, avoiding hot spots at startup and after rebalance (#572).
 
-### Fixed
-
-- Bomberman stress test no longer reports spurious errors at startup while the cluster is still warming up (#573).
-
 ### Changed
 
 - `GateServerConfig.AuthValidator` renamed to `GateServerConfig.EventHandler` (`GateEventHandler` interface). **Migration**: implement `GateEventHandler` and set `EventHandler` instead of `AuthValidator` (#569).
