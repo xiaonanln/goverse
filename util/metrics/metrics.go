@@ -89,6 +89,16 @@ var (
 		},
 	)
 
+	// ShardReallocationsTotal tracks the number of shards forcibly reallocated by the leader
+	// because the assigned node did not claim ownership within the stuck-shard timeout.
+	ShardReallocationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "goverse_shard_reallocations_total",
+			Help: "Total number of shards reallocated by the leader due to stuck assignment (target node alive but did not claim in time)",
+		},
+		[]string{"from_node"},
+	)
+
 	// GateActiveClients tracks the number of active clients connected to each gate
 	GateActiveClients = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -267,6 +277,14 @@ func RecordShardMigration(fromNode, toNode string) {
 // SetShardsMigrating sets the number of shards currently in migration state
 func SetShardsMigrating(count float64) {
 	ShardsMigrating.Set(count)
+}
+
+// RecordShardReallocation increments the reallocation counter for shards forcibly
+// reassigned because the target node was alive but did not claim within the timeout.
+func RecordShardReallocation(fromNode string, count int) {
+	if count > 0 {
+		ShardReallocationsTotal.WithLabelValues(fromNode).Add(float64(count))
+	}
 }
 
 // SetGateActiveClients sets the active client count for a gate

@@ -105,19 +105,20 @@ func (l *Loader) Load(args []string) (*server.ServerConfig, error) {
 		}
 
 		return &server.ServerConfig{
-			ListenAddress:         listenAddr,
-			AdvertiseAddress:      advertiseAddr,
-			MetricsListenAddress:  nodeCfg.HTTPAddr,
-			EtcdAddress:           cfg.GetEtcdAddress(),
-			EtcdPrefix:            cfg.GetEtcdPrefix(),
-			NumShards:             cfg.GetNumShards(),
-			NodeStabilityDuration: cfg.GetClusterStateStabilityDuration(),
-			InspectorAddress:      cfg.GetInspectorAdvertiseAddress(),
-			AutoLoadObjects:       cfg.GetAutoLoadObjects(),
-			DefaultCallTimeout:    cfg.GetDefaultCallTimeout(),
-			DefaultCreateTimeout:  cfg.GetDefaultCreateTimeout(),
-			DefaultDeleteTimeout:  cfg.GetDefaultDeleteTimeout(),
-			ConfigFile:            cfg, // Pass the loaded config file
+			ListenAddress:                 listenAddr,
+			AdvertiseAddress:              advertiseAddr,
+			MetricsListenAddress:          nodeCfg.HTTPAddr,
+			EtcdAddress:                   cfg.GetEtcdAddress(),
+			EtcdPrefix:                    cfg.GetEtcdPrefix(),
+			NumShards:                     cfg.GetNumShards(),
+			NodeStabilityDuration:         cfg.GetClusterStateStabilityDuration(),
+			InspectorAddress:              cfg.GetInspectorAdvertiseAddress(),
+			AutoLoadObjects:               cfg.GetAutoLoadObjects(),
+			DefaultCallTimeout:            cfg.GetDefaultCallTimeout(),
+			DefaultCreateTimeout:          cfg.GetDefaultCreateTimeout(),
+			DefaultDeleteTimeout:          cfg.GetDefaultDeleteTimeout(),
+			StuckShardReallocationTimeout: cfg.GetStuckShardReallocationTimeout(),
+			ConfigFile:                    cfg, // Pass the loaded config file
 		}, nil
 	}
 

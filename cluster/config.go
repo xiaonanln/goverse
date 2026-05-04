@@ -38,6 +38,11 @@ type Config struct {
 	// Default: 0.2 (20% of ideal load)
 	ImbalanceThreshold float64
 
+	// StuckShardReallocationTimeout is how long the leader waits before reassigning
+	// a shard whose TargetNode is alive but has not claimed ownership.
+	// Default: 1 minute (0 means use default).
+	StuckShardReallocationTimeout time.Duration
+
 	// AutoLoadObjects is the list of objects to automatically load when the node starts
 	AutoLoadObjects []config.AutoLoadObjectConfig
 
