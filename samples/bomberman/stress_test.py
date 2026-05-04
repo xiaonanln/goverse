@@ -99,29 +99,28 @@ def wait_for_cluster_ready(gate_port: int, timeout: float = 60.0) -> bool:
     deadline = time.time() + timeout
     attempt = 0
     print(f"Waiting for cluster to be ready (probe: Player-{probe_player} via port {gate_port})...")
-    client: Optional[Client] = None
-    try:
-        client = Client([f"localhost:{gate_port}"], ClientOptions(call_timeout=3.0))
-        client.connect(timeout=10.0)
-        while time.time() < deadline:
-            attempt += 1
-            try:
-                resp_any = client.call_object(
-                    "Player", f"Player-{probe_player}", "GetStats", req, timeout=3.0
-                )
-                if resp_any is not None:
-                    elapsed = timeout - (deadline - time.time())
-                    print(f"✅ Cluster ready after {elapsed:.1f}s ({attempt} probe(s))")
-                    return True
-            except Exception:
-                pass
-            time.sleep(0.5)
-    finally:
-        if client is not None:
-            try:
-                client.close()
-            except Exception:
-                pass
+    while time.time() < deadline:
+        attempt += 1
+        client: Optional[Client] = None
+        try:
+            client = Client([f"localhost:{gate_port}"], ClientOptions(call_timeout=3.0))
+            client.connect(timeout=3.0)
+            resp_any = client.call_object(
+                "Player", f"Player-{probe_player}", "GetStats", req, timeout=3.0
+            )
+            if resp_any is not None:
+                elapsed = timeout - (deadline - time.time())
+                print(f"✅ Cluster ready after {elapsed:.1f}s ({attempt} probe(s))")
+                return True
+        except Exception:
+            pass
+        finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+        time.sleep(0.5)
     print(f"❌ Cluster not ready after {timeout}s ({attempt} probes)")
     return False
 
