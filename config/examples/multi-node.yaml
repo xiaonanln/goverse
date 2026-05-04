@@ -34,6 +34,10 @@ cluster:
   #   churn where you want to avoid premature shard reassignments
   # cluster_state_stability_duration: 10s
 
+  # Optional: How long the leader waits before reassigning a shard whose TargetNode
+  # is alive but has not claimed ownership. Default: 1m
+  # stuck_shard_reallocation_timeout: 1m
+
 inspector:
   grpc_addr: "10.0.3.10:8081"
   http_addr: "10.0.3.10:8080"
