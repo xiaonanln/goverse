@@ -19,15 +19,13 @@ in a k8s environment.
 
 k8s terminates old pods one at a time while bringing up new ones:
 
-1. New pod starts → `/ready` returns 200 immediately → k8s routes traffic
-   to it → shards not yet claimed → requests fail.
-2. Old pod receives `SIGTERM` → GoVerse does nothing → etcd lease expires
+1. Old pod receives `SIGTERM` → GoVerse does nothing → etcd lease expires
    after TTL → other nodes notice the gap → shard reassignment starts →
    all calls to that pod's objects fail for the entire TTL window.
 
 ### 2.2 Scale-down / pod eviction
 
-Same as rolling update step 2. When the operator reduces replica count
+Same as rolling update step 1. When the operator reduces replica count
 or a node is evicted, there is no graceful handoff. Objects are
 unavailable until etcd lease expiry.
 
@@ -83,36 +81,7 @@ GoVerse handles the rest via `SIGTERM`.
 
 ---
 
-### Item B — Readiness probe reflects connectivity and shard map sync
-
-**Priority: high.** Small change, high impact on rolling updates.
-
-The existing `/ready` endpoint returns 200 as soon as the process starts,
-before the node or gate has done any meaningful cluster work.
-
-A node having no shards allocated to it is fine — the leader may simply
-not have assigned any yet, and that is not a reason to be unready. The
-meaningful readiness signal is whether the component can correctly handle
-traffic *right now*.
-
-**Gate is ready when:**
-- The full shard map has been synced from etcd, **and**
-- A gRPC connection to every known node has been established.
-- Nodes that fail to connect (unreachable / not yet started) do not block
-  readiness — their shards will simply return errors as they do today.
-
-**Node is ready when:**
-- The full shard map has been synced from etcd, **and**
-- At least one gate has connected to it (i.e. it is reachable from the
-  cluster's perspective).
-- Gates that have not connected yet do not block readiness.
-
-**Approx LOC:** ~100 (`server/server.go` + `gate/gateserver/` readiness
-handlers; consensus manager needs to expose "shard map synced" signal).
-
----
-
-### Item C — Migration-period availability
+### Item B — Migration-period availability
 
 **Priority: medium.** Needs design before implementation.
 
@@ -133,7 +102,7 @@ exactly when the error fires and whether a fallback read is safe.
 
 ---
 
-### Item D — Gate connection draining on shutdown
+### Item C — Gate connection draining on shutdown
 
 **Priority: medium.**
 
@@ -154,7 +123,7 @@ breaking all active client connections. For HTTP long-lived connections
 
 ---
 
-### Item E — Node version metadata in etcd
+### Item D — Node version metadata in etcd
 
 **Priority: low.**
 
@@ -177,10 +146,9 @@ per-node versions.
 | # | Item                                      | Priority | Approx LOC      |
 | - | ----------------------------------------- | -------- | --------------- |
 | A | Graceful shutdown / proactive shard release | Highest | ~500            |
-| B | Readiness probe reflects shard claims     | High     | ~50             |
-| C | Migration-period availability             | Medium   | design first    |
-| D | Gate connection draining                  | Medium   | ~200            |
-| E | Node version metadata in etcd             | Low      | ~100            |
+| B | Migration-period availability             | Medium   | design first    |
+| C | Gate connection draining                  | Medium   | ~200            |
+| D | Node version metadata in etcd             | Low      | ~100            |
 
 ## 5. Non-goals
 
@@ -195,10 +163,7 @@ per-node versions.
 
 ## 6. Recommended implementation order
 
-1. **B** — small, high-leverage, unblocks everything else (no rolling
-   update testing is reliable until readiness is correct).
-2. **A** — closes the shutdown gap; together with B, rolling updates
-   become zero-error.
-3. **D** — gate draining; completes the user-visible shutdown story.
-4. **C** — investigate and design; implement once A+B are stable.
-5. **E** — operational polish; last.
+1. **A** — closes the shutdown gap; most impactful for rolling updates.
+2. **C** — gate draining; completes the user-visible shutdown story.
+3. **B** — investigate and design; implement once A is stable.
+4. **D** — operational polish; last.
