@@ -1,6 +1,6 @@
 # Goverse v0.2 — Trust-Boundary Design
 
-> **Status**: Items 2 and 4 (Lean v0.2 Tier 1) shipped. Tier 2 items (5–7) are queued.
+> **Status**: Items 2 and 4 (Lean v0.2 Tier 1) shipped. Tier 2 items analysed and deferred — see NODE_SHUTDOWN.md for shutdown work.
 >
 > See [CHANGELOG.md](../../CHANGELOG.md) v0.1.0 "Known Issues" for what
 > this release is meant to close.
@@ -49,13 +49,6 @@ of it*. Native gate TLS is explicitly out of scope — see §2.
 | - | ------------------------------------- | ---------- |
 | 2 | Auth middleware + caller-identity ctx | ~900       |
 | 4 | DeleteObject gate-side access check   | ~300       |
-
-**Tier 2 — ship if Tier 1 lands smoothly**:
-
-| #  | Item                                                | Approx LOC      |
-| -- | --------------------------------------------------- | --------------- |
-| 5  | Migration-period unavailability fix                 | depends — design first |
-| 6  | Proactive shard release on graceful shutdown        | ~500            |
 
 Lean v0.2 is the recommended cut. Items 3–7 each have full sections
 below so the work is queued and reviewable independently.
@@ -331,47 +324,23 @@ upgrade.
 
 ---
 
-## 6. Items 5 + 6 — Migration unavailability + graceful shutdown (Tier 2)
-
-These are the two known issues already called out in v0.1's
-`CHANGELOG.md`:
-
-> - **Migration-period unavailability**: during shard handoff,
->   `GetCurrentNodeForObject` errors even though the current node is
->   still alive — causes brief unavailability during rebalance.
-> - **Graceful shutdown**: scale-down relies on etcd lease expiry
->   rather than a proactive shard release.
-
-Both warrant their own follow-up design docs (separate PRs in the
-`docs/design/` tree), not a single shared section. Skeleton:
-
-- **Item 5**: investigate whether the shard-mapping watch can serve
-  stale-but-ok answers during handoff so `GetCurrentNodeForObject`
-  doesn't error. Probably a small fix in
-  `cluster/consensusmanager/`. Needs a load test demonstrating the
-  current behaviour first.
-- **Item 6**: add a `Cluster.GracefulShutdown(ctx)` that explicitly
-  releases shard ownership to a successor before lease expiry.
-  Coordinates with `consensusmanager`'s leader election.
-
-## 7. Rollout plan
+## 6. Rollout plan
 
 1. **Land item 4 (DeleteObject)** ✅ Done (all layers including node
    type-spoof check and gate lifecycle enforcement).
 2. **Land item 2 (auth)** ✅ Done (PRs #554–#561, #565).
    No built-in JWT — apps bring their own `AuthValidator`.
-3. **Tier 2 items 5–6** based on remaining capacity.
+3. Tier 2 items (migration-period availability, proactive shard release) analysed and deferred — implementation cost outweighs benefit at current scale.
 
 Each item is its own PR with its own design doc / API stability
 note. This file is the *index*.
 
-## 8. CHANGELOG drafting
+## 7. CHANGELOG drafting
 
 Once items 2, 4 land, draft `## [0.2.0]` with:
 
 - Pluggable auth middleware + `goverseapi.CallerUserID(ctx)`.
 - DeleteObject gate-side access checks (with type in the request).
-- Whatever Tier 2 items made it.
 - Documented expectation that the gate is deployed behind a
   TLS-terminating proxy (no built-in TLS in v0.2).
 
@@ -384,9 +353,9 @@ Updated "Known issues deferred to v0.3.0":
 - mTLS gate↔node intra-cluster.
 - Anti-cheat / replay validation primitives.
 
-## 9. Pre-implementation checklist
+## 8. Pre-implementation checklist
 
-- [x] **Lean v0.2 vs full v0.2**: items 2, 4 only; 3/5/6/7 stretch.
+- [x] **Lean v0.2 vs full v0.2**: items 2, 4 only; Tier 2 deferred.
 - [x] **Auth model**: pluggable interface only — no bundled JWT.
 - [x] **Identity propagation across nodes**: yes, via gRPC metadata.
 - [x] **DeleteObject migration**: empty type rejected (no warn-and-allow).
