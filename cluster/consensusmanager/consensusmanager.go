@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"math/rand/v2"
 	"slices"
 	"strconv"
 	"strings"
@@ -1575,47 +1576,51 @@ func (cm *ConsensusManager) calcReassignShardTargetNodes() map[int]ShardInfo {
 		return nil
 	}
 
-	// Sort nodes for deterministic assignment
 	nodes := slices.Sorted(maps.Keys(cm.state.Nodes))
 	nodeSet := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
 		nodeSet[n] = true
 	}
 
-	// Check if any changes are needed
-	updateShards := make(map[int]ShardInfo)
 	var currentShards map[int]ShardInfo
 	if cm.state.ShardMapping != nil {
 		currentShards = cm.state.ShardMapping.Shards
 	} else {
-		// ShardMapping can be nil if ReassignShardTargetNodes is called before Initialize
 		currentShards = make(map[int]ShardInfo)
 	}
 
+	updateShards := make(map[int]ShardInfo)
+
+	// Shards whose CurrentNode is alive can be pinned to that node directly (no shuffle needed).
+	// Shards with no valid anchor are collected for random balanced assignment.
+	var toAssign []int
 	for shardID := 0; shardID < cm.numShards; shardID++ {
-		currentInfo := currentShards[shardID]
+		info := currentShards[shardID]
 
-		// Check if shard has pinned flag
-		isPinned := currentInfo.HasFlag("pinned")
-
-		// If shard is pinned and TargetNode is set (even if node is not alive), don't change it
-		if isPinned && currentInfo.TargetNode != "" {
+		if info.HasFlag("pinned") && info.TargetNode != "" {
 			continue
 		}
 
-		if !nodeSet[currentInfo.TargetNode] {
-			// If TargetNode is empty but CurrentNode is already set to a valid node,
-			// respect the existing assignment and set TargetNode to CurrentNode
-			var targetNode string
-			if currentInfo.TargetNode == "" && currentInfo.CurrentNode != "" && nodeSet[currentInfo.CurrentNode] {
-				targetNode = currentInfo.CurrentNode
-			} else {
-				// Assign to a new node using round-robin
-				nodeIdx := shardID % len(nodes)
-				targetNode = nodes[nodeIdx]
-			}
-			updateShards[shardID] = currentInfo.WithTargetNode(targetNode)
+		if nodeSet[info.TargetNode] {
+			continue
 		}
+
+		if info.TargetNode == "" && info.CurrentNode != "" && nodeSet[info.CurrentNode] {
+			// Respect the existing claim: set TargetNode = CurrentNode.
+			updateShards[shardID] = info.WithTargetNode(info.CurrentNode)
+		} else {
+			toAssign = append(toAssign, shardID)
+		}
+	}
+
+	// Shuffle the unassigned shards and start placement at a random node offset
+	// so that even a single-shard reassignment is not always biased toward the
+	// lexicographically first node.
+	rand.Shuffle(len(toAssign), func(i, j int) { toAssign[i], toAssign[j] = toAssign[j], toAssign[i] })
+	offset := rand.IntN(len(nodes))
+	for i, shardID := range toAssign {
+		targetNode := nodes[(offset+i)%len(nodes)]
+		updateShards[shardID] = currentShards[shardID].WithTargetNode(targetNode)
 	}
 
 	if len(updateShards) == 0 {
