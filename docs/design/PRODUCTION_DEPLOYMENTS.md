@@ -83,24 +83,32 @@ GoVerse handles the rest via `SIGTERM`.
 
 ---
 
-### Item B — Readiness probe reflects shard claim state
+### Item B — Readiness probe reflects connectivity and shard map sync
 
 **Priority: high.** Small change, high impact on rolling updates.
 
-The existing `/ready` endpoint returns 200 as soon as the node starts.
-k8s uses readiness to decide when to send traffic. A node that has
-started but not yet claimed its assigned shards will return errors on
-every object call.
+The existing `/ready` endpoint returns 200 as soon as the process starts,
+before the node or gate has done any meaningful cluster work.
 
-**Change:** `/ready` returns 503 until the node has claimed at least one
-shard (or all shards assigned to it, if that number is known). Once
-claims are in place, returns 200.
+A node having no shards allocated to it is fine — the leader may simply
+not have assigned any yet, and that is not a reason to be unready. The
+meaningful readiness signal is whether the component can correctly handle
+traffic *right now*.
 
-This ensures k8s does not route traffic to a pod that is still in the
-shard-claim window, eliminating the startup error burst seen in every
-rolling update.
+**Gate is ready when:**
+- The full shard map has been synced from etcd, **and**
+- A gRPC connection to every known node has been established.
+- Nodes that fail to connect (unreachable / not yet started) do not block
+  readiness — their shards will simply return errors as they do today.
 
-**Approx LOC:** ~50 (`server/server.go` readiness handler).
+**Node is ready when:**
+- The full shard map has been synced from etcd, **and**
+- At least one gate has connected to it (i.e. it is reachable from the
+  cluster's perspective).
+- Gates that have not connected yet do not block readiness.
+
+**Approx LOC:** ~100 (`server/server.go` + `gate/gateserver/` readiness
+handlers; consensus manager needs to expose "shard map synced" signal).
 
 ---
 
