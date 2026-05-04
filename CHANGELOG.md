@@ -12,6 +12,10 @@ All notable changes to GoVerse are documented in this file.
 - **Self-healing stuck shards**: if a node is assigned shards but goes silent, the cluster automatically reassigns them after `stuck_shard_reallocation_timeout` (default 1 min, configurable in YAML) (#570).
 - **Balanced shard distribution**: shards are spread evenly across nodes (±1) with randomisation, avoiding hot spots at startup and after rebalance (#572).
 
+### Fixed
+
+- **Graceful shutdown ordering**: on SIGTERM, object state is now saved to Postgres before the etcd lease is revoked. Previously, other nodes could claim shards and load stale state from the database during a rolling update or scale-down (#581).
+
 ### Changed
 
 - `GateServerConfig.AuthValidator` renamed to `GateServerConfig.EventHandler` (`GateEventHandler` interface). **Migration**: implement `GateEventHandler` and set `EventHandler` instead of `AuthValidator` (#569).
@@ -36,5 +40,4 @@ First tagged release.
 ### Known Issues
 
 - **Migration-period unavailability**: brief errors during shard handoff even though the current node is still alive.
-- **Graceful shutdown**: scale-down relies on etcd lease expiry rather than proactive shard release.
 - **No built-in TLS**: deploy behind a TLS-terminating proxy. Auth middleware ships in v0.1.1; native gate TLS is deferred.
