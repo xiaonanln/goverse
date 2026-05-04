@@ -84,6 +84,47 @@ MIN_REJOIN_DELAY = 0.0
 MAX_REJOIN_DELAY = 0.5
 
 
+def wait_for_cluster_ready(gate_port: int, timeout: float = 60.0) -> bool:
+    """Poll Player.GetStats for a probe player until the cluster is ready.
+
+    The gate and nodes start asynchronously — shards have a TargetNode
+    assigned by the leader but CurrentNode is empty until each node claims
+    ownership. During that window every CallObject returns an error. This
+    function spins until one GetStats call succeeds (or timeout expires),
+    ensuring clients don't start generating rpc_errors while the cluster
+    is still warming up.
+    """
+    probe_player = "stress-player-000"
+    req = bomberman_pb2.GetPlayerStatsRequest()
+    deadline = time.time() + timeout
+    attempt = 0
+    print(f"Waiting for cluster to be ready (probe: Player-{probe_player} via port {gate_port})...")
+    while time.time() < deadline:
+        attempt += 1
+        client: Optional[Client] = None
+        try:
+            client = Client([f"localhost:{gate_port}"], ClientOptions(call_timeout=3.0))
+            client.connect(timeout=3.0)
+            resp_any = client.call_object(
+                "Player", f"Player-{probe_player}", "GetStats", req, timeout=3.0
+            )
+            if resp_any is not None:
+                elapsed = timeout - (deadline - time.time())
+                print(f"✅ Cluster ready after {elapsed:.1f}s ({attempt} probe(s))")
+                return True
+        except Exception:
+            pass
+        finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+        time.sleep(0.5)
+    print(f"❌ Cluster not ready after {timeout}s ({attempt} probes)")
+    return False
+
+
 def probe_http_gate(http_url: str, timeout: float = 5.0) -> bool:
     """Open an SSE connection to the gate's /api/v1/events/stream and
     assert we get the expected `event: register` greeting within timeout
@@ -450,12 +491,14 @@ def main() -> int:
             gw.start()
             gateways.append(gw)
 
-        time.sleep(2)
-
         if http_gate_url is not None:
             if not probe_http_gate(http_gate_url):
                 print("❌ HTTP gate probe failed — aborting before clients connect")
                 return 1
+
+        if not wait_for_cluster_ready(gate_ports[0]):
+            print("❌ Cluster not ready — aborting before clients connect")
+            return 1
 
         print("\n" + "=" * 80)
         print(f"LAUNCHING {args.clients} CLIENTS FOR {args.duration}s")
