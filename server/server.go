@@ -386,14 +386,18 @@ func (server *Server) Run(ctx context.Context) error {
 		server.logger.Errorf("gRPC server error: %v", err)
 	}
 
-	err = server.cluster.Stop(server.ctx)
-	if err != nil {
-		server.logger.Errorf("Failed to stop cluster: %v", err)
-	}
-
+	// Save all objects to Postgres before revoking the etcd lease so that
+	// other nodes claiming our shards always load up-to-date state.
 	err = node.Stop(server.ctx)
 	if err != nil {
 		server.logger.Errorf("Failed to stop node: %v", err)
+	}
+
+	// Revoke the etcd lease after objects are persisted so the cluster
+	// immediately redistributes our shards without a lease-TTL wait.
+	err = server.cluster.Stop(server.ctx)
+	if err != nil {
+		server.logger.Errorf("Failed to stop cluster: %v", err)
 	}
 
 	server.logger.Infof("gRPC server stopped")
